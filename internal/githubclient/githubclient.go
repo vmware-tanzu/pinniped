@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/google/go-github/v62/github"
 
@@ -40,29 +42,34 @@ type githubClient struct {
 var _ GitHubInterface = (*githubClient)(nil)
 
 func NewGitHubClient(httpClient *http.Client, apiBaseURL, token string) (GitHubInterface, error) {
+	const errorPrefix = "unable to build new github client"
+
 	if httpClient == nil {
-		return nil, fmt.Errorf("httpClient cannot be nil")
+		return nil, fmt.Errorf("%s: httpClient cannot be nil", errorPrefix)
+	}
+
+	parsedURL, err := url.Parse(apiBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", errorPrefix, err)
+	}
+
+	if !strings.HasSuffix(parsedURL.Path, "/") {
+		parsedURL.Path += "/"
+	}
+
+	if parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf(`%s: apiBaseURL must use "https" protocol, found %q instead`, errorPrefix, parsedURL.Scheme)
 	}
 
 	if token == "" {
-		return nil, fmt.Errorf("token cannot be empty string")
+		return nil, fmt.Errorf("%s: token cannot be empty string", errorPrefix)
 	}
 
-	if apiBaseURL == "https://github.com" {
-		apiBaseURL = "https://api.github.com/"
-	}
-
-	client, err := github.NewClient(httpClient).WithEnterpriseURLs(apiBaseURL, "")
-	if err != nil {
-		return nil, fmt.Errorf("unable to create GitHub client using WithEnterpriseURLs: %w", err)
-	}
-
-	if client.BaseURL.Scheme != "https" {
-		return nil, fmt.Errorf(`apiBaseURL must use "https" protocol, found "%s" instead`, client.BaseURL.Scheme)
-	}
+	client := github.NewClient(httpClient).WithAuthToken(token)
+	client.BaseURL = parsedURL
 
 	return &githubClient{
-		client: client.WithAuthToken(token),
+		client: client,
 	}, nil
 }
 

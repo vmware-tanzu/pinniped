@@ -21,7 +21,7 @@ func TestNewGitHubClient(t *testing.T) {
 
 	t.Run("rejects nil http client", func(t *testing.T) {
 		_, err := NewGitHubClient(nil, "https://api.github.com/", "")
-		require.EqualError(t, err, "httpClient cannot be nil")
+		require.EqualError(t, err, "unable to build new github client: httpClient cannot be nil")
 	})
 
 	tests := []struct {
@@ -38,45 +38,39 @@ func TestNewGitHubClient(t *testing.T) {
 			wantBaseURL: "https://api.github.com/",
 		},
 		{
-			name:        "happy path with https://api.github.com",
+			name:        "adds trailing slash to path for https://api.github.com",
 			apiBaseURL:  "https://api.github.com",
 			token:       "other-token",
 			wantBaseURL: "https://api.github.com/",
 		},
 		{
-			name:        "happy path with Enterprise URL https://fake.enterprise.tld",
-			apiBaseURL:  "https://fake.enterprise.tld",
+			name:        "adds trailing slash to path for Enterprise URL https://fake.enterprise.tld/api/v3",
+			apiBaseURL:  "https://fake.enterprise.tld/api/v3",
 			token:       "some-enterprise-token",
 			wantBaseURL: "https://fake.enterprise.tld/api/v3/",
-		},
-		{
-			name:        "coerces https://github.com into https://api.github.com/",
-			apiBaseURL:  "https://github.com",
-			token:       "some-token",
-			wantBaseURL: "https://api.github.com/",
 		},
 		{
 			name:       "rejects apiBaseURL without https:// scheme",
 			apiBaseURL: "scp://github.com",
 			token:      "some-token",
-			wantErr:    `apiBaseURL must use "https" protocol, found "scp" instead`,
+			wantErr:    `unable to build new github client: apiBaseURL must use "https" protocol, found "scp" instead`,
 		},
 		{
 			name:       "rejects apiBaseURL with empty scheme",
 			apiBaseURL: "github.com",
 			token:      "some-token",
-			wantErr:    `apiBaseURL must use "https" protocol, found "" instead`,
+			wantErr:    `unable to build new github client: apiBaseURL must use "https" protocol, found "" instead`,
 		},
 		{
 			name:       "rejects empty token",
 			apiBaseURL: "https://api.github.com/",
-			wantErr:    "token cannot be empty string",
+			wantErr:    "unable to build new github client: token cannot be empty string",
 		},
 		{
-			name:       "returns errors from WithEnterpriseURLs",
+			name:       "returns errors from url.Parse",
 			apiBaseURL: "https:// example.com",
 			token:      "some-token",
-			wantErr:    `unable to create GitHub client using WithEnterpriseURLs: parse "https:// example.com": invalid character " " in host name`,
+			wantErr:    `unable to build new github client: parse "https:// example.com": invalid character " " in host name`,
 		},
 	}
 	for _, test := range tests {
@@ -111,7 +105,6 @@ func TestNewGitHubClient(t *testing.T) {
 			require.True(t, ok)
 			require.NotNil(t, actual.client.BaseURL)
 			require.Equal(t, test.wantBaseURL, actual.client.BaseURL.String())
-			//require.Equal(t, httpClient, actual.client.Client())
 
 			// Force the githubClient's httpClient roundTrippers to run and add the Authorization header
 			_, err = actual.client.Client().Get(testServer.URL)

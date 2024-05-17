@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -92,7 +93,6 @@ var (
 	happyDownstreamRequestParamsQueryForDynamicClient = shallowCopyAndModifyQuery(happyDownstreamRequestParamsQuery,
 		map[string]string{"client_id": downstreamDynamicClientID},
 	)
-	happyDownstreamRequestParamsForDynamicClient = happyDownstreamRequestParamsQueryForDynamicClient.Encode()
 
 	happyDownstreamCustomSessionData = &psession.CustomSessionData{
 		Username:         oidcUpstreamUsername,
@@ -107,6 +107,7 @@ var (
 			UpstreamSubject:      oidcUpstreamSubject,
 		},
 	}
+
 	happyDownstreamCustomSessionDataWithUsernameAndGroups = func(wantDownstreamUsername, wantUpstreamUsername string, wantUpstreamGroups []string) *psession.CustomSessionData {
 		copyOfCustomSession := *happyDownstreamCustomSessionData
 		copyOfOIDC := *(happyDownstreamCustomSessionData.OIDC)
@@ -128,6 +129,14 @@ var (
 			UpstreamIssuer:      oidcUpstreamIssuer,
 			UpstreamSubject:     oidcUpstreamSubject,
 		},
+	}
+
+	addFullyCapableDynamicClientAndSecretToKubeResources = func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
+		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
+			"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID, downstreamRedirectURI, nil,
+			[]string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
+		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
+		require.NoError(t, kubeClient.Tracker().Add(secret))
 	}
 )
 
@@ -153,13 +162,13 @@ func TestCallbackEndpoint(t *testing.T) {
 	happyCookieCodec.SetSerializer(securecookie.JSONEncoder{})
 
 	happyState := happyUpstreamStateParam().Build(t, happyStateCodec)
-	happyStateForDynamicClient := happyUpstreamStateParamForDynamicClient().Build(t, happyStateCodec)
+	happyStateForDynamicClient := happyUpstreamStateParam().WithAuthorizeRequestParams(happyDownstreamRequestParamsQueryForDynamicClient.Encode()).Build(t, happyStateCodec)
 
 	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyDownstreamCSRF)
 	require.NoError(t, err)
 	happyCSRFCookie := "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue
 
-	happyExchangeAndValidateTokensArgs := &oidctestutil.ExchangeAuthcodeAndValidateTokenArgs{
+	happyExchangeAndValidateTokensArgs := &oidctestutil.ExchangeAuthcodeArgs{
 		Authcode:             happyUpstreamAuthcode,
 		PKCECodeVerifier:     oidcpkce.Code(happyDownstreamPKCE),
 		ExpectedIDTokenNonce: nonce.Nonce(happyDownstreamNonce),
@@ -168,14 +177,6 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
 	happyDownstreamRedirectLocationRegexp := downstreamRedirectURI + `\?code=([^&]+)&scope=openid\+username\+groups&state=` + happyDownstreamState
-
-	addFullyCapableDynamicClientAndSecretToKubeResources := func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
-		oidcClient, secret := testutil.FullyCapableOIDCClientAndStorageSecret(t,
-			"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID, downstreamRedirectURI, nil,
-			[]string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
-		require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
-		require.NoError(t, kubeClient.Tracker().Add(secret))
-	}
 
 	prefixUsernameAndGroupsPipeline := transformtestutil.NewPrefixingPipeline(t, transformationUsernamePrefix, transformationGroupsPrefix)
 	rejectAuthPipeline := transformtestutil.NewRejectAllAuthPipeline(t)
@@ -753,7 +754,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:        http.MethodGet,
 			path: newRequestPath().WithState(
-				happyUpstreamStateParamForDynamicClient().
+				happyUpstreamStateParam().
 					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
 						map[string]string{"scope": "openid groups offline_access"}).Encode()).
 					Build(t, happyStateCodec),
@@ -783,7 +784,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:        http.MethodGet,
 			path: newRequestPath().WithState(
-				happyUpstreamStateParamForDynamicClient().
+				happyUpstreamStateParam().
 					WithAuthorizeRequestParams(shallowCopyAndModifyQuery(happyDownstreamRequestParamsQueryForDynamicClient,
 						map[string]string{"scope": "openid username offline_access"}).Encode()).
 					Build(t, happyStateCodec),
@@ -1540,7 +1541,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			}
 
 			// Configure fosite the same way that the production code would.
-			// Inject this into our test subject at the last second so we get a fresh storage for every test.
+			// Inject this into our test subject at the last second, so we get a fresh storage for every test.
 			timeoutsConfiguration := oidc.DefaultOIDCTimeoutsConfiguration()
 			// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
 			oauthStore := storage.NewKubeStorage(secrets, oidcClientsClient, timeoutsConfiguration, bcrypt.MinCost)
@@ -1565,7 +1566,9 @@ func TestCallbackEndpoint(t *testing.T) {
 			if test.wantAuthcodeExchangeCall != nil {
 				test.wantAuthcodeExchangeCall.args.Ctx = reqContext
 				test.idps.RequireExactlyOneCallToExchangeAuthcodeAndValidateTokens(t,
-					test.wantAuthcodeExchangeCall.performedByUpstreamName, test.wantAuthcodeExchangeCall.args,
+					test.wantAuthcodeExchangeCall.performedByUpstreamName,
+					idpdiscoveryv1alpha1.IDPTypeOIDC,
+					test.wantAuthcodeExchangeCall.args,
 				)
 			} else {
 				test.idps.RequireExactlyZeroCallsToExchangeAuthcodeAndValidateTokens(t)
@@ -1636,7 +1639,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 type expectedAuthcodeExchange struct {
 	performedByUpstreamName string
-	args                    *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs
+	args                    *oidctestutil.ExchangeAuthcodeArgs
 }
 
 type requestPath struct {
@@ -1694,12 +1697,6 @@ func happyUpstreamStateParam() *oidctestutil.UpstreamStateParamBuilder {
 		K: happyDownstreamPKCE,
 		V: happyDownstreamStateVersion,
 	}
-}
-
-func happyUpstreamStateParamForDynamicClient() *oidctestutil.UpstreamStateParamBuilder {
-	p := happyUpstreamStateParam()
-	p.P = happyDownstreamRequestParamsForDynamicClient
-	return p
 }
 
 func happyUpstream() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {

@@ -15,6 +15,7 @@ import (
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil/transformtestutil"
 	"go.pinniped.dev/internal/upstreamgithub"
+	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
@@ -58,11 +59,11 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 	originalCustomSession := &psession.CustomSessionData{
 		Username:         "fake-username",
 		UpstreamUsername: "fake-upstream-username",
-		GitHub:           &psession.GitHubSessionData{UpstreamAccessToken: "fake-upstream-access-token"},
+		GitHub:           &psession.GitHubSessionData{UpstreamAccessToken: &oidctypes.Token{AccessToken: &oidctypes.AccessToken{Token: "fake-upstream-access-token"}}},
 	}
 	clonedCustomSession := subject.CloneIDPSpecificSessionDataFromSession(originalCustomSession)
 	require.Equal(t,
-		&psession.GitHubSessionData{UpstreamAccessToken: "fake-upstream-access-token"},
+		&psession.GitHubSessionData{UpstreamAccessToken: &oidctypes.Token{AccessToken: &oidctypes.AccessToken{Token: "fake-upstream-access-token"}}},
 		clonedCustomSession,
 	)
 	require.NotSame(t, originalCustomSession, clonedCustomSession)
@@ -71,11 +72,11 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 		Username:         "fake-username2",
 		UpstreamUsername: "fake-upstream-username2",
 	}
-	subject.ApplyIDPSpecificSessionDataToSession(customSessionToBeMutated, &psession.GitHubSessionData{UpstreamAccessToken: "fake-upstream-access-token2"})
+	subject.ApplyIDPSpecificSessionDataToSession(customSessionToBeMutated, &psession.GitHubSessionData{UpstreamAccessToken: &oidctypes.Token{AccessToken: &oidctypes.AccessToken{Token: "OTHER-upstream-access-token"}}})
 	require.Equal(t, &psession.CustomSessionData{
 		Username:         "fake-username2",
 		UpstreamUsername: "fake-upstream-username2",
-		GitHub:           &psession.GitHubSessionData{UpstreamAccessToken: "fake-upstream-access-token2"},
+		GitHub:           &psession.GitHubSessionData{UpstreamAccessToken: &oidctypes.Token{AccessToken: &oidctypes.AccessToken{Token: "OTHER-upstream-access-token"}}},
 	}, customSessionToBeMutated)
 
 	redirectURL, err := subject.UpstreamAuthorizeRedirectURL(

@@ -168,4 +168,12 @@ type UpstreamGithubIdentityProviderI interface {
 	//  Or maybe higher level interface like this?
 	// 	  ExchangeAuthcode(ctx, authcode, redirectURI) (AccessToken, error)
 	//    GetUser(ctx, accessToken) (User, error) // in this case User would include team and org info
+
+	// ExchangeAuthcode performs an upstream GitHub authorization code exchange.
+	// Returns the raw access token. The access token expiry is not known.
+	ExchangeAuthcode(
+		ctx context.Context,
+		authcode string,
+		redirectURI string,
+	) (string, error)
 }

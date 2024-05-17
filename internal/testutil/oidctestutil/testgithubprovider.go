@@ -4,6 +4,8 @@
 package oidctestutil
 
 import (
+	"context"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -22,6 +24,10 @@ type TestUpstreamGitHubIdentityProviderBuilder struct {
 	groupNameAttribute             v1alpha1.GitHubGroupNameAttribute
 	allowedOrganizations           []string
 	authorizationURL               string
+
+	// Assertions stuff
+	authcodeExchangeErr error
+	accessToken         string
 }
 
 func (u *TestUpstreamGitHubIdentityProviderBuilder) WithName(value string) *TestUpstreamGitHubIdentityProviderBuilder {
@@ -69,6 +75,16 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) WithAuthorizationURL(value s
 	return u
 }
 
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithAccessToken(token string) *TestUpstreamGitHubIdentityProviderBuilder {
+	u.accessToken = token
+	return u
+}
+
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithEmptyAccessToken() *TestUpstreamGitHubIdentityProviderBuilder {
+	u.accessToken = ""
+	return u
+}
+
 func (u *TestUpstreamGitHubIdentityProviderBuilder) Build() *TestUpstreamGitHubIdentityProvider {
 	if u.displayNameForFederationDomain == "" {
 		// default it to the CR name
@@ -89,6 +105,13 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) Build() *TestUpstreamGitHubI
 		GroupNameAttribute:             u.groupNameAttribute,
 		AllowedOrganizations:           u.allowedOrganizations,
 		AuthorizationURL:               u.authorizationURL,
+
+		ExchangeAuthcodeFunc: func(ctx context.Context, authcode string) (string, error) {
+			if u.authcodeExchangeErr != nil {
+				return "", u.authcodeExchangeErr
+			}
+			return u.accessToken, nil
+		},
 	}
 }
 
@@ -107,6 +130,16 @@ type TestUpstreamGitHubIdentityProvider struct {
 	GroupNameAttribute             v1alpha1.GitHubGroupNameAttribute
 	AllowedOrganizations           []string
 	AuthorizationURL               string
+
+	authcodeExchangeErr error
+
+	ExchangeAuthcodeFunc func(
+		ctx context.Context,
+		authcode string,
+	) (string, error)
+
+	exchangeAuthcodeCallCount int
+	exchangeAuthcodeArgs      []*ExchangeAuthcodeArgs
 }
 
 var _ upstreamprovider.UpstreamGithubIdentityProviderI = &TestUpstreamGitHubIdentityProvider{}
@@ -141,4 +174,32 @@ func (u *TestUpstreamGitHubIdentityProvider) GetAllowedOrganizations() []string 
 
 func (u *TestUpstreamGitHubIdentityProvider) GetAuthorizationURL() string {
 	return u.AuthorizationURL
+}
+
+func (u *TestUpstreamGitHubIdentityProvider) ExchangeAuthcode(
+	ctx context.Context,
+	authcode string,
+	redirectURI string,
+) (string, error) {
+	if u.exchangeAuthcodeArgs == nil {
+		u.exchangeAuthcodeArgs = make([]*ExchangeAuthcodeArgs, 0)
+	}
+	u.exchangeAuthcodeCallCount++
+	u.exchangeAuthcodeArgs = append(u.exchangeAuthcodeArgs, &ExchangeAuthcodeArgs{
+		Ctx:         ctx,
+		Authcode:    authcode,
+		RedirectURI: redirectURI,
+	})
+	return u.ExchangeAuthcodeFunc(ctx, authcode)
+}
+
+func (u *TestUpstreamGitHubIdentityProvider) ExchangeAuthcodeCallCount() int {
+	return u.exchangeAuthcodeCallCount
+}
+
+func (u *TestUpstreamGitHubIdentityProvider) ExchangeAuthcodeArgs(call int) *ExchangeAuthcodeArgs {
+	if u.exchangeAuthcodeArgs == nil {
+		u.exchangeAuthcodeArgs = make([]*ExchangeAuthcodeArgs, 0)
+	}
+	return u.exchangeAuthcodeArgs[call]
 }

@@ -18,9 +18,9 @@ import (
 	oidcpkce "go.pinniped.dev/pkg/oidcclient/pkce"
 )
 
-// ExchangeAuthcodeAndValidateTokenArgs is used to spy on calls to
+// ExchangeAuthcodeArgs is used to spy on calls to
 // TestUpstreamOIDCIdentityProvider.ExchangeAuthcodeAndValidateTokensFunc().
-type ExchangeAuthcodeAndValidateTokenArgs struct {
+type ExchangeAuthcodeArgs struct {
 	Ctx                  context.Context
 	Authcode             string
 	PKCECodeVerifier     oidcpkce.Code
@@ -101,7 +101,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 
 	// Fields for tracking actual calls make to mock functions.
 	exchangeAuthcodeAndValidateTokensCallCount         int
-	exchangeAuthcodeAndValidateTokensArgs              []*ExchangeAuthcodeAndValidateTokenArgs
+	exchangeAuthcodeAndValidateTokensArgs              []*ExchangeAuthcodeArgs
 	passwordCredentialsGrantAndValidateTokensCallCount int
 	passwordCredentialsGrantAndValidateTokensArgs      []*PasswordCredentialsGrantAndValidateTokensArgs
 	performRefreshCallCount                            int
@@ -180,10 +180,10 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokens(
 	redirectURI string,
 ) (*oidctypes.Token, error) {
 	if u.exchangeAuthcodeAndValidateTokensArgs == nil {
-		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeAndValidateTokenArgs, 0)
+		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeArgs, 0)
 	}
 	u.exchangeAuthcodeAndValidateTokensCallCount++
-	u.exchangeAuthcodeAndValidateTokensArgs = append(u.exchangeAuthcodeAndValidateTokensArgs, &ExchangeAuthcodeAndValidateTokenArgs{
+	u.exchangeAuthcodeAndValidateTokensArgs = append(u.exchangeAuthcodeAndValidateTokensArgs, &ExchangeAuthcodeArgs{
 		Ctx:                  ctx,
 		Authcode:             authcode,
 		PKCECodeVerifier:     pkceCodeVerifier,
@@ -197,9 +197,9 @@ func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokensCall
 	return u.exchangeAuthcodeAndValidateTokensCallCount
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokensArgs(call int) *ExchangeAuthcodeAndValidateTokenArgs {
+func (u *TestUpstreamOIDCIdentityProvider) ExchangeAuthcodeAndValidateTokensArgs(call int) *ExchangeAuthcodeArgs {
 	if u.exchangeAuthcodeAndValidateTokensArgs == nil {
-		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeAndValidateTokenArgs, 0)
+		u.exchangeAuthcodeAndValidateTokensArgs = make([]*ExchangeAuthcodeArgs, 0)
 	}
 	return u.exchangeAuthcodeAndValidateTokensArgs[call]
 }

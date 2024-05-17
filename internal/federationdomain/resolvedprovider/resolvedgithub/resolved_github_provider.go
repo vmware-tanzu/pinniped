@@ -91,13 +91,28 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) Login(
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
-	_ context.Context,
-	_ string,
-	_ pkce.Code,
-	_ nonce.Nonce,
-	_ string,
+	ctx context.Context,
+	authCode string,
+	_ pkce.Code, // GitHub does not support PKCE, see https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
+	_ nonce.Nonce, // GitHub does not support OIDC, therefore there is no ID token that could contain the "nonce".
+	redirectURI string,
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
-	return nil, nil, errors.New("function LoginFromCallback not yet implemented for GitHub IDP")
+	token, _ := p.Provider.ExchangeAuthcode(
+		ctx,
+		authCode,
+		redirectURI,
+	)
+
+	return &resolvedprovider.Identity{
+			UpstreamUsername:  "some-github-login",
+			UpstreamGroups:    []string{"org1/team1", "org2/team2"},
+			DownstreamSubject: "https://github.com?idpName=upstream-github-idp-name&sub=some-github-login",
+			IDPSpecificSessionData: &psession.GitHubSessionData{
+				UpstreamAccessToken: token,
+			},
+		},
+		&resolvedprovider.IdentityLoginExtras{},
+		nil
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(

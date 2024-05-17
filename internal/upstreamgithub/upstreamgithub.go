@@ -5,6 +5,7 @@
 package upstreamgithub
 
 import (
+	"context"
 	"net/http"
 
 	"golang.org/x/oauth2"
@@ -85,6 +86,11 @@ func (p *Provider) GetAllowedOrganizations() []string {
 
 func (p *Provider) GetAuthorizationURL() string {
 	return p.c.OAuth2Config.Endpoint.AuthURL
+}
+
+func (p *Provider) ExchangeAuthcode(_ context.Context, _ string, _ string) (string, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 // GetConfig returns the config. This is not part of the interface and is mostly just for testing.

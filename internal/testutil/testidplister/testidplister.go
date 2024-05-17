@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedgithub"
@@ -266,38 +267,56 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPasswordCredentialsG
 func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToExchangeAuthcodeAndValidateTokens(
 	t *testing.T,
 	expectedPerformedByUpstreamName string,
-	expectedArgs *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs,
+	expectedPerformedByUpstreamType idpdiscoveryv1alpha1.IDPType,
+	expectedArgs *oidctestutil.ExchangeAuthcodeArgs,
 ) {
 	t.Helper()
-	var actualArgs *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs
+	var actualArgs *oidctestutil.ExchangeAuthcodeArgs
 	var actualNameOfUpstreamWhichMadeCall string
-	actualCallCountAcrossAllOIDCUpstreams := 0
+	var actualTypeOfUpstreamWhichMadeCall idpdiscoveryv1alpha1.IDPType
+	actualCallCountAcrossAllOIDCAndGitHubUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		callCountOnThisUpstream := upstreamOIDC.ExchangeAuthcodeAndValidateTokensCallCount()
-		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+		actualCallCountAcrossAllOIDCAndGitHubUpstreams += callCountOnThisUpstream
 		if callCountOnThisUpstream == 1 {
 			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
+			actualTypeOfUpstreamWhichMadeCall = idpdiscoveryv1alpha1.IDPTypeOIDC
 			actualArgs = upstreamOIDC.ExchangeAuthcodeAndValidateTokensArgs(0)
 		}
 	}
-	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
-		"should have been exactly one call to ExchangeAuthcodeAndValidateTokens() by all OIDC upstreams",
+	for _, upstreamGitHub := range b.upstreamGitHubIdentityProviders {
+		callCountOnThisUpstream := upstreamGitHub.ExchangeAuthcodeCallCount()
+		actualCallCountAcrossAllOIDCAndGitHubUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstreamGitHub.Name
+			actualTypeOfUpstreamWhichMadeCall = idpdiscoveryv1alpha1.IDPTypeGitHub
+			actualArgs = upstreamGitHub.ExchangeAuthcodeArgs(0)
+		}
+	}
+	require.Equal(t, 1, actualCallCountAcrossAllOIDCAndGitHubUpstreams,
+		"expected exactly one call to (OIDC) ExchangeAuthcodeAndValidateTokensCallCount() or (GitHub) ExchangeAuthcodeCallCount()",
 	)
 	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"ExchangeAuthcodeAndValidateTokens() was called on the wrong OIDC upstream",
+		"(OIDC) ExchangeAuthcodeAndValidateTokensCallCount() or (GitHub) ExchangeAuthcodeCallCount() was called on the wrong upstream name",
+	)
+	require.Equal(t, expectedPerformedByUpstreamType, actualTypeOfUpstreamWhichMadeCall,
+		"(OIDC) ExchangeAuthcodeAndValidateTokensCallCount() or (GitHub) ExchangeAuthcodeCallCount() was called on the wrong upstream type",
 	)
 	require.Equal(t, expectedArgs, actualArgs)
 }
 
 func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToExchangeAuthcodeAndValidateTokens(t *testing.T) {
 	t.Helper()
-	actualCallCountAcrossAllOIDCUpstreams := 0
+	actualCallCount := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.ExchangeAuthcodeAndValidateTokensCallCount()
+		actualCallCount += upstreamOIDC.ExchangeAuthcodeAndValidateTokensCallCount()
+	}
+	for _, upstreamGitHub := range b.upstreamGitHubIdentityProviders {
+		actualCallCount += upstreamGitHub.ExchangeAuthcodeCallCount()
 	}
 
-	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
-		"expected exactly zero calls to ExchangeAuthcodeAndValidateTokens()",
+	require.Equal(t, 0, actualCallCount,
+		"expected exactly zero calls to (OIDC) ExchangeAuthcodeAndValidateTokensCallCount() or (GitHub) ExchangeAuthcodeCallCount()",
 	)
 }
 

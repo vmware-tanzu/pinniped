@@ -178,7 +178,7 @@ func TestGetUser(t *testing.T) {
 				),
 			),
 			token:   "does-this-token-work",
-			wantErr: `the "login" attribute is missing for authenticated user`,
+			wantErr: `error fetching authenticated user: the "login" attribute is missing`,
 		},
 		{
 			name: "handles missing ID",
@@ -191,7 +191,7 @@ func TestGetUser(t *testing.T) {
 				),
 			),
 			token:   "does-this-token-work",
-			wantErr: `the "ID" attribute is missing for authenticated user`,
+			wantErr: `error fetching authenticated user: the "id" attribute is missing`,
 		},
 		{
 			name:       "passes the context parameter into the API call",
@@ -313,6 +313,21 @@ func TestGetOrgMembership(t *testing.T) {
 			wantOrgs: []string{"some-org-to-which-the-authenticated-user-belongs"},
 		},
 		{
+			name: "errors when a Login field is empty",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserOrgs,
+					[]github.Organization{
+						{Login: github.String("page1-org1")},
+						{Login: nil},
+						{Login: github.String("page1-org3")},
+					},
+				),
+			),
+			token:   "some-token",
+			wantErr: `error fetching organizations for authenticated user: one or more organizations is missing the "login" attribute`,
+		},
+		{
 			name:       "passes the context parameter into the API call",
 			token:      "some-token",
 			httpClient: mock.NewMockedHTTPClient(),
@@ -338,7 +353,7 @@ func TestGetOrgMembership(t *testing.T) {
 				),
 			),
 			token:   "some-token",
-			wantErr: "error fetching organizations for authenticated user: GET {SERVER_URL}/user/orgs?per_page=10: 424 some random client error []",
+			wantErr: "error fetching organizations for authenticated user: GET {SERVER_URL}/user/orgs?per_page=100: 424 some random client error []",
 		},
 	}
 	for _, test := range tests {
@@ -364,7 +379,8 @@ func TestGetOrgMembership(t *testing.T) {
 			}
 
 			require.NotNil(t, actual)
-			require.Equal(t, test.wantOrgs, actual)
+			require.Equal(t, len(actual), len(test.wantOrgs))
+			require.True(t, actual.HasAll(test.wantOrgs...))
 		})
 	}
 }
@@ -379,7 +395,7 @@ func TestGetTeamMembership(t *testing.T) {
 		ctx                  context.Context
 		allowedOrganizations []string
 		wantErr              string
-		wantTeams            []TeamInfo
+		wantTeams            []*TeamInfo
 	}{
 		{
 			name: "happy path",
@@ -420,7 +436,7 @@ func TestGetTeamMembership(t *testing.T) {
 			),
 			token:                "some-token",
 			allowedOrganizations: []string{"alpha", "beta"},
-			wantTeams: []TeamInfo{
+			wantTeams: []*TeamInfo{
 				{
 					Name: "orgAlpha-team1-name",
 					Slug: "orgAlpha-team1-slug",
@@ -475,7 +491,7 @@ func TestGetTeamMembership(t *testing.T) {
 			),
 			token:                "some-token",
 			allowedOrganizations: []string{"alpha", "gamma"},
-			wantTeams: []TeamInfo{
+			wantTeams: []*TeamInfo{
 				{
 					Name: "team1-name",
 					Slug: "team1-slug",
@@ -526,7 +542,7 @@ func TestGetTeamMembership(t *testing.T) {
 				),
 			),
 			token: "some-token",
-			wantTeams: []TeamInfo{
+			wantTeams: []*TeamInfo{
 				{
 					Name: "team1-name",
 					Slug: "team1-slug",
@@ -599,7 +615,7 @@ func TestGetTeamMembership(t *testing.T) {
 				"parent-team-org-that-in-reality-can-never-be-different-than-child-team-org",
 				"beta",
 			},
-			wantTeams: []TeamInfo{
+			wantTeams: []*TeamInfo{
 				{
 					Name: "team-name-with-parent",
 					Slug: "team-slug-with-parent",
@@ -649,7 +665,7 @@ func TestGetTeamMembership(t *testing.T) {
 			),
 			token:                "some-token",
 			allowedOrganizations: []string{"page1-org-name", "page2-org-name"},
-			wantTeams: []TeamInfo{
+			wantTeams: []*TeamInfo{
 				{
 					Name: "page1-team-name",
 					Slug: "page1-team-slug",
@@ -661,6 +677,164 @@ func TestGetTeamMembership(t *testing.T) {
 					Org:  "page2-org-name",
 				},
 			},
+		},
+		{
+			name: "missing organization attribute returns an error",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserTeams,
+					[]github.Team{
+						{
+							Name: github.String("team-name"),
+							Slug: github.String("team-slug"),
+						},
+					},
+				),
+			),
+			wantErr: `error fetching team membership for authenticated user: missing the "organization" attribute for a team`,
+		},
+		{
+			name: "missing organization's login attribute returns an error",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserTeams,
+					[]github.Team{
+						{
+							Name:         github.String("team-name"),
+							Slug:         github.String("team-slug"),
+							Organization: &github.Organization{},
+						},
+					},
+				),
+			),
+			wantErr: `error fetching team membership for authenticated user: missing the organization's "login" attribute for a team`,
+		},
+		{
+			name: "missing the name attribute for a team returns an error",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserTeams,
+					[]github.Team{
+						{
+							Slug: github.String("team-slug"),
+							Organization: &github.Organization{
+								Login: github.String("some-org"),
+							},
+						},
+					},
+				),
+			),
+			wantErr: `error fetching team membership for authenticated user: the "name" attribute is missing for a team`,
+		},
+		{
+			name: "missing the slug attribute for a team returns an error",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserTeams,
+					[]github.Team{
+						{
+							Name: github.String("team-name"),
+							Organization: &github.Organization{
+								Login: github.String("some-org"),
+							},
+						},
+					},
+				),
+			),
+			wantErr: `error fetching team membership for authenticated user: the "slug" attribute is missing for a team`,
+		},
+		{
+			name: "missing parent's organization attribute returns an error",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserTeams,
+					[]github.Team{
+						{
+							Name: github.String("team-name-with-parent"),
+							Slug: github.String("team-slug-with-parent"),
+							Parent: &github.Team{
+								Name: github.String("parent-team-name"),
+								Slug: github.String("parent-team-slug"),
+							},
+							Organization: &github.Organization{
+								Login: github.String("some-org"),
+							},
+						},
+					},
+				),
+			),
+			wantErr: `error fetching team membership for authenticated user: missing the "organization" attribute for a team`,
+		},
+		{
+			name: "missing parent's organization's login attribute returns an error",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserTeams,
+					[]github.Team{
+						{
+							Name: github.String("team-name-with-parent"),
+							Slug: github.String("team-slug-with-parent"),
+							Parent: &github.Team{
+								Name:         github.String("parent-team-name"),
+								Slug:         github.String("parent-team-slug"),
+								Organization: &github.Organization{},
+							},
+							Organization: &github.Organization{
+								Login: github.String("some-org"),
+							},
+						},
+					},
+				),
+			),
+			wantErr: `error fetching team membership for authenticated user: missing the organization's "login" attribute for a team`,
+		},
+		{
+			name: "missing the name attribute for a parent team returns an error",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserTeams,
+					[]github.Team{
+						{
+							Name: github.String("team-name-with-parent"),
+							Slug: github.String("team-slug-with-parent"),
+							Parent: &github.Team{
+								Slug: github.String("parent-team-slug"),
+								Organization: &github.Organization{
+									Login: github.String("some-org"),
+								},
+							},
+							Organization: &github.Organization{
+								Login: github.String("some-org"),
+							},
+						},
+					},
+				),
+			),
+			wantErr: `error fetching team membership for authenticated user: the "name" attribute is missing for a team`,
+		},
+		{
+			name: "missing the slug attribute for a parent team returns an error",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserTeams,
+					[]github.Team{
+						{
+							Name: github.String("team-name-with-parent"),
+							Slug: github.String("team-slug-with-parent"),
+							Parent: &github.Team{
+								Name: github.String("parent-team-name"),
+								Organization: &github.Organization{
+									Login: github.String("some-org"),
+								},
+							},
+							Organization: &github.Organization{
+								Login: github.String("some-org"),
+							},
+						},
+					},
+				),
+			),
+			wantErr: `error fetching team membership for authenticated user: the "slug" attribute is missing for a team`,
 		},
 		{
 			name: "the token is added in the Authorization header",
@@ -677,7 +851,7 @@ func TestGetTeamMembership(t *testing.T) {
 			),
 			token:                "does-this-token-work",
 			allowedOrganizations: []string{"org-login"},
-			wantTeams: []TeamInfo{
+			wantTeams: []*TeamInfo{
 				{
 					Name: "team1-name",
 					Slug: "team1-slug",
@@ -711,7 +885,7 @@ func TestGetTeamMembership(t *testing.T) {
 				),
 			),
 			token:   "some-token",
-			wantErr: "error fetching team membership for authenticated user: GET {SERVER_URL}/user/teams?per_page=10: 424 some random client error []",
+			wantErr: "error fetching team membership for authenticated user: GET {SERVER_URL}/user/teams?per_page=100: 424 some random client error []",
 		},
 	}
 	for _, test := range tests {

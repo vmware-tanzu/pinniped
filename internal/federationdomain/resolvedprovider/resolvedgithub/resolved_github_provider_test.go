@@ -4,6 +4,8 @@
 package resolvedgithub
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,10 +14,11 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/psession"
+	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/internal/testutil/transformtestutil"
 	"go.pinniped.dev/internal/upstreamgithub"
-	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 )
 
 func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
@@ -59,11 +62,11 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 	originalCustomSession := &psession.CustomSessionData{
 		Username:         "fake-username",
 		UpstreamUsername: "fake-upstream-username",
-		GitHub:           &psession.GitHubSessionData{UpstreamAccessToken: &oidctypes.Token{AccessToken: &oidctypes.AccessToken{Token: "fake-upstream-access-token"}}},
+		GitHub:           &psession.GitHubSessionData{UpstreamAccessToken: "fake-upstream-access-token"},
 	}
 	clonedCustomSession := subject.CloneIDPSpecificSessionDataFromSession(originalCustomSession)
 	require.Equal(t,
-		&psession.GitHubSessionData{UpstreamAccessToken: &oidctypes.Token{AccessToken: &oidctypes.AccessToken{Token: "fake-upstream-access-token"}}},
+		&psession.GitHubSessionData{UpstreamAccessToken: "fake-upstream-access-token"},
 		clonedCustomSession,
 	)
 	require.NotSame(t, originalCustomSession, clonedCustomSession)
@@ -72,11 +75,11 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 		Username:         "fake-username2",
 		UpstreamUsername: "fake-upstream-username2",
 	}
-	subject.ApplyIDPSpecificSessionDataToSession(customSessionToBeMutated, &psession.GitHubSessionData{UpstreamAccessToken: &oidctypes.Token{AccessToken: &oidctypes.AccessToken{Token: "OTHER-upstream-access-token"}}})
+	subject.ApplyIDPSpecificSessionDataToSession(customSessionToBeMutated, &psession.GitHubSessionData{UpstreamAccessToken: "OTHER-upstream-access-token"})
 	require.Equal(t, &psession.CustomSessionData{
 		Username:         "fake-username2",
 		UpstreamUsername: "fake-upstream-username2",
-		GitHub:           &psession.GitHubSessionData{UpstreamAccessToken: &oidctypes.Token{AccessToken: &oidctypes.AccessToken{Token: "OTHER-upstream-access-token"}}},
+		GitHub:           &psession.GitHubSessionData{UpstreamAccessToken: "OTHER-upstream-access-token"},
 	}, customSessionToBeMutated)
 
 	redirectURL, err := subject.UpstreamAuthorizeRedirectURL(
@@ -100,4 +103,140 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 			"state=encodedStateParam12345",
 		redirectURL,
 	)
+}
+
+func TestLoginFromCallback(t *testing.T) {
+	uniqueCtx := context.WithValue(context.Background(), "some-unique-key", "some-value") //nolint:staticcheck // okay to use string key for test
+
+	tests := []struct {
+		name        string
+		provider    *oidctestutil.TestUpstreamGitHubIdentityProvider
+		authcode    string
+		redirectURI string
+
+		wantExchangeAuthcodeCall bool
+		wantExchangeAuthcodeArgs *oidctestutil.ExchangeAuthcodeArgs
+		wantGetUserCall          bool
+		wantGetUserArgs          *oidctestutil.GetUserArgs
+		wantIdentity             *resolvedprovider.Identity
+		wantExtras               *resolvedprovider.IdentityLoginExtras
+		wantErr                  string
+	}{
+		{
+			name: "happy path",
+			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithAccessToken("fake-access-token").
+				WithUser(&upstreamprovider.GitHubUser{
+					Username:          "fake-username",
+					Groups:            []string{"fake-group1", "fake-group2"},
+					DownstreamSubject: "https://fake-downstream-subject",
+				}).
+				Build(),
+			authcode:                 "fake-authcode",
+			redirectURI:              "https://fake-redirect-uri",
+			wantExchangeAuthcodeCall: true,
+			wantExchangeAuthcodeArgs: &oidctestutil.ExchangeAuthcodeArgs{
+				Ctx:         uniqueCtx,
+				Authcode:    "fake-authcode",
+				RedirectURI: "https://fake-redirect-uri",
+			},
+			wantGetUserCall: true,
+			wantGetUserArgs: &oidctestutil.GetUserArgs{
+				Ctx:         uniqueCtx,
+				AccessToken: "fake-access-token",
+			},
+			wantIdentity: &resolvedprovider.Identity{
+				UpstreamUsername:  "fake-username",
+				UpstreamGroups:    []string{"fake-group1", "fake-group2"},
+				DownstreamSubject: "https://fake-downstream-subject",
+				IDPSpecificSessionData: &psession.GitHubSessionData{
+					UpstreamAccessToken: "fake-access-token",
+				},
+			},
+			wantExtras: &resolvedprovider.IdentityLoginExtras{},
+		},
+		{
+			name: "error while exchanging authcode",
+			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithAuthcodeExchangeError(errors.New("fake authcode exchange error")).
+				Build(),
+			authcode:                 "fake-authcode",
+			redirectURI:              "https://fake-redirect-uri",
+			wantExchangeAuthcodeCall: true,
+			wantExchangeAuthcodeArgs: &oidctestutil.ExchangeAuthcodeArgs{
+				Ctx:         uniqueCtx,
+				Authcode:    "fake-authcode",
+				RedirectURI: "https://fake-redirect-uri",
+			},
+			wantGetUserCall: false,
+			wantIdentity:    nil,
+			wantExtras:      nil,
+			wantErr:         "failed to exchange auth code using GitHub API: fake authcode exchange error",
+		},
+		{
+			name: "error while getting user info",
+			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithAccessToken("fake-access-token").
+				WithGetUserError(errors.New("fake user info error")).
+				Build(),
+			authcode:                 "fake-authcode",
+			redirectURI:              "https://fake-redirect-uri",
+			wantExchangeAuthcodeCall: true,
+			wantExchangeAuthcodeArgs: &oidctestutil.ExchangeAuthcodeArgs{
+				Ctx:         uniqueCtx,
+				Authcode:    "fake-authcode",
+				RedirectURI: "https://fake-redirect-uri",
+			},
+			wantGetUserCall: true,
+			wantGetUserArgs: &oidctestutil.GetUserArgs{
+				Ctx:         uniqueCtx,
+				AccessToken: "fake-access-token",
+			},
+			wantIdentity: nil,
+			wantExtras:   nil,
+			wantErr:      "failed to get user info from GitHub API: fake user info error",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			transforms := transformtestutil.NewRejectAllAuthPipeline(t)
+
+			subject := FederationDomainResolvedGitHubIdentityProvider{
+				DisplayName:         "fake-display-name",
+				Provider:            test.provider,
+				SessionProviderType: psession.ProviderTypeGitHub,
+				Transforms:          transforms,
+			}
+
+			identity, loginExtras, err := subject.LoginFromCallback(uniqueCtx,
+				test.authcode,
+				"pkce-will-be-ignored",
+				"nonce-will-be-ignored",
+				test.redirectURI,
+			)
+
+			if test.wantExchangeAuthcodeCall {
+				require.Equal(t, 1, test.provider.ExchangeAuthcodeCallCount())
+				require.Equal(t, test.wantExchangeAuthcodeArgs, test.provider.ExchangeAuthcodeArgs(0))
+			} else {
+				require.Zero(t, test.provider.ExchangeAuthcodeCallCount())
+			}
+
+			if test.wantGetUserCall {
+				require.Equal(t, 1, test.provider.GetUserCallCount())
+				require.Equal(t, test.wantGetUserArgs, test.provider.GetUserArgs(0))
+			} else {
+				require.Zero(t, test.provider.GetUserCallCount())
+			}
+
+			if test.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, test.wantErr)
+			}
+			require.Equal(t, test.wantExtras, loginExtras)
+			require.Equal(t, test.wantIdentity, identity)
+		})
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -88,12 +89,37 @@ func (p *Provider) GetAuthorizationURL() string {
 	return p.c.OAuth2Config.Endpoint.AuthURL
 }
 
-func (p *Provider) ExchangeAuthcode(_ context.Context, _ string, _ string) (string, error) {
-	//TODO implement me
-	panic("implement me")
+func (p *Provider) ExchangeAuthcode(ctx context.Context, authcode string, redirectURI string) (string, error) {
+	// TODO: write tests for this
+	panic("write some tests for this sketch of the implementation, maybe by running a test server in the unit tests")
+	//nolint:govet // this code is intentionally unreachable until we resolve the todos
+	tok, err := p.c.OAuth2Config.Exchange(
+		coreosoidc.ClientContext(ctx, p.c.HttpClient),
+		authcode,
+		oauth2.SetAuthURLParam("redirect_uri", redirectURI),
+	)
+	if err != nil {
+		return "", err
+	}
+	return tok.AccessToken, nil
 }
 
-// GetConfig returns the config. This is not part of the interface and is mostly just for testing.
+func (p *Provider) GetUser(_ctx context.Context, _accessToken string) (*upstreamprovider.GitHubUser, error) {
+	// TODO Implement this to make several https calls to github to learn about the user, using a lower-level githubclient package.
+	//   Pass the ctx, accessToken, p.c.HttpClient, and p.c.APIBaseURL to the lower-level package's functions.
+	// TODO: Reject the auth if the user does not belong to any of p.c.AllowedOrganizations (unless p.c.AllowedOrganizations is empty).
+	// TODO: Make use of p.c.UsernameAttribute and p.c.GroupNameAttribute when deciding the username and group names.
+	// TODO: Determine the downstream subject by first writing a helper in downstream_subject.go and then calling it here.
+	panic("implement me")
+	//nolint:govet // this code is intentionally unreachable until we resolve the todos
+	return &upstreamprovider.GitHubUser{
+		Username:          "TODO",
+		Groups:            []string{"org/TODO"},
+		DownstreamSubject: "TODO",
+	}, nil
+}
+
+// GetConfig returns the config. This is not part of the UpstreamGithubIdentityProviderI interface and is just for testing.
 func (p *Provider) GetConfig() ProviderConfig {
 	return p.c
 }

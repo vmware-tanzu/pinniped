@@ -127,6 +127,12 @@ type UpstreamLDAPIdentityProviderI interface {
 	PerformRefresh(ctx context.Context, storedRefreshAttributes RefreshAttributes, idpDisplayName string) (groups []string, err error)
 }
 
+type GitHubUser struct {
+	Username          string   // could be login name, id, or login:id
+	Groups            []string // could be names or slugs
+	DownstreamSubject string   // the whole downstream subject URI
+}
+
 type UpstreamGithubIdentityProviderI interface {
 	UpstreamIdentityProviderI
 
@@ -159,21 +165,11 @@ type UpstreamGithubIdentityProviderI interface {
 	// It will never include a username or password in the authority section.
 	GetAuthorizationURL() string
 
-	// TODO: This interface should be easily mockable to avoid all interactions with the actual server.
-	//  What interactions with the server do we want to hide behind this interface? Something like this?
-	// 	  ExchangeAuthcode(ctx, authcode, redirectURI) (AccessToken, error)
-	//    GetUser(ctx, accessToken) (User, error)
-	//    GetUserOrgs(ctx, accessToken) ([]Org, error)
-	//    GetUserTeams(ctx, accessToken) ([]Team, error)
-	//  Or maybe higher level interface like this?
-	// 	  ExchangeAuthcode(ctx, authcode, redirectURI) (AccessToken, error)
-	//    GetUser(ctx, accessToken) (User, error) // in this case User would include team and org info
-
 	// ExchangeAuthcode performs an upstream GitHub authorization code exchange.
 	// Returns the raw access token. The access token expiry is not known.
-	ExchangeAuthcode(
-		ctx context.Context,
-		authcode string,
-		redirectURI string,
-	) (string, error)
+	ExchangeAuthcode(ctx context.Context, authcode string, redirectURI string) (string, error)
+
+	// GetUser calls the user, orgs, and teams APIs of GitHub using the accessToken.
+	// It validates any required org memberships. It returns a User or an error.
+	GetUser(ctx context.Context, accessToken string) (*GitHubUser, error)
 }

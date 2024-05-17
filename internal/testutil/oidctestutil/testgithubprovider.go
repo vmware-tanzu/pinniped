@@ -13,6 +13,21 @@ import (
 	"go.pinniped.dev/internal/idtransform"
 )
 
+// ExchangeAuthcodeArgs is used to spy on calls to
+// TestUpstreamGitHubIdentityProvider.ExchangeAuthcodeFunc().
+type ExchangeAuthcodeArgs struct {
+	Ctx         context.Context
+	Authcode    string
+	RedirectURI string
+}
+
+// GetUserArgs is used to spy on calls to
+// TestUpstreamGitHubIdentityProvider.GetUserFunc().
+type GetUserArgs struct {
+	Ctx         context.Context
+	AccessToken string
+}
+
 type TestUpstreamGitHubIdentityProviderBuilder struct {
 	name                           string
 	resourceUID                    types.UID
@@ -24,10 +39,10 @@ type TestUpstreamGitHubIdentityProviderBuilder struct {
 	groupNameAttribute             v1alpha1.GitHubGroupNameAttribute
 	allowedOrganizations           []string
 	authorizationURL               string
-
-	// Assertions stuff
-	authcodeExchangeErr error
-	accessToken         string
+	authcodeExchangeErr            error
+	accessToken                    string
+	getUserErr                     error
+	getUserUser                    *upstreamprovider.GitHubUser
 }
 
 func (u *TestUpstreamGitHubIdentityProviderBuilder) WithName(value string) *TestUpstreamGitHubIdentityProviderBuilder {
@@ -80,8 +95,18 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) WithAccessToken(token string
 	return u
 }
 
-func (u *TestUpstreamGitHubIdentityProviderBuilder) WithEmptyAccessToken() *TestUpstreamGitHubIdentityProviderBuilder {
-	u.accessToken = ""
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithAuthcodeExchangeError(err error) *TestUpstreamGitHubIdentityProviderBuilder {
+	u.authcodeExchangeErr = err
+	return u
+}
+
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithUser(user *upstreamprovider.GitHubUser) *TestUpstreamGitHubIdentityProviderBuilder {
+	u.getUserUser = user
+	return u
+}
+
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithGetUserError(err error) *TestUpstreamGitHubIdentityProviderBuilder {
+	u.getUserErr = err
 	return u
 }
 
@@ -96,8 +121,8 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) Build() *TestUpstreamGitHubI
 	}
 	return &TestUpstreamGitHubIdentityProvider{
 		Name:                           u.name,
-		ResourceUID:                    u.resourceUID,
 		ClientID:                       u.clientID,
+		ResourceUID:                    u.resourceUID,
 		Scopes:                         u.scopes,
 		DisplayNameForFederationDomain: u.displayNameForFederationDomain,
 		TransformsForFederationDomain:  u.transformsForFederationDomain,
@@ -105,7 +130,12 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) Build() *TestUpstreamGitHubI
 		GroupNameAttribute:             u.groupNameAttribute,
 		AllowedOrganizations:           u.allowedOrganizations,
 		AuthorizationURL:               u.authorizationURL,
-
+		GetUserFunc: func(ctx context.Context, accessToken string) (*upstreamprovider.GitHubUser, error) {
+			if u.getUserErr != nil {
+				return nil, u.getUserErr
+			}
+			return u.getUserUser, nil
+		},
 		ExchangeAuthcodeFunc: func(ctx context.Context, authcode string) (string, error) {
 			if u.authcodeExchangeErr != nil {
 				return "", u.authcodeExchangeErr
@@ -130,16 +160,14 @@ type TestUpstreamGitHubIdentityProvider struct {
 	GroupNameAttribute             v1alpha1.GitHubGroupNameAttribute
 	AllowedOrganizations           []string
 	AuthorizationURL               string
+	GetUserFunc                    func(ctx context.Context, accessToken string) (*upstreamprovider.GitHubUser, error)
+	ExchangeAuthcodeFunc           func(ctx context.Context, authcode string) (string, error)
 
-	authcodeExchangeErr error
-
-	ExchangeAuthcodeFunc func(
-		ctx context.Context,
-		authcode string,
-	) (string, error)
-
+	// Fields for tracking actual calls make to mock functions.
 	exchangeAuthcodeCallCount int
 	exchangeAuthcodeArgs      []*ExchangeAuthcodeArgs
+	getUserCallCount          int
+	getUserArgs               []*GetUserArgs
 }
 
 var _ upstreamprovider.UpstreamGithubIdentityProviderI = &TestUpstreamGitHubIdentityProvider{}
@@ -202,4 +230,27 @@ func (u *TestUpstreamGitHubIdentityProvider) ExchangeAuthcodeArgs(call int) *Exc
 		u.exchangeAuthcodeArgs = make([]*ExchangeAuthcodeArgs, 0)
 	}
 	return u.exchangeAuthcodeArgs[call]
+}
+
+func (u *TestUpstreamGitHubIdentityProvider) GetUser(ctx context.Context, accessToken string) (*upstreamprovider.GitHubUser, error) {
+	if u.getUserArgs == nil {
+		u.getUserArgs = make([]*GetUserArgs, 0)
+	}
+	u.getUserCallCount++
+	u.getUserArgs = append(u.getUserArgs, &GetUserArgs{
+		Ctx:         ctx,
+		AccessToken: accessToken,
+	})
+	return u.GetUserFunc(ctx, accessToken)
+}
+
+func (u *TestUpstreamGitHubIdentityProvider) GetUserCallCount() int {
+	return u.getUserCallCount
+}
+
+func (u *TestUpstreamGitHubIdentityProvider) GetUserArgs(call int) *GetUserArgs {
+	if u.getUserArgs == nil {
+		u.getUserArgs = make([]*GetUserArgs, 0)
+	}
+	return u.getUserArgs[call]
 }

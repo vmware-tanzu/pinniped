@@ -97,22 +97,29 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
 	_ nonce.Nonce, // GitHub does not support OIDC, therefore there is no ID token that could contain the "nonce".
 	redirectURI string,
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
-	token, _ := p.Provider.ExchangeAuthcode(
-		ctx,
-		authCode,
-		redirectURI,
-	)
+	accessToken, err := p.Provider.ExchangeAuthcode(ctx, authCode, redirectURI)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to exchange auth code using GitHub API: %w", err)
+	}
+
+	user, err := p.Provider.GetUser(ctx, accessToken)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get user info from GitHub API: %w", err)
+	}
 
 	return &resolvedprovider.Identity{
-			UpstreamUsername:  "some-github-login",
-			UpstreamGroups:    []string{"org1/team1", "org2/team2"},
-			DownstreamSubject: "https://github.com?idpName=upstream-github-idp-name&sub=some-github-login",
+			UpstreamUsername:  user.Username,
+			UpstreamGroups:    user.Groups,
+			DownstreamSubject: user.DownstreamSubject,
 			IDPSpecificSessionData: &psession.GitHubSessionData{
-				UpstreamAccessToken: token,
+				UpstreamAccessToken: accessToken,
 			},
 		},
-		&resolvedprovider.IdentityLoginExtras{},
-		nil
+		&resolvedprovider.IdentityLoginExtras{
+			DownstreamAdditionalClaims: nil, // not using this for GitHub
+			Warnings:                   nil, // not using this for GitHub
+		},
+		nil // no error
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(

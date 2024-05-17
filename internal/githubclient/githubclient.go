@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"slices"
 
 	"github.com/google/go-github/v62/github"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const emptyUserMeansTheAuthenticatedUser = ""
@@ -25,7 +26,7 @@ type TeamInfo struct {
 type GitHubInterface interface {
 	GetUserInfo() (*UserInfo, error)
 	GetOrgMembership() ([]string, error)
-	GetTeamMembership(allowedOrganizations []string) ([]TeamInfo, error)
+	GetTeamMembership(allowedOrganizations sets.Set[string]) ([]TeamInfo, error)
 }
 
 type githubClient struct {
@@ -90,8 +91,9 @@ func (g *githubClient) GetUserInfo() (*UserInfo, error) {
 // GetOrgMembership returns an array of the "Login" attributes for all organizations to which the authenticated user belongs.
 // TODO: where should context come from?
 // TODO: what happens if login is nil?
+// TODO: what is a good page size?
 func (g *githubClient) GetOrgMembership() ([]string, error) {
-	organizationsAsStrings := make([]string, 0)
+	organizationLoginStrings := make([]string, 0)
 
 	opt := &github.ListOptions{PerPage: 10}
 	// get all pages of results
@@ -102,7 +104,7 @@ func (g *githubClient) GetOrgMembership() ([]string, error) {
 		}
 
 		for _, organization := range organizationResults {
-			organizationsAsStrings = append(organizationsAsStrings, organization.GetLogin())
+			organizationLoginStrings = append(organizationLoginStrings, organization.GetLogin())
 		}
 		if response.NextPage == 0 {
 			break
@@ -110,14 +112,20 @@ func (g *githubClient) GetOrgMembership() ([]string, error) {
 		opt.Page = response.NextPage
 	}
 
-	return organizationsAsStrings, nil
+	return organizationLoginStrings, nil
 }
 
-// GetTeamMembership returns a description of each team to which the authenticated user belongs, filtered by allowedOrganizations.
+func isOrgAllowed(allowedOrganizations sets.Set[string], login string) bool {
+	return len(allowedOrganizations) == 0 || allowedOrganizations.Has(login)
+}
+
+// GetTeamMembership returns a description of each team to which the authenticated user belongs.
+// If allowedOrganizations is not empty, will filter the results to only those teams which belong to the allowed organizations.
 // Parent teams will also be returned.
 // TODO: where should context come from?
 // TODO: what happens if org or login or id are nil?
-func (g *githubClient) GetTeamMembership(allowedOrganizations []string) ([]TeamInfo, error) {
+// TODO: what is a good page size?
+func (g *githubClient) GetTeamMembership(allowedOrganizations sets.Set[string]) ([]TeamInfo, error) {
 	teamInfos := make([]TeamInfo, 0)
 
 	opt := &github.ListOptions{PerPage: 10}
@@ -131,7 +139,7 @@ func (g *githubClient) GetTeamMembership(allowedOrganizations []string) ([]TeamI
 		for _, team := range teamsResults {
 			org := team.GetOrganization().GetLogin()
 
-			if !slices.Contains(allowedOrganizations, org) {
+			if !isOrgAllowed(allowedOrganizations, org) {
 				continue
 			}
 
@@ -143,10 +151,15 @@ func (g *githubClient) GetTeamMembership(allowedOrganizations []string) ([]TeamI
 
 			parent := team.GetParent()
 			if parent != nil {
+				parentOrg := parent.GetOrganization().GetLogin()
+				if !isOrgAllowed(allowedOrganizations, parentOrg) {
+					continue
+				}
+
 				teamInfos = append(teamInfos, TeamInfo{
 					Name: parent.GetName(),
 					Slug: parent.GetSlug(),
-					Org:  org,
+					Org:  parentOrg,
 				})
 			}
 		}

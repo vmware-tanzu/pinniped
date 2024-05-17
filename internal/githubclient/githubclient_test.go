@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-github/v62/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/cert"
 
 	"go.pinniped.dev/internal/net/phttp"
@@ -151,6 +152,7 @@ func TestGetUser(t *testing.T) {
 				mock.WithRequestMatchHandler(
 					mock.GetUser,
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						require.Len(t, r.Header["Authorization"], 1)
 						require.Equal(t, "Bearer does-this-token-work", r.Header.Get("Authorization"))
 						_, err := w.Write([]byte(`{"login":"some-authenticated-username","id":999888}`))
 						require.NoError(t, err)
@@ -280,6 +282,7 @@ func TestGetOrgMembership(t *testing.T) {
 				mock.WithRequestMatchHandler(
 					mock.GetUserOrgs,
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						require.Len(t, r.Header["Authorization"], 1)
 						require.Equal(t, "Bearer does-this-token-work", r.Header.Get("Authorization"))
 						_, err := w.Write([]byte(`[{"login":"some-org-to-which-the-authenticated-user-belongs"}]`))
 						require.NoError(t, err)
@@ -448,6 +451,67 @@ func TestGetTeamMembership(t *testing.T) {
 			},
 		},
 		{
+			name: "when allowedOrganizations is empty, return all teams",
+			httpClient: mock.NewMockedHTTPClient(
+				mock.WithRequestMatch(
+					mock.GetUserTeams,
+					[]github.Team{
+						{
+							Name: github.String("team1-name"),
+							Slug: github.String("team1-slug"),
+							Organization: &github.Organization{
+								Login: github.String("alpha"),
+							},
+						},
+						{
+							Name: github.String("team2-name"),
+							Slug: github.String("team2-slug"),
+							Organization: &github.Organization{
+								Login: github.String("beta"),
+							},
+						},
+						{
+							Name: github.String("team3-name"),
+							Slug: github.String("team3-slug"),
+							Parent: &github.Team{
+								Name: github.String("delta-team-name"),
+								Slug: github.String("delta-team-slug"),
+								Organization: &github.Organization{
+									Login: github.String("delta"),
+								},
+							},
+							Organization: &github.Organization{
+								Login: github.String("gamma"),
+							},
+						},
+					},
+				),
+			),
+			token: "some-token",
+			wantTeams: []TeamInfo{
+				{
+					Name: "team1-name",
+					Slug: "team1-slug",
+					Org:  "alpha",
+				},
+				{
+					Name: "team2-name",
+					Slug: "team2-slug",
+					Org:  "beta",
+				},
+				{
+					Name: "team3-name",
+					Slug: "team3-slug",
+					Org:  "gamma",
+				},
+				{
+					Name: "delta-team-name",
+					Slug: "delta-team-slug",
+					Org:  "delta",
+				},
+			},
+		},
+		{
 			name: "includes parent team if present",
 			httpClient: mock.NewMockedHTTPClient(
 				mock.WithRequestMatch(
@@ -474,11 +538,29 @@ func TestGetTeamMembership(t *testing.T) {
 								Login: github.String("beta"),
 							},
 						},
+						{
+							Name: github.String("team-name-with-parent-in-disallowed-org"),
+							Slug: github.String("team-slug-with-parent-in-disallowed-org"),
+							Parent: &github.Team{
+								Name: github.String("disallowed-parent-team-name"),
+								Slug: github.String("disallowed-parent-team-slug"),
+								Organization: &github.Organization{
+									Login: github.String("disallowed-org"),
+								},
+							},
+							Organization: &github.Organization{
+								Login: github.String("beta"),
+							},
+						},
 					},
 				),
 			),
-			token:                "some-token",
-			allowedOrganizations: []string{"org-with-nested-teams", "beta"},
+			token: "some-token",
+			allowedOrganizations: []string{
+				"org-with-nested-teams",
+				"parent-team-org-that-in-reality-can-never-be-different-than-child-team-org",
+				"beta",
+			},
 			wantTeams: []TeamInfo{
 				{
 					Name: "team-name-with-parent",
@@ -488,11 +570,16 @@ func TestGetTeamMembership(t *testing.T) {
 				{
 					Name: "parent-team-name",
 					Slug: "parent-team-slug",
-					Org:  "org-with-nested-teams",
+					Org:  "parent-team-org-that-in-reality-can-never-be-different-than-child-team-org",
 				},
 				{
 					Name: "team-name-without-parent",
 					Slug: "team-slug-without-parent",
+					Org:  "beta",
+				},
+				{
+					Name: "team-name-with-parent-in-disallowed-org",
+					Slug: "team-slug-with-parent-in-disallowed-org",
 					Org:  "beta",
 				},
 			},
@@ -543,6 +630,7 @@ func TestGetTeamMembership(t *testing.T) {
 				mock.WithRequestMatchHandler(
 					mock.GetUserTeams,
 					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						require.Len(t, r.Header["Authorization"], 1)
 						require.Equal(t, "Bearer does-this-token-work", r.Header.Get("Authorization"))
 						_, err := w.Write([]byte(`[{"name":"team1-name","slug":"team1-slug","organization":{"login":"org-login"}}]`))
 						require.NoError(t, err)
@@ -584,7 +672,8 @@ func TestGetTeamMembership(t *testing.T) {
 			githubClient := &githubClient{
 				client: github.NewClient(test.httpClient).WithAuthToken(test.token),
 			}
-			actual, err := githubClient.GetTeamMembership(test.allowedOrganizations)
+
+			actual, err := githubClient.GetTeamMembership(sets.New[string](test.allowedOrganizations...))
 			if test.wantErr != "" {
 				rt, ok := test.httpClient.Transport.(*mock.EnforceHostRoundTripper)
 				require.True(t, ok)

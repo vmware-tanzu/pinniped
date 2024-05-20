@@ -1210,8 +1210,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	})
 
 	t.Run("with Supervisor GitHub upstream IDP and browser flow with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
-		// TODO only skip this test when the GitHub test env vars are not set
-		t.Skip("always skipping for now, this test is still a work in progress and it always fails at the moment")
+		testlib.SkipTestWhenGitHubIsUnavailable(t)
 
 		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		t.Cleanup(cancel)
@@ -1221,15 +1220,31 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
 		browser := browsertest.OpenBrowser(t)
 
-		// TODO create clusterrolebinding for expected user and WaitForUserToHaveAccess. doesn't matter until login fully works.
+		expectedUsername := env.SupervisorUpstreamGithub.TestUserUsername + ":" + env.SupervisorUpstreamGithub.TestUserID
+		expectedGroups := env.SupervisorUpstreamGithub.TestUserExpectedTeamSlugs
+
+		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+		testlib.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+		)
+		testlib.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
+			Verb:     "get",
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		})
 
 		// Create upstream GitHub provider and wait for it to become ready.
-		// TODO use return value when calling requireUserCanUseKubectlWithoutAuthenticatingAgain below
-		_ = testlib.CreateTestGitHubIdentityProvider(t, idpv1alpha1.GitHubIdentityProviderSpec{
+		createdProvider := testlib.CreateTestGitHubIdentityProvider(t, idpv1alpha1.GitHubIdentityProviderSpec{
 			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
 				Organizations: idpv1alpha1.GitHubOrganizationsSpec{
 					Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
 				},
+			},
+			Claims: idpv1alpha1.GitHubClaims{
+				Username: ptr.To(idpv1alpha1.GitHubUsernameLoginAndID),
+				Groups:   ptr.To(idpv1alpha1.GitHubUseTeamSlugForGroupName),
 			},
 			Client: idpv1alpha1.GitHubClientSpec{
 				SecretName: testlib.CreateGitHubClientCredentialsSecret(t,
@@ -1262,8 +1277,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
-		// TODO use return value when calling requireKubectlGetNamespaceOutput below
-		_ = startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
 
 		// Confirm that we got to the upstream IDP's login page, fill out the form, and submit the form.
 		browsertest.LoginToUpstreamGitHub(t, browser, env.SupervisorUpstreamGithub)
@@ -1272,16 +1286,14 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
 		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
 
-		// TODO When you turn off headless and watch this test run,
-		//   the browser is indeed redirected back to the Supervisor at this point with a code,
-		//   but the Supervisor's callback endpoint does not yet work for github IDPs so it returns an error page,
-		//   and the Supervisor's form_post page is not loaded, so it does not automatically post the callback to the CLI's callback listener.
-		//   The test eventually times out and fails at this point.
+		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
+		// It should now be in the "success" state.
+		formpostExpectSuccessState(t, browser)
 
-		// TODO
-		//  formpostExpectSuccessState
-		//  requireKubectlGetNamespaceOutput
-		//  requireUserCanUseKubectlWithoutAuthenticatingAgain
+		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
 	t.Run("with multiple IDPs: one OIDC and one LDAP", func(t *testing.T) {

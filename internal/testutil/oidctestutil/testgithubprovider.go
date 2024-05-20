@@ -24,8 +24,9 @@ type ExchangeAuthcodeArgs struct {
 // GetUserArgs is used to spy on calls to
 // TestUpstreamGitHubIdentityProvider.GetUserFunc().
 type GetUserArgs struct {
-	Ctx         context.Context
-	AccessToken string
+	Ctx            context.Context
+	AccessToken    string
+	IDPDisplayName string
 }
 
 type TestUpstreamGitHubIdentityProviderBuilder struct {
@@ -232,14 +233,15 @@ func (u *TestUpstreamGitHubIdentityProvider) ExchangeAuthcodeArgs(call int) *Exc
 	return u.exchangeAuthcodeArgs[call]
 }
 
-func (u *TestUpstreamGitHubIdentityProvider) GetUser(ctx context.Context, accessToken string) (*upstreamprovider.GitHubUser, error) {
+func (u *TestUpstreamGitHubIdentityProvider) GetUser(ctx context.Context, accessToken string, idpDisplayName string) (*upstreamprovider.GitHubUser, error) {
 	if u.getUserArgs == nil {
 		u.getUserArgs = make([]*GetUserArgs, 0)
 	}
 	u.getUserCallCount++
 	u.getUserArgs = append(u.getUserArgs, &GetUserArgs{
-		Ctx:         ctx,
-		AccessToken: accessToken,
+		Ctx:            ctx,
+		AccessToken:    accessToken,
+		IDPDisplayName: idpDisplayName,
 	})
 	return u.GetUserFunc(ctx, accessToken)
 }

@@ -15,6 +15,7 @@ import (
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/internal/testutil/transformtestutil"
@@ -109,10 +110,11 @@ func TestLoginFromCallback(t *testing.T) {
 	uniqueCtx := context.WithValue(context.Background(), "some-unique-key", "some-value") //nolint:staticcheck // okay to use string key for test
 
 	tests := []struct {
-		name        string
-		provider    *oidctestutil.TestUpstreamGitHubIdentityProvider
-		authcode    string
-		redirectURI string
+		name           string
+		provider       *oidctestutil.TestUpstreamGitHubIdentityProvider
+		idpDisplayName string
+		authcode       string
+		redirectURI    string
 
 		wantExchangeAuthcodeCall bool
 		wantExchangeAuthcodeArgs *oidctestutil.ExchangeAuthcodeArgs
@@ -132,6 +134,7 @@ func TestLoginFromCallback(t *testing.T) {
 					DownstreamSubject: "https://fake-downstream-subject",
 				}).
 				Build(),
+			idpDisplayName:           "fake-display-name",
 			authcode:                 "fake-authcode",
 			redirectURI:              "https://fake-redirect-uri",
 			wantExchangeAuthcodeCall: true,
@@ -142,8 +145,9 @@ func TestLoginFromCallback(t *testing.T) {
 			},
 			wantGetUserCall: true,
 			wantGetUserArgs: &oidctestutil.GetUserArgs{
-				Ctx:         uniqueCtx,
-				AccessToken: "fake-access-token",
+				Ctx:            uniqueCtx,
+				AccessToken:    "fake-access-token",
+				IDPDisplayName: "fake-display-name",
 			},
 			wantIdentity: &resolvedprovider.Identity{
 				UpstreamUsername:  "fake-username",
@@ -160,6 +164,7 @@ func TestLoginFromCallback(t *testing.T) {
 			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
 				WithAuthcodeExchangeError(errors.New("fake authcode exchange error")).
 				Build(),
+			idpDisplayName:           "fake-display-name",
 			authcode:                 "fake-authcode",
 			redirectURI:              "https://fake-redirect-uri",
 			wantExchangeAuthcodeCall: true,
@@ -171,7 +176,7 @@ func TestLoginFromCallback(t *testing.T) {
 			wantGetUserCall: false,
 			wantIdentity:    nil,
 			wantExtras:      nil,
-			wantErr:         "failed to exchange auth code using GitHub API: fake authcode exchange error",
+			wantErr:         "failed to exchange authcode using GitHub API: fake authcode exchange error: fake authcode exchange error",
 		},
 		{
 			name: "error while getting user info",
@@ -179,6 +184,7 @@ func TestLoginFromCallback(t *testing.T) {
 				WithAccessToken("fake-access-token").
 				WithGetUserError(errors.New("fake user info error")).
 				Build(),
+			idpDisplayName:           "fake-display-name",
 			authcode:                 "fake-authcode",
 			redirectURI:              "https://fake-redirect-uri",
 			wantExchangeAuthcodeCall: true,
@@ -189,24 +195,23 @@ func TestLoginFromCallback(t *testing.T) {
 			},
 			wantGetUserCall: true,
 			wantGetUserArgs: &oidctestutil.GetUserArgs{
-				Ctx:         uniqueCtx,
-				AccessToken: "fake-access-token",
+				Ctx:            uniqueCtx,
+				AccessToken:    "fake-access-token",
+				IDPDisplayName: "fake-display-name",
 			},
 			wantIdentity: nil,
 			wantExtras:   nil,
-			wantErr:      "failed to get user info from GitHub API: fake user info error",
+			wantErr:      "failed to get user info from GitHub API: fake user info error: fake user info error",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			transforms := transformtestutil.NewRejectAllAuthPipeline(t)
-
 			subject := FederationDomainResolvedGitHubIdentityProvider{
-				DisplayName:         "fake-display-name",
+				DisplayName:         test.idpDisplayName,
 				Provider:            test.provider,
 				SessionProviderType: psession.ProviderTypeGitHub,
-				Transforms:          transforms,
+				Transforms:          transformtestutil.NewRejectAllAuthPipeline(t),
 			}
 
 			identity, loginExtras, err := subject.LoginFromCallback(uniqueCtx,
@@ -233,7 +238,9 @@ func TestLoginFromCallback(t *testing.T) {
 			if test.wantErr == "" {
 				require.NoError(t, err)
 			} else {
-				require.EqualError(t, err, test.wantErr)
+				errAsResponder, ok := err.(httperr.Responder)
+				require.True(t, ok)
+				require.EqualError(t, errAsResponder, test.wantErr)
 			}
 			require.Equal(t, test.wantExtras, loginExtras)
 			require.Equal(t, test.wantIdentity, identity)

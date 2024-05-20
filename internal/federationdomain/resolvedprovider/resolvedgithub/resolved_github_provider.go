@@ -7,13 +7,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"golang.org/x/oauth2"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/idtransform"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -99,12 +102,19 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	accessToken, err := p.Provider.ExchangeAuthcode(ctx, authCode, redirectURI)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to exchange auth code using GitHub API: %w", err)
+		plog.WarningErr("error exchanging GitHub authcode", err, "upstreamName", p.Provider.GetName())
+		return nil, nil, httperr.Wrap(http.StatusBadGateway,
+			fmt.Sprintf("failed to exchange authcode using GitHub API: %s", err.Error()),
+			err,
+		)
 	}
 
-	user, err := p.Provider.GetUser(ctx, accessToken)
+	user, err := p.Provider.GetUser(ctx, accessToken, p.GetDisplayName())
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get user info from GitHub API: %w", err)
+		return nil, nil, httperr.Wrap(http.StatusUnprocessableEntity,
+			fmt.Sprintf("failed to get user info from GitHub API: %s", err.Error()),
+			err,
+		)
 	}
 
 	return &resolvedprovider.Identity{
@@ -124,7 +134,12 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(
 	_ context.Context,
-	_ *resolvedprovider.Identity,
-) (refreshedIdentity *resolvedprovider.RefreshedIdentity, err error) {
-	return nil, errors.New("function UpstreamRefresh not yet implemented for GitHub IDP")
+	identity *resolvedprovider.Identity,
+) (*resolvedprovider.RefreshedIdentity, error) {
+	// TODO: actually implement refresh. this is just a placeholder that will make refresh always succeed.
+	return &resolvedprovider.RefreshedIdentity{
+		UpstreamUsername:       identity.UpstreamUsername,
+		UpstreamGroups:         identity.UpstreamGroups,
+		IDPSpecificSessionData: nil, // nil means that no update to the GitHub-specific portion of the session data is required
+	}, nil
 }

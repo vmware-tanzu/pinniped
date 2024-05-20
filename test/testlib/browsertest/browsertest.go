@@ -398,14 +398,27 @@ func LoginToUpstreamGitHub(t *testing.T, b *Browser, upstream testlib.TestGithub
 	t.Logf("entering GitHub OTP code")
 	b.SendKeysToFirstMatch(t, otpSelector, code)
 
+	// Keep looping until we get to a page that we do not know how to handle. Then return to allow the test to move on.
+	for handleOccasionalGithubLoginPage(t, b) {
+		continue
+	}
+}
+
+// handleOccasionalGithubLoginPage handles the interstitial pages which GitHub might show during a login flow.
+// None of these will always happen.
+func handleOccasionalGithubLoginPage(t *testing.T, b *Browser) bool {
+	t.Helper()
+
 	t.Log("sleeping for 2 seconds before looking at page title")
 	time.Sleep(2 * time.Second)
 	pageTitle := b.Title(t)
 	t.Logf("saw page title %q", pageTitle)
+	lowercaseTitle := strings.ToLower(pageTitle)
 
-	// Next Github might go to another page asking if you authorize the GitHub App to act on your behalf,
-	// if this user has never authorized this app.
-	if strings.HasPrefix(pageTitle, "Authorize ") { // the title is "Authorize <App Name>"
+	switch {
+	case strings.HasPrefix(lowercaseTitle, "authorize "): // the title is "Authorize <App Name>"
+		// Next Github might go to another page asking if you authorize the GitHub App to act on your behalf,
+		// if this user has never authorized this app.
 		// Wait for the authorize app page to be rendered.
 		t.Logf("waiting for GitHub authorize button")
 		// There are unfortunately two very similar buttons on this page:
@@ -415,16 +428,23 @@ func LoginToUpstreamGitHub(t *testing.T, b *Browser, upstream testlib.TestGithub
 		b.WaitForVisibleElements(t, submitAuthorizeAppButtonSelector)
 		t.Logf("clicking authorize button")
 		b.ClickFirstMatch(t, submitAuthorizeAppButtonSelector)
+		return true
 
-		t.Log("sleeping for 2 seconds before looking at page title again")
-		time.Sleep(2 * time.Second)
-		pageTitle = b.Title(t)
-		t.Logf("saw page title %q", pageTitle)
-	}
+	case strings.HasPrefix(lowercaseTitle, "confirm your account recovery settings"):
+		// Next Github might occasionally as you to confirm your recovery settings.
+		// Wait for the page to be rendered.
+		t.Logf("waiting for GitHub confirm button")
+		// There are several buttons and links. We want to click this confirm button to confirm our settings:
+		// <button type="submit" name="type" value="confirmed" class="btn btn-block btn-primary ml-3">Confirm</button>
+		submitConfirmButtonSelector := "button.btn-primary"
+		b.WaitForVisibleElements(t, submitConfirmButtonSelector)
+		t.Logf("clicking confirm button")
+		b.ClickFirstMatch(t, submitConfirmButtonSelector)
+		return true
 
-	// TODO I only saw this happen once, so I did not get a chance to finish this code. Not sure if it will happen again?
-	// Next GitHub might ask if we want to configure a passkey for auth.
-	if strings.HasPrefix(pageTitle, "Passkey TODO GET THIS PAGE TITLE") {
+	case strings.HasPrefix(lowercaseTitle, "configure passwordless authentication"):
+		// Next GitHub might occasionally ask if we want to configure a passkey for auth.
+		// The URL bar shows https://github.com/sessions/trusted-device for this page.
 		// The link that we want to click looks like this:
 		// <input class="btn-link" type="submit" value="Don't ask again for this browser">
 		dontAskAgainLinkSelector := `input[value="Don't ask again for this browser"]`
@@ -434,6 +454,19 @@ func LoginToUpstreamGitHub(t *testing.T, b *Browser, upstream testlib.TestGithub
 		// Tell it that we do not want to use a passkey.
 		t.Logf("clicking don't ask again button")
 		b.ClickFirstMatch(t, dontAskAgainLinkSelector)
+		return true
+
+	case strings.HasPrefix(lowercaseTitle, "server error"):
+		// Sometimes this happens after the OTP page. Not sure why. The page has a cute cartoon, but no helpful information.
+		// The URL bar shows https://github.com/sessions/trusted-device for this error page, which is the URL that usually
+		// asks if you want to configure passwordless authentication (aka passkey).
+		t.Fatal("Got GitHub server error page during login flow. This is not expected, but is unfortunately unrecoverable.")
+		return false // we recognized the title, but we don't know how to handle this page because it has no buttons or other way forward
+
+	default:
+		// We did not know how to handle the page given its title.
+		// Maybe we successfully got through all the interstitial pages and finished the login.
+		return false
 	}
 }
 

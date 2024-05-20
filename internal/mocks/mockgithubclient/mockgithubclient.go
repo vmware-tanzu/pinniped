@@ -61,10 +61,10 @@ func (mr *MockGitHubInterfaceMockRecorder) GetOrgMembership(arg0 any) *gomock.Ca
 }
 
 // GetTeamMembership mocks base method.
-func (m *MockGitHubInterface) GetTeamMembership(arg0 context.Context, arg1 sets.Set[string]) ([]*githubclient.TeamInfo, error) {
+func (m *MockGitHubInterface) GetTeamMembership(arg0 context.Context, arg1 sets.Set[string]) ([]githubclient.TeamInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetTeamMembership", arg0, arg1)
-	ret0, _ := ret[0].([]*githubclient.TeamInfo)
+	ret0, _ := ret[0].([]githubclient.TeamInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

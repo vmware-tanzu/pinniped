@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/google/go-github/v62/github"
-
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"go.pinniped.dev/internal/plog"
 )
 
 const (
@@ -35,7 +37,7 @@ type TeamInfo struct {
 type GitHubInterface interface {
 	GetUserInfo(ctx context.Context) (*UserInfo, error)
 	GetOrgMembership(ctx context.Context) (sets.Set[string], error)
-	GetTeamMembership(ctx context.Context, allowedOrganizations sets.Set[string]) ([]*TeamInfo, error)
+	GetTeamMembership(ctx context.Context, allowedOrganizations sets.Set[string]) ([]TeamInfo, error)
 }
 
 type githubClient struct {
@@ -87,6 +89,7 @@ func (g *githubClient) GetUserInfo(ctx context.Context) (*UserInfo, error) {
 	if user == nil { // untested
 		return nil, fmt.Errorf("%s: user is nil", errorPrefix)
 	}
+	plog.Trace("got raw GitHub API user results", "user", user)
 
 	userInfo := &UserInfo{
 		Login: user.GetLogin(),
@@ -98,6 +101,8 @@ func (g *githubClient) GetUserInfo(ctx context.Context) (*UserInfo, error) {
 	if userInfo.Login == "" {
 		return nil, fmt.Errorf(`%s: the "login" attribute is missing`, errorPrefix)
 	}
+
+	plog.Trace("calculated response from GitHub user endpoint", "user", userInfo)
 	return userInfo, nil
 }
 
@@ -114,6 +119,7 @@ func (g *githubClient) GetOrgMembership(ctx context.Context) (sets.Set[string], 
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", errorPrefix, err)
 		}
+		plog.Trace("got raw GitHub API org results", "orgs", organizationResults, "hasNextPage", response.NextPage)
 
 		for _, organization := range organizationResults {
 			organizationLogins.Insert(organization.GetLogin())
@@ -128,11 +134,16 @@ func (g *githubClient) GetOrgMembership(ctx context.Context) (sets.Set[string], 
 		return nil, fmt.Errorf(`%s: one or more organizations is missing the "login" attribute`, errorPrefix)
 	}
 
+	plog.Trace("calculated response from GitHub org membership endpoint", "orgs", organizationLogins.UnsortedList())
 	return organizationLogins, nil
 }
 
 func isOrgAllowed(allowedOrganizations sets.Set[string], login string) bool {
 	return len(allowedOrganizations) == 0 || allowedOrganizations.Has(login)
+}
+
+func buildAndValidateParentTeam(githubTeam *github.Team, organizationLogin string) (*TeamInfo, error) {
+	return buildTeam(githubTeam, organizationLogin)
 }
 
 func buildAndValidateTeam(githubTeam *github.Team) (*TeamInfo, error) {
@@ -144,6 +155,10 @@ func buildAndValidateTeam(githubTeam *github.Team) (*TeamInfo, error) {
 		return nil, errors.New(`missing the organization's "login" attribute for a team`)
 	}
 
+	return buildTeam(githubTeam, organizationLogin)
+}
+
+func buildTeam(githubTeam *github.Team, organizationLogin string) (*TeamInfo, error) {
 	teamInfo := &TeamInfo{
 		Name: githubTeam.GetName(),
 		Slug: githubTeam.GetSlug(),
@@ -161,9 +176,9 @@ func buildAndValidateTeam(githubTeam *github.Team) (*TeamInfo, error) {
 // GetTeamMembership returns a description of each team to which the authenticated user belongs.
 // If allowedOrganizations is not empty, will filter the results to only those teams which belong to the allowed organizations.
 // Parent teams will also be returned.
-func (g *githubClient) GetTeamMembership(ctx context.Context, allowedOrganizations sets.Set[string]) ([]*TeamInfo, error) {
+func (g *githubClient) GetTeamMembership(ctx context.Context, allowedOrganizations sets.Set[string]) ([]TeamInfo, error) {
 	const errorPrefix = "error fetching team membership for authenticated user"
-	teamInfos := make([]*TeamInfo, 0)
+	teamInfos := sets.New[TeamInfo]()
 
 	opt := &github.ListOptions{PerPage: pageSize}
 	// get all pages of results
@@ -172,6 +187,7 @@ func (g *githubClient) GetTeamMembership(ctx context.Context, allowedOrganizatio
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", errorPrefix, err)
 		}
+		plog.Trace("got raw GitHub API team results", "teams", teamsResults, "hasNextPage", response.NextPage)
 
 		for _, team := range teamsResults {
 			teamInfo, err := buildAndValidateTeam(team)
@@ -183,20 +199,18 @@ func (g *githubClient) GetTeamMembership(ctx context.Context, allowedOrganizatio
 				continue
 			}
 
-			teamInfos = append(teamInfos, teamInfo)
+			teamInfos.Insert(*teamInfo)
 
 			parent := team.GetParent()
 			if parent != nil {
-				teamInfo, err := buildAndValidateTeam(parent)
+				// The GitHub API does not return the Organization for the Parent of the team.
+				// Use the org of the child as the org of the parent, since they must come from the same org.
+				parentTeamInfo, err := buildAndValidateParentTeam(parent, teamInfo.Org)
 				if err != nil {
 					return nil, fmt.Errorf("%s: %w", errorPrefix, err)
 				}
 
-				if !isOrgAllowed(allowedOrganizations, teamInfo.Org) {
-					continue
-				}
-
-				teamInfos = append(teamInfos, teamInfo)
+				teamInfos.Insert(*parentTeamInfo)
 			}
 		}
 		if response.NextPage == 0 {
@@ -205,5 +219,16 @@ func (g *githubClient) GetTeamMembership(ctx context.Context, allowedOrganizatio
 		opt.Page = response.NextPage
 	}
 
-	return teamInfos, nil
+	// Sort by org and then by name, just so we always return teams in the same order.
+	sortedTeams := teamInfos.UnsortedList()
+	slices.SortStableFunc(sortedTeams, func(a, b TeamInfo) int {
+		orgsCompared := strings.Compare(a.Org, b.Org)
+		if orgsCompared == 0 {
+			return strings.Compare(a.Slug, b.Slug)
+		}
+		return orgsCompared
+	})
+
+	plog.Trace("calculated response from GitHub teams endpoint", "teams", sortedTeams)
+	return sortedTeams, nil
 }

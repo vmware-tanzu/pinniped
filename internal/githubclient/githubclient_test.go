@@ -100,22 +100,23 @@ func TestNewGitHubClient(t *testing.T) {
 
 			if test.wantErr != "" {
 				require.EqualError(t, err, test.wantErr)
-				return
+			} else {
+				require.NoError(t, err)
+
+				require.NotNil(t, actualI)
+				actual, ok := actualI.(*githubClient)
+				require.True(t, ok)
+				require.NotNil(t, actual.client.BaseURL)
+				require.Equal(t, test.wantBaseURL, actual.client.BaseURL.String())
+
+				// Force the githubClient's httpClient roundTrippers to run and add the Authorization header
+
+				req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, testServer.URL, nil)
+				require.NoError(t, err)
+
+				_, err = actual.client.Client().Do(req) //nolint:bodyclose
+				require.NoError(t, err)
 			}
-
-			require.NotNil(t, actualI)
-			actual, ok := actualI.(*githubClient)
-			require.True(t, ok)
-			require.NotNil(t, actual.client.BaseURL)
-			require.Equal(t, test.wantBaseURL, actual.client.BaseURL.String())
-
-			// Force the githubClient's httpClient roundTrippers to run and add the Authorization header
-
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, testServer.URL, nil)
-			require.NoError(t, err)
-
-			_, err = actual.client.Client().Do(req) //nolint:bodyclose
-			require.NoError(t, err)
 		})
 	}
 }
@@ -241,11 +242,11 @@ func TestGetUser(t *testing.T) {
 				require.True(t, ok)
 				test.wantErr = strings.ReplaceAll(test.wantErr, "{SERVER_URL}", rt.Host)
 				require.EqualError(t, err, test.wantErr)
-				return
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, actual)
+				require.Equal(t, test.wantUserInfo, *actual)
 			}
-
-			require.NotNil(t, actual)
-			require.Equal(t, test.wantUserInfo, *actual)
 		})
 	}
 }
@@ -395,7 +396,7 @@ func TestGetTeamMembership(t *testing.T) {
 		ctx                  context.Context
 		allowedOrganizations []string
 		wantErr              string
-		wantTeams            []*TeamInfo
+		wantTeams            []TeamInfo
 	}{
 		{
 			name: "happy path",
@@ -436,7 +437,7 @@ func TestGetTeamMembership(t *testing.T) {
 			),
 			token:                "some-token",
 			allowedOrganizations: []string{"alpha", "beta"},
-			wantTeams: []*TeamInfo{
+			wantTeams: []TeamInfo{
 				{
 					Name: "orgAlpha-team1-name",
 					Slug: "orgAlpha-team1-slug",
@@ -491,7 +492,7 @@ func TestGetTeamMembership(t *testing.T) {
 			),
 			token:                "some-token",
 			allowedOrganizations: []string{"alpha", "gamma"},
-			wantTeams: []*TeamInfo{
+			wantTeams: []TeamInfo{
 				{
 					Name: "team1-name",
 					Slug: "team1-slug",
@@ -528,11 +529,9 @@ func TestGetTeamMembership(t *testing.T) {
 							Name: github.String("team3-name"),
 							Slug: github.String("team3-slug"),
 							Parent: &github.Team{
-								Name: github.String("delta-team-name"),
-								Slug: github.String("delta-team-slug"),
-								Organization: &github.Organization{
-									Login: github.String("delta"),
-								},
+								Name:         github.String("delta-team-name"),
+								Slug:         github.String("delta-team-slug"),
+								Organization: nil, // the real GitHub API does not return Org on "Parent" team.
 							},
 							Organization: &github.Organization{
 								Login: github.String("gamma"),
@@ -542,7 +541,7 @@ func TestGetTeamMembership(t *testing.T) {
 				),
 			),
 			token: "some-token",
-			wantTeams: []*TeamInfo{
+			wantTeams: []TeamInfo{
 				{
 					Name: "team1-name",
 					Slug: "team1-slug",
@@ -554,19 +553,19 @@ func TestGetTeamMembership(t *testing.T) {
 					Org:  "beta",
 				},
 				{
+					Name: "delta-team-name",
+					Slug: "delta-team-slug",
+					Org:  "gamma",
+				},
+				{
 					Name: "team3-name",
 					Slug: "team3-slug",
 					Org:  "gamma",
 				},
-				{
-					Name: "delta-team-name",
-					Slug: "delta-team-slug",
-					Org:  "delta",
-				},
 			},
 		},
 		{
-			name: "includes parent team if present",
+			name: "includes parent team in allowed orgs if present",
 			httpClient: mock.NewMockedHTTPClient(
 				mock.WithRequestMatch(
 					mock.GetUserTeams,
@@ -575,33 +574,48 @@ func TestGetTeamMembership(t *testing.T) {
 							Name: github.String("team-name-with-parent"),
 							Slug: github.String("team-slug-with-parent"),
 							Parent: &github.Team{
-								Name: github.String("parent-team-name"),
-								Slug: github.String("parent-team-slug"),
-								Organization: &github.Organization{
-									Login: github.String("parent-team-org-that-in-reality-can-never-be-different-than-child-team-org"),
-								},
+								Name:         github.String("parent-team-name"),
+								Slug:         github.String("parent-team-slug"),
+								Organization: nil, // the real GitHub API does not return Org on "Parent" team.
 							},
 							Organization: &github.Organization{
 								Login: github.String("org-with-nested-teams"),
 							},
 						},
 						{
-							Name: github.String("team-name-without-parent"),
-							Slug: github.String("team-slug-without-parent"),
+							Name: github.String("team-name-with-same-parent-again"),
+							Slug: github.String("team-slug-with-same-parent-again"),
+							Parent: &github.Team{
+								Name:         github.String("parent-team-name"),
+								Slug:         github.String("parent-team-slug"),
+								Organization: nil, // the real GitHub API does not return Org on "Parent" team.
+							},
 							Organization: &github.Organization{
-								Login: github.String("beta"),
+								Login: github.String("org-with-nested-teams"),
 							},
 						},
 						{
-							Name: github.String("team-name-with-parent-in-disallowed-org"),
-							Slug: github.String("team-slug-with-parent-in-disallowed-org"),
-							Parent: &github.Team{
-								Name: github.String("disallowed-parent-team-name"),
-								Slug: github.String("disallowed-parent-team-slug"),
-								Organization: &github.Organization{
-									Login: github.String("disallowed-org"),
-								},
+							Name: github.String("parent-team-name"),
+							Slug: github.String("parent-team-slug"),
+							Organization: &github.Organization{
+								Login: github.String("org-with-nested-teams"),
 							},
+						},
+						{
+							Name: github.String("team-name-with-parent-from-disallowed-org"),
+							Slug: github.String("team-slug-with-parent-from-disallowed-org"),
+							Parent: &github.Team{
+								Name:         github.String("parent-team-name-from-disallowed-org"),
+								Slug:         github.String("parent-team-slug-from-disallowed-org"),
+								Organization: nil, // the real GitHub API does not return Org on "Parent" team.
+							},
+							Organization: &github.Organization{
+								Login: github.String("disallowed-org"),
+							},
+						},
+						{
+							Name: github.String("team-name-without-parent"),
+							Slug: github.String("team-slug-without-parent"),
 							Organization: &github.Organization{
 								Login: github.String("beta"),
 							},
@@ -612,29 +626,28 @@ func TestGetTeamMembership(t *testing.T) {
 			token: "some-token",
 			allowedOrganizations: []string{
 				"org-with-nested-teams",
-				"parent-team-org-that-in-reality-can-never-be-different-than-child-team-org",
 				"beta",
 			},
-			wantTeams: []*TeamInfo{
-				{
-					Name: "team-name-with-parent",
-					Slug: "team-slug-with-parent",
-					Org:  "org-with-nested-teams",
-				},
-				{
-					Name: "parent-team-name",
-					Slug: "parent-team-slug",
-					Org:  "parent-team-org-that-in-reality-can-never-be-different-than-child-team-org",
-				},
+			wantTeams: []TeamInfo{
 				{
 					Name: "team-name-without-parent",
 					Slug: "team-slug-without-parent",
 					Org:  "beta",
 				},
 				{
-					Name: "team-name-with-parent-in-disallowed-org",
-					Slug: "team-slug-with-parent-in-disallowed-org",
-					Org:  "beta",
+					Name: "parent-team-name",
+					Slug: "parent-team-slug",
+					Org:  "org-with-nested-teams",
+				},
+				{
+					Name: "team-name-with-parent",
+					Slug: "team-slug-with-parent",
+					Org:  "org-with-nested-teams",
+				},
+				{
+					Name: "team-name-with-same-parent-again",
+					Slug: "team-slug-with-same-parent-again",
+					Org:  "org-with-nested-teams",
 				},
 			},
 		},
@@ -665,7 +678,7 @@ func TestGetTeamMembership(t *testing.T) {
 			),
 			token:                "some-token",
 			allowedOrganizations: []string{"page1-org-name", "page2-org-name"},
-			wantTeams: []*TeamInfo{
+			wantTeams: []TeamInfo{
 				{
 					Name: "page1-team-name",
 					Slug: "page1-team-slug",
@@ -744,99 +757,6 @@ func TestGetTeamMembership(t *testing.T) {
 			wantErr: `error fetching team membership for authenticated user: the "slug" attribute is missing for a team`,
 		},
 		{
-			name: "missing parent's organization attribute returns an error",
-			httpClient: mock.NewMockedHTTPClient(
-				mock.WithRequestMatch(
-					mock.GetUserTeams,
-					[]github.Team{
-						{
-							Name: github.String("team-name-with-parent"),
-							Slug: github.String("team-slug-with-parent"),
-							Parent: &github.Team{
-								Name: github.String("parent-team-name"),
-								Slug: github.String("parent-team-slug"),
-							},
-							Organization: &github.Organization{
-								Login: github.String("some-org"),
-							},
-						},
-					},
-				),
-			),
-			wantErr: `error fetching team membership for authenticated user: missing the "organization" attribute for a team`,
-		},
-		{
-			name: "missing parent's organization's login attribute returns an error",
-			httpClient: mock.NewMockedHTTPClient(
-				mock.WithRequestMatch(
-					mock.GetUserTeams,
-					[]github.Team{
-						{
-							Name: github.String("team-name-with-parent"),
-							Slug: github.String("team-slug-with-parent"),
-							Parent: &github.Team{
-								Name:         github.String("parent-team-name"),
-								Slug:         github.String("parent-team-slug"),
-								Organization: &github.Organization{},
-							},
-							Organization: &github.Organization{
-								Login: github.String("some-org"),
-							},
-						},
-					},
-				),
-			),
-			wantErr: `error fetching team membership for authenticated user: missing the organization's "login" attribute for a team`,
-		},
-		{
-			name: "missing the name attribute for a parent team returns an error",
-			httpClient: mock.NewMockedHTTPClient(
-				mock.WithRequestMatch(
-					mock.GetUserTeams,
-					[]github.Team{
-						{
-							Name: github.String("team-name-with-parent"),
-							Slug: github.String("team-slug-with-parent"),
-							Parent: &github.Team{
-								Slug: github.String("parent-team-slug"),
-								Organization: &github.Organization{
-									Login: github.String("some-org"),
-								},
-							},
-							Organization: &github.Organization{
-								Login: github.String("some-org"),
-							},
-						},
-					},
-				),
-			),
-			wantErr: `error fetching team membership for authenticated user: the "name" attribute is missing for a team`,
-		},
-		{
-			name: "missing the slug attribute for a parent team returns an error",
-			httpClient: mock.NewMockedHTTPClient(
-				mock.WithRequestMatch(
-					mock.GetUserTeams,
-					[]github.Team{
-						{
-							Name: github.String("team-name-with-parent"),
-							Slug: github.String("team-slug-with-parent"),
-							Parent: &github.Team{
-								Name: github.String("parent-team-name"),
-								Organization: &github.Organization{
-									Login: github.String("some-org"),
-								},
-							},
-							Organization: &github.Organization{
-								Login: github.String("some-org"),
-							},
-						},
-					},
-				),
-			),
-			wantErr: `error fetching team membership for authenticated user: the "slug" attribute is missing for a team`,
-		},
-		{
 			name: "the token is added in the Authorization header",
 			httpClient: mock.NewMockedHTTPClient(
 				mock.WithRequestMatchHandler(
@@ -851,7 +771,7 @@ func TestGetTeamMembership(t *testing.T) {
 			),
 			token:                "does-this-token-work",
 			allowedOrganizations: []string{"org-login"},
-			wantTeams: []*TeamInfo{
+			wantTeams: []TeamInfo{
 				{
 					Name: "team1-name",
 					Slug: "team1-slug",
@@ -907,11 +827,11 @@ func TestGetTeamMembership(t *testing.T) {
 				require.True(t, ok)
 				test.wantErr = strings.ReplaceAll(test.wantErr, "{SERVER_URL}", rt.Host)
 				require.EqualError(t, err, test.wantErr)
-				return
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, actual)
+				require.Equal(t, test.wantTeams, actual)
 			}
-
-			require.NotNil(t, actual)
-			require.Equal(t, test.wantTeams, actual)
 		})
 	}
 }

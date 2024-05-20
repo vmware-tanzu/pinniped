@@ -171,5 +171,6 @@ type UpstreamGithubIdentityProviderI interface {
 
 	// GetUser calls the user, orgs, and teams APIs of GitHub using the accessToken.
 	// It validates any required org memberships. It returns a User or an error.
-	GetUser(ctx context.Context, accessToken string) (*GitHubUser, error)
+	// The IDP display name is passed to aid in building a suitable downstream subject string.
+	GetUser(ctx context.Context, accessToken string, idpDisplayName string) (*GitHubUser, error)
 }

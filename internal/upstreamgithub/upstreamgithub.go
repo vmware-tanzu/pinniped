@@ -99,34 +99,23 @@ func (p *Provider) GetAuthorizationURL() string {
 }
 
 func (p *Provider) ExchangeAuthcode(ctx context.Context, authcode string, redirectURI string) (string, error) {
-	// TODO: write tests for this
-	panic("write some tests for this sketch of the implementation, maybe by running a test server in the unit tests")
-	//nolint:govet // this code is intentionally unreachable until we resolve the todos
 	tok, err := p.c.OAuth2Config.Exchange(
 		coreosoidc.ClientContext(ctx, p.c.HttpClient),
 		authcode,
 		oauth2.SetAuthURLParam("redirect_uri", redirectURI),
 	)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error exchanging authorization code using GitHub API: %w", err)
 	}
 	return tok.AccessToken, nil
 }
 
-// GetUser will use the provided configuration to make HTTPS calls to the GitHub API to find out who the logged-in user is,
-// what organizations they belong to, and what teams they belong to.
-// If the user's information meets the AllowedOrganization criteria specified on the GitHubIdentityProvider, they will be
-// allowed to log in.
+// GetUser will use the provided configuration to make HTTPS calls to the GitHub API to get the identity of the
+// authenticated user and to discover their org and team memberships.
+// If the user's information meets the AllowedOrganization criteria specified on the GitHubIdentityProvider,
+// they will be allowed to log in.
 // Note that errors from the githubclient package already have helpful error prefixes, so there is no need for additional prefixes here.
-// TODO: populate the IDP display name
-// TODO: What should we do if the group or team name is outside of the enum? The controller would reject this.
-// TODO: should we use the APIBaseURL or some other URL in the downstreamSubject
-//
-// Examples:
-//
-//	"github.com" or "https://github.com" or "https://api.github.com"?
-//	"enterprise.tld" or "https://enterprise.tld" or "https://enterprise.tld/api/v3"?
-func (p *Provider) GetUser(ctx context.Context, accessToken string) (*upstreamprovider.GitHubUser, error) {
+func (p *Provider) GetUser(ctx context.Context, accessToken string, idpDisplayName string) (*upstreamprovider.GitHubUser, error) {
 	githubClient, err := p.buildGitHubClient(p.c.HttpClient, p.c.APIBaseURL, accessToken)
 	if err != nil {
 		return nil, err
@@ -139,7 +128,7 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string) (*upstreampr
 		return nil, err
 	}
 
-	githubUser.DownstreamSubject = downstreamsubject.GitHub(p.c.APIBaseURL, "TODO_IDP_DISPLAY_NAME", userInfo.Login, userInfo.ID)
+	githubUser.DownstreamSubject = downstreamsubject.GitHub(p.c.APIBaseURL, idpDisplayName, userInfo.Login, userInfo.ID)
 
 	switch p.c.UsernameAttribute {
 	case supervisoridpv1alpha1.GitHubUsernameLoginAndID:
@@ -148,6 +137,8 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string) (*upstreampr
 		githubUser.Username = userInfo.Login
 	case supervisoridpv1alpha1.GitHubUsernameID:
 		githubUser.Username = userInfo.ID
+	default:
+		return nil, fmt.Errorf("bad configuration: unknown GitHub username attribute: %s", p.c.UsernameAttribute)
 	}
 
 	orgMembership, err := githubClient.GetOrgMembership(ctx)
@@ -174,6 +165,8 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string) (*upstreampr
 			downstreamGroup = fmt.Sprintf("%s/%s", team.Org, team.Name)
 		case supervisoridpv1alpha1.GitHubUseTeamSlugForGroupName:
 			downstreamGroup = fmt.Sprintf("%s/%s", team.Org, team.Slug)
+		default:
+			return nil, fmt.Errorf("bad configuration: unknown GitHub group name attribute: %s", p.c.GroupNameAttribute)
 		}
 
 		githubUser.Groups = append(githubUser.Groups, downstreamGroup)

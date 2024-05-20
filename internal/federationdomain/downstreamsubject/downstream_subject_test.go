@@ -89,3 +89,41 @@ func TestOIDC(t *testing.T) {
 		})
 	}
 }
+
+func TestGitHub(t *testing.T) {
+	tests := []struct {
+		name           string
+		APIBaseURL     string
+		idpDisplayName string
+		login          string
+		id             string
+		wantSubject    string
+	}{
+		{
+			name:           "simple display name",
+			APIBaseURL:     "https://github.com",
+			idpDisplayName: "simpleName",
+			login:          "some login",
+			id:             "some id",
+			wantSubject:    "https://github.com?idpName=simpleName&login=some+login&id=some+id",
+		},
+		{
+			name:           "interesting display name",
+			APIBaseURL:     "https://server.example.com:1234/path",
+			idpDisplayName: "this is a 👍 display name that 🦭 can handle",
+			login:          "some other login",
+			id:             "some other id",
+			wantSubject:    "https://server.example.com:1234/path?idpName=this+is+a+%F0%9F%91%8D+display+name+that+%F0%9F%A6%AD+can+handle&login=some+other+login&id=some+other+id",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual := GitHub(test.APIBaseURL, test.idpDisplayName, test.login, test.id)
+
+			require.Equal(t, test.wantSubject, actual)
+		})
+	}
+}

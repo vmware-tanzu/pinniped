@@ -1,3 +1,6 @@
+// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package githubclient
 
 import (
@@ -107,7 +110,11 @@ func TestNewGitHubClient(t *testing.T) {
 			require.Equal(t, test.wantBaseURL, actual.client.BaseURL.String())
 
 			// Force the githubClient's httpClient roundTrippers to run and add the Authorization header
-			_, err = actual.client.Client().Get(testServer.URL)
+
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, testServer.URL, nil)
+			require.NoError(t, err)
+
+			_, err = actual.client.Client().Do(req) //nolint:bodyclose
 			require.NoError(t, err)
 		})
 	}

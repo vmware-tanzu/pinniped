@@ -93,7 +93,7 @@ func TestOIDC(t *testing.T) {
 func TestGitHub(t *testing.T) {
 	tests := []struct {
 		name           string
-		APIBaseURL     string
+		apiBaseURL     string
 		idpDisplayName string
 		login          string
 		id             string
@@ -101,7 +101,7 @@ func TestGitHub(t *testing.T) {
 	}{
 		{
 			name:           "simple display name",
-			APIBaseURL:     "https://github.com",
+			apiBaseURL:     "https://github.com",
 			idpDisplayName: "simpleName",
 			login:          "some login",
 			id:             "some id",
@@ -109,7 +109,7 @@ func TestGitHub(t *testing.T) {
 		},
 		{
 			name:           "interesting display name",
-			APIBaseURL:     "https://server.example.com:1234/path",
+			apiBaseURL:     "https://server.example.com:1234/path",
 			idpDisplayName: "this is a 👍 display name that 🦭 can handle",
 			login:          "some other login",
 			id:             "some other id",
@@ -121,7 +121,7 @@ func TestGitHub(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual := GitHub(test.APIBaseURL, test.idpDisplayName, test.login, test.id)
+			actual := GitHub(test.apiBaseURL, test.idpDisplayName, test.login, test.id)
 
 			require.Equal(t, test.wantSubject, actual)
 		})

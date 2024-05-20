@@ -25,8 +25,8 @@ func OIDC(upstreamIssuerAsString string, upstreamSubject string, idpDisplayName 
 	)
 }
 
-func GitHub(APIBaseURL, idpDisplayName, login, id string) string {
-	return fmt.Sprintf("%s?%s=%s&login=%s&id=%s", APIBaseURL,
+func GitHub(apiBaseURL, idpDisplayName, login, id string) string {
+	return fmt.Sprintf("%s?%s=%s&login=%s&id=%s", apiBaseURL,
 		oidc.IDTokenSubClaimIDPNameQueryParam, url.QueryEscape(idpDisplayName),
 		url.QueryEscape(login), url.QueryEscape(id),
 	)

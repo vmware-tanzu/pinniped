@@ -6,6 +6,7 @@ package callback
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,14 +18,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -73,6 +77,13 @@ const (
 )
 
 var (
+	githubIDPName             = "upstream-github-idp-name"
+	githubIDPResourceUID      = types.UID("upstream-github-idp-resource-uid")
+	githubUpstreamUsername    = "some-github-login"
+	githubUpstreamGroups      = []string{"org1/team1", "org2/team2"}
+	githubDownstreamSubject   = fmt.Sprintf("https://github.com?idpName=%s&sub=%s", githubIDPName, githubUpstreamUsername)
+	githubUpstreamAccessToken = "some-opaque-access-token-from-github" //nolint:gosec // this is not a credential
+
 	oidcUpstreamGroupMembership    = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
 	happyDownstreamScopesRequested = []string{"openid", "username", "groups"}
 	happyDownstreamScopesGranted   = []string{"openid", "username", "groups"}
@@ -129,7 +140,26 @@ var (
 			UpstreamSubject:     oidcUpstreamSubject,
 		},
 	}
+	happyDownstreamGitHubCustomSessionData = &psession.CustomSessionData{
+		Username:         githubUpstreamUsername,
+		UpstreamUsername: githubUpstreamUsername,
+		UpstreamGroups:   githubUpstreamGroups,
+		ProviderUID:      githubIDPResourceUID,
+		ProviderName:     githubIDPName,
+		ProviderType:     psession.ProviderTypeGitHub,
+		GitHub: &psession.GitHubSessionData{
+			UpstreamAccessToken: githubUpstreamAccessToken,
+		},
+	}
 )
+
+func happyGitHubUpstream() *oidctestutil.TestUpstreamGitHubIdentityProviderBuilder {
+	return oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+		WithName(githubIDPName).
+		WithResourceUID(githubIDPResourceUID).
+		WithClientID("some-client-id").
+		WithScopes([]string{"these", "scopes", "appear", "unused"})
+}
 
 func TestCallbackEndpoint(t *testing.T) {
 	require.Len(t, happyDownstreamState, 8, "we expect fosite to allow 8 byte state params, so we want to test that boundary case")
@@ -164,6 +194,11 @@ func TestCallbackEndpoint(t *testing.T) {
 		PKCECodeVerifier:     oidcpkce.Code(happyDownstreamPKCE),
 		ExpectedIDTokenNonce: nonce.Nonce(happyDownstreamNonce),
 		RedirectURI:          happyUpstreamRedirectURI,
+	}
+
+	happyGitHubExchangeAuthcodeArgs := &oidctestutil.ExchangeAuthcodeArgs{
+		Authcode:    happyUpstreamAuthcode,
+		RedirectURI: happyUpstreamRedirectURI,
 	}
 
 	// Note that fosite puts the granted scopes as a param in the redirect URI even though the spec doesn't seem to require it
@@ -206,6 +241,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
 		wantDownstreamAdditionalClaims    map[string]interface{}
 		wantOIDCAuthcodeExchangeCall      *expectedOIDCAuthcodeExchange
+		wantGitHubAuthcodeExchangeCall    *expectedGitHubAuthcodeExchange
 	}{
 		{
 			name:   "GET with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
@@ -1232,6 +1268,90 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
+			name: "GitHub IDP: GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback",
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(
+				happyGitHubUpstream().
+					WithAccessToken(githubUpstreamAccessToken).
+					WithUser(&upstreamprovider.GitHubUser{
+						Username:          githubUpstreamUsername,
+						Groups:            githubUpstreamGroups,
+						DownstreamSubject: githubDownstreamSubject,
+					}).
+					Build()),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().
+					WithUpstreamIDPName(githubIDPName).
+					WithUpstreamIDPType(idpdiscoveryv1alpha1.IDPTypeGitHub).
+					WithAuthorizeRequestParams(
+						happyDownstreamRequestParamsQuery.Encode(),
+					).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      githubDownstreamSubject,
+			wantDownstreamIDTokenUsername:     githubUpstreamUsername,
+			wantDownstreamIDTokenGroups:       githubUpstreamGroups,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamGitHubCustomSessionData,
+			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
+				performedByUpstreamName: githubIDPName,
+				args:                    happyGitHubExchangeAuthcodeArgs,
+			},
+		},
+		{
+			name: "GitHub IDP: GET with good state and cookie and successful upstream token exchange with dynamic client returns 303 to downstream client callback, with dynamic client",
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(
+				happyGitHubUpstream().
+					WithAccessToken(githubUpstreamAccessToken).
+					WithUser(&upstreamprovider.GitHubUser{
+						Username:          githubUpstreamUsername,
+						Groups:            githubUpstreamGroups,
+						DownstreamSubject: githubDownstreamSubject,
+					}).
+					Build()),
+			method:        http.MethodGet,
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().
+					WithUpstreamIDPName(githubIDPName).
+					WithUpstreamIDPType(idpdiscoveryv1alpha1.IDPTypeGitHub).
+					WithAuthorizeRequestParams(
+						shallowCopyAndModifyQuery(
+							happyDownstreamRequestParamsQuery,
+							map[string]string{
+								"client_id": downstreamDynamicClientID,
+							},
+						).Encode(),
+					).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      githubDownstreamSubject,
+			wantDownstreamIDTokenUsername:     githubUpstreamUsername,
+			wantDownstreamIDTokenGroups:       githubUpstreamGroups,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamDynamicClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamGitHubCustomSessionData,
+			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
+				performedByUpstreamName: githubIDPName,
+				args:                    happyGitHubExchangeAuthcodeArgs,
+			},
+		},
+		{
 			name:            "the OIDCIdentityProvider resource has been deleted",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(otherUpstreamOIDCIdentityProvider),
 			method:          http.MethodGet,
@@ -1561,13 +1681,20 @@ func TestCallbackEndpoint(t *testing.T) {
 
 			testutil.RequireSecurityHeadersWithFormPostPageCSPs(t, rsp)
 
-			if test.wantOIDCAuthcodeExchangeCall != nil {
+			switch {
+			case test.wantOIDCAuthcodeExchangeCall != nil:
 				test.wantOIDCAuthcodeExchangeCall.args.Ctx = reqContext
 				test.idps.RequireExactlyOneOIDCAuthcodeExchange(t,
 					test.wantOIDCAuthcodeExchangeCall.performedByUpstreamName,
 					test.wantOIDCAuthcodeExchangeCall.args,
 				)
-			} else {
+			case test.wantGitHubAuthcodeExchangeCall != nil:
+				test.wantGitHubAuthcodeExchangeCall.args.Ctx = reqContext
+				test.idps.RequireExactlyOneGitHubAuthcodeExchange(t,
+					test.wantGitHubAuthcodeExchangeCall.performedByUpstreamName,
+					test.wantGitHubAuthcodeExchangeCall.args,
+				)
+			default:
 				test.idps.RequireExactlyZeroAuthcodeExchanges(t)
 			}
 

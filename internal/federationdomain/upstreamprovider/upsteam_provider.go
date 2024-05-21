@@ -12,6 +12,7 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
+	"go.pinniped.dev/internal/setutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -157,7 +158,7 @@ type UpstreamGithubIdentityProviderI interface {
 	// and only teams from the listed organizations should be represented as groups for the downstream token.
 	// If this list is empty, then any user can log in regardless of org membership, and any observable
 	// teams memberships should be represented as groups for the downstream token.
-	GetAllowedOrganizations() []string
+	GetAllowedOrganizations() *setutil.CaseInsensitiveSet
 
 	// GetAuthorizationURL returns the authorization URL for the configured GitHub. This will look like:
 	// https://<spec.githubAPI.host>/login/oauth/authorize

@@ -17,13 +17,13 @@ import (
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/cert"
 
 	supervisoridpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/githubclient"
 	"go.pinniped.dev/internal/mocks/mockgithubclient"
+	"go.pinniped.dev/internal/setutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -45,7 +45,7 @@ func TestGitHubProvider(t *testing.T) {
 				AuthStyle:     oauth2.AuthStyleInParams,
 			},
 		},
-		AllowedOrganizations: []string{"fake-org", "fake-org2"},
+		AllowedOrganizations: setutil.NewCaseInsensitiveSet("fake-org", "fake-org2"),
 		HttpClient: &http.Client{
 			Timeout: 1234509,
 		},
@@ -68,7 +68,7 @@ func TestGitHubProvider(t *testing.T) {
 				AuthStyle:     oauth2.AuthStyleInParams,
 			},
 		},
-		AllowedOrganizations: []string{"fake-org", "fake-org2"},
+		AllowedOrganizations: setutil.NewCaseInsensitiveSet("fake-org", "fake-org2"),
 		HttpClient: &http.Client{
 			Timeout: 1234509,
 		},
@@ -80,7 +80,7 @@ func TestGitHubProvider(t *testing.T) {
 	require.Equal(t, "fake-client-id", subject.GetClientID())
 	require.Equal(t, supervisoridpv1alpha1.GitHubUsernameAttribute("fake-username-attribute"), subject.GetUsernameAttribute())
 	require.Equal(t, supervisoridpv1alpha1.GitHubGroupNameAttribute("fake-group-name-attribute"), subject.GetGroupNameAttribute())
-	require.Equal(t, []string{"fake-org", "fake-org2"}, subject.GetAllowedOrganizations())
+	require.Equal(t, setutil.NewCaseInsensitiveSet("fake-org", "fake-org2"), subject.GetAllowedOrganizations())
 	require.Equal(t, "https://fake-authorization-url", subject.GetAuthorizationURL())
 	require.Equal(t, &http.Client{
 		Timeout: 1234509,
@@ -193,9 +193,6 @@ func TestGetUser(t *testing.T) {
 	const idpDisplayName = "idp display name 😀"
 	const encodedIDPDisplayName = "idp+display+name+%F0%9F%98%80"
 
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
 	someContext := context.Background()
 
 	someHttpClient := &http.Client{
@@ -223,7 +220,7 @@ func TestGetUser(t *testing.T) {
 					ID:    "some-github-id",
 				}, nil)
 				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(nil, nil)
-				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, sets.New[string]()).Return(nil, nil)
+				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, gomock.Any()).Return(nil, nil)
 			},
 			wantUser: &upstreamprovider.GitHubUser{
 				Username:          "some-github-login:some-github-id",
@@ -243,7 +240,7 @@ func TestGetUser(t *testing.T) {
 					ID:    "some-github-id",
 				}, nil)
 				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(nil, nil)
-				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, sets.New[string]()).Return(nil, nil)
+				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, nil).Return(nil, nil)
 			},
 			wantUser: &upstreamprovider.GitHubUser{
 				Username:          "some-github-login",
@@ -263,7 +260,7 @@ func TestGetUser(t *testing.T) {
 					ID:    "some-github-id",
 				}, nil)
 				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(nil, nil)
-				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, sets.New[string]()).Return(nil, nil)
+				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, nil).Return(nil, nil)
 			},
 			wantUser: &upstreamprovider.GitHubUser{
 				Username:          "some-github-id",
@@ -276,15 +273,15 @@ func TestGetUser(t *testing.T) {
 				APIBaseURL:           "https://some-url",
 				HttpClient:           someHttpClient,
 				UsernameAttribute:    supervisoridpv1alpha1.GitHubUsernameLoginAndID,
-				AllowedOrganizations: []string{"allowed-org1", "allowed-org2"},
+				AllowedOrganizations: setutil.NewCaseInsensitiveSet("ALLOWED-ORG1", "ALLOWED-ORG2"),
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{
 					Login: "some-github-login",
 					ID:    "some-github-id",
 				}, nil)
-				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(sets.New[string]("allowed-org2"), nil)
-				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, sets.New[string]("allowed-org1", "allowed-org2")).Return(nil, nil)
+				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return([]string{"allowed-org2"}, nil)
+				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, setutil.NewCaseInsensitiveSet("ALLOWED-ORG1", "ALLOWED-ORG2")).Return(nil, nil)
 			},
 			wantUser: &upstreamprovider.GitHubUser{
 				Username:          "some-github-login:some-github-id",
@@ -297,14 +294,14 @@ func TestGetUser(t *testing.T) {
 				APIBaseURL:           "https://some-url",
 				HttpClient:           someHttpClient,
 				UsernameAttribute:    supervisoridpv1alpha1.GitHubUsernameID,
-				AllowedOrganizations: []string{"allowed-org"},
+				AllowedOrganizations: setutil.NewCaseInsensitiveSet("allowed-org"),
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{
 					Login: "some-github-login",
 					ID:    "some-github-id",
 				}, nil)
-				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(sets.New[string]("disallowed-org"), nil)
+				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return([]string{"disallowed-org"}, nil)
 			},
 			wantErr: "user is not allowed to log in due to organization membership policy",
 		},
@@ -314,7 +311,7 @@ func TestGetUser(t *testing.T) {
 				APIBaseURL:           "https://some-url",
 				HttpClient:           someHttpClient,
 				UsernameAttribute:    supervisoridpv1alpha1.GitHubUsernameLoginAndID,
-				AllowedOrganizations: []string{"allowed-org1", "allowed-org2"},
+				AllowedOrganizations: setutil.NewCaseInsensitiveSet("allowed-org1", "allowed-org2"),
 				GroupNameAttribute:   supervisoridpv1alpha1.GitHubUseTeamNameForGroupName,
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
@@ -322,8 +319,8 @@ func TestGetUser(t *testing.T) {
 					Login: "some-github-login",
 					ID:    "some-github-id",
 				}, nil)
-				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(sets.New[string]("allowed-org2"), nil)
-				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, sets.New[string]("allowed-org1", "allowed-org2")).Return([]githubclient.TeamInfo{
+				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return([]string{"allowed-org2"}, nil)
+				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, setutil.NewCaseInsensitiveSet("allowed-org1", "allowed-org2")).Return([]githubclient.TeamInfo{
 					{
 						Name: "org1-team1-name",
 						Slug: "org1-team1-slug",
@@ -353,7 +350,7 @@ func TestGetUser(t *testing.T) {
 				APIBaseURL:           "https://some-url",
 				HttpClient:           someHttpClient,
 				UsernameAttribute:    supervisoridpv1alpha1.GitHubUsernameLoginAndID,
-				AllowedOrganizations: []string{"allowed-org1", "allowed-org2"},
+				AllowedOrganizations: setutil.NewCaseInsensitiveSet("allowed-org1", "allowed-org2"),
 				GroupNameAttribute:   supervisoridpv1alpha1.GitHubUseTeamSlugForGroupName,
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
@@ -361,8 +358,8 @@ func TestGetUser(t *testing.T) {
 					Login: "some-github-login",
 					ID:    "some-github-id",
 				}, nil)
-				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(sets.New[string]("allowed-org2"), nil)
-				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, sets.New[string]("allowed-org1", "allowed-org2")).Return([]githubclient.TeamInfo{
+				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return([]string{"allowed-org2"}, nil)
+				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, setutil.NewCaseInsensitiveSet("allowed-org1", "allowed-org2")).Return([]githubclient.TeamInfo{
 					{
 						Name: "org1-team1-name",
 						Slug: "org1-team1-slug",
@@ -462,7 +459,7 @@ func TestGetUser(t *testing.T) {
 					ID:    "some-github-id",
 				}, nil)
 				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(nil, nil)
-				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, sets.New[string]()).Return([]githubclient.TeamInfo{
+				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, nil).Return([]githubclient.TeamInfo{
 					{
 						Name: "org1-team1-name",
 						Slug: "org1-team1-slug",
@@ -476,6 +473,9 @@ func TestGetUser(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
 
 			accessToken := "some-opaque-github-access-token" + rand.String(8)
 			mockGitHubInterface := mockgithubclient.NewMockGitHubInterface(ctrl)

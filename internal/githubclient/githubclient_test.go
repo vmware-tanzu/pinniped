@@ -12,10 +12,10 @@ import (
 	"github.com/google/go-github/v62/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/cert"
 
 	"go.pinniped.dev/internal/net/phttp"
+	"go.pinniped.dev/internal/setutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -380,8 +380,7 @@ func TestGetOrgMembership(t *testing.T) {
 			}
 
 			require.NotNil(t, actual)
-			require.Equal(t, len(actual), len(test.wantOrgs))
-			require.True(t, actual.HasAll(test.wantOrgs...))
+			require.ElementsMatch(t, test.wantOrgs, actual)
 		})
 	}
 }
@@ -394,7 +393,7 @@ func TestGetTeamMembership(t *testing.T) {
 		httpClient           *http.Client
 		token                string
 		ctx                  context.Context
-		allowedOrganizations []string
+		allowedOrganizations *setutil.CaseInsensitiveSet
 		wantErr              string
 		wantTeams            []TeamInfo
 	}{
@@ -436,7 +435,7 @@ func TestGetTeamMembership(t *testing.T) {
 				),
 			),
 			token:                "some-token",
-			allowedOrganizations: []string{"alpha", "beta"},
+			allowedOrganizations: setutil.NewCaseInsensitiveSet("alpha", "beta"),
 			wantTeams: []TeamInfo{
 				{
 					Name: "orgAlpha-team1-name",
@@ -461,7 +460,7 @@ func TestGetTeamMembership(t *testing.T) {
 			},
 		},
 		{
-			name: "filters by allowedOrganizations",
+			name: "filters by allowedOrganizations in a case-insensitive way, but preserves case as returned by GitHub API in the result",
 			httpClient: mock.NewMockedHTTPClient(
 				mock.WithRequestMatch(
 					mock.GetUserTeams,
@@ -470,38 +469,38 @@ func TestGetTeamMembership(t *testing.T) {
 							Name: github.String("team1-name"),
 							Slug: github.String("team1-slug"),
 							Organization: &github.Organization{
-								Login: github.String("alpha"),
+								Login: github.String("alPhA"),
 							},
 						},
 						{
 							Name: github.String("team2-name"),
 							Slug: github.String("team2-slug"),
 							Organization: &github.Organization{
-								Login: github.String("beta"),
+								Login: github.String("bEtA"),
 							},
 						},
 						{
 							Name: github.String("team3-name"),
 							Slug: github.String("team3-slug"),
 							Organization: &github.Organization{
-								Login: github.String("gamma"),
+								Login: github.String("gAmmA"),
 							},
 						},
 					},
 				),
 			),
 			token:                "some-token",
-			allowedOrganizations: []string{"alpha", "gamma"},
+			allowedOrganizations: setutil.NewCaseInsensitiveSet("ALPHA", "gamma"),
 			wantTeams: []TeamInfo{
 				{
 					Name: "team1-name",
 					Slug: "team1-slug",
-					Org:  "alpha",
+					Org:  "alPhA",
 				},
 				{
 					Name: "team3-name",
 					Slug: "team3-slug",
-					Org:  "gamma",
+					Org:  "gAmmA",
 				},
 			},
 		},
@@ -623,11 +622,8 @@ func TestGetTeamMembership(t *testing.T) {
 					},
 				),
 			),
-			token: "some-token",
-			allowedOrganizations: []string{
-				"org-with-nested-teams",
-				"beta",
-			},
+			token:                "some-token",
+			allowedOrganizations: setutil.NewCaseInsensitiveSet("org-with-nested-teams", "beta"),
 			wantTeams: []TeamInfo{
 				{
 					Name: "team-name-without-parent",
@@ -677,7 +673,7 @@ func TestGetTeamMembership(t *testing.T) {
 				),
 			),
 			token:                "some-token",
-			allowedOrganizations: []string{"page1-org-name", "page2-org-name"},
+			allowedOrganizations: setutil.NewCaseInsensitiveSet("page1-org-name", "page2-org-name"),
 			wantTeams: []TeamInfo{
 				{
 					Name: "page1-team-name",
@@ -770,7 +766,7 @@ func TestGetTeamMembership(t *testing.T) {
 				),
 			),
 			token:                "does-this-token-work",
-			allowedOrganizations: []string{"org-login"},
+			allowedOrganizations: setutil.NewCaseInsensitiveSet("org-login"),
 			wantTeams: []TeamInfo{
 				{
 					Name: "team1-name",
@@ -821,7 +817,7 @@ func TestGetTeamMembership(t *testing.T) {
 				ctx = test.ctx
 			}
 
-			actual, err := githubClient.GetTeamMembership(ctx, sets.New[string](test.allowedOrganizations...))
+			actual, err := githubClient.GetTeamMembership(ctx, test.allowedOrganizations)
 			if test.wantErr != "" {
 				rt, ok := test.httpClient.Transport.(*mock.EnforceHostRoundTripper)
 				require.True(t, ok)

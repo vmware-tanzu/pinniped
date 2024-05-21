@@ -17,6 +17,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/psession"
+	"go.pinniped.dev/internal/setutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 	"go.pinniped.dev/internal/testutil/transformtestutil"
 	"go.pinniped.dev/internal/upstreamgithub"
@@ -31,7 +32,7 @@ func TestFederationDomainResolvedGitHubIdentityProvider(t *testing.T) {
 		APIBaseURL:           "https://fake-api-host.com",
 		UsernameAttribute:    idpv1alpha1.GitHubUsernameID,
 		GroupNameAttribute:   idpv1alpha1.GitHubUseTeamSlugForGroupName,
-		AllowedOrganizations: []string{"org1", "org2"},
+		AllowedOrganizations: setutil.NewCaseInsensitiveSet("org1", "org2"),
 		HttpClient:           nil, // not needed yet for this test
 		OAuth2Config: &oauth2.Config{
 			ClientID:     "fake-client-id",

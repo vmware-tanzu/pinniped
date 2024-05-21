@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/setutil"
 )
 
 const (
@@ -36,8 +37,8 @@ type TeamInfo struct {
 
 type GitHubInterface interface {
 	GetUserInfo(ctx context.Context) (*UserInfo, error)
-	GetOrgMembership(ctx context.Context) (sets.Set[string], error)
-	GetTeamMembership(ctx context.Context, allowedOrganizations sets.Set[string]) ([]TeamInfo, error)
+	GetOrgMembership(ctx context.Context) ([]string, error)
+	GetTeamMembership(ctx context.Context, allowedOrganizations *setutil.CaseInsensitiveSet) ([]TeamInfo, error)
 }
 
 type githubClient struct {
@@ -107,7 +108,7 @@ func (g *githubClient) GetUserInfo(ctx context.Context) (*UserInfo, error) {
 }
 
 // GetOrgMembership returns an array of the "Login" attributes for all organizations to which the authenticated user belongs.
-func (g *githubClient) GetOrgMembership(ctx context.Context) (sets.Set[string], error) {
+func (g *githubClient) GetOrgMembership(ctx context.Context) ([]string, error) {
 	const errorPrefix = "error fetching organizations for authenticated user"
 
 	organizationLogins := sets.New[string]()
@@ -135,11 +136,11 @@ func (g *githubClient) GetOrgMembership(ctx context.Context) (sets.Set[string], 
 	}
 
 	plog.Trace("calculated response from GitHub org membership endpoint", "orgs", organizationLogins.UnsortedList())
-	return organizationLogins, nil
+	return organizationLogins.UnsortedList(), nil
 }
 
-func isOrgAllowed(allowedOrganizations sets.Set[string], login string) bool {
-	return len(allowedOrganizations) == 0 || allowedOrganizations.Has(login)
+func isOrgAllowed(allowedOrganizations *setutil.CaseInsensitiveSet, login string) bool {
+	return allowedOrganizations.Empty() || allowedOrganizations.ContainsIgnoringCase(login)
 }
 
 func buildAndValidateParentTeam(githubTeam *github.Team, organizationLogin string) (*TeamInfo, error) {
@@ -176,7 +177,7 @@ func buildTeam(githubTeam *github.Team, organizationLogin string) (*TeamInfo, er
 // GetTeamMembership returns a description of each team to which the authenticated user belongs.
 // If allowedOrganizations is not empty, will filter the results to only those teams which belong to the allowed organizations.
 // Parent teams will also be returned.
-func (g *githubClient) GetTeamMembership(ctx context.Context, allowedOrganizations sets.Set[string]) ([]TeamInfo, error) {
+func (g *githubClient) GetTeamMembership(ctx context.Context, allowedOrganizations *setutil.CaseInsensitiveSet) ([]TeamInfo, error) {
 	const errorPrefix = "error fetching team membership for authenticated user"
 	teamInfos := sets.New[TeamInfo]()
 

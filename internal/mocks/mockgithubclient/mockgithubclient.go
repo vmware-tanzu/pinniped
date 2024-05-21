@@ -18,8 +18,8 @@ import (
 	reflect "reflect"
 
 	githubclient "go.pinniped.dev/internal/githubclient"
+	setutil "go.pinniped.dev/internal/setutil"
 	gomock "go.uber.org/mock/gomock"
-	sets "k8s.io/apimachinery/pkg/util/sets"
 )
 
 // MockGitHubInterface is a mock of GitHubInterface interface.
@@ -46,10 +46,10 @@ func (m *MockGitHubInterface) EXPECT() *MockGitHubInterfaceMockRecorder {
 }
 
 // GetOrgMembership mocks base method.
-func (m *MockGitHubInterface) GetOrgMembership(arg0 context.Context) (sets.Set[string], error) {
+func (m *MockGitHubInterface) GetOrgMembership(arg0 context.Context) ([]string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetOrgMembership", arg0)
-	ret0, _ := ret[0].(sets.Set[string])
+	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -61,7 +61,7 @@ func (mr *MockGitHubInterfaceMockRecorder) GetOrgMembership(arg0 any) *gomock.Ca
 }
 
 // GetTeamMembership mocks base method.
-func (m *MockGitHubInterface) GetTeamMembership(arg0 context.Context, arg1 sets.Set[string]) ([]githubclient.TeamInfo, error) {
+func (m *MockGitHubInterface) GetTeamMembership(arg0 context.Context, arg1 *setutil.CaseInsensitiveSet) ([]githubclient.TeamInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetTeamMembership", arg0, arg1)
 	ret0, _ := ret[0].([]githubclient.TeamInfo)

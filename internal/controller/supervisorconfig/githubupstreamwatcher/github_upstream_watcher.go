@@ -38,6 +38,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/setutil"
 	"go.pinniped.dev/internal/upstreamgithub"
 )
 
@@ -317,7 +318,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 				RedirectURL: "", // this will be different for each FederationDomain, so we do not set it here
 				Scopes:      []string{"read:user", "read:org"},
 			},
-			AllowedOrganizations: upstream.Spec.AllowAuthentication.Organizations.Allowed,
+			AllowedOrganizations: setutil.NewCaseInsensitiveSet(upstream.Spec.AllowAuthentication.Organizations.Allowed...),
 			HttpClient:           httpClient,
 		},
 	)

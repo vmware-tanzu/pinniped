@@ -13,12 +13,12 @@ import (
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	supervisoridpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/downstreamsubject"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/githubclient"
+	"go.pinniped.dev/internal/setutil"
 )
 
 // ProviderConfig holds the active configuration of an upstream GitHub provider.
@@ -35,7 +35,7 @@ type ProviderConfig struct {
 	GroupNameAttribute supervisoridpv1alpha1.GitHubGroupNameAttribute
 
 	// AllowedOrganizations, when empty, means to allow users from all orgs.
-	AllowedOrganizations []string
+	AllowedOrganizations *setutil.CaseInsensitiveSet
 
 	// HttpClient is a client that can be used to call the GitHub APIs and token endpoint.
 	// This client should be configured with the user-provided CA bundle and a timeout.
@@ -90,7 +90,7 @@ func (p *Provider) GetGroupNameAttribute() supervisoridpv1alpha1.GitHubGroupName
 	return p.c.GroupNameAttribute
 }
 
-func (p *Provider) GetAllowedOrganizations() []string {
+func (p *Provider) GetAllowedOrganizations() *setutil.CaseInsensitiveSet {
 	return p.c.AllowedOrganizations
 }
 
@@ -146,13 +146,11 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string, idpDisplayNa
 		return nil, err
 	}
 
-	allowedOrgs := sets.New[string](p.c.AllowedOrganizations...)
-
-	if allowedOrgs.Len() > 0 && allowedOrgs.Intersection(orgMembership).Len() < 1 {
+	if !p.c.AllowedOrganizations.Empty() && !p.c.AllowedOrganizations.HasAnyIgnoringCase(orgMembership) {
 		return nil, errors.New("user is not allowed to log in due to organization membership policy")
 	}
 
-	teamMembership, err := githubClient.GetTeamMembership(ctx, allowedOrgs)
+	teamMembership, err := githubClient.GetTeamMembership(ctx, p.c.AllowedOrganizations)
 	if err != nil {
 		return nil, err
 	}

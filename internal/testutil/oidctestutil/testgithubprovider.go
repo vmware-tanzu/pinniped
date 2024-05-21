@@ -11,6 +11,7 @@ import (
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/idtransform"
+	"go.pinniped.dev/internal/setutil"
 )
 
 // ExchangeAuthcodeArgs is used to spy on calls to
@@ -38,7 +39,7 @@ type TestUpstreamGitHubIdentityProviderBuilder struct {
 	transformsForFederationDomain  *idtransform.TransformationPipeline
 	usernameAttribute              v1alpha1.GitHubUsernameAttribute
 	groupNameAttribute             v1alpha1.GitHubGroupNameAttribute
-	allowedOrganizations           []string
+	allowedOrganizations           *setutil.CaseInsensitiveSet
 	authorizationURL               string
 	authcodeExchangeErr            error
 	accessToken                    string
@@ -81,7 +82,7 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) WithGroupNameAttribute(value
 	return u
 }
 
-func (u *TestUpstreamGitHubIdentityProviderBuilder) WithAllowedOrganizations(value []string) *TestUpstreamGitHubIdentityProviderBuilder {
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithAllowedOrganizations(value *setutil.CaseInsensitiveSet) *TestUpstreamGitHubIdentityProviderBuilder {
 	u.allowedOrganizations = value
 	return u
 }
@@ -159,7 +160,7 @@ type TestUpstreamGitHubIdentityProvider struct {
 	TransformsForFederationDomain  *idtransform.TransformationPipeline
 	UsernameAttribute              v1alpha1.GitHubUsernameAttribute
 	GroupNameAttribute             v1alpha1.GitHubGroupNameAttribute
-	AllowedOrganizations           []string
+	AllowedOrganizations           *setutil.CaseInsensitiveSet
 	AuthorizationURL               string
 	GetUserFunc                    func(ctx context.Context, accessToken string) (*upstreamprovider.GitHubUser, error)
 	ExchangeAuthcodeFunc           func(ctx context.Context, authcode string) (string, error)
@@ -197,7 +198,7 @@ func (u *TestUpstreamGitHubIdentityProvider) GetGroupNameAttribute() v1alpha1.Gi
 	return u.GroupNameAttribute
 }
 
-func (u *TestUpstreamGitHubIdentityProvider) GetAllowedOrganizations() []string {
+func (u *TestUpstreamGitHubIdentityProvider) GetAllowedOrganizations() *setutil.CaseInsensitiveSet {
 	return u.AllowedOrganizations
 }
 

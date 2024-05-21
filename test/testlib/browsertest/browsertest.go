@@ -380,6 +380,15 @@ func LoginToUpstreamGitHub(t *testing.T, b *Browser, upstream testlib.TestGithub
 	b.SendKeysToFirstMatch(t, passwordSelector, upstream.TestUserPassword)
 	b.ClickFirstMatch(t, loginButtonSelector)
 
+	handleGithubOTPLoginPage(t, b, upstream)
+
+	// Keep looping until we get to a page that we do not know how to handle. Then return to allow the test to move on.
+	for handleOccasionalGithubLoginPage(t, b, upstream) {
+		continue
+	}
+}
+
+func handleGithubOTPLoginPage(t *testing.T, b *Browser, upstream testlib.TestGithubUpstream) {
 	// Next, GitHub should go to a new page and prompt for the six digit MFA/OTP code.
 	otpSelector := "input#app_totp"
 
@@ -397,16 +406,11 @@ func LoginToUpstreamGitHub(t *testing.T, b *Browser, upstream testlib.TestGithub
 	// Fill in the OTP code. We do not need to click "verify" because entering the code automatically submits the page.
 	t.Logf("entering GitHub OTP code")
 	b.SendKeysToFirstMatch(t, otpSelector, code)
-
-	// Keep looping until we get to a page that we do not know how to handle. Then return to allow the test to move on.
-	for handleOccasionalGithubLoginPage(t, b) {
-		continue
-	}
 }
 
 // handleOccasionalGithubLoginPage handles the interstitial pages which GitHub might show during a login flow.
 // None of these will always happen.
-func handleOccasionalGithubLoginPage(t *testing.T, b *Browser) bool {
+func handleOccasionalGithubLoginPage(t *testing.T, b *Browser, upstream testlib.TestGithubUpstream) bool {
 	t.Helper()
 
 	t.Log("sleeping for 2 seconds before looking at page title")
@@ -456,11 +460,19 @@ func handleOccasionalGithubLoginPage(t *testing.T, b *Browser) bool {
 		b.ClickFirstMatch(t, dontAskAgainLinkSelector)
 		return true
 
+	case strings.HasPrefix(lowercaseTitle, "two-factor authentication"):
+		// Sometimes this happens after the OTP page when we try to use the same OTP code again too quickly.
+		// GitHub stays on the same page and shows an error banner saying that we used the same code again.
+		t.Log("sleeping before trying to generate and use a new GitHub OTP code")
+		time.Sleep(5 * time.Second) // 5 seconds may not be enough time, but if we get the error again then we can try again
+		handleGithubOTPLoginPage(t, b, upstream)
+		return true
+
 	case strings.HasPrefix(lowercaseTitle, "server error"):
 		// Sometimes this happens after the OTP page. Not sure why. The page has a cute cartoon, but no helpful information.
 		// The URL bar shows https://github.com/sessions/trusted-device for this error page, which is the URL that usually
 		// asks if you want to configure passwordless authentication (aka passkey).
-		t.Fatal("Got GitHub server error page during login flow. This is not expected, but is unfortunately unrecoverable.")
+		t.Fatal("Got GitHub server internal error page during login flow. This is not expected, but is unfortunately unrecoverable.")
 		return false // we recognized the title, but we don't know how to handle this page because it has no buttons or other way forward
 
 	default:

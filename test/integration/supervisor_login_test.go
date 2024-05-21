@@ -56,6 +56,11 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
 	}
 
+	skipGitHubTests := func(t *testing.T) {
+		t.Helper()
+		testlib.SkipTestWhenGitHubIsUnavailable(t)
+	}
+
 	skipActiveDirectoryTests := func(t *testing.T) {
 		t.Helper()
 		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
@@ -69,6 +74,19 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			Client: idpv1alpha1.OIDCClient{
 				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+			},
+		}
+	}
+
+	basicGitHubIdentityProviderSpec := func() idpv1alpha1.GitHubIdentityProviderSpec {
+		return idpv1alpha1.GitHubIdentityProviderSpec{
+			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+				Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+					Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
+				},
+			},
+			Client: idpv1alpha1.GitHubClientSpec{
+				SecretName: testlib.CreateGitHubClientCredentialsSecret(t, env.SupervisorUpstreamGithub.GithubAppClientID, env.SupervisorUpstreamGithub.GithubAppClientSecret).Name,
 			},
 		}
 	}
@@ -167,6 +185,14 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 	expectedIDTokenSubjectRegexForUpstreamOIDC := "^" +
 		regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?idpName=test-upstream-oidc-idp-") + `[\w]+` +
 		regexp.QuoteMeta("&sub=") + ".+" +
+		"$"
+
+	// The downstream ID token Subject should include the upstream user ID after the upstream issuer name
+	// and IDP display name.
+	expectedIDTokenSubjectRegexForUpstreamGitHub := "^" +
+		regexp.QuoteMeta("https://api.github.com?idpName=test-upstream-github-idp-") + `[\w]+` +
+		regexp.QuoteMeta("&login=") + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserUsername) +
+		regexp.QuoteMeta("&id=") + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserID) +
 		"$"
 
 	// The downstream ID token Subject should be the Host URL, plus the user search base, plus the IDP display name,
@@ -483,6 +509,98 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				"upstream_issuer✅":  env.SupervisorUpstreamOIDC.Issuer,
 				"upstream_username": env.SupervisorUpstreamOIDC.Username,
 			}, "upstream_groups", env.SupervisorUpstreamOIDC.ExpectedGroups),
+		},
+		{
+			name:      "github with all orgs allowed and default claim settings",
+			maybeSkip: skipGitHubTests,
+			createIDP: func(t *testing.T) string {
+				return testlib.CreateTestGitHubIdentityProvider(t, basicGitHubIdentityProviderSpec(), idpv1alpha1.GitHubPhaseReady).Name
+			},
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowGitHub,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamGitHub,
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserUsername+":"+env.SupervisorUpstreamGithub.TestUserID) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamGithub.TestUserExpectedTeamSlugs,
+		},
+		{
+			name:      "github with list of allowed orgs, username as login, and groups as names",
+			maybeSkip: skipGitHubTests,
+			createIDP: func(t *testing.T) string {
+				spec := basicGitHubIdentityProviderSpec()
+				spec.AllowAuthentication = idpv1alpha1.GitHubAllowAuthenticationSpec{
+					Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+						Policy:  ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations),
+						Allowed: []string{env.SupervisorUpstreamGithub.TestUserOrganization, "some-unrelated-org"},
+					},
+				}
+				spec.Claims = idpv1alpha1.GitHubClaims{
+					Username: ptr.To(idpv1alpha1.GitHubUsernameLogin),
+					Groups:   ptr.To(idpv1alpha1.GitHubUseTeamNameForGroupName),
+				}
+				return testlib.CreateTestGitHubIdentityProvider(t, spec, idpv1alpha1.GitHubPhaseReady).Name
+			},
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowGitHub,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamGitHub,
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserUsername) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamGithub.TestUserExpectedTeamNames,
+		},
+		{
+			name:      "github with list of allowed orgs differently cased, username as id, and groups as names",
+			maybeSkip: skipGitHubTests,
+			createIDP: func(t *testing.T) string {
+				spec := basicGitHubIdentityProviderSpec()
+				spec.AllowAuthentication = idpv1alpha1.GitHubAllowAuthenticationSpec{
+					Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+						Policy:  ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations),
+						Allowed: []string{strings.ToUpper(env.SupervisorUpstreamGithub.TestUserOrganization), "some-unrelated-org"},
+					},
+				}
+				spec.Claims = idpv1alpha1.GitHubClaims{
+					Username: ptr.To(idpv1alpha1.GitHubUsernameID),
+					Groups:   ptr.To(idpv1alpha1.GitHubUseTeamNameForGroupName),
+				}
+				return testlib.CreateTestGitHubIdentityProvider(t, spec, idpv1alpha1.GitHubPhaseReady).Name
+			},
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowGitHub,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamGitHub,
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserID) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamGithub.TestUserExpectedTeamNames,
+		},
+		{
+			name:      "github when user does not belong to any of the allowed orgs, should fail to exchange downstream authcode",
+			maybeSkip: skipGitHubTests,
+			createIDP: func(t *testing.T) string {
+				spec := basicGitHubIdentityProviderSpec()
+				spec.AllowAuthentication = idpv1alpha1.GitHubAllowAuthenticationSpec{
+					Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+						Policy:  ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations),
+						Allowed: []string{"some-unrelated-org"},
+					},
+				}
+				return testlib.CreateTestGitHubIdentityProvider(t, spec, idpv1alpha1.GitHubPhaseReady).Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+				t.Helper()
+				browser := openBrowserAndNavigateToAuthorizeURL(t, downstreamAuthorizeURL, httpClient)
+				// Expect to be redirected to the upstream provider and log in.
+				browsertest.LoginToUpstreamGitHub(t, browser, env.SupervisorUpstreamGithub)
+				// Wait for the login to happen and us be redirected back to the Supervisor callback with an error showing.
+				t.Logf("waiting for redirect to Supervisor callback endpoint, which should be showing an error")
+				callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.CallbackURL) + `\?.+\z`)
+				browser.WaitForURL(t, callbackURLPattern)
+				// Get the text of the preformatted error message showing on the page.
+				textOfPreTag := browser.TextOfFirstMatch(t, "pre")
+				require.Equal(t,
+					"Unprocessable Entity: failed to get user info from GitHub API: "+
+						"user is not allowed to log in due to organization membership policy\n",
+					textOfPreTag)
+			},
+			wantLocalhostCallbackToNeverHappen: true,
 		},
 		{
 			name:      "ldap with email as username and groups names as DNs and using an LDAP provider which supports TLS",
@@ -2427,7 +2545,7 @@ func testSupervisorLogin(
 	}
 
 	// Create the downstream FederationDomain and expect it to go into the appropriate status condition.
-	downstream := testlib.CreateTestFederationDomain(ctx, t,
+	federationDomain := testlib.CreateTestFederationDomain(ctx, t,
 		configv1alpha1.FederationDomainSpec{
 			Issuer:            issuerURL.String(),
 			TLS:               &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
@@ -2476,7 +2594,7 @@ func testSupervisorLogin(
 	var discovery *coreosoidc.Provider
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		var err error
-		discovery, err = coreosoidc.NewProvider(oidcHTTPClientContext, downstream.Spec.Issuer)
+		discovery, err = coreosoidc.NewProvider(oidcHTTPClientContext, federationDomain.Spec.Issuer)
 		requireEventually.NoError(err)
 	}, 30*time.Second, 200*time.Millisecond)
 
@@ -2527,7 +2645,7 @@ func testSupervisorLogin(
 	downstreamAuthorizeURL := downstreamOAuth2Config.AuthCodeURL(stateParam.String(), authorizeRequestParams...)
 
 	// Perform parameterized auth code acquisition.
-	requestAuthorization(t, downstream.Spec.Issuer, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)
+	requestAuthorization(t, federationDomain.Spec.Issuer, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)
 
 	// Expect that our callback handler was invoked.
 	callback, err := localCallbackServer.waitForCallback(10 * time.Second)
@@ -2884,12 +3002,33 @@ func loginToUpstreamOIDCAndWaitForCallback(t *testing.T, b *browsertest.Browser,
 	b.WaitForURL(t, callbackURLPattern)
 }
 
+func loginToUpstreamGitHubAndWaitForCallback(t *testing.T, b *browsertest.Browser, downstreamCallbackURL string) {
+	t.Helper()
+	env := testlib.IntegrationEnv(t)
+
+	// Expect to be redirected to the upstream provider and log in.
+	browsertest.LoginToUpstreamGitHub(t, b, env.SupervisorUpstreamGithub)
+
+	// Wait for the login to happen and us be redirected back to a localhost callback.
+	t.Logf("waiting for redirect to callback")
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
+	b.WaitForURL(t, callbackURLPattern)
+}
+
 func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
 	t.Helper()
 
 	browser := openBrowserAndNavigateToAuthorizeURL(t, downstreamAuthorizeURL, httpClient)
 
 	loginToUpstreamOIDCAndWaitForCallback(t, browser, downstreamCallbackURL)
+}
+
+func requestAuthorizationUsingBrowserAuthcodeFlowGitHub(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+	t.Helper()
+
+	browser := openBrowserAndNavigateToAuthorizeURL(t, downstreamAuthorizeURL, httpClient)
+
+	loginToUpstreamGitHubAndWaitForCallback(t, browser, downstreamCallbackURL)
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlowOIDCWithIDPChooserPage(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {

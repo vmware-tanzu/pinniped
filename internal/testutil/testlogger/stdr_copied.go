@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"slices"
 	"sort"
 
 	"github.com/go-logr/logr"
@@ -154,7 +155,7 @@ func (l logger) WithName(name string) logr.LogSink {
 // saved.
 func (l logger) WithValues(kvList ...any) logr.LogSink {
 	lgr := l.clone()
-	lgr.values = append(lgr.values, kvList...)
+	lgr.values = slices.Concat(lgr.values, kvList)
 	return lgr
 }
 

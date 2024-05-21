@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -172,7 +173,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		}
 		t.Step("bcrypt.GenerateFromPassword")
 
-		hashes = append([]string{string(hash)}, hashes...)
+		hashes = slices.Concat([]string{string(hash)}, hashes)
 	}
 
 	// If requested, remove all client secrets except for the most recent one.
@@ -267,7 +268,7 @@ func (r *REST) validateRequest(
 			if !strings.HasPrefix(name, "client.oauth.pinniped.dev-") {
 				errs = append(errs, `must start with 'client.oauth.pinniped.dev-'`)
 			}
-			return append(errs, path.IsValidPathSegmentName(name)...)
+			return slices.Concat(errs, path.IsValidPathSegmentName(name))
 		},
 		field.NewPath("metadata"),
 	); len(errs) > 0 {

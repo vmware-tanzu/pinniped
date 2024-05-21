@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -129,7 +130,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		var kubectlStdoutPipe io.ReadCloser
 		if runtime.GOOS != "darwin" {
 			// For some unknown reason this breaks the pty library on some MacOS machines.
@@ -219,7 +220,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// 	Run kubectl, which should work without any prompting for authentication.
 		kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd2.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		startTime2 := time.Now()
 		var kubectlStdoutPipe2 io.ReadCloser
 		if runtime.GOOS != "darwin" {
@@ -277,7 +278,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		var kubectlStdoutPipe io.ReadCloser
 		if runtime.GOOS != "darwin" {
 			// For some unknown reason this breaks the pty library on some MacOS machines.
@@ -348,7 +349,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// Run kubectl, which should work without any prompting for authentication.
 		kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd2.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		startTime2 := time.Now()
 		var kubectlStdoutPipe2 io.ReadCloser
 		if runtime.GOOS != "darwin" {
@@ -442,7 +443,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		var kubectlStdoutPipe io.ReadCloser
 		if runtime.GOOS != "darwin" {
 			// For some unknown reason this breaks the pty library on some MacOS machines.
@@ -555,7 +556,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// 	Run kubectl, which should work without any prompting for authentication.
 		kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd2.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		startTime2 := time.Now()
 		var kubectlStdoutPipe2 io.ReadCloser
 		if runtime.GOOS != "darwin" {

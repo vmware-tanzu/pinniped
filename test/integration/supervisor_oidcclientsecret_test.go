@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"slices"
 	"testing"
 	"time"
 
@@ -1020,10 +1021,7 @@ func retainOnlyMostRecentSecret(list []string) []string {
 }
 
 func prependSecret(list []string, newItem string) []string {
-	newList := make([]string, 0, len(list)+1)
-	newList = append(newList, newItem)
-	newList = append(newList, list...)
-	return newList
+	return slices.Concat([]string{newItem}, list)
 }
 
 func TestOIDCClientSecretRequestUnauthenticated_Parallel(t *testing.T) {

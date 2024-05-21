@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -1081,8 +1082,7 @@ func TestAgentController(t *testing.T) {
 			actualErrors := deduplicate(errorMessages)
 			assert.Subsetf(t, actualErrors, tt.wantDistinctErrors, "required error(s) were not found in the actual errors")
 
-			allAllowedErrors := append([]string{}, tt.wantDistinctErrors...)
-			allAllowedErrors = append(allAllowedErrors, tt.alsoAllowUndesiredDistinctErrors...)
+			allAllowedErrors := slices.Concat(tt.wantDistinctErrors, tt.alsoAllowUndesiredDistinctErrors)
 			assert.Subsetf(t, allAllowedErrors, actualErrors, "actual errors contained additional error(s) which is not expected by the test")
 
 			assert.Equal(t, tt.wantDistinctLogs, deduplicate(testutil.SplitByNewline(buf.String())), "unexpected logs")

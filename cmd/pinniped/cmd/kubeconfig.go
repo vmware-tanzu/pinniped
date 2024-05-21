@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +24,6 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Adds handlers for various dynamic auth plugins in client-go
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	"k8s.io/utils/strings/slices"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
@@ -303,7 +303,7 @@ func newExecConfig(deps kubeconfigDeps, flags getKubeconfigParams) (*clientcmdap
 		if flags.staticToken != "" && flags.staticTokenEnvName != "" {
 			return nil, fmt.Errorf("only one of --static-token and --static-token-env can be specified")
 		}
-		execConfig.Args = append([]string{"login", "static"}, execConfig.Args...)
+		execConfig.Args = slices.Concat([]string{"login", "static"}, execConfig.Args)
 		if flags.staticToken != "" {
 			execConfig.Args = append(execConfig.Args, "--token="+flags.staticToken)
 		}
@@ -314,7 +314,7 @@ func newExecConfig(deps kubeconfigDeps, flags getKubeconfigParams) (*clientcmdap
 	}
 
 	// Otherwise continue to parse the OIDC-related flags and output a config that runs `pinniped login oidc`.
-	execConfig.Args = append([]string{"login", "oidc"}, execConfig.Args...)
+	execConfig.Args = slices.Concat([]string{"login", "oidc"}, execConfig.Args)
 	if flags.oidc.issuer == "" {
 		return nil, fmt.Errorf("could not autodiscover --oidc-issuer and none was provided")
 	}
@@ -783,12 +783,12 @@ func pinnipedSupervisorDiscovery(ctx context.Context, flags *getKubeconfigParams
 		return err
 	}
 	if !supervisorSupportsBothUsernameAndGroupsScopes {
-		flags.oidc.scopes = slices.Filter(nil, flags.oidc.scopes, func(scope string) bool {
+		flags.oidc.scopes = slices.DeleteFunc(flags.oidc.scopes, func(scope string) bool {
 			if scope == oidcapi.ScopeUsername || scope == oidcapi.ScopeGroups {
 				log.Info("removed scope from --oidc-scopes list because it is not supported by this Supervisor", "scope", scope)
-				return false // Remove username and groups scopes if there were present in the flags.
+				return true // Remove username and groups scopes if there were present in the flags.
 			}
-			return true // Keep any other scopes in the flag list.
+			return false // Keep any other scopes in the flag list.
 		})
 	}
 

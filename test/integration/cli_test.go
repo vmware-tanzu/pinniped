@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -142,7 +143,7 @@ func assertWhoami(ctx context.Context, t *testing.T, useProxy bool, pinnipedExe,
 		apiGroupSuffix,
 	)
 	if useProxy {
-		cmd.Env = append(os.Environ(), testlib.IntegrationEnv(t).ProxyEnv()...)
+		cmd.Env = slices.Concat(os.Environ(), testlib.IntegrationEnv(t).ProxyEnv())
 	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -427,6 +428,6 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 	}
 
 	// If there is a custom proxy, set it using standard environment variables.
-	cmd.Env = append(os.Environ(), env.ProxyEnv()...)
+	cmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 	return cmd
 }

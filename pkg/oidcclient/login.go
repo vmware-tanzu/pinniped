@@ -480,7 +480,7 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		return nil, err
 	}
 	h.loginFlow = loginFlow
-	authorizeOptions = append(authorizeOptions, pinnipedSupervisorOptions...)
+	authorizeOptions = slices.Concat(authorizeOptions, pinnipedSupervisorOptions)
 
 	// Preserve the legacy behavior where browser-based auth is preferred
 	authFunc := h.webBrowserBasedAuth

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -609,7 +610,7 @@ func getContainerArgByName(pod *corev1.Pod, name, fallbackValue string) string {
 		flagset.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
 		var val string
 		flagset.StringVar(&val, name, "", "")
-		_ = flagset.Parse(append(container.Command, container.Args...))
+		_ = flagset.Parse(slices.Concat(container.Command, container.Args))
 		if val != "" {
 			return val
 		}

@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -594,7 +595,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.NoError(t, err)
 
 			expectedGroups := make([]string, 0, len(env.TestUser.ExpectedGroups)+1) // make sure we do not mutate env.TestUser.ExpectedGroups
-			expectedGroups = append(expectedGroups, env.TestUser.ExpectedGroups...)
+			expectedGroups = slices.Concat(expectedGroups, env.TestUser.ExpectedGroups)
 			expectedGroups = append(expectedGroups, "system:authenticated")
 			expectedOriginalUserInfo := authenticationv1.UserInfo{
 				Username: env.TestUser.ExpectedUsername,
@@ -880,7 +881,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 			require.NoError(t, err, testlib.Sdump(err))
 			expectedGroups := make([]string, 0, len(env.TestUser.ExpectedGroups)+1) // make sure we do not mutate env.TestUser.ExpectedGroups
-			expectedGroups = append(expectedGroups, env.TestUser.ExpectedGroups...)
+			expectedGroups = slices.Concat(expectedGroups, env.TestUser.ExpectedGroups)
 			expectedGroups = append(expectedGroups, "system:authenticated")
 			require.Equal(t,
 				expectedWhoAmIRequestResponse(
@@ -2116,7 +2117,7 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testli
 	require.NoError(t, err)
 
 	expectedGroups := make([]string, 0, len(env.TestUser.ExpectedGroups)+1) // make sure we do not mutate env.TestUser.ExpectedGroups
-	expectedGroups = append(expectedGroups, env.TestUser.ExpectedGroups...)
+	expectedGroups = slices.Concat(expectedGroups, env.TestUser.ExpectedGroups)
 	expectedGroups = append(expectedGroups, "system:authenticated")
 
 	// probe each pod directly for readiness since the concierge status is a lie - it just means a single pod is ready
@@ -2339,7 +2340,7 @@ func getImpersonationKubeconfig(t *testing.T, env *testlib.TestEnv, impersonatio
 	var envVarsWithProxy []string
 	if !env.HasCapability(testlib.HasExternalLoadBalancerProvider) {
 		// Only if you don't have a load balancer, use the squid proxy when it's available.
-		envVarsWithProxy = append(os.Environ(), env.ProxyEnv()...)
+		envVarsWithProxy = slices.Concat(os.Environ(), env.ProxyEnv())
 	}
 
 	// Get the kubeconfig.
@@ -2380,7 +2381,7 @@ func getImpersonationKubeconfig(t *testing.T, env *testlib.TestEnv, impersonatio
 func kubectlCommand(timeout context.Context, t *testing.T, kubeconfigPath string, envVarsWithProxy []string, args ...string) (*exec.Cmd, *syncBuffer, *syncBuffer) {
 	t.Helper()
 
-	allArgs := append([]string{"--kubeconfig", kubeconfigPath}, args...)
+	allArgs := slices.Concat([]string{"--kubeconfig", kubeconfigPath}, args)
 	kubectlCmd := exec.CommandContext(timeout, "kubectl", allArgs...)
 	var stdout, stderr syncBuffer
 	kubectlCmd.Stdout = &stdout

@@ -5,6 +5,7 @@ package testutil
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -33,7 +34,7 @@ func (log *TranscriptLogger) Transcript() []TranscriptLogMessage {
 	log.lock.Lock()
 	defer log.lock.Unlock()
 	result := make([]TranscriptLogMessage, 0, len(log.transcript))
-	result = append(result, log.transcript...)
+	result = slices.Concat(result, log.transcript)
 	return result
 }
 

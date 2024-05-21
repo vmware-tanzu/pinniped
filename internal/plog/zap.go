@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ func newLogr(ctx context.Context, encoding string, klogLevel klog.Level) (logr.L
 		if overrides.f != nil {
 			f = overrides.f
 		}
-		opts = append(opts, overrides.opts...)
+		opts = slices.Concat(opts, overrides.opts)
 	}
 
 	// when using the trace or all log levels, an error log will contain the full stack.
@@ -96,7 +97,7 @@ func newLogr(ctx context.Context, encoding string, klogLevel klog.Level) (logr.L
 }
 
 func newZapr(level zap.AtomicLevel, addStack zapcore.LevelEnabler, encoding, path string, f func(config *zap.Config), opts ...zap.Option) (logr.Logger, func(), error) {
-	opts = append([]zap.Option{zap.AddStacktrace(addStack)}, opts...)
+	opts = slices.Concat([]zap.Option{zap.AddStacktrace(addStack)}, opts)
 
 	config := zap.Config{
 		Level:             level,

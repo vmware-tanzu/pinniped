@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -3252,7 +3253,7 @@ func TestGetKubeconfig(t *testing.T) {
 						fake = conciergefake.NewSimpleClientset(tt.conciergeObjects(string(testServerCA), testServer.URL)...)
 					}
 					if len(tt.conciergeReactions) > 0 {
-						fake.ReactionChain = append(tt.conciergeReactions, fake.ReactionChain...)
+						fake.ReactionChain = slices.Concat(tt.conciergeReactions, fake.ReactionChain)
 					}
 					return fake, nil
 				},

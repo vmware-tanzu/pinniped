@@ -1,4 +1,4 @@
-// Copyright 2020-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package filesession implements the file format for session caches.
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"time"
 
@@ -153,5 +154,5 @@ func (c *sessionCache) lookup(key oidcclient.SessionCacheKey) *sessionEntry {
 
 // insert a cache entry.
 func (c *sessionCache) insert(entries ...sessionEntry) {
-	c.Sessions = append(c.Sessions, entries...)
+	c.Sessions = slices.Concat(c.Sessions, entries)
 }

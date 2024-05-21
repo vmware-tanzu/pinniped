@@ -28,6 +28,7 @@ package plog
 
 import (
 	"os"
+	"slices"
 
 	"github.com/go-logr/logr"
 )
@@ -87,7 +88,7 @@ func (p pLogger) warningDepth(msg string, depth int, keysAndValues ...any) {
 		// Thus we use info at log level zero as a proxy
 		// klog's info logs have an I prefix and its warning logs have a W prefix
 		// Since we lose the W prefix by using InfoS, just add a key to make these easier to find
-		keysAndValues = append([]any{"warning", true}, keysAndValues...)
+		keysAndValues = slices.Concat([]any{"warning", true}, keysAndValues)
 		p.logr().V(klogLevelWarning).WithCallDepth(depth+1).Info(msg, keysAndValues...)
 	}
 }
@@ -97,7 +98,7 @@ func (p pLogger) Warning(msg string, keysAndValues ...any) {
 }
 
 func (p pLogger) WarningErr(msg string, err error, keysAndValues ...any) {
-	p.warningDepth(msg, p.depth+1, append([]any{errorKey, err}, keysAndValues...)...)
+	p.warningDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
 func (p pLogger) infoDepth(msg string, depth int, keysAndValues ...any) {
@@ -111,7 +112,7 @@ func (p pLogger) Info(msg string, keysAndValues ...any) {
 }
 
 func (p pLogger) InfoErr(msg string, err error, keysAndValues ...any) {
-	p.infoDepth(msg, p.depth+1, append([]any{errorKey, err}, keysAndValues...)...)
+	p.infoDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
 func (p pLogger) debugDepth(msg string, depth int, keysAndValues ...any) {
@@ -125,7 +126,7 @@ func (p pLogger) Debug(msg string, keysAndValues ...any) {
 }
 
 func (p pLogger) DebugErr(msg string, err error, keysAndValues ...any) {
-	p.debugDepth(msg, p.depth+1, append([]any{errorKey, err}, keysAndValues...)...)
+	p.debugDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
 func (p pLogger) traceDepth(msg string, depth int, keysAndValues ...any) {
@@ -139,7 +140,7 @@ func (p pLogger) Trace(msg string, keysAndValues ...any) {
 }
 
 func (p pLogger) TraceErr(msg string, err error, keysAndValues ...any) {
-	p.traceDepth(msg, p.depth+1, append([]any{errorKey, err}, keysAndValues...)...)
+	p.traceDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
 func (p pLogger) All(msg string, keysAndValues ...any) {
@@ -181,7 +182,7 @@ func (p pLogger) withDepth(d int) Logger {
 func (p pLogger) withLogrMod(mod func(logr.Logger) logr.Logger) Logger {
 	out := p // make a copy and carefully avoid mutating the mods slice
 	mods := make([]func(logr.Logger) logr.Logger, 0, len(out.mods)+1)
-	mods = append(mods, out.mods...)
+	mods = slices.Concat(mods, out.mods)
 	mods = append(mods, mod)
 	out.mods = mods
 	return out

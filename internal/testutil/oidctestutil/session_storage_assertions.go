@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +18,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	kubetesting "k8s.io/client-go/testing"
-	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"

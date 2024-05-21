@@ -184,7 +184,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
@@ -270,7 +270,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
@@ -360,7 +360,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
@@ -484,7 +484,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		var kubectlStdoutPipe io.ReadCloser
 		if runtime.GOOS != "darwin" {
 			// For some unknown reason this breaks the pty library on some MacOS machines.
@@ -616,7 +616,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a browser-less CLI prompt login via the plugin.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -699,7 +699,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// would be stuck waiting for input on the second username prompt. "kubectl get --raw /healthz" doesn't need
 		// to do API discovery, so we know it will only call the credential exec plugin once.
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "--raw", "/healthz", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -749,7 +749,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -808,7 +808,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -889,7 +889,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should run an LDAP-style login without interactive prompts for username and password.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -942,7 +942,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -1019,7 +1019,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should run an LDAP-style login without interactive prompts for username and password.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -1076,7 +1076,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
@@ -1131,7 +1131,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
@@ -1192,7 +1192,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
@@ -1404,7 +1404,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		t.Log("starting LDAP auth via kubectl")
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		ptyFile, err := pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -1431,7 +1431,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a browser login via the plugin for the OIDC IDP.
 		t.Log("starting OIDC auth via kubectl")
 		kubectlCmd = exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", oidcKubeconfigPath, "-v", "6")
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 
 		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
 		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
@@ -1517,7 +1517,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger an LDAP-style login CLI prompt via the plugin for the LDAP IDP.
 		t.Log("starting second LDAP auth via kubectl")
 		kubectlCmd = exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", ldapKubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		ptyFile, err = pty.Start(kubectlCmd)
 		require.NoError(t, err)
 
@@ -1561,8 +1561,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		createdLDAPProvider := setupClusterForEndToEndLDAPTest(t, expectedDownstreamLDAPUsername, env)
 
 		// Having one IDP should put the FederationDomain into a ready state.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
-		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
 		testlib.CreateTestClusterRoleBinding(t,
@@ -1596,8 +1596,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		}, idpv1alpha1.PhaseReady)
 
 		// Having a second IDP should put the FederationDomain back into an error state until we tell it which one to use.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseError)
-		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseError)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Update the FederationDomain to use the two IDPs.
 		federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
@@ -1611,7 +1611,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		ldapIDPDisplayName := "My LDAP IDP 💾"
 		oidcIDPDisplayName := "My OIDC IDP 🚀"
 
-		gotFederationDomain.Spec.IdentityProviders = []configv1alpha1.FederationDomainIdentityProvider{
+		gotFederationDomain.Spec.IdentityProviders = []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 			{
 				DisplayName: ldapIDPDisplayName,
 				ObjectRef: corev1.TypedLocalObjectReference{
@@ -1633,8 +1633,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		require.NoError(t, err)
 
 		// The FederationDomain should be valid after the above update.
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
-		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1979,7 +1979,7 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 ) {
 	// 	Run kubectl, which should work without any prompting for authentication.
 	kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-	kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+	kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 	startTime := time.Now()
 	kubectlOutput2, err := kubectlCmd.CombinedOutput()
 	require.NoError(t, err)
@@ -2017,7 +2017,7 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 		require.ElementsMatch(t, expectedGroupsAsEmptyInterfaces, idTokenClaims["groups"])
 	}
 
-	expectedGroupsPlusAuthenticated := append([]string{}, expectedGroups...)
+	expectedGroupsPlusAuthenticated := expectedGroups
 	expectedGroupsPlusAuthenticated = append(expectedGroupsPlusAuthenticated, "system:authenticated")
 
 	// Confirm we are the right user according to Kube by calling the WhoAmIRequest API.
@@ -2029,7 +2029,7 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 	// While it is true that the user cannot list CRDs, that fact seems unrelated to making a create call to the
 	// aggregated API endpoint, so this is a strange error, but it can be easily reproduced.
 	kubectlCmd3 := exec.CommandContext(ctx, "kubectl", "create", "-f", "-", "-o", "yaml", "--kubeconfig", kubeconfigPath, "--validate=false")
-	kubectlCmd3.Env = append(os.Environ(), env.ProxyEnv()...)
+	kubectlCmd3.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 	kubectlCmd3.Stdin = strings.NewReader(here.Docf(`
 			apiVersion: identity.concierge.%s/v1alpha1
 			kind: WhoAmIRequest
@@ -2091,7 +2091,7 @@ func requireGCAnnotationsOnSessionStorage(ctx context.Context, t *testing.T, sup
 
 func runPinnipedGetKubeconfig(t *testing.T, env *testlib.TestEnv, pinnipedExe string, tempDir string, pinnipedCLICommand []string) string {
 	// Run "pinniped get kubeconfig" to get a kubeconfig YAML.
-	envVarsWithProxy := append(os.Environ(), env.ProxyEnv()...)
+	envVarsWithProxy := slices.Concat(os.Environ(), env.ProxyEnv())
 	kubeconfigYAML, stderr := runPinnipedCLI(t, envVarsWithProxy, pinnipedExe, pinnipedCLICommand...)
 	t.Logf("stderr output from 'pinniped get kubeconfig':\n%s\n\n", stderr)
 	t.Logf("test kubeconfig:\n%s\n\n", kubeconfigYAML)

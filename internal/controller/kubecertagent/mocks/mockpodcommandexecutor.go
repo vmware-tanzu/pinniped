@@ -16,6 +16,7 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
+	"slices"
 
 	gomock "go.uber.org/mock/gomock"
 )
@@ -59,6 +60,6 @@ func (m *MockPodCommandExecutor) Exec(arg0 context.Context, arg1, arg2, arg3 str
 // Exec indicates an expected call of Exec.
 func (mr *MockPodCommandExecutorMockRecorder) Exec(arg0, arg1, arg2, arg3 any, arg4 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2, arg3}, arg4...)
+	varargs := slices.Concat([]any{arg0, arg1, arg2, arg3}, arg4)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockPodCommandExecutor)(nil).Exec), varargs...)
 }

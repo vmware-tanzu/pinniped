@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"go.pinniped.dev/internal/mocks/issuermocks"
+	"go.pinniped.dev/internal/mocks/mockissuer"
 )
 
 func TestName(t *testing.T) {
@@ -30,7 +30,7 @@ func TestName(t *testing.T) {
 		{
 			name: "foo issuer",
 			buildIssuerMocks: func() ClientCertIssuers {
-				fooClientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+				fooClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				fooClientCertIssuer.EXPECT().Name().Return("foo")
 
 				return ClientCertIssuers{fooClientCertIssuer}
@@ -40,10 +40,10 @@ func TestName(t *testing.T) {
 		{
 			name: "foo and bar issuers",
 			buildIssuerMocks: func() ClientCertIssuers {
-				fooClientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+				fooClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				fooClientCertIssuer.EXPECT().Name().Return("foo")
 
-				barClientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+				barClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				barClientCertIssuer.EXPECT().Name().Return("bar")
 
 				return ClientCertIssuers{fooClientCertIssuer, barClientCertIssuer}
@@ -81,7 +81,7 @@ func TestIssueClientCertPEM(t *testing.T) {
 		{
 			name: "issuers with error",
 			buildIssuerMocks: func() ClientCertIssuers {
-				errClientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+				errClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				errClientCertIssuer.EXPECT().Name().Return("error cert issuer")
 				errClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
@@ -93,7 +93,7 @@ func TestIssueClientCertPEM(t *testing.T) {
 		{
 			name: "valid issuer",
 			buildIssuerMocks: func() ClientCertIssuers {
-				validClientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+				validClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				validClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
 					Return([]byte("cert"), []byte("key"), nil)
@@ -105,13 +105,13 @@ func TestIssueClientCertPEM(t *testing.T) {
 		{
 			name: "fallthrough issuer",
 			buildIssuerMocks: func() ClientCertIssuers {
-				errClientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+				errClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				errClientCertIssuer.EXPECT().Name().Return("error cert issuer")
 				errClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
 					Return(nil, nil, errors.New("error from wrapped cert issuer"))
 
-				validClientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+				validClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				validClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
 					Return([]byte("cert"), []byte("key"), nil)
@@ -126,13 +126,13 @@ func TestIssueClientCertPEM(t *testing.T) {
 		{
 			name: "multiple error issuers",
 			buildIssuerMocks: func() ClientCertIssuers {
-				err1ClientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+				err1ClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				err1ClientCertIssuer.EXPECT().Name().Return("error1 cert issuer")
 				err1ClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
 					Return(nil, nil, errors.New("error1 from wrapped cert issuer"))
 
-				err2ClientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+				err2ClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				err2ClientCertIssuer.EXPECT().Name().Return("error2 cert issuer")
 				err2ClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).

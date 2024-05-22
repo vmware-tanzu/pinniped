@@ -6,8 +6,10 @@ package resolvedgithub
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 
+	"github.com/ory/fosite"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
@@ -245,6 +247,167 @@ func TestLoginFromCallback(t *testing.T) {
 			}
 			require.Equal(t, test.wantExtras, loginExtras)
 			require.Equal(t, test.wantIdentity, identity)
+		})
+	}
+}
+
+func TestUpstreamRefresh(t *testing.T) {
+	uniqueCtx := context.WithValue(context.Background(), "some-unique-key", "some-value") //nolint:staticcheck // okay to use string key for test
+
+	tests := []struct {
+		name           string
+		provider       *oidctestutil.TestUpstreamGitHubIdentityProvider
+		idpDisplayName string
+		identity       *resolvedprovider.Identity
+
+		wantGetUserCall       bool
+		wantGetUserArgs       *oidctestutil.GetUserArgs
+		wantRefreshedIdentity *resolvedprovider.RefreshedIdentity
+		wantWrappedErr        string
+	}{
+		{
+			name: "happy path",
+			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithUser(&upstreamprovider.GitHubUser{
+					Username:          "refreshed-username",
+					Groups:            []string{"refreshed-group1", "refreshed-group2"},
+					DownstreamSubject: "https://fake-downstream-subject",
+				}).
+				Build(),
+			identity: &resolvedprovider.Identity{
+				UpstreamUsername:       "initial-username",
+				UpstreamGroups:         []string{"initial-group1", "initial-group2"},
+				DownstreamSubject:      "https://fake-downstream-subject",
+				IDPSpecificSessionData: &psession.GitHubSessionData{UpstreamAccessToken: "fake-access-token"},
+			},
+			idpDisplayName:  "fake-display-name",
+			wantGetUserCall: true,
+			wantGetUserArgs: &oidctestutil.GetUserArgs{
+				Ctx:            uniqueCtx,
+				AccessToken:    "fake-access-token",
+				IDPDisplayName: "fake-display-name",
+			},
+			wantRefreshedIdentity: &resolvedprovider.RefreshedIdentity{
+				UpstreamUsername:       "refreshed-username",
+				UpstreamGroups:         []string{"refreshed-group1", "refreshed-group2"},
+				IDPSpecificSessionData: nil,
+			},
+		},
+		{
+			name: "error while getting user info",
+			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithName("fake-provider-name").
+				WithGetUserError(errors.New("fake user info error")).
+				Build(),
+			identity: &resolvedprovider.Identity{
+				UpstreamUsername:       "initial-username",
+				UpstreamGroups:         []string{"initial-group1", "initial-group2"},
+				DownstreamSubject:      "https://fake-downstream-subject",
+				IDPSpecificSessionData: &psession.GitHubSessionData{UpstreamAccessToken: "fake-access-token"},
+			},
+			idpDisplayName:  "fake-display-name",
+			wantGetUserCall: true,
+			wantGetUserArgs: &oidctestutil.GetUserArgs{
+				Ctx:            uniqueCtx,
+				AccessToken:    "fake-access-token",
+				IDPDisplayName: "fake-display-name",
+			},
+			wantRefreshedIdentity: nil,
+			wantWrappedErr:        "failed to get user info from GitHub API: fake user info error",
+		},
+		{
+			name: "wrong session data type, which should not really happen",
+			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithName("fake-provider-name").
+				Build(),
+			identity: &resolvedprovider.Identity{
+				UpstreamUsername:       "initial-username",
+				UpstreamGroups:         []string{"initial-group1", "initial-group2"},
+				DownstreamSubject:      "https://fake-downstream-subject",
+				IDPSpecificSessionData: &psession.LDAPSessionData{}, // wrong type
+			},
+			idpDisplayName:        "fake-display-name",
+			wantGetUserCall:       false,
+			wantRefreshedIdentity: nil,
+			wantWrappedErr:        "wrong data type found for IDPSpecificSessionData",
+		},
+		{
+			name: "session is missing github access token, which should not really happen",
+			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithName("fake-provider-name").
+				Build(),
+			identity: &resolvedprovider.Identity{
+				UpstreamUsername:       "initial-username",
+				UpstreamGroups:         []string{"initial-group1", "initial-group2"},
+				DownstreamSubject:      "https://fake-downstream-subject",
+				IDPSpecificSessionData: &psession.GitHubSessionData{UpstreamAccessToken: ""}, // missing token
+			},
+			idpDisplayName:        "fake-display-name",
+			wantGetUserCall:       false,
+			wantRefreshedIdentity: nil,
+			wantWrappedErr:        "session is missing GitHub access token",
+		},
+		{
+			name: "users downstream subject changes based on an unexpected change in the upstream identity",
+			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithName("fake-provider-name").
+				WithUser(&upstreamprovider.GitHubUser{
+					Username:          "refreshed-username",
+					Groups:            []string{"refreshed-group1", "refreshed-group2"},
+					DownstreamSubject: "https://unexpected-different-downstream-subject", // unexpected change in calculated subject during refresh
+				}).
+				Build(),
+			identity: &resolvedprovider.Identity{
+				UpstreamUsername:       "initial-username",
+				UpstreamGroups:         []string{"initial-group1", "initial-group2"},
+				DownstreamSubject:      "https://fake-downstream-subject",
+				IDPSpecificSessionData: &psession.GitHubSessionData{UpstreamAccessToken: "fake-access-token"},
+			},
+			idpDisplayName:  "fake-display-name",
+			wantGetUserCall: true,
+			wantGetUserArgs: &oidctestutil.GetUserArgs{
+				Ctx:            uniqueCtx,
+				AccessToken:    "fake-access-token",
+				IDPDisplayName: "fake-display-name",
+			},
+			wantRefreshedIdentity: nil,
+			wantWrappedErr: `user's calculated downstream subject at initial login was "https://fake-downstream-subject" ` +
+				`but now is "https://unexpected-different-downstream-subject"`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			subject := FederationDomainResolvedGitHubIdentityProvider{
+				DisplayName:         test.idpDisplayName,
+				Provider:            test.provider,
+				SessionProviderType: psession.ProviderTypeGitHub,
+				Transforms:          transformtestutil.NewRejectAllAuthPipeline(t),
+			}
+
+			refreshedIdentity, err := subject.UpstreamRefresh(uniqueCtx, test.identity)
+
+			if test.wantGetUserCall {
+				require.Equal(t, 1, test.provider.GetUserCallCount())
+				require.Equal(t, test.wantGetUserArgs, test.provider.GetUserArgs(0))
+			} else {
+				require.Zero(t, test.provider.GetUserCallCount())
+			}
+
+			if test.wantWrappedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.NotNil(t, err, "expected to get an error but did not get one")
+				errAsFositeErr, ok := err.(*fosite.RFC6749Error)
+				require.True(t, ok)
+				require.EqualError(t, errAsFositeErr.Unwrap(), test.wantWrappedErr)
+				require.Equal(t, "error", errAsFositeErr.ErrorField)
+				require.Equal(t, "Error during upstream refresh.", errAsFositeErr.DescriptionField)
+				require.Equal(t, http.StatusUnauthorized, errAsFositeErr.CodeField)
+				require.Equal(t, `provider name: "fake-provider-name", provider type: "github"`, errAsFositeErr.DebugField)
+			}
+
+			require.Equal(t, test.wantRefreshedIdentity, refreshedIdentity)
 		})
 	}
 }

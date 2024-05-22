@@ -516,7 +516,24 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			createIDP: func(t *testing.T) string {
 				return testlib.CreateTestGitHubIdentityProvider(t, basicGitHubIdentityProviderSpec(), idpv1alpha1.GitHubPhaseReady).Name
 			},
-			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowGitHub,
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowGitHub,
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to some names that did not come from the GitHub API,
+				// we expect that it will return to the real groups from the GitHub API after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return env.SupervisorUpstreamGithub.TestUserExpectedTeamSlugs
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				// Pretend that the github access token was revoked or expired by changing it to an
+				// invalid access token in the user's session data. This should cause refresh to fail because
+				// during the refresh the GitHub API will not accept this bad access token.
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeGitHub, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.GitHub.UpstreamAccessToken)
+				customSessionData.GitHub.UpstreamAccessToken = "purposely-using-bad-access-token-during-an-automated-integration-test"
+			},
 			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamGitHub,
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
 				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserUsername+":"+env.SupervisorUpstreamGithub.TestUserID) + "$"
@@ -572,7 +589,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamGithub.TestUserExpectedTeamNames,
 		},
 		{
-			name:      "github when user does not belong to any of the allowed orgs, should fail to exchange downstream authcode",
+			name:      "github when user does not belong to any of the allowed orgs, should fail at the Supervisor callback endpoint",
 			maybeSkip: skipGitHubTests,
 			createIDP: func(t *testing.T) string {
 				spec := basicGitHubIdentityProviderSpec()
@@ -2836,6 +2853,7 @@ func testSupervisorLogin(
 		// Should have got an error since the upstream refresh should have failed.
 		require.Error(t, err)
 		require.EqualError(t, err, `oauth2: "error" "Error during upstream refresh. Upstream refresh failed."`)
+		t.Log("successfully confirmed that breaking the refresh session data caused the refresh to fail")
 	}
 }
 

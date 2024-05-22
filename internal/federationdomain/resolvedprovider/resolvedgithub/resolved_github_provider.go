@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/ory/fosite"
 	"golang.org/x/oauth2"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
@@ -133,13 +134,41 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
 }
 
 func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(
-	_ context.Context,
+	ctx context.Context,
 	identity *resolvedprovider.Identity,
 ) (*resolvedprovider.RefreshedIdentity, error) {
-	// TODO: actually implement refresh. this is just a placeholder that will make refresh always succeed.
+	githubSessionData, ok := identity.IDPSpecificSessionData.(*psession.GitHubSessionData)
+	if !ok {
+		// This should not really happen.
+		return nil, p.refreshErr(errors.New("wrong data type found for IDPSpecificSessionData"))
+	}
+	if len(githubSessionData.UpstreamAccessToken) == 0 {
+		// This should not really happen.
+		return nil, p.refreshErr(errors.New("session is missing GitHub access token"))
+	}
+
+	// Get the user's GitHub identity and groups again using the cached access token.
+	refreshedUserInfo, err := p.Provider.GetUser(ctx, githubSessionData.UpstreamAccessToken, p.GetDisplayName())
+	if err != nil {
+		return nil, p.refreshErr(fmt.Errorf("failed to get user info from GitHub API: %w", err))
+	}
+
+	if refreshedUserInfo.DownstreamSubject != identity.DownstreamSubject {
+		// The user's upstream identity changed since the initial login in a surprising way.
+		return nil, p.refreshErr(fmt.Errorf("user's calculated downstream subject at initial login was %q but now is %q",
+			identity.DownstreamSubject, refreshedUserInfo.DownstreamSubject))
+	}
+
 	return &resolvedprovider.RefreshedIdentity{
-		UpstreamUsername:       identity.UpstreamUsername,
-		UpstreamGroups:         identity.UpstreamGroups,
+		UpstreamUsername:       refreshedUserInfo.Username,
+		UpstreamGroups:         refreshedUserInfo.Groups,
 		IDPSpecificSessionData: nil, // nil means that no update to the GitHub-specific portion of the session data is required
 	}, nil
+}
+
+func (p *FederationDomainResolvedGitHubIdentityProvider) refreshErr(err error) *fosite.RFC6749Error {
+	return resolvedprovider.ErrUpstreamRefreshError().
+		WithHint("Upstream refresh failed.").
+		WithTrace(err).
+		WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
 }

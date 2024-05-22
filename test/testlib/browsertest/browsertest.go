@@ -396,6 +396,12 @@ func handleGithubOTPLoginPage(t *testing.T, b *Browser, upstream testlib.TestGit
 	t.Logf("waiting for GitHub MFA page")
 	b.WaitForVisibleElements(t, otpSelector)
 
+	// Sleep for a bit to make it less likely that we use the same OTP code twice when multiple tests are run in serial.
+	// GitHub gets upset when the same OTP code gets reused.
+	otpSleepSeconds := 25
+	t.Logf("sleeping %d seconds before generating a GitHub OTP code", otpSleepSeconds)
+	time.Sleep(time.Duration(otpSleepSeconds) * time.Second)
+
 	code, codeRemainingLifetimeSeconds := totp.GenerateOTPCode(t, upstream.TestUserOTPSecret, time.Now())
 	if codeRemainingLifetimeSeconds < 2 {
 		t.Log("sleeping for 2 seconds before generating another OTP code")
@@ -463,8 +469,11 @@ func handleOccasionalGithubLoginPage(t *testing.T, b *Browser, upstream testlib.
 	case strings.HasPrefix(lowercaseTitle, "two-factor authentication"):
 		// Sometimes this happens after the OTP page when we try to use the same OTP code again too quickly.
 		// GitHub stays on the same page and shows an error banner saying that we used the same code again.
-		t.Log("sleeping before trying to generate and use a new GitHub OTP code")
-		time.Sleep(5 * time.Second) // 5 seconds may not be enough time, but if we get the error again then we can try again
+		// Sleep for a long time to try to avoid this error from GitHub, which seems to be some type of rate limiting on OTP codes:
+		// "We were unable to authenticate your request because too many codes have been submitted".
+		otpSleepSeconds := 60
+		t.Logf("sleeping %d seconds before generating another GitHub OTP code after a previous code failed", otpSleepSeconds)
+		time.Sleep(time.Duration(otpSleepSeconds) * time.Second)
 		handleGithubOTPLoginPage(t, b, upstream)
 		return true
 

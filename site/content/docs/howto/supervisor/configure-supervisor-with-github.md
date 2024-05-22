@@ -22,9 +22,79 @@ cluster using their credentials from [GitHub.com](https://github.com) or [GitHub
 This how-to guide assumes that you have already [installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress,
 and that you have [configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
 
+The instructions below reference the steps needed to configure a GitHub App or GitHub OAuth2 App on https://github.com at the time of writing.
+GitHub UI and documentation changes frequently and may not exactly match the steps below.
+The below steps have not been tested with any version of GitHub Enterprise Server.
+Please submit a PR at the [Pinniped repo](https://github.com/vmware-tanzu/pinniped) to resolve any discrepancies.
+
 ## Create a GitHub App
 
-TODO: add text
+GitHub Applications can be created either in your personal profile, or directly within an organization.
+The steps to create a GitHub Application for Pinniped integration are the same, but the created application
+must be installed into an organization to order to see whether a user belongs to that organization and to which teams that user belongss.
+
+The Pinniped team recommends that the GitHub app be created within an organization, so that management of the application belongs to a team of org admins.
+
+### Create the GitHub App
+
+To create the GitHub App within an organization (recommended), start at the organization profile, then Settings > Developer Settings > GitHub Apps > New GitHub App.
+To create the GitHub App within your profile, click your user icon, then Settings > Developer Settings > GitHub Apps > New GitHub App.
+
+In the section called "Register new GitHub App"
+
+* Provide a name for your application.
+  This name should uniquely identify the realm of clusters and applications to which this Pinniped Supervisor permits access.
+  Provide a description if desired.
+
+* GitHub requires a `Homepage URL`, but the Pinniped Supervisor does not have such a home page.
+  You could provide a link to an internal company help page or perhaps https://pinniped.dev/.
+  No user credentials or information will be sent from GitHub to this `Homepage URL`.
+
+In the section called "Identifying and authorizing users"
+
+* For `Callback URL`, provide the Pinniped Supervisor issuer URL suffixed with `/callback`.
+  The issuer URL will be configured on the `FederationDomain` at `spec.Issuer`.
+  For example, if the issuer URL is `https://example.com/some/path`, the `Callback URL` must be `https://example.com/some/path/callback`.
+  It is recommended to have only one callback URL for each GitHub App.
+  Register different GitHub apps for different Pinniped Supervisors.
+
+* Check `Expire user authorization tokens` to ensure that access tokens expire.
+  For more information, see [here](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/token-expiration-and-revocation#user-token-expired-due-to-github-app-configuration).
+
+* Do not check `Request user authorization (OAuth) during installation`, otherwise GitHub will redirect users to the Pinniped Supervisor for login during application installation.
+  Pinniped Supervisor will reject these unexpected login requests.
+
+* Do not check `Enable Device Flow`, since Pinniped Supervisor does not use this flow.
+
+In the section called "Post installation"
+
+* Leave all settings blank, such as `Setup URL` and `Redirect on update`.
+
+In the section called "Webhook"
+
+* Do not check `Active`, since Pinniped Supervisor does not support GitHub's webhooks.
+
+In the section called "Permissions"
+
+* The only permission needed is "Read Access to Members", found under Organization Permissions > Members (Organization members and teams) > Read-Only.
+  This is necessary for Pinniped Supervisor to obtain the team membership information, used to provide user groups to Kubernetes RBAC.
+  For more information about this permission, see [here](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps#organization-permissions-for-members).
+
+* For `Where can this GitHub App be installed?`, select `Any account (Allow this GitHub App to be installed by any user or organization)`.
+  This will allow this GitHub Application to be installed into GitHub organizations so that Pinniped Supervisor can see the user and team membership within those organizations.
+
+Click `Create GitHub App`.
+
+### Install the app into an organization
+
+The GitHub App for the Pinniped Supervisor must be installed into an organization in order for Pinniped to see user and team membership within that org.
+To request installation of your GitHub App into an org, please see the [GitHub documentation](https://docs.github.com/en/apps/using-github-apps/requesting-a-github-app-from-your-organization-owner).
+
+As an organization owner, you can install "third-party applications" into your organization.
+Additionally, you can approve the installation requests submitted by members of the organization.
+For more information, see the [GitHub documentation](https://docs.github.com/en/apps/using-github-apps/installing-a-github-app-from-a-third-party).
+
+Note that these steps will be slightly different depending on whether the application was created within your personal account or on an organization.
 
 ## Create a GitHub OAuth App
 

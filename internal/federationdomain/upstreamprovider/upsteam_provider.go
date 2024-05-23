@@ -26,9 +26,9 @@ const (
 	AccessTokenType  RevocableTokenType = "access_token"
 )
 
-// RefreshAttributes contains information about the user from the original login request
+// LDAPRefreshAttributes contains information about the user from the original login request
 // and previous refreshes to be used during an LDAP session refresh.
-type RefreshAttributes struct {
+type LDAPRefreshAttributes struct {
 	Username             string
 	Subject              string
 	DN                   string
@@ -125,7 +125,7 @@ type UpstreamLDAPIdentityProviderI interface {
 	authenticators.UserAuthenticator
 
 	// PerformRefresh performs a refresh against the upstream LDAP identity provider
-	PerformRefresh(ctx context.Context, storedRefreshAttributes RefreshAttributes, idpDisplayName string) (groups []string, err error)
+	PerformRefresh(ctx context.Context, storedRefreshAttributes LDAPRefreshAttributes, idpDisplayName string) (groups []string, err error)
 }
 
 type GitHubUser struct {

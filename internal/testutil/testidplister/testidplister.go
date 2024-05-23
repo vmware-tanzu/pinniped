@@ -330,60 +330,111 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroAuthcodeExchanges(t *testin
 	)
 }
 
-func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPerformRefresh(
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToOIDCPerformRefresh(
 	t *testing.T,
 	expectedPerformedByUpstreamName string,
-	expectedArgs *oidctestutil.PerformRefreshArgs,
+	expectedArgs *oidctestutil.PerformOIDCRefreshArgs,
 ) {
 	t.Helper()
-	var actualArgs *oidctestutil.PerformRefreshArgs
+	var actualArgs *oidctestutil.PerformOIDCRefreshArgs
 	var actualNameOfUpstreamWhichMadeCall string
-	actualCallCountAcrossAllUpstreams := 0
-	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		callCountOnThisUpstream := upstreamOIDC.PerformRefreshCallCount()
-		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
-		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
-			actualArgs = upstreamOIDC.PerformRefreshArgs(0)
-		}
-	}
-	for _, upstreamLDAP := range b.upstreamLDAPIdentityProviders {
-		callCountOnThisUpstream := upstreamLDAP.PerformRefreshCallCount()
-		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
-		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamLDAP.Name
-			actualArgs = upstreamLDAP.PerformRefreshArgs(0)
-		}
-	}
-	for _, upstreamAD := range b.upstreamActiveDirectoryIdentityProviders {
-		callCountOnThisUpstream := upstreamAD.PerformRefreshCallCount()
-		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
-		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamAD.Name
-			actualArgs = upstreamAD.PerformRefreshArgs(0)
-		}
-	}
-	for _, upstream := range b.upstreamGitHubIdentityProviders {
-		// Remember that GitHub does not have a traditional PerformRefresh function.
-		// GitHub calls GetUser during both the original authcode exchange and the refresh.
-		callCountOnThisUpstream := upstream.GetUserCallCount()
-		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
+	for _, upstream := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstream.PerformRefreshCallCount()
 		if callCountOnThisUpstream == 1 {
 			actualNameOfUpstreamWhichMadeCall = upstream.Name
-			actualArgs = nil
+			actualArgs = upstream.PerformRefreshArgs(0)
 		}
 	}
-	require.Equal(t, 1, actualCallCountAcrossAllUpstreams,
-		"should have been exactly one call to PerformRefresh() by all upstreams",
+	require.Equal(t, 1, b.CountAllCallsToAnyUpstreamRefresh(),
+		"should have been exactly one call to upstream refresh by all upstreams",
 	)
 	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"PerformRefresh() was called on the wrong upstream",
+		"upstream refresh was called on the wrong upstream",
 	)
 	require.Equal(t, expectedArgs, actualArgs)
 }
 
-func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *testing.T) {
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToActiveDirectoryPerformRefresh(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *oidctestutil.PerformLDAPRefreshArgs,
+) {
 	t.Helper()
+	var actualArgs *oidctestutil.PerformLDAPRefreshArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	for _, upstream := range b.upstreamActiveDirectoryIdentityProviders {
+		callCountOnThisUpstream := upstream.PerformRefreshCallCount()
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = upstream.PerformRefreshArgs(0)
+		}
+	}
+	require.Equal(t, 1, b.CountAllCallsToAnyUpstreamRefresh(),
+		"should have been exactly one call to upstream refresh by all upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"upstream refresh was called on the wrong upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToLDAPPerformRefresh(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *oidctestutil.PerformLDAPRefreshArgs,
+) {
+	t.Helper()
+	var actualArgs *oidctestutil.PerformLDAPRefreshArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	for _, upstream := range b.upstreamLDAPIdentityProviders {
+		callCountOnThisUpstream := upstream.PerformRefreshCallCount()
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = upstream.PerformRefreshArgs(0)
+		}
+	}
+	require.Equal(t, 1, b.CountAllCallsToAnyUpstreamRefresh(),
+		"should have been exactly one call to upstream refresh by all upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"upstream refresh was called on the wrong upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToGithubGetUser(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *oidctestutil.GetUserArgs,
+) {
+	t.Helper()
+	var actualArgs *oidctestutil.GetUserArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	for _, upstream := range b.upstreamGitHubIdentityProviders {
+		// GitHub calls GetUser during both the original authcode exchange and the refresh.
+		callCountOnThisUpstream := upstream.GetUserCallCount()
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = upstream.GetUserArgs(0)
+		}
+	}
+	require.Equal(t, 1, b.CountAllCallsToAnyUpstreamRefresh(),
+		"should have been exactly one call to upstream refresh by all upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"upstream refresh was called on the wrong upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToAnyUpstreamRefresh(t *testing.T) {
+	t.Helper()
+	require.Equal(t, 0, b.CountAllCallsToAnyUpstreamRefresh(),
+		"expected exactly zero calls to any upstream refresh mocks",
+	)
+}
+
+func (b *UpstreamIDPListerBuilder) CountAllCallsToAnyUpstreamRefresh() int {
 	actualCallCountAcrossAllUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllUpstreams += upstreamOIDC.PerformRefreshCallCount()
@@ -394,11 +445,10 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *te
 	for _, upstreamActiveDirectory := range b.upstreamActiveDirectoryIdentityProviders {
 		actualCallCountAcrossAllUpstreams += upstreamActiveDirectory.PerformRefreshCallCount()
 	}
-	// TODO: probably add GitHub loop once we flesh out the structs
-
-	require.Equal(t, 0, actualCallCountAcrossAllUpstreams,
-		"expected exactly zero calls to PerformRefresh()",
-	)
+	for _, upstreamGithub := range b.upstreamGitHubIdentityProviders {
+		actualCallCountAcrossAllUpstreams += upstreamGithub.GetUserCallCount()
+	}
+	return actualCallCountAcrossAllUpstreams
 }
 
 func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToValidateToken(

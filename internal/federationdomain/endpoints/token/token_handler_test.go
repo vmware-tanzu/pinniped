@@ -269,30 +269,43 @@ var (
 	}
 )
 
-type expectedUpstreamRefresh struct {
+type expectedOIDCUpstreamRefresh struct {
 	performedByUpstreamName string
-	args                    *oidctestutil.PerformRefreshArgs
+	args                    *oidctestutil.PerformOIDCRefreshArgs
 }
 
-type expectedUpstreamValidateTokens struct {
+type expectedLDAPUpstreamRefresh struct {
+	performedByUpstreamName string
+	args                    *oidctestutil.PerformLDAPRefreshArgs
+}
+
+type expectedGithubUpstreamRefresh struct {
+	performedByUpstreamName string
+	args                    *oidctestutil.GetUserArgs
+}
+
+type expectedOIDCUpstreamValidateTokens struct {
 	performedByUpstreamName string
 	args                    *oidctestutil.ValidateTokenAndMergeWithUserInfoArgs
 }
 
 type tokenEndpointResponseExpectedValues struct {
-	wantStatus                        int
-	wantSuccessBodyFields             []string
-	wantErrorResponseBody             string
-	wantClientID                      string
-	wantRequestedScopes               []string
-	wantGrantedScopes                 []string
-	wantUsername                      string
-	wantGroups                        []string
-	wantUpstreamRefreshCall           *expectedUpstreamRefresh
-	wantUpstreamOIDCValidateTokenCall *expectedUpstreamValidateTokens
-	wantCustomSessionDataStored       *psession.CustomSessionData
-	wantWarnings                      []RecordedWarning
-	wantAdditionalClaims              map[string]interface{}
+	wantStatus                             int
+	wantSuccessBodyFields                  []string
+	wantErrorResponseBody                  string
+	wantClientID                           string
+	wantRequestedScopes                    []string
+	wantGrantedScopes                      []string
+	wantUsername                           string
+	wantGroups                             []string
+	wantOIDCUpstreamRefreshCall            *expectedOIDCUpstreamRefresh
+	wantLDAPUpstreamRefreshCall            *expectedLDAPUpstreamRefresh
+	wantActiveDirectoryUpstreamRefreshCall *expectedLDAPUpstreamRefresh
+	wantGithubUpstreamRefreshCall          *expectedGithubUpstreamRefresh
+	wantUpstreamOIDCValidateTokenCall      *expectedOIDCUpstreamValidateTokens
+	wantCustomSessionDataStored            *psession.CustomSessionData
+	wantWarnings                           []RecordedWarning
+	wantAdditionalClaims                   map[string]interface{}
 	// The expected lifetime of the ID tokens issued by authcode exchange and refresh, but not token exchange.
 	// When zero, will assume that the test wants the default value for ID token lifetime.
 	wantIDTokenLifetimeSeconds int
@@ -1925,48 +1938,63 @@ func TestRefreshGrant(t *testing.T) {
 		return sessionData
 	}
 
-	happyOIDCUpstreamRefreshCall := func() *expectedUpstreamRefresh {
-		return &expectedUpstreamRefresh{
+	happyOIDCUpstreamRefreshCall := func() *expectedOIDCUpstreamRefresh {
+		return &expectedOIDCUpstreamRefresh{
 			performedByUpstreamName: oidcUpstreamName,
-			args: &oidctestutil.PerformRefreshArgs{
+			args: &oidctestutil.PerformOIDCRefreshArgs{
 				Ctx:          nil, // this will be filled in with the actual request context by the test below
 				RefreshToken: oidcUpstreamInitialRefreshToken,
 			},
 		}
 	}
 
-	happyGitHubUpstreamRefreshCall := func() *expectedUpstreamRefresh {
-		return &expectedUpstreamRefresh{
+	happyGitHubUpstreamRefreshCall := func() *expectedGithubUpstreamRefresh {
+		return &expectedGithubUpstreamRefresh{
 			performedByUpstreamName: githubUpstreamName,
+			args: &oidctestutil.GetUserArgs{
+				Ctx:            nil, // this will be filled in with the actual request context by the test below
+				AccessToken:    githubUpstreamAccessToken,
+				IDPDisplayName: githubUpstreamName,
+			},
 		}
 	}
 
-	happyLDAPUpstreamRefreshCall := func() *expectedUpstreamRefresh {
-		return &expectedUpstreamRefresh{
+	happyLDAPUpstreamRefreshCall := func() *expectedLDAPUpstreamRefresh {
+		return &expectedLDAPUpstreamRefresh{
 			performedByUpstreamName: ldapUpstreamName,
-			args: &oidctestutil.PerformRefreshArgs{
-				Ctx:              nil,
-				DN:               ldapUpstreamDN,
-				ExpectedSubject:  goodSubject,
-				ExpectedUsername: goodUsername,
+			args: &oidctestutil.PerformLDAPRefreshArgs{
+				Ctx: nil, // this will be filled in with the actual request context by the test below
+				StoredRefreshAttributes: upstreamprovider.LDAPRefreshAttributes{
+					Username:             goodUsername,
+					Subject:              goodSubject,
+					DN:                   ldapUpstreamDN,
+					Groups:               goodGroups,
+					AdditionalAttributes: nil,
+				},
+				IDPDisplayName: ldapUpstreamName,
 			},
 		}
 	}
 
-	happyActiveDirectoryUpstreamRefreshCall := func() *expectedUpstreamRefresh {
-		return &expectedUpstreamRefresh{
+	happyActiveDirectoryUpstreamRefreshCall := func() *expectedLDAPUpstreamRefresh {
+		return &expectedLDAPUpstreamRefresh{
 			performedByUpstreamName: activeDirectoryUpstreamName,
-			args: &oidctestutil.PerformRefreshArgs{
-				Ctx:              nil,
-				DN:               activeDirectoryUpstreamDN,
-				ExpectedSubject:  goodSubject,
-				ExpectedUsername: goodUsername,
+			args: &oidctestutil.PerformLDAPRefreshArgs{
+				Ctx: nil, // this will be filled in with the actual request context by the test below
+				StoredRefreshAttributes: upstreamprovider.LDAPRefreshAttributes{
+					Username:             goodUsername,
+					Subject:              goodSubject,
+					DN:                   activeDirectoryUpstreamDN,
+					Groups:               goodGroups,
+					AdditionalAttributes: nil,
+				},
+				IDPDisplayName: activeDirectoryUpstreamName,
 			},
 		}
 	}
 
-	happyUpstreamValidateTokenCall := func(expectedTokens *oauth2.Token, requireIDToken bool) *expectedUpstreamValidateTokens {
-		return &expectedUpstreamValidateTokens{
+	happyUpstreamValidateTokenCall := func(expectedTokens *oauth2.Token, requireIDToken bool) *expectedOIDCUpstreamValidateTokens {
+		return &expectedOIDCUpstreamValidateTokens{
 			performedByUpstreamName: oidcUpstreamName,
 			args: &oidctestutil.ValidateTokenAndMergeWithUserInfoArgs{
 				Ctx:                  nil, // this will be filled in with the actual request context by the test below
@@ -2014,7 +2042,7 @@ func TestRefreshGrant(t *testing.T) {
 		// same as the same values as the authcode exchange case.
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
 		// Should always try to perform an upstream refresh.
-		want.wantUpstreamRefreshCall = happyOIDCUpstreamRefreshCall()
+		want.wantOIDCUpstreamRefreshCall = happyOIDCUpstreamRefreshCall()
 		if expectToValidateToken != nil {
 			want.wantUpstreamOIDCValidateTokenCall = happyUpstreamValidateTokenCall(expectToValidateToken, true)
 		}
@@ -2026,7 +2054,7 @@ func TestRefreshGrant(t *testing.T) {
 		// same as the same values as the authcode exchange case.
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(wantCustomSessionDataStored, wantDownstreamUsername, wantDownstreamGroups)
 		// Should always try to perform an upstream refresh.
-		want.wantUpstreamRefreshCall = happyOIDCUpstreamRefreshCall()
+		want.wantOIDCUpstreamRefreshCall = happyOIDCUpstreamRefreshCall()
 		if expectToValidateToken != nil {
 			want.wantUpstreamOIDCValidateTokenCall = happyUpstreamValidateTokenCall(expectToValidateToken, true)
 		}
@@ -2038,7 +2066,7 @@ func TestRefreshGrant(t *testing.T) {
 		// same as the same values as the authcode exchange case.
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(wantCustomSessionDataStored, wantDownstreamUsername, wantDownstreamGroups)
 		// Should always try to perform an upstream refresh.
-		want.wantUpstreamRefreshCall = happyGitHubUpstreamRefreshCall()
+		want.wantGithubUpstreamRefreshCall = happyGitHubUpstreamRefreshCall()
 		return want
 	}
 
@@ -2050,19 +2078,19 @@ func TestRefreshGrant(t *testing.T) {
 
 	happyRefreshTokenResponseForLDAP := func(wantCustomSessionDataStored *psession.CustomSessionData) tokenEndpointResponseExpectedValues {
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
-		want.wantUpstreamRefreshCall = happyLDAPUpstreamRefreshCall()
+		want.wantLDAPUpstreamRefreshCall = happyLDAPUpstreamRefreshCall()
 		return want
 	}
 
 	happyRefreshTokenResponseForLDAPWithUsernameAndGroups := func(wantCustomSessionDataStored *psession.CustomSessionData, wantDownstreamUsername string, wantDownstreamGroups []string) tokenEndpointResponseExpectedValues {
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(wantCustomSessionDataStored, wantDownstreamUsername, wantDownstreamGroups)
-		want.wantUpstreamRefreshCall = happyLDAPUpstreamRefreshCall()
+		want.wantLDAPUpstreamRefreshCall = happyLDAPUpstreamRefreshCall()
 		return want
 	}
 
 	happyRefreshTokenResponseForActiveDirectory := func(wantCustomSessionDataStored *psession.CustomSessionData) tokenEndpointResponseExpectedValues {
 		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored)
-		want.wantUpstreamRefreshCall = happyActiveDirectoryUpstreamRefreshCall()
+		want.wantActiveDirectoryUpstreamRefreshCall = happyActiveDirectoryUpstreamRefreshCall()
 		return want
 	}
 
@@ -2252,7 +2280,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                      transformationUsernamePrefix + goodUsername,
 					wantGroups:                        testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken(), false),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshTokenWithUsername(oidcUpstreamRefreshedRefreshToken, transformationUsernamePrefix+goodUsername),
 				},
@@ -2286,7 +2314,7 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantStatus:                        http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
@@ -2326,7 +2354,7 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantStatus:                        http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
@@ -2576,7 +2604,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					wantUsername:                      "",
 					wantGroups:                        goodGroups,
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 				}),
 			},
@@ -2631,7 +2659,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:     []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
-					wantUpstreamOIDCValidateTokenCall: &expectedUpstreamValidateTokens{
+					wantUpstreamOIDCValidateTokenCall: &expectedOIDCUpstreamValidateTokens{
 						oidcUpstreamName,
 						&oidctestutil.ValidateTokenAndMergeWithUserInfoArgs{
 							Ctx:                  nil,                                                 // this will be filled in with the actual request context by the test below
@@ -2674,7 +2702,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantSuccessBodyFields:             []string{"refresh_token", "access_token", "token_type", "expires_in", "scope"},
 					wantRequestedScopes:               []string{"offline_access"},
 					wantGrantedScopes:                 []string{"offline_access", "username", "groups"},
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken(), false),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					wantUsername:                      goodUsername,
@@ -2700,7 +2728,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                      goodUsername,
 					wantGroups:                        goodGroups,
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken(), false),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 				},
@@ -2727,7 +2755,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                      goodUsername,
 					wantGroups:                        []string{"new-group1", "new-group2", "new-group3"},
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					wantWarnings: []RecordedWarning{
@@ -2768,7 +2796,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                      goodUsername,
 					wantGroups:                        []string{"new-group1", "new-group2", "new-group3"},
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					wantWarnings:                      nil, // dynamic clients should not get these warnings which are intended for the pinniped-cli client
@@ -2796,7 +2824,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                      goodUsername,
 					wantGroups:                        []string{"new-group1", "new-group2", "new-group3"},
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					wantWarnings: []RecordedWarning{
@@ -2827,7 +2855,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                      goodUsername,
 					wantGroups:                        []string{}, // the user no longer belongs to any groups
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					wantWarnings: []RecordedWarning{
@@ -2857,7 +2885,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                      goodUsername,
 					wantGroups:                        goodGroups, // the same groups as from the initial login
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 				},
@@ -2882,7 +2910,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:           []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                goodUsername,
 					wantGroups:                  []string{"new-group1", "new-group2", "new-group3"},
-					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
 					wantCustomSessionDataStored: happyLDAPCustomSessionData,
 					wantWarnings: []RecordedWarning{
 						{Text: `User "some-username" has been added to the following groups: ["new-group1" "new-group2" "new-group3"]`},
@@ -2920,7 +2948,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:           []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                goodUsername,
 					wantGroups:                  []string{"new-group1", "new-group2", "new-group3"},
-					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
 					wantCustomSessionDataStored: happyLDAPCustomSessionData,
 					wantWarnings:                nil, // dynamic clients should not get these warnings which are intended for the pinniped-cli client
 				},
@@ -2945,7 +2973,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:           []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                goodUsername,
 					wantGroups:                  []string{},
-					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
 					wantCustomSessionDataStored: happyLDAPCustomSessionData,
 					wantWarnings: []RecordedWarning{
 						{Text: `User "some-username" has been removed from the following groups: ["group1" "groups2"]`},
@@ -2988,7 +3016,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:           []string{"openid", "offline_access", "username", "groups"}, // username and groups were not requested, but granted anyway for backwards compatibility
 					wantUsername:                goodUsername,
 					wantGroups:                  []string{"new-group1", "new-group2", "new-group3"},
-					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
 					wantCustomSessionDataStored: happyLDAPCustomSessionData,
 					wantWarnings: []RecordedWarning{
 						{Text: `User "some-username" has been added to the following groups: ["new-group1" "new-group2" "new-group3"]`},
@@ -3034,7 +3062,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "username", "groups"}, // username and groups were not requested, but granted anyway for backwards compatibility
 					wantUsername:                      goodUsername,
 					wantGroups:                        []string{"new-group1", "new-group2", "new-group3"},
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					wantWarnings: []RecordedWarning{
@@ -3087,7 +3115,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "username"},
 					wantUsername:                      goodUsername,
 					wantGroups:                        nil,
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 				},
@@ -3138,7 +3166,7 @@ func TestRefreshGrant(t *testing.T) {
 					r.SetBasicAuth(dynamicClientID, testutil.PlaintextPassword1) // Use basic auth header instead.
 				},
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantStatus:                        http.StatusUnauthorized,
 					// auth was rejected because of the upstream group to which the user belonged, as shown by the configured RejectedAuthenticationMessage appearing here
@@ -3188,7 +3216,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:           []string{"openid", "offline_access", "username", "groups"},
 					wantUsername:                goodUsername,
 					wantGroups:                  []string{"new-group1", "new-group2", "new-group3"}, // groups are updated even though the scope was not included
-					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
 					wantCustomSessionDataStored: happyLDAPCustomSessionData,
 					wantWarnings: []RecordedWarning{
 						{Text: `User "some-username" has been added to the following groups: ["new-group1" "new-group2" "new-group3"]`},
@@ -3213,7 +3241,7 @@ func TestRefreshGrant(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:                        http.StatusUnauthorized,
 					wantErrorResponseBody:             fositeUpstreamGroupClaimErrorBody,
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 				},
 			},
@@ -3295,7 +3323,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantGrantedScopes:                 []string{"openid", "offline_access", "pinniped:request-audience", "username", "groups"},
 					wantUsername:                      goodUsername,
 					wantGroups:                        goodGroups,
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantCustomSessionDataStored:       upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 				},
@@ -3793,8 +3821,8 @@ func TestRefreshGrant(t *testing.T) {
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall: happyOIDCUpstreamRefreshCall(),
-					wantStatus:              http.StatusUnauthorized,
+					wantOIDCUpstreamRefreshCall: happyOIDCUpstreamRefreshCall(),
+					wantStatus:                  http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
@@ -3814,7 +3842,7 @@ func TestRefreshGrant(t *testing.T) {
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantStatus:                        http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
@@ -3842,7 +3870,7 @@ func TestRefreshGrant(t *testing.T) {
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantStatus:                        http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
@@ -3867,7 +3895,7 @@ func TestRefreshGrant(t *testing.T) {
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantStatus:                        http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
@@ -3894,7 +3922,7 @@ func TestRefreshGrant(t *testing.T) {
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantStatus:                        http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
@@ -3921,7 +3949,7 @@ func TestRefreshGrant(t *testing.T) {
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall:           happyOIDCUpstreamRefreshCall(),
+					wantOIDCUpstreamRefreshCall:       happyOIDCUpstreamRefreshCall(),
 					wantUpstreamOIDCValidateTokenCall: happyUpstreamValidateTokenCall(refreshedUpstreamTokensWithIDAndRefreshTokens(), true),
 					wantStatus:                        http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
@@ -4011,8 +4039,8 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
-					wantStatus:              http.StatusUnauthorized,
+					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
+					wantStatus:                  http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
@@ -4051,8 +4079,8 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
-					wantStatus:              http.StatusUnauthorized,
+					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
+					wantStatus:                  http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
@@ -4125,7 +4153,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantCustomSessionDataStored: happyLDAPCustomSessionData,
 					wantUsername:                "",
 					wantGroups:                  goodGroups,
-					wantUpstreamRefreshCall:     happyLDAPUpstreamRefreshCall(),
+					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
 				}),
 			},
 		},
@@ -4319,8 +4347,8 @@ func TestRefreshGrant(t *testing.T) {
 			authcodeExchange: happyAuthcodeExchangeInputsForLDAPUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
-					wantStatus:              http.StatusUnauthorized,
+					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
+					wantStatus:                  http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
@@ -4348,8 +4376,8 @@ func TestRefreshGrant(t *testing.T) {
 			},
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
-					wantUpstreamRefreshCall: happyActiveDirectoryUpstreamRefreshCall(),
-					wantStatus:              http.StatusUnauthorized,
+					wantActiveDirectoryUpstreamRefreshCall: happyActiveDirectoryUpstreamRefreshCall(),
+					wantStatus:                             http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",
@@ -4602,7 +4630,7 @@ func TestRefreshGrant(t *testing.T) {
 
 			// Performing an authcode exchange should not have caused any upstream refresh, which should only
 			// happen during a downstream refresh.
-			test.idps.RequireExactlyZeroCallsToPerformRefresh(t)
+			test.idps.RequireExactlyZeroCallsToAnyUpstreamRefresh(t)
 			test.idps.RequireExactlyZeroCallsToValidateToken(t)
 
 			// Wait one second before performing the refresh so we can see that the refreshed ID token has new issued
@@ -4634,21 +4662,38 @@ func TestRefreshGrant(t *testing.T) {
 			t.Logf("second response: %#v", refreshResponse)
 			t.Logf("second response body: %q", refreshResponse.Body.String())
 
-			// Test that we did or did not make a call to the upstream OIDC provider interface to perform a token refresh.
-			if test.refreshRequest.want.wantUpstreamRefreshCall != nil {
-				if test.authcodeExchange.customSessionData.ProviderType != "github" {
-					test.refreshRequest.want.wantUpstreamRefreshCall.args.Ctx = reqContext
-				}
-				test.idps.RequireExactlyOneCallToPerformRefresh(t,
-					test.refreshRequest.want.wantUpstreamRefreshCall.performedByUpstreamName,
-					test.refreshRequest.want.wantUpstreamRefreshCall.args,
+			// Test that we did or did not make a call to the upstream provider's interface to perform refresh.
+			switch {
+			case test.refreshRequest.want.wantOIDCUpstreamRefreshCall != nil:
+				test.refreshRequest.want.wantOIDCUpstreamRefreshCall.args.Ctx = reqContext
+				test.idps.RequireExactlyOneCallToOIDCPerformRefresh(t,
+					test.refreshRequest.want.wantOIDCUpstreamRefreshCall.performedByUpstreamName,
+					test.refreshRequest.want.wantOIDCUpstreamRefreshCall.args,
 				)
-			} else {
-				test.idps.RequireExactlyZeroCallsToPerformRefresh(t)
+			case test.refreshRequest.want.wantLDAPUpstreamRefreshCall != nil:
+				test.refreshRequest.want.wantLDAPUpstreamRefreshCall.args.Ctx = reqContext
+				test.idps.RequireExactlyOneCallToLDAPPerformRefresh(t,
+					test.refreshRequest.want.wantLDAPUpstreamRefreshCall.performedByUpstreamName,
+					test.refreshRequest.want.wantLDAPUpstreamRefreshCall.args,
+				)
+			case test.refreshRequest.want.wantActiveDirectoryUpstreamRefreshCall != nil:
+				test.refreshRequest.want.wantActiveDirectoryUpstreamRefreshCall.args.Ctx = reqContext
+				test.idps.RequireExactlyOneCallToActiveDirectoryPerformRefresh(t,
+					test.refreshRequest.want.wantActiveDirectoryUpstreamRefreshCall.performedByUpstreamName,
+					test.refreshRequest.want.wantActiveDirectoryUpstreamRefreshCall.args,
+				)
+			case test.refreshRequest.want.wantGithubUpstreamRefreshCall != nil:
+				test.refreshRequest.want.wantGithubUpstreamRefreshCall.args.Ctx = reqContext
+				test.idps.RequireExactlyOneCallToGithubGetUser(t,
+					test.refreshRequest.want.wantGithubUpstreamRefreshCall.performedByUpstreamName,
+					test.refreshRequest.want.wantGithubUpstreamRefreshCall.args,
+				)
+			default:
+				test.idps.RequireExactlyZeroCallsToAnyUpstreamRefresh(t)
 			}
 
 			// Test that we did or did not make a call to the upstream OIDC provider interface to validate the
-			// new ID token that was returned by the upstream refresh.
+			// new ID token that was returned by the upstream refresh, in the case of an OIDC upstream.
 			if test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall != nil {
 				test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.args.Ctx = reqContext
 				test.idps.RequireExactlyOneCallToValidateToken(t,

@@ -641,8 +641,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes upstreamprovider.RefreshAttributes) error{
-					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes upstreamprovider.RefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes upstreamprovider.LDAPRefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes upstreamprovider.LDAPRefreshAttributes) error {
 						return nil
 					},
 				}
@@ -679,8 +679,8 @@ func TestEndUserAuthentication(t *testing.T) {
 			username: testUpstreamUsername,
 			password: testUpstreamPassword,
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes upstreamprovider.RefreshAttributes) error{
-					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes upstreamprovider.RefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(entry *ldap.Entry, attributes upstreamprovider.LDAPRefreshAttributes) error{
+					"some-attribute-to-check-during-refresh": func(entry *ldap.Entry, attributes upstreamprovider.LDAPRefreshAttributes) error {
 						return nil
 					},
 				}
@@ -1527,8 +1527,8 @@ func TestUpstreamRefresh(t *testing.T) {
 				Filter:             testGroupSearchFilter,
 				GroupNameAttribute: testGroupSearchGroupNameAttribute,
 			},
-			RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
-				pwdLastSetAttribute: func(*ldap.Entry, upstreamprovider.RefreshAttributes) error { return nil },
+			RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.LDAPRefreshAttributes) error{
+				pwdLastSetAttribute: func(*ldap.Entry, upstreamprovider.LDAPRefreshAttributes) error { return nil },
 			},
 		}
 		if editFunc != nil {
@@ -2124,8 +2124,8 @@ func TestUpstreamRefresh(t *testing.T) {
 		{
 			name: "search result has a changed pwdLastSet value",
 			providerConfig: providerConfig(func(p *ProviderConfig) {
-				p.RefreshAttributeChecks = map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
-					pwdLastSetAttribute: func(*ldap.Entry, upstreamprovider.RefreshAttributes) error {
+				p.RefreshAttributeChecks = map[string]func(*ldap.Entry, upstreamprovider.LDAPRefreshAttributes) error{
+					pwdLastSetAttribute: func(*ldap.Entry, upstreamprovider.LDAPRefreshAttributes) error {
 						return errors.New(`value for attribute "pwdLastSet" has changed since initial value at login`)
 					},
 				}
@@ -2201,7 +2201,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				"ldaps://ldap.example.com:8443?base=some-upstream-user-base-dn&idpName=%s&sub=c29tZS11cHN0cmVhbS11aWQtdmFsdWU",
 				testUpstreamName,
 			)
-			groups, err := ldapProvider.PerformRefresh(context.Background(), upstreamprovider.RefreshAttributes{
+			groups, err := ldapProvider.PerformRefresh(context.Background(), upstreamprovider.LDAPRefreshAttributes{
 				Username:             testUserSearchResultUsernameAttributeValue,
 				Subject:              subject,
 				DN:                   tt.refreshUserDN,

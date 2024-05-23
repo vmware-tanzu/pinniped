@@ -1832,7 +1832,7 @@ func TestRefreshGrant(t *testing.T) {
 		githubUpstreamName        = "some-github-idp"
 		githubUpstreamResourceUID = "github-resource-uid"
 		githubUpstreamType        = "github"
-		githubUpstreamAccessToken = "some-opaque-access-token-from-github"
+		githubUpstreamAccessToken = "some-opaque-access-token-from-github" //nolint:gosec // this is not a credential
 
 		transformationUsernamePrefix = "username_prefix:"
 		transformationGroupsPrefix   = "groups_prefix:"

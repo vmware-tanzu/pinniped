@@ -363,7 +363,16 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPerformRefresh(
 			actualArgs = upstreamAD.PerformRefreshArgs(0)
 		}
 	}
-	// TODO: probably add GitHub loop once we flesh out the structs
+	for _, upstream := range b.upstreamGitHubIdentityProviders {
+		// Remember that GitHub does not have a traditional PerformRefresh function.
+		// GitHub calls GetUser during both the original authcode exchange and the refresh.
+		callCountOnThisUpstream := upstream.GetUserCallCount()
+		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = nil
+		}
+	}
 	require.Equal(t, 1, actualCallCountAcrossAllUpstreams,
 		"should have been exactly one call to PerformRefresh() by all upstreams",
 	)

@@ -51,6 +51,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
+	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/openidconnect"
@@ -1828,6 +1829,11 @@ func TestRefreshGrant(t *testing.T) {
 		activeDirectoryUpstreamType        = "activedirectory"
 		activeDirectoryUpstreamDN          = "some-ad-user-dn"
 
+		githubUpstreamName        = "some-github-idp"
+		githubUpstreamResourceUID = "github-resource-uid"
+		githubUpstreamType        = "github"
+		githubUpstreamAccessToken = "some-opaque-access-token-from-github"
+
 		transformationUsernamePrefix = "username_prefix:"
 		transformationGroupsPrefix   = "groups_prefix:"
 	)
@@ -1843,6 +1849,18 @@ func TestRefreshGrant(t *testing.T) {
 			WithResourceUID(oidcUpstreamResourceUID)
 	}
 
+	upstreamGitHubIdentityProviderBuilder := func() *oidctestutil.TestUpstreamGitHubIdentityProviderBuilder {
+		goodGitHubUser := &upstreamprovider.GitHubUser{
+			Username:          goodUsername,
+			Groups:            goodGroups,
+			DownstreamSubject: goodSubject,
+		}
+		return oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+			WithName(githubUpstreamName).
+			WithResourceUID(githubUpstreamResourceUID).
+			WithUser(goodGitHubUser)
+	}
+
 	initialUpstreamOIDCRefreshTokenCustomSessionData := func() *psession.CustomSessionData {
 		return &psession.CustomSessionData{
 			Username:         goodUsername,
@@ -1855,6 +1873,20 @@ func TestRefreshGrant(t *testing.T) {
 				UpstreamRefreshToken: oidcUpstreamInitialRefreshToken,
 				UpstreamSubject:      goodUpstreamSubject,
 				UpstreamIssuer:       goodIssuer,
+			},
+		}
+	}
+
+	initialUpstreamGitHubCustomSessionData := func() *psession.CustomSessionData {
+		return &psession.CustomSessionData{
+			Username:         goodUsername,
+			UpstreamUsername: goodUsername,
+			UpstreamGroups:   goodGroups,
+			ProviderName:     githubUpstreamName,
+			ProviderUID:      githubUpstreamResourceUID,
+			ProviderType:     githubUpstreamType,
+			GitHub: &psession.GitHubSessionData{
+				UpstreamAccessToken: githubUpstreamAccessToken,
 			},
 		}
 	}
@@ -1900,6 +1932,12 @@ func TestRefreshGrant(t *testing.T) {
 				Ctx:          nil, // this will be filled in with the actual request context by the test below
 				RefreshToken: oidcUpstreamInitialRefreshToken,
 			},
+		}
+	}
+
+	happyGitHubUpstreamRefreshCall := func() *expectedUpstreamRefresh {
+		return &expectedUpstreamRefresh{
+			performedByUpstreamName: githubUpstreamName,
 		}
 	}
 
@@ -1992,6 +2030,15 @@ func TestRefreshGrant(t *testing.T) {
 		if expectToValidateToken != nil {
 			want.wantUpstreamOIDCValidateTokenCall = happyUpstreamValidateTokenCall(expectToValidateToken, true)
 		}
+		return want
+	}
+
+	happyRefreshTokenResponseForGitHubAndOfflineAccessWithUsernameAndGroups := func(wantCustomSessionDataStored *psession.CustomSessionData, wantDownstreamUsername string, wantDownstreamGroups []string) tokenEndpointResponseExpectedValues {
+		// Should always have some custom session data stored. The other expectations happens to be the
+		// same as the same values as the authcode exchange case.
+		want := happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(wantCustomSessionDataStored, wantDownstreamUsername, wantDownstreamGroups)
+		// Should always try to perform an upstream refresh.
+		want.wantUpstreamRefreshCall = happyGitHubUpstreamRefreshCall()
 		return want
 	}
 
@@ -2148,6 +2195,27 @@ func TestRefreshGrant(t *testing.T) {
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
 					transformationUsernamePrefix+goodUsername,
 					testutil.AddPrefixToEach(transformationGroupsPrefix, goodGroups),
+				),
+			},
+		},
+		{
+			name: "happy path refresh grant with GitHub upstream",
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(
+				upstreamGitHubIdentityProviderBuilder().Build()),
+			authcodeExchange: authcodeExchangeInputs{
+				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+				customSessionData: initialUpstreamGitHubCustomSessionData(),
+				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
+					initialUpstreamGitHubCustomSessionData(),
+					goodUsername,
+					goodGroups,
+				),
+			},
+			refreshRequest: refreshRequestInputs{
+				want: happyRefreshTokenResponseForGitHubAndOfflineAccessWithUsernameAndGroups(
+					initialUpstreamGitHubCustomSessionData(),
+					goodUsername,
+					goodGroups,
 				),
 			},
 		},
@@ -4568,7 +4636,9 @@ func TestRefreshGrant(t *testing.T) {
 
 			// Test that we did or did not make a call to the upstream OIDC provider interface to perform a token refresh.
 			if test.refreshRequest.want.wantUpstreamRefreshCall != nil {
-				test.refreshRequest.want.wantUpstreamRefreshCall.args.Ctx = reqContext
+				if test.authcodeExchange.customSessionData.ProviderType != "github" {
+					test.refreshRequest.want.wantUpstreamRefreshCall.args.Ctx = reqContext
+				}
 				test.idps.RequireExactlyOneCallToPerformRefresh(t,
 					test.refreshRequest.want.wantUpstreamRefreshCall.performedByUpstreamName,
 					test.refreshRequest.want.wantUpstreamRefreshCall.args,

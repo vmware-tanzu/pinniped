@@ -103,17 +103,18 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	accessToken, err := p.Provider.ExchangeAuthcode(ctx, authCode, redirectURI)
 	if err != nil {
-		plog.WarningErr("error exchanging GitHub authcode", err, "upstreamName", p.Provider.GetName())
+		plog.WarningErr("failed to exchange authcode using GitHub API", err, "upstreamName", p.Provider.GetName())
 		return nil, nil, httperr.Wrap(http.StatusBadGateway,
-			fmt.Sprintf("failed to exchange authcode using GitHub API: %s", err.Error()),
+			"failed to exchange authcode using GitHub API",
 			err,
 		)
 	}
 
 	user, err := p.Provider.GetUser(ctx, accessToken, p.GetDisplayName())
 	if err != nil {
+		plog.WarningErr("failed to get user info from GitHub API", err, "upstreamName", p.Provider.GetName())
 		return nil, nil, httperr.Wrap(http.StatusUnprocessableEntity,
-			fmt.Sprintf("failed to get user info from GitHub API: %s", err.Error()),
+			"failed to get user info from GitHub API",
 			err,
 		)
 	}
@@ -150,7 +151,8 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(
 	// Get the user's GitHub identity and groups again using the cached access token.
 	refreshedUserInfo, err := p.Provider.GetUser(ctx, githubSessionData.UpstreamAccessToken, p.GetDisplayName())
 	if err != nil {
-		return nil, p.refreshErr(fmt.Errorf("failed to get user info from GitHub API: %w", err))
+		plog.WarningErr("failed to refresh user info from GitHub API", err, "upstreamName", p.Provider.GetName())
+		return nil, p.refreshErr(errors.New("failed to refresh user info from GitHub API"))
 	}
 
 	if refreshedUserInfo.DownstreamSubject != identity.DownstreamSubject {

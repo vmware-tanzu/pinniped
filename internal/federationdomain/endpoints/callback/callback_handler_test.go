@@ -21,7 +21,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -178,8 +177,8 @@ func TestCallbackEndpoint(t *testing.T) {
 	var happyCookieCodec = securecookie.New(cookieEncoderHashKey, cookieEncoderBlockKey)
 	happyCookieCodec.SetSerializer(securecookie.JSONEncoder{})
 
-	happyState := happyOIDCUpstreamStateParam().Build(t, happyStateCodec)
-	happyStateForDynamicClient := happyOIDCUpstreamStateParamForDynamicClient().Build(t, happyStateCodec)
+	happyOIDCState := happyOIDCUpstreamStateParam().Build(t, happyStateCodec)
+	happyOIDCStateForDynamicClient := happyOIDCUpstreamStateParamForDynamicClient().Build(t, happyStateCodec)
 
 	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyDownstreamCSRF)
 	require.NoError(t, err)
@@ -240,7 +239,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantGitHubAuthcodeExchangeCall    *expectedGitHubAuthcodeExchange
 	}{
 		{
-			name:   "GET with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
+			name:   "OIDC: GET with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
 			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
@@ -268,6 +267,37 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
+			},
+		},
+		{
+			name:   "GitHub: GET with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithGitHub(happyGitHubUpstream().Build()),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyGitHubUpstreamStateParam().WithAuthorizeRequestParams(
+					shallowCopyAndModifyQuery(
+						happyDownstreamRequestParamsQuery,
+						map[string]string{"response_mode": "form_post"},
+					).Encode(),
+				).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusOK,
+			wantContentType:                   "text/html;charset=UTF-8",
+			wantBodyFormResponseRegexp:        `<code id="manual-auth-code">(.+)</code>`,
+			wantDownstreamIDTokenSubject:      githubDownstreamSubject,
+			wantDownstreamIDTokenUsername:     githubUpstreamUsername,
+			wantDownstreamIDTokenGroups:       githubUpstreamGroups,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamGitHubCustomSessionData,
+			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
+				performedByUpstreamName: happyGithubIDPName,
+				args:                    happyGitHubUpstreamExchangeAuthcodeArgs,
 			},
 		},
 		{
@@ -317,7 +347,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:                              "GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback with its state and code",
 			idps:                              testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -342,7 +372,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			idps:                              testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			kubeResources:                     addFullyCapableDynamicClientAndSecretToKubeResources,
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyStateForDynamicClient).String(),
+			path:                              newRequestPath().WithState(happyOIDCStateForDynamicClient).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -366,7 +396,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:                              "GET with authcode exchange that returns an access token but no refresh token when there is a userinfo endpoint returns 303 to downstream client callback with its state and code",
 			idps:                              testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -425,7 +455,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:                              "GET with authcode exchange that returns an access token but no refresh token but has a short token lifetime which is stored as a warning in the session",
 			idps:                              testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().WithEmptyRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(1*time.Hour))).WithUserInfoURL().Build()),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -464,7 +494,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithoutUsernameClaim().WithoutGroupsClaim().Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -494,7 +524,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithUsernameClaim("email").WithIDTokenClaim("email", "joe@whitehouse.gov").Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -526,7 +556,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					WithIDTokenClaim("email_verified", true).Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -559,7 +589,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					WithIDTokenClaim("email_verified", false).Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther, // succeed despite `email_verified=false` because we're not using the email claim for anything
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -590,7 +620,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				WithIDTokenClaim("email_verified", "supposed to be boolean").Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -604,7 +634,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:            "return an error when upstream IDP returned no refresh token with an access token when there is no userinfo endpoint",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().WithoutRefreshToken().WithAccessToken(oidcUpstreamAccessToken, metav1.NewTime(time.Now().Add(9*time.Hour))).WithoutUserInfoURL().Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -618,7 +648,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:            "return an error when upstream IDP returned no refresh token and no access token",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().WithoutRefreshToken().WithoutAccessToken().Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -632,7 +662,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:            "return an error when upstream IDP returned an empty refresh token and empty access token",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().WithEmptyRefreshToken().WithEmptyAccessToken().Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -646,7 +676,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:            "return an error when upstream IDP returned no refresh token and empty access token",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().WithoutRefreshToken().WithEmptyAccessToken().Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -660,7 +690,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:            "return an error when upstream IDP returned an empty refresh token and no access token",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().WithEmptyRefreshToken().WithoutAccessToken().Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -678,7 +708,7 @@ func TestCallbackEndpoint(t *testing.T) {
 					WithIDTokenClaim("email_verified", false).Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -694,7 +724,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithUsernameClaim("sub").Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -724,7 +754,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, "notAnArrayGroup1 notAnArrayGroup2").Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -754,7 +784,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -929,7 +959,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(happyOIDCUpstream().WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -995,7 +1025,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:            "code param was not included on request",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).WithoutCode().String(),
+			path:            newRequestPath().WithState(happyOIDCState).WithoutCode().String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: htmlContentType,
@@ -1264,21 +1294,11 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name: "GitHub IDP: GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback",
-			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(
-				happyGitHubUpstream().
-					WithAccessToken(githubUpstreamAccessToken).
-					WithUser(&upstreamprovider.GitHubUser{
-						Username:          githubUpstreamUsername,
-						Groups:            githubUpstreamGroups,
-						DownstreamSubject: githubDownstreamSubject,
-					}).
-					Build()),
+			name:   "GitHub IDP: GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback",
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithGitHub(happyGitHubUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
-				happyOIDCUpstreamStateParam().
-					WithUpstreamIDPName(happyGithubIDPName).
-					WithUpstreamIDPType(idpdiscoveryv1alpha1.IDPTypeGitHub).
+				happyGitHubUpstreamStateParam().
 					WithAuthorizeRequestParams(
 						happyDownstreamRequestParamsQuery.Encode(),
 					).Build(t, happyStateCodec),
@@ -1303,22 +1323,12 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name: "GitHub IDP: GET with good state and cookie and successful upstream token exchange with dynamic client returns 303 to downstream client callback, with dynamic client",
-			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(
-				happyGitHubUpstream().
-					WithAccessToken(githubUpstreamAccessToken).
-					WithUser(&upstreamprovider.GitHubUser{
-						Username:          githubUpstreamUsername,
-						Groups:            githubUpstreamGroups,
-						DownstreamSubject: githubDownstreamSubject,
-					}).
-					Build()),
+			name:          "GitHub IDP: GET with good state and cookie and successful upstream token exchange with dynamic client returns 303 to downstream client callback, with dynamic client",
+			idps:          testidplister.NewUpstreamIDPListerBuilder().WithGitHub(happyGitHubUpstream().Build()),
 			method:        http.MethodGet,
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
 			path: newRequestPath().WithState(
-				happyOIDCUpstreamStateParam().
-					WithUpstreamIDPName(happyGithubIDPName).
-					WithUpstreamIDPType(idpdiscoveryv1alpha1.IDPTypeGitHub).
+				happyGitHubUpstreamStateParam().
 					WithAuthorizeRequestParams(
 						shallowCopyAndModifyQuery(
 							happyDownstreamRequestParamsQuery,
@@ -1351,7 +1361,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:            "the OIDCIdentityProvider resource has been deleted",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(otherUpstreamOIDCIdentityProvider),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1361,7 +1371,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:            "the CSRF cookie does not exist on request",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			wantStatus:      http.StatusForbidden,
 			wantContentType: htmlContentType,
 			wantBody:        "Forbidden: CSRF cookie is missing\n",
@@ -1370,7 +1380,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			name:            "cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
 			wantStatus:      http.StatusForbidden,
 			wantContentType: htmlContentType,
@@ -1389,12 +1399,12 @@ func TestCallbackEndpoint(t *testing.T) {
 
 		// Upstream exchange
 		{
-			name: "upstream auth code exchange fails",
+			name: "OIDC: upstream auth code exchange fails",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyOIDCUpstream().WithUpstreamAuthcodeExchangeError(errors.New("some error")).Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusBadGateway,
 			wantBody:        "Bad Gateway: error exchanging and validating upstream tokens\n",
@@ -1405,12 +1415,33 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
+			name: "GitHub upstream auth code exchange fails",
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(
+				happyGitHubUpstream().WithAuthcodeExchangeError(errors.New("some error")).Build(),
+			),
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyGitHubUpstreamStateParam().
+					WithAuthorizeRequestParams(
+						happyDownstreamRequestParamsQuery.Encode(),
+					).Build(t, happyStateCodec),
+			).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadGateway,
+			wantBody:        "Bad Gateway: failed to exchange authcode using GitHub API\n",
+			wantContentType: htmlContentType,
+			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
+				performedByUpstreamName: happyGithubIDPName,
+				args:                    happyGitHubUpstreamExchangeAuthcodeArgs,
+			},
+		},
+		{
 			name: "upstream ID token does not contain requested username claim",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				happyOIDCUpstream().WithoutIDTokenClaim(oidcUpstreamUsernameClaim).Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantBody:        "Unprocessable Entity: required claim in upstream ID token missing\n",
@@ -1426,7 +1457,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithoutIDTokenClaim(oidcUpstreamGroupsClaim).Build(),
 			),
 			method:                            http.MethodGet,
-			path:                              newRequestPath().WithState(happyState).String(),
+			path:                              newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusSeeOther,
 			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
@@ -1456,7 +1487,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamUsernameClaim, 42).Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1472,7 +1503,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamUsernameClaim, "").Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1488,7 +1519,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithoutIDTokenClaim("iss").WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1504,7 +1535,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim("iss", "").WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1520,7 +1551,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim("iss", 42).WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1536,7 +1567,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithoutIDTokenClaim("sub").WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1552,7 +1583,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim("sub", "").WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1568,7 +1599,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim("sub", 42).WithoutUsernameClaim().Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1584,7 +1615,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, 42).Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1600,7 +1631,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1616,7 +1647,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, nil).Build(),
 			),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1631,7 +1662,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(happyOIDCUpstream().WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyState).String(),
+			path:            newRequestPath().WithState(happyOIDCState).String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusUnprocessableEntity,
 			wantContentType: htmlContentType,
@@ -1824,6 +1855,18 @@ func happyOIDCUpstreamStateParam() *oidctestutil.UpstreamStateParamBuilder {
 	}
 }
 
+func happyGitHubUpstreamStateParam() *oidctestutil.UpstreamStateParamBuilder {
+	return &oidctestutil.UpstreamStateParamBuilder{
+		U: happyGithubIDPName,
+		P: happyDownstreamRequestParams,
+		T: "github",
+		N: happyDownstreamNonce,
+		C: happyDownstreamCSRF,
+		K: happyDownstreamPKCEVerifier,
+		V: happyDownstreamStateVersion,
+	}
+}
+
 func happyOIDCUpstreamStateParamForDynamicClient() *oidctestutil.UpstreamStateParamBuilder {
 	p := happyOIDCUpstreamStateParam()
 	p.P = happyDownstreamRequestParamsForDynamicClient
@@ -1853,7 +1896,13 @@ func happyGitHubUpstream() *oidctestutil.TestUpstreamGitHubIdentityProviderBuild
 		WithName(happyGithubIDPName).
 		WithResourceUID(happyGithubIDPResourceUID).
 		WithClientID("some-client-id").
-		WithScopes([]string{"these", "scopes", "appear", "unused"})
+		WithScopes([]string{"these", "scopes", "appear", "unused"}). // TODO: What do we do with these scopes?
+		WithAccessToken(githubUpstreamAccessToken).
+		WithUser(&upstreamprovider.GitHubUser{
+			Username:          githubUpstreamUsername,
+			Groups:            githubUpstreamGroups,
+			DownstreamSubject: githubDownstreamSubject,
+		})
 }
 
 func shallowCopyAndModifyQuery(query url.Values, modifications map[string]string) url.Values {

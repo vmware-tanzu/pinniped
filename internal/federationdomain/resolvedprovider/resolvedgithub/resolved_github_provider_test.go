@@ -179,7 +179,7 @@ func TestLoginFromCallback(t *testing.T) {
 			wantGetUserCall: false,
 			wantIdentity:    nil,
 			wantExtras:      nil,
-			wantErr:         "failed to exchange authcode using GitHub API: fake authcode exchange error: fake authcode exchange error",
+			wantErr:         "failed to exchange authcode using GitHub API: fake authcode exchange error",
 		},
 		{
 			name: "error while getting user info",
@@ -204,7 +204,7 @@ func TestLoginFromCallback(t *testing.T) {
 			},
 			wantIdentity: nil,
 			wantExtras:   nil,
-			wantErr:      "failed to get user info from GitHub API: fake user info error: fake user info error",
+			wantErr:      "failed to get user info from GitHub API: fake user info error",
 		},
 	}
 
@@ -297,7 +297,7 @@ func TestUpstreamRefresh(t *testing.T) {
 			name: "error while getting user info",
 			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
 				WithName("fake-provider-name").
-				WithGetUserError(errors.New("fake user info error")).
+				WithGetUserError(errors.New("any error message")).
 				Build(),
 			identity: &resolvedprovider.Identity{
 				UpstreamUsername:       "initial-username",
@@ -313,7 +313,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				IDPDisplayName: "fake-display-name",
 			},
 			wantRefreshedIdentity: nil,
-			wantWrappedErr:        "failed to get user info from GitHub API: fake user info error",
+			wantWrappedErr:        "failed to refresh user info from GitHub API",
 		},
 		{
 			name: "wrong session data type, which should not really happen",

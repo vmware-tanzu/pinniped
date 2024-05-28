@@ -112,6 +112,11 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) WithGetUserError(err error) 
 	return u
 }
 
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithTransformsForFederationDomain(transforms *idtransform.TransformationPipeline) *TestUpstreamGitHubIdentityProviderBuilder {
+	u.transformsForFederationDomain = transforms
+	return u
+}
+
 func (u *TestUpstreamGitHubIdentityProviderBuilder) Build() *TestUpstreamGitHubIdentityProvider {
 	if u.displayNameForFederationDomain == "" {
 		// default it to the CR name

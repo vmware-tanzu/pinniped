@@ -82,10 +82,10 @@ const (
 )
 
 var (
-	githubUpstreamUsername    = "some-github-login"
-	githubUpstreamGroups      = []string{"org1/team1", "org2/team2"}
-	githubDownstreamSubject   = fmt.Sprintf("https://github.com?idpName=%s&sub=%s", happyGithubIDPName, githubUpstreamUsername)
-	githubUpstreamAccessToken = "some-opaque-access-token-from-github" //nolint:gosec // this is not a credential
+	githubUpstreamUsername        = "some-github-login"
+	githubUpstreamGroupMembership = []string{"org1/team1", "org2/team2"}
+	githubDownstreamSubject       = fmt.Sprintf("https://github.com?idpName=%s&sub=%s", happyGithubIDPName, githubUpstreamUsername)
+	githubUpstreamAccessToken     = "some-opaque-access-token-from-github" //nolint:gosec // this is not a credential
 
 	oidcUpstreamGroupMembership    = []string{"test-pinniped-group-0", "test-pinniped-group-1"}
 	happyDownstreamScopesRequested = []string{"openid", "username", "groups"}
@@ -108,7 +108,7 @@ var (
 	)
 	happyDownstreamRequestParamsForDynamicClient = happyDownstreamRequestParamsQueryForDynamicClient.Encode()
 
-	happyDownstreamCustomSessionData = &psession.CustomSessionData{
+	happyDownstreamCustomSessionDataForOIDCUpstream = &psession.CustomSessionData{
 		Username:         oidcUpstreamUsername,
 		UpstreamUsername: oidcUpstreamUsername,
 		UpstreamGroups:   oidcUpstreamGroupMembership,
@@ -121,10 +121,16 @@ var (
 			UpstreamSubject:      oidcUpstreamSubject,
 		},
 	}
-	happyDownstreamCustomSessionDataWithUsernameAndGroups = func(wantDownstreamUsername, wantUpstreamUsername string, wantUpstreamGroups []string) *psession.CustomSessionData {
-		copyOfCustomSession := *happyDownstreamCustomSessionData
-		copyOfOIDC := *(happyDownstreamCustomSessionData.OIDC)
-		copyOfCustomSession.OIDC = &copyOfOIDC
+	happyDownstreamCustomSessionDataWithUsernameAndGroups = func(startingSessionData *psession.CustomSessionData, wantDownstreamUsername, wantUpstreamUsername string, wantUpstreamGroups []string) *psession.CustomSessionData {
+		copyOfCustomSession := *startingSessionData
+		if startingSessionData.OIDC != nil {
+			copyOfOIDC := *(startingSessionData.OIDC)
+			copyOfCustomSession.OIDC = &copyOfOIDC
+		}
+		if startingSessionData.GitHub != nil {
+			copyOfGitHub := *(startingSessionData.GitHub)
+			copyOfCustomSession.GitHub = &copyOfGitHub
+		}
 		copyOfCustomSession.Username = wantDownstreamUsername
 		copyOfCustomSession.UpstreamUsername = wantUpstreamUsername
 		copyOfCustomSession.UpstreamGroups = wantUpstreamGroups
@@ -143,10 +149,10 @@ var (
 			UpstreamSubject:     oidcUpstreamSubject,
 		},
 	}
-	happyDownstreamGitHubCustomSessionData = &psession.CustomSessionData{
+	happyDownstreamCustomSessionDataForGitHubUpstream = &psession.CustomSessionData{
 		Username:         githubUpstreamUsername,
 		UpstreamUsername: githubUpstreamUsername,
-		UpstreamGroups:   githubUpstreamGroups,
+		UpstreamGroups:   githubUpstreamGroupMembership,
 		ProviderUID:      happyGithubIDPResourceUID,
 		ProviderName:     happyGithubIDPName,
 		ProviderType:     psession.ProviderTypeGitHub,
@@ -179,6 +185,8 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	happyOIDCState := happyOIDCUpstreamStateParam().Build(t, happyStateCodec)
 	happyOIDCStateForDynamicClient := happyOIDCUpstreamStateParamForDynamicClient().Build(t, happyStateCodec)
+
+	happyGitHubPath := newRequestPath().WithState(happyGitHubUpstreamStateParam().Build(t, happyStateCodec)).String()
 
 	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyDownstreamCSRF)
 	require.NoError(t, err)
@@ -263,7 +271,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -287,14 +295,14 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBodyFormResponseRegexp:        `<code id="manual-auth-code">(.+)</code>`,
 			wantDownstreamIDTokenSubject:      githubDownstreamSubject,
 			wantDownstreamIDTokenUsername:     githubUpstreamUsername,
-			wantDownstreamIDTokenGroups:       githubUpstreamGroups,
+			wantDownstreamIDTokenGroups:       githubUpstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamGitHubCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForGitHubUpstream,
 			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
 				performedByUpstreamName: happyGithubIDPName,
 				args:                    happyGitHubUpstreamExchangeAuthcodeArgs,
@@ -333,7 +341,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -361,7 +369,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -386,7 +394,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -445,7 +453,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -509,6 +517,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForOIDCUpstream,
 				oidcUpstreamIssuer+"?sub="+oidcUpstreamSubjectQueryEscaped,
 				oidcUpstreamIssuer+"?sub="+oidcUpstreamSubjectQueryEscaped,
 				nil,
@@ -539,6 +548,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForOIDCUpstream,
 				"joe@whitehouse.gov",
 				"joe@whitehouse.gov",
 				oidcUpstreamGroupMembership,
@@ -571,6 +581,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForOIDCUpstream,
 				"joe@whitehouse.gov",
 				"joe@whitehouse.gov",
 				oidcUpstreamGroupMembership,
@@ -604,6 +615,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForOIDCUpstream,
 				"joe",
 				"joe",
 				oidcUpstreamGroupMembership,
@@ -739,6 +751,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForOIDCUpstream,
 				oidcUpstreamSubject,
 				oidcUpstreamSubject,
 				oidcUpstreamGroupMembership,
@@ -769,6 +782,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForOIDCUpstream,
 				oidcUpstreamUsername,
 				oidcUpstreamUsername,
 				[]string{"notAnArrayGroup1 notAnArrayGroup2"},
@@ -799,6 +813,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForOIDCUpstream,
 				oidcUpstreamUsername,
 				oidcUpstreamUsername,
 				[]string{"group1", "group2"},
@@ -832,7 +847,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -862,7 +877,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -905,7 +920,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -948,14 +963,14 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
 			},
 		},
 		{
-			name: "using identity transformations which modify the username and group names",
+			name: "OIDC: using identity transformations which modify the username and group names",
 			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(happyOIDCUpstream().WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
 			method:                            http.MethodGet,
@@ -974,6 +989,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForOIDCUpstream,
 				transformationUsernamePrefix+oidcUpstreamUsername,
 				oidcUpstreamUsername,
 				oidcUpstreamGroupMembership,
@@ -981,6 +997,36 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
+			},
+		},
+		{
+			name: "GitHub: using identity transformations which modify the username and group names",
+			idps: testidplister.NewUpstreamIDPListerBuilder().
+				WithGitHub(happyGitHubUpstream().WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
+			method:                            http.MethodGet,
+			path:                              happyGitHubPath,
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusSeeOther,
+			wantRedirectLocationRegexp:        happyDownstreamRedirectLocationRegexp,
+			wantBody:                          "",
+			wantDownstreamIDTokenSubject:      githubDownstreamSubject,
+			wantDownstreamIDTokenUsername:     transformationUsernamePrefix + githubUpstreamUsername,
+			wantDownstreamIDTokenGroups:       testutil.AddPrefixToEach(transformationGroupsPrefix, githubUpstreamGroupMembership),
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForGitHubUpstream,
+				transformationUsernamePrefix+githubUpstreamUsername,
+				githubUpstreamUsername,
+				githubUpstreamGroupMembership,
+			),
+			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
+				performedByUpstreamName: happyGithubIDPName,
+				args:                    happyGitHubUpstreamExchangeAuthcodeArgs,
 			},
 		},
 
@@ -1228,7 +1274,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -1258,7 +1304,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
@@ -1287,14 +1333,14 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
 			},
 		},
 		{
-			name:   "GitHub IDP: GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback",
+			name:   "GitHub: GET with good state and cookie and successful upstream token exchange returns 303 to downstream client callback",
 			idps:   testidplister.NewUpstreamIDPListerBuilder().WithGitHub(happyGitHubUpstream().Build()),
 			method: http.MethodGet,
 			path: newRequestPath().WithState(
@@ -1309,21 +1355,21 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      githubDownstreamSubject,
 			wantDownstreamIDTokenUsername:     githubUpstreamUsername,
-			wantDownstreamIDTokenGroups:       githubUpstreamGroups,
+			wantDownstreamIDTokenGroups:       githubUpstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamClientID:            downstreamPinnipedClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamGitHubCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForGitHubUpstream,
 			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
 				performedByUpstreamName: happyGithubIDPName,
 				args:                    happyGitHubUpstreamExchangeAuthcodeArgs,
 			},
 		},
 		{
-			name:          "GitHub IDP: GET with good state and cookie and successful upstream token exchange with dynamic client returns 303 to downstream client callback, with dynamic client",
+			name:          "GitHub: GET with good state and cookie and successful upstream token exchange with dynamic client returns 303 to downstream client callback, with dynamic client",
 			idps:          testidplister.NewUpstreamIDPListerBuilder().WithGitHub(happyGitHubUpstream().Build()),
 			method:        http.MethodGet,
 			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
@@ -1344,14 +1390,14 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:                          "",
 			wantDownstreamIDTokenSubject:      githubDownstreamSubject,
 			wantDownstreamIDTokenUsername:     githubUpstreamUsername,
-			wantDownstreamIDTokenGroups:       githubUpstreamGroups,
+			wantDownstreamIDTokenGroups:       githubUpstreamGroupMembership,
 			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
 			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
 			wantDownstreamNonce:               downstreamNonce,
 			wantDownstreamClientID:            downstreamDynamicClientID,
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
-			wantDownstreamCustomSessionData:   happyDownstreamGitHubCustomSessionData,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForGitHubUpstream,
 			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
 				performedByUpstreamName: happyGithubIDPName,
 				args:                    happyGitHubUpstreamExchangeAuthcodeArgs,
@@ -1415,7 +1461,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name: "GitHub upstream auth code exchange fails",
+			name: "GitHub: upstream auth code exchange fails",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(
 				happyGitHubUpstream().WithAuthcodeExchangeError(errors.New("some error")).Build(),
 			),
@@ -1472,6 +1518,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData: happyDownstreamCustomSessionDataWithUsernameAndGroups(
+				happyDownstreamCustomSessionDataForOIDCUpstream,
 				oidcUpstreamUsername,
 				oidcUpstreamUsername,
 				nil,
@@ -1658,7 +1705,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name: "using identity transformations which reject the authentication",
+			name: "OIDC: using identity transformations which reject the authentication",
 			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(happyOIDCUpstream().WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
 			method:          http.MethodGet,
@@ -1670,6 +1717,21 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
+			},
+		},
+		{
+			name: "GitHub: using identity transformations which reject the authentication",
+			idps: testidplister.NewUpstreamIDPListerBuilder().
+				WithGitHub(happyGitHubUpstream().WithTransformsForFederationDomain(rejectAuthPipeline).Build()),
+			method:          http.MethodGet,
+			path:            happyGitHubPath,
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnprocessableEntity,
+			wantContentType: htmlContentType,
+			wantBody:        "Unprocessable Entity: configured identity policy rejected this authentication: authentication was rejected by a configured policy\n",
+			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
+				performedByUpstreamName: happyGithubIDPName,
+				args:                    happyGitHubUpstreamExchangeAuthcodeArgs,
 			},
 		},
 	}
@@ -1896,11 +1958,10 @@ func happyGitHubUpstream() *oidctestutil.TestUpstreamGitHubIdentityProviderBuild
 		WithName(happyGithubIDPName).
 		WithResourceUID(happyGithubIDPResourceUID).
 		WithClientID("some-client-id").
-		WithScopes([]string{"these", "scopes", "appear", "unused"}). // TODO: What do we do with these scopes?
 		WithAccessToken(githubUpstreamAccessToken).
 		WithUser(&upstreamprovider.GitHubUser{
 			Username:          githubUpstreamUsername,
-			Groups:            githubUpstreamGroups,
+			Groups:            githubUpstreamGroupMembership,
 			DownstreamSubject: githubDownstreamSubject,
 		})
 }

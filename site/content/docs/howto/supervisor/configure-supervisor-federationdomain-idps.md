@@ -20,7 +20,7 @@ This how-to guide assumes that you have already [installed the Pinniped Supervis
 and have already read the guide about how to [configure the Supervisor as an OIDC issuer]({{< ref "configure-supervisor" >}}).
 
 This guide focuses on the use of the `spec.identityProviders` setting on the
-[FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#federationdomain)
+[FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#federationdomain)
 resource.
 
 Note that the `spec.identityProviders` setting on the FederationDomain resource was added in v0.26.0 of Pinniped.
@@ -230,7 +230,7 @@ The following example is contrived to demonstrate every feature of the `transfor
 (constants, expressions, and examples). It is likely more complex than a typical configuration.
 
 Documentation for each of the fields shown below can be found in the API docs for the
-[FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#federationdomain)
+[FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#federationdomain)
 resource.
 
 ```yaml

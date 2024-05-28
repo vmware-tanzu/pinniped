@@ -30,7 +30,7 @@ Most managed Kubernetes services do not support this.
 2. Impersonation Proxy: Can be run on any Kubernetes cluster. Default configuration requires that a `LoadBalancer` service can be created. Most cloud-hosted Kubernetes environments have this
 capability. The Impersonation Proxy automatically provisions (when `spec.impersonationProxy.mode` is set to `auto`) a `LoadBalancer` for ingress to the impersonation endpoint. Users who wish to use the impersonation proxy without an automatically
 configured `LoadBalancer` can do so with an automatically provisioned `ClusterIP` or with a Service that they provision themselves. These options
-can be configured in the spec of the [`CredentialIssuer`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#credentialissuer).
+can be configured in the spec of the [`CredentialIssuer`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#credentialissuer).
 
 If a cluster is capable of supporting both strategies, the Pinniped CLI will use the
 token credential request API strategy by default.

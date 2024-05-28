@@ -46,7 +46,7 @@ For example, to create a tenant:
 
 ## Configure the Supervisor 
 
-Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#oidcidentityprovider) 
+Create an [OIDCIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#oidcidentityprovider) 
 in the same namespace as the Supervisor.
 
 1. In the [Azure portal](portal.azure.com), navigate to _Home_ > _Azure Active Directory_ > _App Registrations_.

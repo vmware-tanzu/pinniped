@@ -613,8 +613,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				// Get the text of the preformatted error message showing on the page.
 				textOfPreTag := browser.TextOfFirstMatch(t, "pre")
 				require.Equal(t,
-					"Unprocessable Entity: failed to get user info from GitHub API: "+
-						"user is not allowed to log in due to organization membership policy\n",
+					"Unprocessable Entity: failed to get user info from GitHub API\n",
 					textOfPreTag)
 			},
 			wantLocalhostCallbackToNeverHappen: true,

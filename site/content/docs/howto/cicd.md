@@ -47,7 +47,7 @@ on each cluster.
    and make those kubeconfigs available to CI/CD
    * Be sure to use `pinniped get kubeconfig` with option `--upstream-identity-provider-flow=cli_password` to authenticate non-interactively (without a browser)
    * When using OIDC, the optional CLI-based flow must be enabled by the administrator in the OIDCIdentityProvider configuration before use
-     (see `allowPasswordGrant` in the [API docs](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#oidcauthorizationconfig) for more details).
+     (see `allowPasswordGrant` in the [API docs](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#oidcauthorizationconfig) for more details).
 2. A CI/CD admin should make the non-human user account credentials available to CI/CD tasks
 3. Each CI/CD task should set the environment variables `PINNIPED_USERNAME` and `PINNIPED_PASSWORD` for the `kubectl` process to avoid the interactive prompts.
 The values should be provided from the non-human user account credentials.

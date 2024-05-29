@@ -188,7 +188,7 @@ kubectl apply -f openldap.yaml
 
 ## Configure the Supervisor cluster
 
-Create an [LDAPIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#ldapidentityprovider) in the same namespace as the Supervisor.
+Create an [LDAPIdentityProvider](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#ldapidentityprovider) in the same namespace as the Supervisor.
 
 For example, this LDAPIdentityProvider configures the LDAP entry's `uid` as the Kubernetes username,
 and the `cn` (common name) of each group to which the user belongs as the Kubernetes group names.

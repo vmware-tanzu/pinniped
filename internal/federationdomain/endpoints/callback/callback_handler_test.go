@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	// Upstream OIDC
+	// Upstream OIDC.
 	happyOIDCUpstreamIDPName        = "upstream-oidc-idp-name"
 	happyOIDCUpstreamIDPResourceUID = "upstream-oidc-resource-uid"
 
@@ -51,15 +51,15 @@ const (
 	oidcUpstreamUsernameClaim = "the-user-claim"
 	oidcUpstreamGroupsClaim   = "the-groups-claim"
 
-	// Upstream GitHub
+	// Upstream GitHub.
 	happyGithubIDPName        = "upstream-github-idp-name"
 	happyGithubIDPResourceUID = "upstream-github-idp-resource-uid"
 
-	// Upstream OAuth2 (OIDC or GitHub)
+	// Upstream OAuth2 (OIDC or GitHub).
 	happyUpstreamAuthcode    = "upstream-auth-code"
 	happyUpstreamRedirectURI = "https://example.com/callback"
 
-	// Downstream parameters
+	// Downstream parameters.
 	happyDownstreamState        = "8b-state"
 	happyDownstreamCSRF         = "test-csrf"
 	happyDownstreamPKCEVerifier = "test-pkce"

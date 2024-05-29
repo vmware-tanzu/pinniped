@@ -2154,6 +2154,14 @@ func TestRefreshGrant(t *testing.T) {
 		),
 	}
 
+	happyAuthcodeExchangeInputsForGithubUpstream := authcodeExchangeInputs{
+		modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
+		customSessionData: initialUpstreamGitHubCustomSessionData(),
+		want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(
+			initialUpstreamGitHubCustomSessionData(),
+		),
+	}
+
 	happyAuthcodeExchangeInputsForLDAPUpstream := authcodeExchangeInputs{
 		modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 		customSessionData: happyLDAPCustomSessionData,
@@ -2230,15 +2238,7 @@ func TestRefreshGrant(t *testing.T) {
 			name: "happy path refresh grant with GitHub upstream",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(
 				upstreamGitHubIdentityProviderBuilder().Build()),
-			authcodeExchange: authcodeExchangeInputs{
-				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
-				customSessionData: initialUpstreamGitHubCustomSessionData(),
-				want: happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups(
-					initialUpstreamGitHubCustomSessionData(),
-					goodUsername,
-					goodGroups,
-				),
-			},
+			authcodeExchange: happyAuthcodeExchangeInputsForGithubUpstream,
 			refreshRequest: refreshRequestInputs{
 				want: happyRefreshTokenResponseForGitHubAndOfflineAccessWithUsernameAndGroups(
 					initialUpstreamGitHubCustomSessionData(),
@@ -2951,6 +2951,73 @@ func TestRefreshGrant(t *testing.T) {
 					wantLDAPUpstreamRefreshCall: happyLDAPUpstreamRefreshCall(),
 					wantCustomSessionDataStored: happyLDAPCustomSessionData,
 					wantWarnings:                nil, // dynamic clients should not get these warnings which are intended for the pinniped-cli client
+				},
+			},
+		},
+		{
+			name: "happy path refresh grant when the upstream refresh returns new group memberships from GitHub, it updates groups",
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithName(githubUpstreamName).
+				WithResourceUID(githubUpstreamResourceUID).
+				WithUser(&upstreamprovider.GitHubUser{
+					Username:          goodUsername,
+					Groups:            []string{goodGroups[0], "new-group1", "new-group2", "new-group3"},
+					DownstreamSubject: goodSubject,
+				}).Build(),
+			),
+			authcodeExchange: happyAuthcodeExchangeInputsForGithubUpstream,
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                    http.StatusOK,
+					wantClientID:                  pinnipedCLIClientID,
+					wantSuccessBodyFields:         []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:           []string{"openid", "offline_access", "username", "groups"},
+					wantGrantedScopes:             []string{"openid", "offline_access", "username", "groups"},
+					wantUsername:                  goodUsername,
+					wantGroups:                    []string{goodGroups[0], "new-group1", "new-group2", "new-group3"},
+					wantGithubUpstreamRefreshCall: happyGitHubUpstreamRefreshCall(),
+					wantCustomSessionDataStored:   initialUpstreamGitHubCustomSessionData(),
+					wantWarnings: []RecordedWarning{
+						{Text: `User "some-username" has been added to the following groups: ["new-group1" "new-group2" "new-group3"]`},
+						{Text: `User "some-username" has been removed from the following groups: ["groups2"]`},
+					},
+				},
+			},
+		},
+		{
+			name: "happy path refresh grant when the upstream refresh returns new group memberships from GitHub, it updates groups, using dynamic client - updates groups without outputting warnings",
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithName(githubUpstreamName).
+				WithResourceUID(githubUpstreamResourceUID).
+				WithUser(&upstreamprovider.GitHubUser{
+					Username:          goodUsername,
+					Groups:            []string{goodGroups[0], "new-group1", "new-group2", "new-group3"},
+					DownstreamSubject: goodSubject,
+				}).Build(),
+			),
+			kubeResources: addFullyCapableDynamicClientAndSecretToKubeResources,
+			authcodeExchange: authcodeExchangeInputs{
+				customSessionData: initialUpstreamGitHubCustomSessionData(),
+				modifyAuthRequest: func(r *http.Request) {
+					addDynamicClientIDToFormPostBody(r)
+					r.Form.Set("scope", "openid offline_access username groups")
+				},
+				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
+				want:               withWantDynamicClientID(happyAuthcodeExchangeTokenResponseForOpenIDAndOfflineAccess(initialUpstreamGitHubCustomSessionData())),
+			},
+			refreshRequest: refreshRequestInputs{
+				modifyTokenRequest: modifyRefreshTokenRequestWithDynamicClientAuth,
+				want: tokenEndpointResponseExpectedValues{
+					wantStatus:                    http.StatusOK,
+					wantClientID:                  dynamicClientID,
+					wantSuccessBodyFields:         []string{"refresh_token", "access_token", "id_token", "token_type", "expires_in", "scope"},
+					wantRequestedScopes:           []string{"openid", "offline_access", "username", "groups"},
+					wantGrantedScopes:             []string{"openid", "offline_access", "username", "groups"},
+					wantUsername:                  goodUsername,
+					wantGroups:                    []string{goodGroups[0], "new-group1", "new-group2", "new-group3"},
+					wantGithubUpstreamRefreshCall: happyGitHubUpstreamRefreshCall(),
+					wantCustomSessionDataStored:   initialUpstreamGitHubCustomSessionData(),
+					wantWarnings:                  nil, // dynamic clients should not get these warnings which are intended for the pinniped-cli client
 				},
 			},
 		},
@@ -3815,7 +3882,7 @@ func TestRefreshGrant(t *testing.T) {
 			},
 		},
 		{
-			name: "when the upstream refresh fails during the refresh request",
+			name: "when the upstream refresh fails during the refresh request using OIDC upstream",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().
 				WithPerformRefreshError(errors.New("some upstream refresh error")).Build()),
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
@@ -3823,6 +3890,24 @@ func TestRefreshGrant(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantOIDCUpstreamRefreshCall: happyOIDCUpstreamRefreshCall(),
 					wantStatus:                  http.StatusUnauthorized,
+					wantErrorResponseBody: here.Doc(`
+						{
+							"error":             "error",
+							"error_description": "Error during upstream refresh. Upstream refresh failed."
+						}
+					`),
+				},
+			},
+		},
+		{
+			name: "when the upstream refresh fails during the refresh request using GitHub upstream",
+			idps: testidplister.NewUpstreamIDPListerBuilder().WithGitHub(upstreamGitHubIdentityProviderBuilder().
+				WithGetUserError(errors.New("some upstream refresh error")).Build()),
+			authcodeExchange: happyAuthcodeExchangeInputsForGithubUpstream,
+			refreshRequest: refreshRequestInputs{
+				want: tokenEndpointResponseExpectedValues{
+					wantGithubUpstreamRefreshCall: happyGitHubUpstreamRefreshCall(),
+					wantStatus:                    http.StatusUnauthorized,
 					wantErrorResponseBody: here.Doc(`
 						{
 							"error":             "error",

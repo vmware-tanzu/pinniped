@@ -329,7 +329,7 @@ should be signed by a certificate authority that is trusted by their browsers.
 
 ## Next steps
 
-Next, configure an OIDCIdentityProvider, ActiveDirectoryIdentityProvider, or an LDAPIdentityProvider for the Supervisor
+Next, configure an OIDCIdentityProvider, ActiveDirectoryIdentityProvider, LDAPIdentityProvider, or a GitHubIdentityProvider for the Supervisor
 (several examples are available in these guides). Then learn [how to configure a FederationDomain to use one or more
 identity providers]({{< ref "configure-supervisor-federationdomain-idps" >}}). And finally,
 [configure the Concierge to use the Supervisor for authentication]({{< ref "configure-concierge-supervisor-jwt" >}})

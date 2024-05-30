@@ -18,7 +18,7 @@ This how-to guide assumes that you have already configured the following Pinnipe
    then you have already:
      1. [Installed the Pinniped Supervisor]({{< ref "install-supervisor" >}}) with working ingress.
      1. [Configured a FederationDomain to issue tokens for your downstream clusters]({{< ref "configure-supervisor" >}}).
-     1. Configured an `OIDCIdentityProvider`, `LDAPIdentityProvider`, or `ActiveDirectoryIdentityProvider` for the Supervisor as the source of your user's identities.
+     1. Configured an `OIDCIdentityProvider`, `LDAPIdentityProvider`, `ActiveDirectoryIdentityProvider`, or `GitHubIdentityProvider` for the Supervisor as the source of your user's identities.
         Various examples of configuring these resources can be found in these guides.
 1. In each cluster for which you would like to use Pinniped for authentication, you have [installed the Concierge]({{< ref "install-concierge" >}}).
 1. In each cluster's Concierge, you have configured an authenticator. For example, if you are using the Pinniped Supervisor,
@@ -73,7 +73,7 @@ The new Pinniped-compatible kubeconfig YAML will be output as stdout, and can be
 
 Various default behaviors of `pinniped get kubeconfig` can be overridden using [its command-line options]({{< ref "cli" >}}).
 One flag of note is `--upstream-identity-provider-flow browser_authcode` to choose end-user `kubectl` login via a web browser
-(the default for OIDCIdentityProviders), and `--upstream-identity-provider-flow cli_password` to choose end-user `kubectl`
+(the default for OIDCIdentityProviders and GitHubIdentityProviders), and `--upstream-identity-provider-flow cli_password` to choose end-user `kubectl`
 login via CLI username/password prompts (the default for LDAPIdentityProviders and ActiveDirectoryIdentityProviders).
 
 If the cluster is using a Pinniped Supervisor's FederationDomain to provide authentication services,

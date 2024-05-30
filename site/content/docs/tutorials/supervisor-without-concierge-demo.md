@@ -51,7 +51,7 @@ clusters all with a single Pinniped Supervisor.
 
 1. A Pinniped Supervisor already installed and running on another cluster, and already configured with
    a working FederationDomain, TLS certificates, and an external identity provider
-   (e.g. an OIDCIdentityProvider, LDAPIdentityProvider, or ActiveDirectoryIdentityProvider).
+   (e.g. an OIDCIdentityProvider, LDAPIdentityProvider, ActiveDirectoryIdentityProvider, or GitHubIdentityProvider).
 
    Don't have a Pinniped Supervisor ready? Please refer to the other documents on this site to help you get one up and running
    and sufficiently configured.

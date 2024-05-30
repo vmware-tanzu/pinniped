@@ -9,12 +9,25 @@ updates:
     schedule:
       interval: "daily"
 
-# Our own CI job is responsible for updating this go.mod file now.
-#  - package-ecosystem: "gomod"
-#    open-pull-requests-limit: 100
-#    directory: "/"
-#    schedule:
-#      interval: "daily"
+  # Use dependabot to automate major-only dependency bumps
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 2 # Not sure why there would ever be more than 1, just would not want to hide anything
+    directory: "/"
+    schedule:
+      interval: "daily"
+    # group all major dependency bumps together so there's only one pull request
+    groups:
+      go-modules:
+        patterns:
+        - "*"
+        update-types:
+        - "major"
+    ignore:
+    # For all packages, ignore all minor and patch updates
+    - dependency-name: "*"
+      update-types:
+      - "version-update:semver-minor"
+      - "version-update:semver-patch"
 
 # Our own CI job is responsible for updating this Docker file now.
 #  - package-ecosystem: "docker"

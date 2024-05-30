@@ -115,7 +115,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			// When multiple FederationDomains exist at the same time they each serve a unique discovery endpoint.
 			config3, jwks3 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer3, client)
 			config4, jwks4 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer4, client)
-			requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer3, nil) // discovery for issuer3 is still working after issuer4 started working
+			requireStandardDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer3, nil) // discovery for issuer3 is still working after issuer4 started working
 			// The auto-created JWK's were different from each other.
 			require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
 			require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
@@ -123,7 +123,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			// Editing a FederationDomain to change the issuer URL updates the endpoints that are being served.
 			updatedConfig4 := editFederationDomainIssuerName(t, config4, client, ns, issuer5)
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer4)
-			jwks5 := requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5, nil)
+			jwks5 := requireStandardDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5, nil)
 			// The JWK did not change when the issuer name was updated.
 			require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
 
@@ -206,7 +206,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	ca1 := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
 
 	// Update the config to with a new .spec.tls.secretName.
 	certSecretName1update := "integration-test-cert-1-update"
@@ -227,7 +227,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	ca1update := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1update, kubeClient)
 
 	// Now that the Secret exists at the new name, we should be able to access the endpoints by hostname using the CA.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
 
 	// To test SNI virtual hosting, send requests to discovery endpoints when the public address is different from the issuer name.
 	hostname2 := "some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com"
@@ -247,7 +247,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, certSecretName2, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
 		hostname2 + ":" + hostnamePort2: address,
 	})
 }
@@ -300,7 +300,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ips[0]}, defaultTLSCertSecretName(env), kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
 
 	// Create an FederationDomain with a spec.tls.secretName.
 	certSecretName := "integration-test-cert-1"
@@ -317,10 +317,10 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA from the SNI cert.
 	// Hostnames are case-insensitive, so the request should still work even if the case of the hostname is different
 	// from the case of the issuer URL's hostname.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, string(certCA.Bundle()), issuerUsingHostname, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, string(certCA.Bundle()), issuerUsingHostname, nil)
 
 	// And we can still access the other issuer using the default cert.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
 }
 
 func defaultTLSCertSecretName(env *testlib.TestEnv) string {
@@ -496,13 +496,12 @@ func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
 ) (*v1alpha1.FederationDomain, *ExpectedJWKSResponseFormat) {
 	t.Helper()
 	newFederationDomain := testlib.CreateTestFederationDomain(ctx, t, v1alpha1.FederationDomainSpec{Issuer: issuerName}, v1alpha1.FederationDomainPhaseReady)
-	jwksResult := requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
+	jwksResult := requireStandardDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
 	requireStatus(t, client, newFederationDomain.Namespace, newFederationDomain.Name, v1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 	return newFederationDomain, jwksResult
 }
 
-// TODO: consider renaming this since it does not actually check all discovery endpoints (example: idp discovery is not tested).
-func requireDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
+func requireStandardDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
 	requireWellKnownEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, dnsOverrides)
 	jwksResult := requireJWKSEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, dnsOverrides)
 	return jwksResult
@@ -887,7 +886,7 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 		IdentityProviders: idpsForFD,
 	}, v1alpha1.FederationDomainPhaseReady)
 
-	requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
+	requireStandardDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
 	issuer8URL, err := url.Parse(issuerName)
 	require.NoError(t, err)
 	wellKnownURL := wellKnownURLForIssuer(supervisorScheme, supervisorAddress, issuer8URL.Path)

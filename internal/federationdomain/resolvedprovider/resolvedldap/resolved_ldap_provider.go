@@ -221,7 +221,7 @@ func (p *FederationDomainResolvedLDAPIdentityProvider) UpstreamRefresh(
 	plog.Debug("attempting upstream refresh request",
 		"providerName", p.Provider.GetName(), "providerType", p.GetSessionProviderType(), "providerUID", p.Provider.GetResourceUID())
 
-	refreshedUntransformedGroups, err := p.Provider.PerformRefresh(ctx, upstreamprovider.RefreshAttributes{
+	refreshedUntransformedGroups, err := p.Provider.PerformRefresh(ctx, upstreamprovider.LDAPRefreshAttributes{
 		Username:             identity.UpstreamUsername,
 		Subject:              identity.DownstreamSubject,
 		DN:                   dn,

@@ -323,10 +323,9 @@ stringData:
 EOF
 
   # Grant the test user some RBAC permissions so we can play with kubectl as that user.
-  # TODO
-#  kubectl create clusterrolebinding github-test-user-can-view --clusterrole view \
-#    --user "$PINNIPED_TEST_GITHUB_TODO_WE_DONT_HAVE_THIS_VARIABLE_YET" \
-#    --dry-run=client --output yaml | kubectl apply -f -
+  kubectl create clusterrolebinding github-test-user-can-view --clusterrole view \
+    --user "$PINNIPED_TEST_GITHUB_USER_USERNAME:$PINNIPED_TEST_GITHUB_USERID" \
+    --dry-run=client --output yaml | kubectl apply -f -
 fi
 
 # Create a CA and TLS serving certificates for the Supervisor's FederationDomain.

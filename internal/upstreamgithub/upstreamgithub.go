@@ -5,13 +5,20 @@
 package upstreamgithub
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/http"
 
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/types"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	supervisoridpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	"go.pinniped.dev/internal/federationdomain/downstreamsubject"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/githubclient"
+	"go.pinniped.dev/internal/setutil"
 )
 
 // ProviderConfig holds the active configuration of an upstream GitHub provider.
@@ -24,11 +31,11 @@ type ProviderConfig struct {
 	// or https://HOSTNAME/api/v3/ for Enterprise Server.
 	APIBaseURL string
 
-	UsernameAttribute  v1alpha1.GitHubUsernameAttribute
-	GroupNameAttribute v1alpha1.GitHubGroupNameAttribute
+	UsernameAttribute  supervisoridpv1alpha1.GitHubUsernameAttribute
+	GroupNameAttribute supervisoridpv1alpha1.GitHubGroupNameAttribute
 
 	// AllowedOrganizations, when empty, means to allow users from all orgs.
-	AllowedOrganizations []string
+	AllowedOrganizations *setutil.CaseInsensitiveSet
 
 	// HttpClient is a client that can be used to call the GitHub APIs and token endpoint.
 	// This client should be configured with the user-provided CA bundle and a timeout.
@@ -44,7 +51,8 @@ type ProviderConfig struct {
 }
 
 type Provider struct {
-	c ProviderConfig
+	c                 ProviderConfig
+	buildGitHubClient func(httpClient *http.Client, apiBaseURL, token string) (githubclient.GitHubInterface, error)
 }
 
 var _ upstreamprovider.UpstreamGithubIdentityProviderI = &Provider{}
@@ -52,7 +60,10 @@ var _ upstreamprovider.UpstreamGithubIdentityProviderI = &Provider{}
 // New creates a Provider. The config is not a pointer to ensure that a copy of the config is created,
 // making the resulting Provider use an effectively read-only configuration.
 func New(config ProviderConfig) *Provider {
-	return &Provider{c: config}
+	return &Provider{
+		c:                 config,
+		buildGitHubClient: githubclient.NewGitHubClient,
+	}
 }
 
 func (p *Provider) GetName() string {
@@ -71,15 +82,15 @@ func (p *Provider) GetScopes() []string {
 	return p.c.OAuth2Config.Scopes
 }
 
-func (p *Provider) GetUsernameAttribute() v1alpha1.GitHubUsernameAttribute {
+func (p *Provider) GetUsernameAttribute() supervisoridpv1alpha1.GitHubUsernameAttribute {
 	return p.c.UsernameAttribute
 }
 
-func (p *Provider) GetGroupNameAttribute() v1alpha1.GitHubGroupNameAttribute {
+func (p *Provider) GetGroupNameAttribute() supervisoridpv1alpha1.GitHubGroupNameAttribute {
 	return p.c.GroupNameAttribute
 }
 
-func (p *Provider) GetAllowedOrganizations() []string {
+func (p *Provider) GetAllowedOrganizations() *setutil.CaseInsensitiveSet {
 	return p.c.AllowedOrganizations
 }
 
@@ -87,7 +98,82 @@ func (p *Provider) GetAuthorizationURL() string {
 	return p.c.OAuth2Config.Endpoint.AuthURL
 }
 
-// GetConfig returns the config. This is not part of the interface and is mostly just for testing.
+func (p *Provider) ExchangeAuthcode(ctx context.Context, authcode string, redirectURI string) (string, error) {
+	tok, err := p.c.OAuth2Config.Exchange(
+		coreosoidc.ClientContext(ctx, p.c.HttpClient),
+		authcode,
+		oauth2.SetAuthURLParam("redirect_uri", redirectURI),
+	)
+	if err != nil {
+		return "", fmt.Errorf("error exchanging authorization code using GitHub API: %w", err)
+	}
+	return tok.AccessToken, nil
+}
+
+// GetUser will use the provided configuration to make HTTPS calls to the GitHub API to get the identity of the
+// authenticated user and to discover their org and team memberships.
+// If the user's information meets the AllowedOrganization criteria specified on the GitHubIdentityProvider,
+// they will be allowed to log in.
+// Note that errors from the githubclient package already have helpful error prefixes, so there is no need for additional prefixes here.
+func (p *Provider) GetUser(ctx context.Context, accessToken string, idpDisplayName string) (*upstreamprovider.GitHubUser, error) {
+	githubClient, err := p.buildGitHubClient(p.c.HttpClient, p.c.APIBaseURL, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	githubUser := upstreamprovider.GitHubUser{}
+
+	userInfo, err := githubClient.GetUserInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	githubUser.DownstreamSubject = downstreamsubject.GitHub(p.c.APIBaseURL, idpDisplayName, userInfo.Login, userInfo.ID)
+
+	switch p.c.UsernameAttribute {
+	case supervisoridpv1alpha1.GitHubUsernameLoginAndID:
+		githubUser.Username = fmt.Sprintf("%s:%s", userInfo.Login, userInfo.ID)
+	case supervisoridpv1alpha1.GitHubUsernameLogin:
+		githubUser.Username = userInfo.Login
+	case supervisoridpv1alpha1.GitHubUsernameID:
+		githubUser.Username = userInfo.ID
+	default:
+		return nil, fmt.Errorf("bad configuration: unknown GitHub username attribute: %s", p.c.UsernameAttribute)
+	}
+
+	orgMembership, err := githubClient.GetOrgMembership(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !p.c.AllowedOrganizations.Empty() && !p.c.AllowedOrganizations.HasAnyIgnoringCase(orgMembership) {
+		return nil, errors.New("user is not allowed to log in due to organization membership policy")
+	}
+
+	teamMembership, err := githubClient.GetTeamMembership(ctx, p.c.AllowedOrganizations)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, team := range teamMembership {
+		downstreamGroup := ""
+
+		switch p.c.GroupNameAttribute {
+		case supervisoridpv1alpha1.GitHubUseTeamNameForGroupName:
+			downstreamGroup = fmt.Sprintf("%s/%s", team.Org, team.Name)
+		case supervisoridpv1alpha1.GitHubUseTeamSlugForGroupName:
+			downstreamGroup = fmt.Sprintf("%s/%s", team.Org, team.Slug)
+		default:
+			return nil, fmt.Errorf("bad configuration: unknown GitHub group name attribute: %s", p.c.GroupNameAttribute)
+		}
+
+		githubUser.Groups = append(githubUser.Groups, downstreamGroup)
+	}
+
+	return &githubUser, nil
+}
+
+// GetConfig returns the config. This is not part of the UpstreamGithubIdentityProviderI interface and is just for testing.
 func (p *Provider) GetConfig() ProviderConfig {
 	return p.c
 }

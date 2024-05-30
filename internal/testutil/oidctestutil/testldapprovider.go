@@ -14,6 +14,12 @@ import (
 	"go.pinniped.dev/internal/idtransform"
 )
 
+type PerformLDAPRefreshArgs struct {
+	Ctx                     context.Context
+	StoredRefreshAttributes upstreamprovider.LDAPRefreshAttributes
+	IDPDisplayName          string
+}
+
 func NewTestUpstreamLDAPIdentityProviderBuilder() *TestUpstreamLDAPIdentityProviderBuilder {
 	return &TestUpstreamLDAPIdentityProviderBuilder{}
 }
@@ -102,7 +108,7 @@ type TestUpstreamLDAPIdentityProvider struct {
 
 	// Fields for tracking actual calls make to mock functions.
 	performRefreshCallCount int
-	performRefreshArgs      []*PerformRefreshArgs
+	performRefreshArgs      []*PerformLDAPRefreshArgs
 }
 
 var _ upstreamprovider.UpstreamLDAPIdentityProviderI = &TestUpstreamLDAPIdentityProvider{}
@@ -123,16 +129,15 @@ func (u *TestUpstreamLDAPIdentityProvider) GetURL() *url.URL {
 	return u.URL
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.RefreshAttributes, _idpDisplayName string) ([]string, error) {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.LDAPRefreshAttributes, idpDisplayName string) ([]string, error) {
 	if u.performRefreshArgs == nil {
-		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+		u.performRefreshArgs = make([]*PerformLDAPRefreshArgs, 0)
 	}
 	u.performRefreshCallCount++
-	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
-		Ctx:              ctx,
-		DN:               storedRefreshAttributes.DN,
-		ExpectedUsername: storedRefreshAttributes.Username,
-		ExpectedSubject:  storedRefreshAttributes.Subject,
+	u.performRefreshArgs = append(u.performRefreshArgs, &PerformLDAPRefreshArgs{
+		Ctx:                     ctx,
+		StoredRefreshAttributes: storedRefreshAttributes,
+		IDPDisplayName:          idpDisplayName,
 	})
 	if u.PerformRefreshErr != nil {
 		return nil, u.PerformRefreshErr
@@ -144,9 +149,9 @@ func (u *TestUpstreamLDAPIdentityProvider) PerformRefreshCallCount() int {
 	return u.performRefreshCallCount
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) PerformRefreshArgs(call int) *PerformRefreshArgs {
+func (u *TestUpstreamLDAPIdentityProvider) PerformRefreshArgs(call int) *PerformLDAPRefreshArgs {
 	if u.performRefreshArgs == nil {
-		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+		u.performRefreshArgs = make([]*PerformLDAPRefreshArgs, 0)
 	}
 	return u.performRefreshArgs[call]
 }

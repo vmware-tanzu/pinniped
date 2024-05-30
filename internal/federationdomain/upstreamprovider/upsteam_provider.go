@@ -12,6 +12,7 @@ import (
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
+	"go.pinniped.dev/internal/setutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -25,9 +26,9 @@ const (
 	AccessTokenType  RevocableTokenType = "access_token"
 )
 
-// RefreshAttributes contains information about the user from the original login request
+// LDAPRefreshAttributes contains information about the user from the original login request
 // and previous refreshes to be used during an LDAP session refresh.
-type RefreshAttributes struct {
+type LDAPRefreshAttributes struct {
 	Username             string
 	Subject              string
 	DN                   string
@@ -124,7 +125,13 @@ type UpstreamLDAPIdentityProviderI interface {
 	authenticators.UserAuthenticator
 
 	// PerformRefresh performs a refresh against the upstream LDAP identity provider
-	PerformRefresh(ctx context.Context, storedRefreshAttributes RefreshAttributes, idpDisplayName string) (groups []string, err error)
+	PerformRefresh(ctx context.Context, storedRefreshAttributes LDAPRefreshAttributes, idpDisplayName string) (groups []string, err error)
+}
+
+type GitHubUser struct {
+	Username          string   // could be login name, id, or login:id
+	Groups            []string // could be names or slugs
+	DownstreamSubject string   // the whole downstream subject URI
 }
 
 type UpstreamGithubIdentityProviderI interface {
@@ -151,7 +158,7 @@ type UpstreamGithubIdentityProviderI interface {
 	// and only teams from the listed organizations should be represented as groups for the downstream token.
 	// If this list is empty, then any user can log in regardless of org membership, and any observable
 	// teams memberships should be represented as groups for the downstream token.
-	GetAllowedOrganizations() []string
+	GetAllowedOrganizations() *setutil.CaseInsensitiveSet
 
 	// GetAuthorizationURL returns the authorization URL for the configured GitHub. This will look like:
 	// https://<spec.githubAPI.host>/login/oauth/authorize
@@ -159,13 +166,12 @@ type UpstreamGithubIdentityProviderI interface {
 	// It will never include a username or password in the authority section.
 	GetAuthorizationURL() string
 
-	// TODO: This interface should be easily mockable to avoid all interactions with the actual server.
-	//  What interactions with the server do we want to hide behind this interface? Something like this?
-	// 	  ExchangeAuthcode(ctx, authcode, redirectURI) (AccessToken, error)
-	//    GetUser(ctx, accessToken) (User, error)
-	//    GetUserOrgs(ctx, accessToken) ([]Org, error)
-	//    GetUserTeams(ctx, accessToken) ([]Team, error)
-	//  Or maybe higher level interface like this?
-	// 	  ExchangeAuthcode(ctx, authcode, redirectURI) (AccessToken, error)
-	//    GetUser(ctx, accessToken) (User, error) // in this case User would include team and org info
+	// ExchangeAuthcode performs an upstream GitHub authorization code exchange.
+	// Returns the raw access token. The access token expiry is not known.
+	ExchangeAuthcode(ctx context.Context, authcode string, redirectURI string) (string, error)
+
+	// GetUser calls the user, orgs, and teams APIs of GitHub using the accessToken.
+	// It validates any required org memberships. It returns a User or an error.
+	// The IDP display name is passed to aid in building a suitable downstream subject string.
+	GetUser(ctx context.Context, accessToken string, idpDisplayName string) (*GitHubUser, error)
 }

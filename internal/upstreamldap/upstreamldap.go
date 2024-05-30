@@ -118,7 +118,7 @@ type ProviderConfig struct {
 	GroupAttributeParsingOverrides map[string]func(*ldap.Entry) (string, error)
 
 	// RefreshAttributeChecks are extra checks that attributes in a refresh response are as expected.
-	RefreshAttributeChecks map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error
+	RefreshAttributeChecks map[string]func(*ldap.Entry, upstreamprovider.LDAPRefreshAttributes) error
 }
 
 // UserSearchConfig contains information about how to search for users in the upstream LDAP IDP.
@@ -186,7 +186,7 @@ func closeAndLogError(conn Conn, doingWhat string) {
 	}
 }
 
-func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.RefreshAttributes, idpDisplayName string) ([]string, error) {
+func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.LDAPRefreshAttributes, idpDisplayName string) ([]string, error) {
 	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 	userDN := storedRefreshAttributes.DN

@@ -41,6 +41,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/setutil"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 	"go.pinniped.dev/internal/upstreamgithub"
@@ -406,7 +407,7 @@ func TestController(t *testing.T) {
 						RedirectURL: "", // not used
 						Scopes:      []string{"read:user", "read:org"},
 					},
-					AllowedOrganizations: []string{"organization1", "org2"},
+					AllowedOrganizations: setutil.NewCaseInsensitiveSet("organization1", "org2"),
 					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
@@ -462,7 +463,8 @@ func TestController(t *testing.T) {
 						RedirectURL: "", // not used
 						Scopes:      []string{"read:user", "read:org"},
 					},
-					HttpClient: nil, // let the test runner populate this for us
+					AllowedOrganizations: setutil.NewCaseInsensitiveSet(),
+					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -531,7 +533,8 @@ func TestController(t *testing.T) {
 						RedirectURL: "", // not used
 						Scopes:      []string{"read:user", "read:org"},
 					},
-					HttpClient: nil, // let the test runner populate this for us
+					AllowedOrganizations: setutil.NewCaseInsensitiveSet(),
+					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -598,7 +601,8 @@ func TestController(t *testing.T) {
 						RedirectURL: "", // not used
 						Scopes:      []string{"read:user", "read:org"},
 					},
-					HttpClient: nil, // let the test runner populate this for us
+					AllowedOrganizations: setutil.NewCaseInsensitiveSet(),
+					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
 			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
@@ -685,7 +689,7 @@ func TestController(t *testing.T) {
 						RedirectURL: "", // not used
 						Scopes:      []string{"read:user", "read:org"},
 					},
-					AllowedOrganizations: []string{"organization1", "org2"},
+					AllowedOrganizations: setutil.NewCaseInsensitiveSet("organization1", "org2"),
 					HttpClient:           nil, // let the test runner populate this for us
 				},
 				{
@@ -706,7 +710,7 @@ func TestController(t *testing.T) {
 						RedirectURL: "", // not used
 						Scopes:      []string{"read:user", "read:org"},
 					},
-					AllowedOrganizations: []string{"organization1", "org2"},
+					AllowedOrganizations: setutil.NewCaseInsensitiveSet("organization1", "org2"),
 					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},

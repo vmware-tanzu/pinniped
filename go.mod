@@ -32,7 +32,7 @@ replace github.com/coreos/go-oidc/v3 => github.com/coreos/go-oidc/v3 v3.9.0
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20240524221637-55927c2a4565
+	github.com/chromedp/cdproto v0.0.0-20240529195259-de715aab5f80
 	github.com/chromedp/chromedp v0.9.5
 	github.com/coreos/go-oidc/v3 v3.10.0
 	github.com/coreos/go-semver v0.3.1

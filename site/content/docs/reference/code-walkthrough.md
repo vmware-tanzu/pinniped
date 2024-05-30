@@ -208,7 +208,7 @@ The per-FederationDomain endpoints are:
   extended in [internal/federationdomain/endpoints/tokenexchange/token_exchange.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/tokenexchange/token_exchange.go)
   to handle an additional grant type for [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) token exchanges to
   reduce the applicable scope (technically, the `aud` claim) of ID tokens.
-- `<issuer_path>/callback` is a special endpoint that is used as the redirect URL when performing an OIDC authcode flow against an upstream OIDC identity provider as configured by an OIDCIdentityProvider custom resource.
+- `<issuer_path>/callback` is a special endpoint that is used as the redirect URL when performing an OAuth 2.0 or OIDC authcode flow against an upstream OIDC identity provider as configured by an OIDCIdentityProvider or GitHubIdentityProvider custom resource.
   See [internal/federationdomain/endpoints/callback/callback_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/callback/callback_handler.go).
 - `<issuer_path>/v1alpha1/pinniped_identity_providers` is a custom discovery endpoint for clients to learn about available upstream identity providers.
   See [internal/federationdomain/endpoints/idpdiscovery/idp_discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/idpdiscovery/idp_discovery_handler.go).

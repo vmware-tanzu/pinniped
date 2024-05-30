@@ -41,3 +41,14 @@ func SkipTestWhenGitHubIsUnavailable(t *testing.T) {
 		t.Skip("GitHub test env vars not specified")
 	}
 }
+
+func SkipTestWhenGitHubOAuthClientCallbackDoesNotMatchFederationDomainIssuerCallback(t *testing.T) {
+	t.Helper()
+
+	SkipTestWhenGitHubIsUnavailable(t)
+
+	env := IntegrationEnv(t)
+	if env.SupervisorUpstreamGithub.GithubOAuthAppAllowedCallbackURL != env.SupervisorUpstreamOIDC.CallbackURL {
+		t.Skip("GitHub OAuth App client allowed callback URL does not match the callback URL for the FederationDomain")
+	}
+}

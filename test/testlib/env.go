@@ -112,15 +112,18 @@ type TestLDAPUpstream struct {
 }
 
 type TestGithubUpstream struct {
-	GithubAppClientID         string   `json:"githubAppClientId"`
-	GithubAppClientSecret     string   `json:"githubAppClientSecret"`
-	TestUserUsername          string   `json:"testUserUsername"` // the "login" attribute value for the user
-	TestUserPassword          string   `json:"testUserPassword"`
-	TestUserOTPSecret         string   `json:"testUserOTPSecret"`
-	TestUserID                string   `json:"testUserID"`           // the "id" attribute value for the user
-	TestUserOrganization      string   `json:"testUserOrganization"` // an org to which the user belongs
-	TestUserExpectedTeamNames []string `json:"testUserExpectedTeamNames"`
-	TestUserExpectedTeamSlugs []string `json:"testUserExpectedTeamSlugs"`
+	GithubAppClientID                string   `json:"githubAppClientId"` // GitHub's new-style GitHub App
+	GithubAppClientSecret            string   `json:"githubAppClientSecret"`
+	GithubOAuthAppClientID           string   `json:"githubOAuthAppClientId"` // GitHub's old-style OAuth App
+	GithubOAuthAppClientSecret       string   `json:"githubOAuthAppClientSecret"`
+	GithubOAuthAppAllowedCallbackURL string   `json:"githubOAuthAppAllowedCallbackURL"` // the callback URL that was configured in GitHub for this App
+	TestUserUsername                 string   `json:"testUserUsername"`                 // the "login" attribute value for the user
+	TestUserPassword                 string   `json:"testUserPassword"`
+	TestUserOTPSecret                string   `json:"testUserOTPSecret"`
+	TestUserID                       string   `json:"testUserID"`           // the "id" attribute value for the user
+	TestUserOrganization             string   `json:"testUserOrganization"` // an org to which the user belongs
+	TestUserExpectedTeamNames        []string `json:"testUserExpectedTeamNames"`
+	TestUserExpectedTeamSlugs        []string `json:"testUserExpectedTeamSlugs"`
 }
 
 // ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
@@ -333,15 +336,18 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	}
 
 	result.SupervisorUpstreamGithub = TestGithubUpstream{
-		GithubAppClientID:         wantEnv("PINNIPED_TEST_GITHUB_APP_CLIENT_ID", ""),
-		GithubAppClientSecret:     wantEnv("PINNIPED_TEST_GITHUB_APP_CLIENT_SECRET", ""),
-		TestUserUsername:          wantEnv("PINNIPED_TEST_GITHUB_USER_USERNAME", ""),
-		TestUserPassword:          wantEnv("PINNIPED_TEST_GITHUB_USER_PASSWORD", ""),
-		TestUserOTPSecret:         wantEnv("PINNIPED_TEST_GITHUB_USER_OTP_SECRET", ""),
-		TestUserID:                wantEnv("PINNIPED_TEST_GITHUB_USERID", ""),
-		TestUserOrganization:      wantEnv("PINNIPED_TEST_GITHUB_ORG", ""),
-		TestUserExpectedTeamNames: filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_GITHUB_EXPECTED_TEAM_NAMES", ""), ",")),
-		TestUserExpectedTeamSlugs: filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_GITHUB_EXPECTED_TEAM_SLUGS", ""), ",")),
+		GithubAppClientID:                wantEnv("PINNIPED_TEST_GITHUB_APP_CLIENT_ID", ""),
+		GithubAppClientSecret:            wantEnv("PINNIPED_TEST_GITHUB_APP_CLIENT_SECRET", ""),
+		GithubOAuthAppClientID:           wantEnv("PINNIPED_TEST_GITHUB_OAUTH_APP_CLIENT_ID", ""),
+		GithubOAuthAppClientSecret:       wantEnv("PINNIPED_TEST_GITHUB_OAUTH_APP_CLIENT_SECRET", ""),
+		GithubOAuthAppAllowedCallbackURL: wantEnv("PINNIPED_TEST_GITHUB_OAUTH_APP_ALLOWED_CALLBACK_URL", ""),
+		TestUserUsername:                 wantEnv("PINNIPED_TEST_GITHUB_USER_USERNAME", ""),
+		TestUserPassword:                 wantEnv("PINNIPED_TEST_GITHUB_USER_PASSWORD", ""),
+		TestUserOTPSecret:                wantEnv("PINNIPED_TEST_GITHUB_USER_OTP_SECRET", ""),
+		TestUserID:                       wantEnv("PINNIPED_TEST_GITHUB_USERID", ""),
+		TestUserOrganization:             wantEnv("PINNIPED_TEST_GITHUB_ORG", ""),
+		TestUserExpectedTeamNames:        filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_GITHUB_EXPECTED_TEAM_NAMES", ""), ",")),
+		TestUserExpectedTeamSlugs:        filterEmpty(strings.Split(wantEnv("PINNIPED_TEST_GITHUB_EXPECTED_TEAM_SLUGS", ""), ",")),
 	}
 
 	sort.Strings(result.SupervisorUpstreamLDAP.TestUserDirectGroupsCNs)

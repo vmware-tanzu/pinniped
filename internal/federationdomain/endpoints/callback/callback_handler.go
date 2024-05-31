@@ -48,6 +48,9 @@ func NewHandler(
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), reconstitutedAuthRequest)
 		if err != nil {
 			plog.Error("error using state downstream auth params", err,
+				"identityProviderDisplayName", idp.GetDisplayName(),
+				"identityProviderResourceName", idp.GetProvider().GetResourceName(),
+				"supervisorCallbackURL", redirectURI,
 				"fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.New(http.StatusBadRequest, "error using state downstream auth params")
 		}
@@ -59,6 +62,10 @@ func NewHandler(
 
 		identity, loginExtras, err := idp.LoginFromCallback(r.Context(), authcode(r), state.PKCECode, state.Nonce, redirectURI)
 		if err != nil {
+			plog.InfoErr("unable to complete login from callback", err,
+				"identityProviderDisplayName", idp.GetDisplayName(),
+				"identityProviderResourceName", idp.GetProvider().GetResourceName(),
+				"supervisorCallbackURL", redirectURI)
 			return err
 		}
 
@@ -69,13 +76,20 @@ func NewHandler(
 			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
 		})
 		if err != nil {
+			plog.InfoErr("unable to create a Pinniped session", err,
+				"identityProviderDisplayName", idp.GetDisplayName(),
+				"identityProviderResourceName", idp.GetProvider().GetResourceName(),
+				"supervisorCallbackURL", redirectURI)
 			return httperr.Wrap(http.StatusUnprocessableEntity, err.Error(), err)
 		}
 
 		authorizeResponder, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, session)
 		if err != nil {
 			plog.WarningErr("error while generating and saving authcode", err,
-				"identityProviderDisplayName", idp.GetDisplayName(), "fositeErr", oidc.FositeErrorForLog(err))
+				"identityProviderDisplayName", idp.GetDisplayName(),
+				"identityProviderResourceName", idp.GetProvider().GetResourceName(),
+				"supervisorCallbackURL", redirectURI,
+				"fositeErr", oidc.FositeErrorForLog(err))
 			return httperr.Wrap(http.StatusInternalServerError, "error while generating and saving authcode", err)
 		}
 

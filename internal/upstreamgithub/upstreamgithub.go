@@ -6,7 +6,6 @@ package upstreamgithub
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -18,6 +17,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/downstreamsubject"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/githubclient"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/setutil"
 )
 
@@ -66,7 +66,7 @@ func New(config ProviderConfig) *Provider {
 	}
 }
 
-func (p *Provider) GetName() string {
+func (p *Provider) GetResourceName() string {
 	return p.c.Name
 }
 
@@ -147,7 +147,20 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string, idpDisplayNa
 	}
 
 	if !p.c.AllowedOrganizations.Empty() && !p.c.AllowedOrganizations.HasAnyIgnoringCase(orgMembership) {
-		return nil, errors.New("user is not allowed to log in due to organization membership policy")
+		plog.Warning("user is not allowed to log in due to organization membership policy", // do not log username to avoid PII
+			"userBelongsToOrganizations", orgMembership,
+			"configuredAllowedOrganizations", p.c.AllowedOrganizations,
+			"identityProviderDisplayName", idpDisplayName,
+			"identityProviderResourceName", p.GetResourceName())
+		plog.Trace("user is not allowed to log in due to organization membership policy", // okay to log PII at trace level
+			"githubLogin", userInfo.Login,
+			"githubID", userInfo.ID,
+			"calculatedUsername", githubUser.Username,
+			"userBelongsToOrganizations", orgMembership,
+			"configuredAllowedOrganizations", p.c.AllowedOrganizations,
+			"identityProviderDisplayName", idpDisplayName,
+			"identityProviderResourceName", p.GetResourceName())
+		return nil, upstreamprovider.NewGitHubLoginDeniedError("user is not allowed to log in due to organization membership policy")
 	}
 
 	teamMembership, err := githubClient.GetTeamMembership(ctx, p.c.AllowedOrganizations)

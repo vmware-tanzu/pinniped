@@ -39,11 +39,11 @@ type LDAPRefreshAttributes struct {
 // UpstreamIdentityProviderI includes the interface functions that are common to all upstream identity provider types.
 // These represent the identity provider resources, i.e. OIDCIdentityProvider, etc.
 type UpstreamIdentityProviderI interface {
-	// GetName returns a name for this upstream provider. The controller watching the identity provider resources will
+	// GetResourceName returns a name for this upstream provider. The controller watching the identity provider resources will
 	// set this to be the Name of the CR from its metadata. Note that this is different from the DisplayName configured
 	// in each FederationDomain that uses this provider, so this name is for internal use only, not for interacting
 	// with clients. Clients should not expect to see this name or send this name.
-	GetName() string
+	GetResourceName() string
 
 	// GetResourceUID returns the Kubernetes resource ID
 	GetResourceUID() types.UID
@@ -133,6 +133,22 @@ type GitHubUser struct {
 	Groups            []string // could be names or slugs
 	DownstreamSubject string   // the whole downstream subject URI
 }
+
+// GitHubLoginDeniedError can be returned by UpstreamGithubIdentityProviderI GetUser() when a policy
+// configured on GitHubIdentityProvider should prevent this user from completing authentication.
+type GitHubLoginDeniedError struct {
+	message string
+}
+
+func NewGitHubLoginDeniedError(message string) GitHubLoginDeniedError {
+	return GitHubLoginDeniedError{message: message}
+}
+
+func (g GitHubLoginDeniedError) Error() string {
+	return g.message
+}
+
+var _ error = &GitHubLoginDeniedError{}
 
 type UpstreamGithubIdentityProviderI interface {
 	UpstreamIdentityProviderI

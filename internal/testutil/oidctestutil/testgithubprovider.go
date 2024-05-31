@@ -183,7 +183,7 @@ func (u *TestUpstreamGitHubIdentityProvider) GetResourceUID() types.UID {
 	return u.ResourceUID
 }
 
-func (u *TestUpstreamGitHubIdentityProvider) GetName() string {
+func (u *TestUpstreamGitHubIdentityProvider) GetResourceName() string {
 	return u.Name
 }
 

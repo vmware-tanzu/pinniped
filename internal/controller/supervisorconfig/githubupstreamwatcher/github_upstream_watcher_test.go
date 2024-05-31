@@ -1882,7 +1882,7 @@ func TestController(t *testing.T) {
 				// Do not expect any particular order in the cache
 				var actualProvider *upstreamgithub.Provider
 				for _, possibleIDP := range actualIDPList {
-					if possibleIDP.GetName() == tt.wantResultingCache[i].Name {
+					if possibleIDP.GetResourceName() == tt.wantResultingCache[i].Name {
 						var ok bool
 						actualProvider, ok = possibleIDP.(*upstreamgithub.Provider)
 						require.True(t, ok)
@@ -1890,7 +1890,7 @@ func TestController(t *testing.T) {
 					}
 				}
 
-				require.Equal(t, tt.wantResultingCache[i].Name, actualProvider.GetName())
+				require.Equal(t, tt.wantResultingCache[i].Name, actualProvider.GetResourceName())
 				require.Equal(t, tt.wantResultingCache[i].ResourceUID, actualProvider.GetResourceUID())
 				require.Equal(t, tt.wantResultingCache[i].OAuth2Config.ClientID, actualProvider.GetClientID())
 				require.Equal(t, tt.wantResultingCache[i].GroupNameAttribute, actualProvider.GetGroupNameAttribute())

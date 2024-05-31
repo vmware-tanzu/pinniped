@@ -1448,7 +1448,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := range actualIDPList {
 				actualIDP := actualIDPList[i].(*upstreamoidc.ProviderConfig)
-				require.Equal(t, tt.wantResultingCache[i].GetName(), actualIDP.GetName())
+				require.Equal(t, tt.wantResultingCache[i].GetResourceName(), actualIDP.GetResourceName())
 				require.Equal(t, tt.wantResultingCache[i].GetClientID(), actualIDP.GetClientID())
 				require.Equal(t, tt.wantResultingCache[i].GetAuthorizationURL().String(), actualIDP.GetAuthorizationURL().String())
 				require.Equal(t, tt.wantResultingCache[i].GetUsernameClaim(), actualIDP.GetUsernameClaim())

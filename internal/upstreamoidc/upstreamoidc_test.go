@@ -47,7 +47,7 @@ func TestProviderConfig(t *testing.T) {
 				rawClaims: []byte(`{"userinfo_endpoint": "https://example.com/userinfo"}`),
 			},
 		}
-		require.Equal(t, "test-name", p.GetName())
+		require.Equal(t, "test-name", p.GetResourceName())
 		require.Equal(t, "test-client-id", p.GetClientID())
 		require.Equal(t, "https://example.com", p.GetAuthorizationURL().String())
 		require.ElementsMatch(t, []string{"scope1", "scope2"}, p.GetScopes())

@@ -123,7 +123,7 @@ func (u *TestUpstreamOIDCIdentityProvider) GetAdditionalClaimMappings() map[stri
 	return u.AdditionalClaimMappings
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) GetName() string {
+func (u *TestUpstreamOIDCIdentityProvider) GetResourceName() string {
 	return u.Name
 }
 

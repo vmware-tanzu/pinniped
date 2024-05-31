@@ -191,8 +191,7 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) LoginFromCallback(
 		redirectURI,
 	)
 	if err != nil {
-		plog.WarningErr("error exchanging and validating upstream tokens", err, "upstreamName", p.Provider.GetName())
-		return nil, nil, httperr.New(http.StatusBadGateway, "error exchanging and validating upstream tokens")
+		return nil, nil, httperr.Wrap(http.StatusBadGateway, "error exchanging and validating upstream tokens", err)
 	}
 
 	subject, upstreamUsername, upstreamGroups, err := getIdentityFromUpstreamIDToken(
@@ -241,7 +240,9 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 	}
 
 	plog.Debug("attempting upstream refresh request",
-		"providerName", p.Provider.GetName(), "providerType", p.GetSessionProviderType(), "providerUID", p.Provider.GetResourceUID())
+		"identityProviderResourceName", p.Provider.GetResourceName(),
+		"identityProviderType", p.GetSessionProviderType(),
+		"identityProviderUID", p.Provider.GetResourceUID())
 
 	var tokens *oauth2.Token
 	if refreshTokenStored {
@@ -249,7 +250,7 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 		if err != nil {
 			return nil, resolvedprovider.ErrUpstreamRefreshError().WithHint(
 				"Upstream refresh failed.",
-			).WithTrace(err).WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
+			).WithTrace(err).WithDebugf("provider name: %q, provider type: %q", p.Provider.GetResourceName(), p.GetSessionProviderType())
 		}
 	} else {
 		tokens = &oauth2.Token{AccessToken: sessionData.UpstreamAccessToken}
@@ -270,13 +271,13 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 	if err != nil {
 		return nil, resolvedprovider.ErrUpstreamRefreshError().WithHintf(
 			"Upstream refresh returned an invalid ID token or UserInfo response.").WithTrace(err).
-			WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
+			WithDebugf("provider name: %q, provider type: %q", p.Provider.GetResourceName(), p.GetSessionProviderType())
 	}
 	mergedClaims := validatedTokens.IDToken.Claims
 
 	// To the extent possible, check that the user's basic identity hasn't changed. We check that their downstream
 	// username has not changed separately below, as part of reapplying the transformations.
-	err = validateUpstreamSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims, sessionData, p.Provider.GetName(), p.GetSessionProviderType())
+	err = validateUpstreamSubjectAndIssuerUnchangedSinceInitialLogin(mergedClaims, sessionData, p.Provider.GetResourceName(), p.GetSessionProviderType())
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +293,7 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 	if err != nil {
 		return nil, resolvedprovider.ErrUpstreamRefreshError().WithHintf(
 			"Upstream refresh error while extracting groups claim.").WithTrace(err).
-			WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
+			WithDebugf("provider name: %q, provider type: %q", p.Provider.GetResourceName(), p.GetSessionProviderType())
 	}
 
 	// It's possible that a username wasn't returned by the upstream provider during refresh,
@@ -312,7 +313,9 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 	// overwriting the old one.
 	if tokens.RefreshToken != "" {
 		plog.Debug("upstream refresh request returned a new refresh token",
-			"providerName", p.Provider.GetName(), "providerType", p.GetSessionProviderType(), "providerUID", p.Provider.GetResourceUID())
+			"identityProviderResourceName", p.Provider.GetResourceName(),
+			"identityProviderType", p.GetSessionProviderType(),
+			"identityProviderUID", p.Provider.GetResourceUID())
 
 		updatedSessionData.UpstreamRefreshToken = tokens.RefreshToken
 	}
@@ -370,11 +373,11 @@ func makeDownstreamOIDCSessionData(
 	oidcUpstream upstreamprovider.UpstreamOIDCIdentityProviderI,
 	token *oidctypes.Token,
 ) (*psession.OIDCSessionData, []string, error) {
-	upstreamSubject, err := extractStringClaimValue(oidc.IDTokenClaimSubject, oidcUpstream.GetName(), token.IDToken.Claims)
+	upstreamSubject, err := extractStringClaimValue(oidc.IDTokenClaimSubject, oidcUpstream.GetResourceName(), token.IDToken.Claims)
 	if err != nil {
 		return nil, nil, err
 	}
-	upstreamIssuer, err := extractStringClaimValue(oidc.IDTokenClaimIssuer, oidcUpstream.GetName(), token.IDToken.Claims)
+	upstreamIssuer, err := extractStringClaimValue(oidc.IDTokenClaimIssuer, oidcUpstream.GetResourceName(), token.IDToken.Claims)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -387,7 +390,7 @@ func makeDownstreamOIDCSessionData(
 	const pleaseCheck = "please check configuration of OIDCIdentityProvider and the client in the " +
 		"upstream provider's API/UI and try to get a refresh token if possible"
 	logKV := []interface{}{
-		"upstreamName", oidcUpstream.GetName(),
+		"identityProviderResourceName", oidcUpstream.GetResourceName(),
 		"scopes", oidcUpstream.GetScopes(),
 		"additionalParams", oidcUpstream.GetAdditionalAuthcodeParams(),
 	}
@@ -452,7 +455,7 @@ func mapAdditionalClaimsFromUpstreamIDToken(
 		if !ok {
 			plog.Warning(
 				"additionalClaims mapping claim in upstream ID token missing",
-				"upstreamName", upstreamIDPConfig.GetName(),
+				"identityProviderResourceName", upstreamIDPConfig.GetResourceName(),
 				"claimName", upstreamClaimName,
 			)
 		} else {
@@ -469,11 +472,11 @@ func getDownstreamSubjectAndUpstreamUsernameFromUpstreamIDToken(
 ) (string, string, error) {
 	// The spec says the "sub" claim is only unique per issuer,
 	// so we will prepend the issuer string to make it globally unique.
-	upstreamIssuer, err := extractStringClaimValue(oidc.IDTokenClaimIssuer, upstreamIDPConfig.GetName(), idTokenClaims)
+	upstreamIssuer, err := extractStringClaimValue(oidc.IDTokenClaimIssuer, upstreamIDPConfig.GetResourceName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
-	upstreamSubject, err := extractStringClaimValue(oidc.IDTokenClaimSubject, upstreamIDPConfig.GetName(), idTokenClaims)
+	upstreamSubject, err := extractStringClaimValue(oidc.IDTokenClaimSubject, upstreamIDPConfig.GetResourceName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
@@ -492,7 +495,7 @@ func getDownstreamSubjectAndUpstreamUsernameFromUpstreamIDToken(
 		if !ok {
 			plog.Warning(
 				"username claim configured as \"email\" and upstream email_verified claim is not a boolean",
-				"upstreamName", upstreamIDPConfig.GetName(),
+				"identityProviderResourceName", upstreamIDPConfig.GetResourceName(),
 				"configuredUsernameClaim", usernameClaimName,
 				"emailVerifiedClaim", emailVerifiedAsInterface,
 			)
@@ -501,14 +504,14 @@ func getDownstreamSubjectAndUpstreamUsernameFromUpstreamIDToken(
 		if !emailVerified {
 			plog.Warning(
 				"username claim configured as \"email\" and upstream email_verified claim has false value",
-				"upstreamName", upstreamIDPConfig.GetName(),
+				"identityProviderResourceName", upstreamIDPConfig.GetResourceName(),
 				"configuredUsernameClaim", usernameClaimName,
 			)
 			return "", "", emailVerifiedClaimFalseErr
 		}
 	}
 
-	username, err := extractStringClaimValue(usernameClaimName, upstreamIDPConfig.GetName(), idTokenClaims)
+	username, err := extractStringClaimValue(usernameClaimName, upstreamIDPConfig.GetResourceName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
@@ -571,7 +574,7 @@ func getGroupsFromUpstreamIDToken(
 	if !ok {
 		plog.Warning(
 			"no groups claim in upstream ID token",
-			"upstreamName", upstreamIDPConfig.GetName(),
+			"identityProviderResourceName", upstreamIDPConfig.GetResourceName(),
 			"configuredGroupsClaim", groupsClaimName,
 		)
 		return nil, nil // the upstream IDP may have omitted the claim if the user has no groups
@@ -581,7 +584,7 @@ func getGroupsFromUpstreamIDToken(
 	if !okAsArray {
 		plog.Warning(
 			"groups claim in upstream ID token has invalid format",
-			"upstreamName", upstreamIDPConfig.GetName(),
+			"identityProviderResourceName", upstreamIDPConfig.GetResourceName(),
 			"configuredGroupsClaim", groupsClaimName,
 		)
 		return nil, requiredClaimInvalidFormatErr

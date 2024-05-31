@@ -1,7 +1,7 @@
 ---
 title: "Authenticating Users via GitHub"
 authors: [ "@cfryanr" ]
-status: "accepted"
+status: "partially-implemented"
 sponsor: [ ]
 approval_date: "March 27, 2024"
 ---
@@ -77,6 +77,7 @@ GitHub offers a REST API which can be used to find out about, among other things
 [team memberships of the currently authenticated user](https://docs.github.com/en/rest/teams/teams?apiVersion=2022-11-28#list-teams-for-the-authenticated-user)
 (`/user/teams`).
 These are the only three GitHub APIs that would be used by Pinniped.
+Note that the path to these APIs is slightly different for GitHub Enterprise.
 
 Access tokens from both types of OAuth 2.0 clients and both types PATs can be used to call the GitHub APIs
 on behalf of a GitHub user.
@@ -280,7 +281,7 @@ The status conditions will be populated by a controller. The conditions will inc
 - `HostValid`. This is not a URL, so it must not contain `://`. It must be parsable as defined by our `endpointaddr.Parse()` helper function.
 - `TLSConfigurationValid`. The CA bundle can be parsed as a CA bundle.
 - `OrganizationsPolicyValid`. Use the same logic and same error text in CEL validations for this field, and repeat it in the controller in case an old version of Kubernetes is being used.
-- `ClientCredentialsValid`. This is what we call the same check in the OIDCIdentityProvider's status.
+- `ClientCredentialsSecretValid`. The specified Secret must be found and must have the expected type and key/value pairs.
 - `GitHubConnectionValid`. Report if the host can be dialed with TLS verification. (In LDAPIdentityProvider we called this `LDAPConnectionValid`.)
 
 #### Web Browser-based Authentication using GitHubIdentityProvider
@@ -556,18 +557,16 @@ None.
   or just one specific GitHubIdentityProvider in that FederationDomain?
 - Would it be helpful to offer a `GET` endpoint to list current PAT consents? What would a user do with this
   information?
-- Should we also reduce the lifetime of the Supervisor-issued refresh tokens? This would be a signal to the client
+- For PAT-base auth, should we also reduce the lifetime of the Supervisor-issued refresh tokens? This would be a signal to the client
   that the token is not going to work. Would this help the Pinniped CLI remove stale entries from the session
   cache file more quickly?
 - For the consent CLI commands, what if the kubeconfig's exec plugin is a path to a different CLI? It could be
   a different path to a different version of the Pinniped CLI, or it could be a different CLI entirely
   (like the `tanzu` CLI). Does this matter?
-- Are the three GitHub API endpoints that we intend to use different for GitHub Enterprise Server (on-prem)?
-  Do they have different paths or different inputs and outputs? Need to check the GitHub docs.
 
 ## Answered Questions
 
-- Does the GitHub Identity Provider need `additionalClaimMappings`? No. This feature was only added for
+- Does the GitHubIdentityProvider need `additionalClaimMappings`? No. This feature was only added for
   OIDCIdentityProvider, and not yet added for other identity provider types. Please raise an issue in
   this repo if you need this feature.
 
@@ -579,3 +578,9 @@ Community contributions to the effort would be welcomed. Contact the maintainers
 
 Implementing browser-based authentication will happen first. It is simpler and is a pre-requisite for
 the PAT consent feature for CLI-based authentication.
+
+### Implementation Progress
+
+As of June 2024, browser-based authentication using GitHub has been implemented.
+This includes the GitHubIdentityProvider CRD except for the `spec.allowAuthentication.personalAccessTokens` section.
+Authentication without a web browser using personal access tokens is not yet implemented.

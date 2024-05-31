@@ -442,7 +442,10 @@ func handleGithubOTPLoginPage(t *testing.T, b *Browser, upstream testlib.TestGit
 
 	// Sleep for a bit to make it less likely that we use the same OTP code twice when multiple tests are run in serial.
 	// GitHub gets upset when the same OTP code gets reused.
-	otpSleepSeconds := 25
+	// GitHub seems to also get upset when any OTP codes are used often, like when all our GitHub tests run sequentially,
+	// because sometimes auth will go to a GitHub page that says: "We were unable to authenticate your request because too
+	// many codes have been submitted. Please wait a few minutes and contact support if you continue to have problems."
+	otpSleepSeconds := 60
 	t.Logf("sleeping %d seconds before generating a GitHub OTP code", otpSleepSeconds)
 	time.Sleep(time.Duration(otpSleepSeconds) * time.Second)
 

@@ -2532,7 +2532,7 @@ func testSupervisorLogin(
 ) {
 	env := testlib.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 
 	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.

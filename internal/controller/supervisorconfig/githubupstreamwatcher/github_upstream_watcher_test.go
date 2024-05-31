@@ -79,12 +79,12 @@ func TestController(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	generation := int64(1234)
-	lastTransitionTime := metav1.Time{Time: time.Now().Add(-1 * time.Hour)}
+	wantObservedGeneration := int64(1234)
 	namespace := "some-namespace"
 
-	nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
-	frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
+	wantFrozenTime := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
+	frozenClockForLastTransitionTime := clocktesting.NewFakeClock(wantFrozenTime)
+	wantLastTransitionTime := metav1.Time{Time: wantFrozenTime}
 
 	goodSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -103,7 +103,7 @@ func TestController(t *testing.T) {
 			Name:       "minimal-idp-name",
 			Namespace:  namespace,
 			UID:        types.UID("minimal-uid"),
-			Generation: generation,
+			Generation: wantObservedGeneration,
 		},
 		Spec: v1alpha1.GitHubIdentityProviderSpec{
 			GitHubAPI: v1alpha1.GitHubAPIConfig{
@@ -134,7 +134,7 @@ func TestController(t *testing.T) {
 			Name:       "some-idp-name",
 			Namespace:  namespace,
 			UID:        types.UID("some-resource-uid"),
-			Generation: generation,
+			Generation: wantObservedGeneration,
 		},
 		Spec: v1alpha1.GitHubIdentityProviderSpec{
 			GitHubAPI: v1alpha1.GitHubAPIConfig{
@@ -165,8 +165,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               HostValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", host),
 		}
@@ -178,8 +178,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               HostValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "InvalidHost",
 			Message:            fmt.Sprintf(`spec.githubAPI.host (%q) is not valid: %s`, host, message),
 		}
@@ -191,8 +191,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               TLSConfigurationValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
 		}
@@ -204,8 +204,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               TLSConfigurationValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "InvalidTLSConfig",
 			Message:            message,
 		}
@@ -217,8 +217,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               OrganizationsPolicyValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.allowAuthentication.organizations.policy (%q) is valid", policy),
 		}
@@ -230,8 +230,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               OrganizationsPolicyValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "Invalid",
 			Message:            message,
 		}
@@ -239,11 +239,12 @@ func TestController(t *testing.T) {
 
 	buildClientCredentialsObtainedTrue := func(t *testing.T, secretName string) metav1.Condition {
 		t.Helper()
+
 		return metav1.Condition{
 			Type:               ClientCredentialsObtained,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            fmt.Sprintf("clientID and clientSecret have been read from spec.client.SecretName (%q)", secretName),
 		}
@@ -255,8 +256,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               ClientCredentialsObtained,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             reason,
 			Message: fmt.Sprintf(
 				`%s: secret from spec.client.SecretName (%q) must be found in namespace %q with type "secrets.pinniped.dev/github-client" and keys "clientID" and "clientSecret"`,
@@ -269,11 +270,12 @@ func TestController(t *testing.T) {
 
 	buildClaimsValidatedTrue := func(t *testing.T) metav1.Condition {
 		t.Helper()
+
 		return metav1.Condition{
 			Type:               ClaimsValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            "spec.claims are valid",
 		}
@@ -281,11 +283,12 @@ func TestController(t *testing.T) {
 
 	buildClaimsValidatedFalse := func(t *testing.T, message string) metav1.Condition {
 		t.Helper()
+
 		return metav1.Condition{
 			Type:               ClaimsValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "Invalid",
 			Message:            message,
 		}
@@ -297,8 +300,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               GitHubConnectionValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", host),
 		}
@@ -310,8 +313,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               GitHubConnectionValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "UnableToDialServer",
 			Message:            message,
 		}
@@ -323,8 +326,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               GitHubConnectionValid,
 			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "UnableToValidate",
 			Message:            "unable to validate; see other conditions for details",
 		}
@@ -1852,7 +1855,7 @@ func TestController(t *testing.T) {
 				kubeInformers.Core().V1().Secrets(),
 				logger,
 				controllerlib.WithInformer,
-				frozenClock,
+				frozenClockForLastTransitionTime,
 				dialer,
 			)
 
@@ -1924,15 +1927,6 @@ func TestController(t *testing.T) {
 
 				require.NotNil(t, actualIDP, "must find IDP with name %s", tt.wantResultingUpstreams[i].Name)
 				require.Len(t, actualIDP.Status.Conditions, countExpectedConditions)
-
-				// Update all expected conditions to the frozenTime.
-				// TODO: Push this out to the test table
-				for j := range countExpectedConditions {
-					// Get this as a pointer so that we can update the value within the array
-					condition := &tt.wantResultingUpstreams[i].Status.Conditions[j]
-					condition.LastTransitionTime = metav1.Time{Time: frozenClock.Now()}
-				}
-
 				require.Equal(t, tt.wantResultingUpstreams[i], *actualIDP)
 			}
 
@@ -1967,8 +1961,9 @@ func TestController_OnlyWantActions(t *testing.T) {
 	oneHourAgo := metav1.Time{Time: time.Now().Add(-1 * time.Hour)}
 	namespace := "existing-conditions-namespace"
 
-	nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
-	frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
+	wantFrozenTime := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
+	frozenClockForLastTransitionTime := clocktesting.NewFakeClock(wantFrozenTime)
+	wantLastTransitionTime := metav1.Time{Time: wantFrozenTime}
 
 	goodSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2132,7 +2127,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					for i := range idp.Status.Conditions {
 						idp.Status.Conditions[i].ObservedGeneration = 400
 					}
-					idp.Status.Conditions[0].LastTransitionTime = metav1.Time{Time: nowDoesntMatter}
+					idp.Status.Conditions[0].LastTransitionTime = wantLastTransitionTime
 					wantAction := coretesting.NewUpdateSubresourceAction(githubIDPGVR, "status", namespace, idp)
 					return wantAction
 				}(),
@@ -2158,7 +2153,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               ClaimsValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            "spec.claims are valid",
 							},
@@ -2166,7 +2161,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               ClientCredentialsObtained,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            `clientID and clientSecret have been read from spec.client.SecretName ("some-secret-name")`,
 							},
@@ -2174,7 +2169,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               GitHubConnectionValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", goodServerDomain),
 							},
@@ -2182,7 +2177,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               HostValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", goodServerDomain),
 							},
@@ -2190,7 +2185,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               OrganizationsPolicyValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            `spec.allowAuthentication.organizations.policy ("AllGitHubUsers") is valid`,
 							},
@@ -2198,7 +2193,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               TLSConfigurationValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
 							},
@@ -2234,7 +2229,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 				kubeInformers.Core().V1().Secrets(),
 				logger,
 				controllerlib.WithInformer,
-				frozenClock,
+				frozenClockForLastTransitionTime,
 				tls.Dial,
 			)
 

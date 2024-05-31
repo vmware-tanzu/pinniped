@@ -5,7 +5,10 @@
 package browsertest
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"regexp"
@@ -16,6 +19,7 @@ import (
 	"time"
 
 	chromedpbrowser "github.com/chromedp/cdproto/browser"
+	"github.com/chromedp/cdproto/dom"
 	chromedpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/stretchr/testify/require"
@@ -163,10 +167,50 @@ func OpenBrowser(t *testing.T) *Browser {
 		for _, e := range b.exceptionEvents {
 			t.Logf("exception: %s", e)
 		}
+
+		// If the test failed, dump helpful debugging info from the browser's final page.
+		if t.Failed() {
+			b.dumpPage(t)
+		}
 	})
 
 	// Done. The browser is ready to be driven by the test.
 	return b
+}
+
+func (b *Browser) dumpPage(t *testing.T) {
+	// Log the URL of the current page.
+	var url string
+	b.runWithTimeout(t, b.timeout(), chromedp.Location(&url))
+	t.Logf("Browser URL from end of test %q: %s", t.Name(), url)
+
+	// Log the title of the current page.
+	t.Logf("Browser page title from end of test %q: %q", t.Name(), b.Title(t))
+
+	// Log a screenshot of the current page.
+	var screenBuf []byte
+	b.runWithTimeout(t, b.timeout(), chromedp.FullScreenshot(&screenBuf, 10)) // low quality to make it smaller
+	t.Logf("Browser screenshot (base64 encoded jpeg format) from end of test %q:\n%s\n",
+		t.Name(), base64.StdEncoding.EncodeToString(screenBuf))
+
+	// Log the HTML of the current page.
+	var html string
+	b.runWithTimeout(t, b.timeout(), chromedp.ActionFunc(func(ctx context.Context) error {
+		node, err := dom.GetDocument().Do(ctx)
+		if err != nil {
+			return err
+		}
+		html, err = dom.GetOuterHTML().WithNodeID(node.NodeID).Do(ctx)
+		return err
+	}))
+	var htmlBuf bytes.Buffer
+	gz := gzip.NewWriter(&htmlBuf)
+	_, err := gz.Write([]byte(html))
+	require.NoError(t, err)
+	err = gz.Close()
+	require.NoError(t, err)
+	t.Logf("Browser html (gzip and base64 encoded) from end of test %q:\n%s\n",
+		t.Name(), base64.StdEncoding.EncodeToString(htmlBuf.Bytes()))
 }
 
 func (b *Browser) timeout() time.Duration {
@@ -427,7 +471,7 @@ func handleOccasionalGithubLoginPage(t *testing.T, b *Browser, upstream testlib.
 
 	switch {
 	case strings.HasPrefix(lowercaseTitle, "authorize "): // the title is "Authorize <App Name>"
-		// Next Github might go to another page asking if you authorize the GitHub App to act on your behalf,
+		// Next GitHub might go to another page asking if you authorize the GitHub App to act on your behalf,
 		// if this user has never authorized this app.
 		// Wait for the authorize app page to be rendered.
 		t.Logf("waiting for GitHub authorize button")
@@ -441,7 +485,7 @@ func handleOccasionalGithubLoginPage(t *testing.T, b *Browser, upstream testlib.
 		return true
 
 	case strings.HasPrefix(lowercaseTitle, "confirm your account recovery settings"):
-		// Next Github might occasionally as you to confirm your recovery settings.
+		// Next GitHub might occasionally as you to confirm your recovery settings.
 		// Wait for the page to be rendered.
 		t.Logf("waiting for GitHub confirm button")
 		// There are several buttons and links. We want to click this confirm button to confirm our settings:

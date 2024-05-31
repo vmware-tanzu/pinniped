@@ -383,7 +383,7 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 					Message: "spec.claims are valid",
 				},
 				{
-					Type:    "ClientCredentialsObtained",
+					Type:    "ClientCredentialsSecretValid",
 					Status:  metav1.ConditionTrue,
 					Reason:  "Success",
 					Message: fmt.Sprintf("clientID and clientSecret have been read from spec.client.SecretName (%q)", happySecretName),
@@ -450,7 +450,7 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 					Message: "spec.claims are valid",
 				},
 				{
-					Type:   "ClientCredentialsObtained",
+					Type:   "ClientCredentialsSecretValid",
 					Status: metav1.ConditionFalse,
 					Reason: "SecretNotFound",
 					Message: fmt.Sprintf(`missing key "clientID": secret from spec.client.SecretName (%q) must be found in namespace %q with type "secrets.pinniped.dev/github-client" and keys "clientID" and "clientSecret"`,
@@ -656,7 +656,7 @@ func TestGitHubIDPSecretInOtherNamespace_Parallel(t *testing.T) {
 			Message: "spec.claims are valid",
 		},
 		{
-			Type:   "ClientCredentialsObtained",
+			Type:   "ClientCredentialsSecretValid",
 			Status: metav1.ConditionFalse,
 			Reason: "SecretNotFound",
 			Message: fmt.Sprintf(`secret %q not found: secret from spec.client.SecretName (%q) must be found in namespace %q with type "secrets.pinniped.dev/github-client" and keys "clientID" and "clientSecret"`,

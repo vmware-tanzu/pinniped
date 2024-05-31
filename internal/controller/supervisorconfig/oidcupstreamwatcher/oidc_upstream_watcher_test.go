@@ -174,10 +174,10 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			inputSecrets: []runtime.Object{},
 			wantErr:      controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="secret \"test-client-secret\" not found" "reason"="SecretNotFound" "status"="False" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="secret \"test-client-secret\" not found" "reason"="SecretNotFound" "status"="False" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
-				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="secret \"test-client-secret\" not found" "name"="test-name" "namespace"="test-namespace" "reason"="SecretNotFound" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="secret \"test-client-secret\" not found" "name"="test-name" "namespace"="test-namespace" "reason"="SecretNotFound" "type"="ClientCredentialsSecretValid"`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -187,7 +187,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "SecretNotFound",
@@ -221,10 +221,10 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "reason"="SecretWrongType" "status"="False" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "reason"="SecretWrongType" "status"="False" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
-				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "name"="test-name" "namespace"="test-namespace" "reason"="SecretWrongType" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")" "name"="test-name" "namespace"="test-namespace" "reason"="SecretWrongType" "type"="ClientCredentialsSecretValid"`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -234,7 +234,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "SecretWrongType",
@@ -267,10 +267,10 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "reason"="SecretMissingKeys" "status"="False" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "reason"="SecretMissingKeys" "status"="False" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
-				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "name"="test-name" "namespace"="test-namespace" "reason"="SecretMissingKeys" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]" "name"="test-name" "namespace"="test-namespace" "reason"="SecretMissingKeys" "type"="ClientCredentialsSecretValid"`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []v1alpha1.OIDCIdentityProvider{{
@@ -280,7 +280,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "SecretMissingKeys",
@@ -316,7 +316,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
@@ -329,7 +329,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -365,7 +365,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="spec.certificateAuthorityData is invalid: no certificates found" "reason"="InvalidTLSConfig" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="spec.certificateAuthorityData is invalid: no certificates found" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidTLSConfig" "type"="OIDCDiscoverySucceeded"`,
@@ -378,7 +378,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -411,7 +411,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to parse issuer URL: parse \"%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\": invalid URL escape \"%in\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to parse issuer URL: parse \"%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\": invalid URL escape \"%in\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
@@ -424,7 +424,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -457,7 +457,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have \"https\" scheme, not \"http\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have \"https\" scheme, not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
@@ -470,7 +470,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -503,7 +503,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="issuer URL '` + testIssuerURL + "?sub=foo" + `' cannot contain query or fragment component" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="issuer URL '` + testIssuerURL + "?sub=foo" + `' cannot contain query or fragment component" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
@@ -516,7 +516,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -549,7 +549,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="issuer URL '` + testIssuerURL + "#fragment" + `' cannot contain query or fragment component" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="issuer URL '` + testIssuerURL + "#fragment" + `' cannot contain query or fragment component" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
@@ -562,7 +562,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -597,7 +597,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`oidc-upstream-observer "msg"="failed to perform OIDC discovery" "error"="Get \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": tls: failed to verify certificate: x509: certificate signed by unknown authority" "issuer"="` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" "name"="test-name" "namespace"="test-namespace"`,
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\":\nGet \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": tls: failed to verify certificate: x509: certificate signed by unknown authority" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\":\nGet \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": tls: failed to verify certificate: x509: certificate signed by unknown authority" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
@@ -610,7 +610,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -645,7 +645,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
@@ -658,7 +658,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -692,7 +692,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to parse revocation endpoint URL: parse \"%\": invalid URL escape \"%\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to parse revocation endpoint URL: parse \"%\": invalid URL escape \"%\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
@@ -705,7 +705,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -739,7 +739,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="authorization endpoint URL 'http://example.com/authorize' must have \"https\" scheme, not \"http\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="authorization endpoint URL 'http://example.com/authorize' must have \"https\" scheme, not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
@@ -752,7 +752,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -786,7 +786,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="revocation endpoint URL 'http://example.com/revoke' must have \"https\" scheme, not \"http\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="revocation endpoint URL 'http://example.com/revoke' must have \"https\" scheme, not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
@@ -799,7 +799,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -833,7 +833,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="token endpoint URL 'http://example.com/token' must have \"https\" scheme, not \"http\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="token endpoint URL 'http://example.com/token' must have \"https\" scheme, not \"http\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
@@ -846,7 +846,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -880,7 +880,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="token endpoint URL '' must have \"https\" scheme, not \"\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="token endpoint URL '' must have \"https\" scheme, not \"\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
@@ -893,7 +893,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -927,7 +927,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="authorization endpoint URL '' must have \"https\" scheme, not \"\"" "reason"="InvalidResponse" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="authorization endpoint URL '' must have \"https\" scheme, not \"\"" "name"="test-name" "namespace"="test-namespace" "reason"="InvalidResponse" "type"="OIDCDiscoverySucceeded"`,
@@ -940,7 +940,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -974,7 +974,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: v1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
-						{Type: "ClientCredentialsValid", Status: "False", LastTransitionTime: earlier, Reason: "SomeError1", Message: "some previous error 1"},
+						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: earlier, Reason: "SomeError1", Message: "some previous error 1"},
 						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: earlier, Reason: "SomeError2", Message: "some previous error 2"},
 					},
 				},
@@ -985,7 +985,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Data:       testValidSecretData,
 			}},
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 			},
@@ -1010,7 +1010,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "discovered issuer configuration"},
 					},
 				},
@@ -1030,7 +1030,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
 					},
 				},
@@ -1041,7 +1041,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Data:       testValidSecretData,
 			}},
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 			},
@@ -1066,7 +1066,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
 					},
 				},
@@ -1086,7 +1086,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
 					},
 				},
@@ -1097,7 +1097,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Data:       testValidSecretData,
 			}},
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 			},
@@ -1122,7 +1122,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
 					},
 				},
@@ -1145,7 +1145,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
 					},
 				},
@@ -1156,7 +1156,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Data:       testValidSecretData,
 			}},
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 			},
@@ -1181,7 +1181,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
 					},
 				},
@@ -1212,7 +1212,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
 					},
 				},
@@ -1223,7 +1223,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Data:       testValidSecretData,
 			}},
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 			},
@@ -1250,7 +1250,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
 					},
 				},
@@ -1287,7 +1287,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			}},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="discovered issuer configuration" "reason"="Success" "status"="True" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="the following additionalAuthorizeParameters are not allowed: response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd" "reason"="DisallowedParameterName" "status"="False" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="the following additionalAuthorizeParameters are not allowed: response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd" "name"="test-name" "namespace"="test-namespace" "reason"="DisallowedParameterName" "type"="AdditionalAuthorizeParametersValid"`,
@@ -1301,7 +1301,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 						{Type: "AdditionalAuthorizeParametersValid", Status: "False", LastTransitionTime: now, Reason: "DisallowedParameterName",
 							Message: "the following additionalAuthorizeParameters are not allowed: " +
 								"response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
 					},
 				},
@@ -1325,7 +1325,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`oidc-upstream-observer "msg"="failed to perform OIDC discovery" "error"="oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "issuer"="` + testIssuerURL + `/ends-with-slash" "name"="test-name" "namespace"="test-namespace"`,
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
@@ -1338,7 +1338,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
@@ -1374,7 +1374,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`oidc-upstream-observer "msg"="failed to perform OIDC discovery" "error"="oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "issuer"="` + testIssuerURL + `/" "name"="test-name" "namespace"="test-namespace"`,
-				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsValid"`,
+				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="loaded client credentials" "reason"="Success" "status"="True" "type"="ClientCredentialsSecretValid"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "reason"="Unreachable" "status"="False" "type"="OIDCDiscoverySucceeded"`,
 				`oidc-upstream-observer "level"=0 "msg"="updated condition" "name"="test-name" "namespace"="test-namespace" "message"="additionalAuthorizeParameters parameter names are allowed" "reason"="Success" "status"="True" "type"="AdditionalAuthorizeParametersValid"`,
 				`oidc-upstream-observer "msg"="found failing condition" "error"="OIDCIdentityProvider has a failing condition" "message"="failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"" "name"="test-name" "namespace"="test-namespace" "reason"="Unreachable" "type"="OIDCDiscoverySucceeded"`,
@@ -1387,7 +1387,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
 						{
-							Type:               "ClientCredentialsValid",
+							Type:               "ClientCredentialsSecretValid",
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",

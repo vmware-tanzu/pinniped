@@ -376,7 +376,7 @@ scenes is actually served by the Pinniped Concierge. It can be accessed just lik
 not require any authentication on the request.
 
 The details of the request and response formats are documented in the
-[API docs](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#tokencredentialrequest).
+[API docs](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#tokencredentialrequest).
 
 Here is a sample YAML representation of a request:
 

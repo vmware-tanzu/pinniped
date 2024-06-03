@@ -132,7 +132,7 @@ with these new features, see:
 - The documentation for [creating FederationDomains]({{< ref "docs/howto/supervisor/configure-supervisor.md" >}}).
 - The documentation for [configuring identity providers on FederationDomains]({{< ref "docs/howto/supervisor/configure-supervisor-federationdomain-idps.md" >}}).
 - The API documentation for the `spec.identityProviders` setting on the
-[FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#federationdomain)
+[FederationDomain](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#federationdomain)
 resource.
 
 {{< community >}}

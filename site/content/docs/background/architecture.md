@@ -48,7 +48,7 @@ Pinniped supports the following IDPs.
 1. Any Active Directory identity provider (via LDAP).
 
 The
-[`idp.supervisor.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#k8s-api-idp-supervisor-pinniped-dev-v1alpha1)
+[`idp.supervisor.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#k8s-api-idp-supervisor-pinniped-dev-v1alpha1)
 API group contains the Kubernetes custom resources that configure the Pinniped
 Supervisor's upstream IDPs.
 
@@ -83,7 +83,7 @@ Pinniped supports the following authenticator types.
    set on the `kube-apiserver` process.
 
 The
-[`authentication.concierge.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#k8s-api-authentication-concierge-pinniped-dev-v1alpha1)
+[`authentication.concierge.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#k8s-api-authentication-concierge-pinniped-dev-v1alpha1)
 API group contains the Kubernetes custom resources that configure the Pinniped
 Concierge's authenticators.
 

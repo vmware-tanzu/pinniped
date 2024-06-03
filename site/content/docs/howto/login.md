@@ -125,7 +125,7 @@ will depend on which type of identity provider was configured.
   `kubectl` process to avoid the interactive prompts. Note that the optional CLI-based flow must be enabled by the
   administrator in the OIDCIdentityProvider configuration before use
   (see `allowPasswordGrant` in the
-  [API docs](https://github.com/vmware-tanzu/pinniped/blob/main/generated/{{< latestcodegenversion >}}/README.adoc#oidcauthorizationconfig)
+  [API docs](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#oidcauthorizationconfig)
   for more details).
 
 - For LDAP and Active Directory identity providers, there are also two supported client flows:

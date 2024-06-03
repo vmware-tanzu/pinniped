@@ -51,14 +51,12 @@ const (
 
 	countExpectedConditions = 6
 
-	HostValid                string = "HostValid"
-	TLSConfigurationValid    string = "TLSConfigurationValid"
-	OrganizationsPolicyValid string = "OrganizationsPolicyValid"
-	// ClientCredentialsObtained is different from other status conditions because it only checks that the client credentials
-	// have been obtained. The controller has no way to verify whether they are valid.
-	ClientCredentialsObtained string = "ClientCredentialsObtained" //nolint:gosec // this is not a credential
-	GitHubConnectionValid     string = "GitHubConnectionValid"
-	ClaimsValid               string = "ClaimsValid"
+	HostValid                    string = "HostValid"
+	TLSConfigurationValid        string = "TLSConfigurationValid"
+	OrganizationsPolicyValid     string = "OrganizationsPolicyValid"
+	ClientCredentialsSecretValid string = "ClientCredentialsSecretValid" //nolint:gosec // this is not a credential
+	GitHubConnectionValid        string = "GitHubConnectionValid"
+	ClaimsValid                  string = "ClaimsValid"
 
 	defaultHost       = "github.com"
 	defaultApiBaseURL = "https://api.github.com"
@@ -166,7 +164,7 @@ func (c *gitHubWatcherController) validateClientSecret(secretName string) (*meta
 
 	buildFalseCondition := func(prefix string) (*metav1.Condition, string, string, error) {
 		return &metav1.Condition{
-			Type:   ClientCredentialsObtained,
+			Type:   ClientCredentialsSecretValid,
 			Status: metav1.ConditionFalse,
 			Reason: upstreamwatchers.ReasonNotFound,
 			Message: fmt.Sprintf("%s: secret from spec.client.SecretName (%q) must be found in namespace %q with type %q and keys %q and %q",
@@ -202,7 +200,7 @@ func (c *gitHubWatcherController) validateClientSecret(secretName string) (*meta
 	}
 
 	return &metav1.Condition{
-		Type:    ClientCredentialsObtained,
+		Type:    ClientCredentialsSecretValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  upstreamwatchers.ReasonSuccess,
 		Message: fmt.Sprintf("clientID and clientSecret have been read from spec.client.SecretName (%q)", secretName),

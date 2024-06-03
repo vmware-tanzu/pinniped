@@ -117,7 +117,7 @@ func (u *TestUpstreamLDAPIdentityProvider) GetResourceUID() types.UID {
 	return u.ResourceUID
 }
 
-func (u *TestUpstreamLDAPIdentityProvider) GetName() string {
+func (u *TestUpstreamLDAPIdentityProvider) GetResourceName() string {
 	return u.Name
 }
 

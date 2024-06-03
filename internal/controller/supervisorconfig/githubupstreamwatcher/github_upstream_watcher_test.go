@@ -79,12 +79,12 @@ func TestController(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	generation := int64(1234)
-	lastTransitionTime := metav1.Time{Time: time.Now().Add(-1 * time.Hour)}
+	wantObservedGeneration := int64(1234)
 	namespace := "some-namespace"
 
-	nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
-	frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
+	wantFrozenTime := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
+	frozenClockForLastTransitionTime := clocktesting.NewFakeClock(wantFrozenTime)
+	wantLastTransitionTime := metav1.Time{Time: wantFrozenTime}
 
 	goodSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -103,7 +103,7 @@ func TestController(t *testing.T) {
 			Name:       "minimal-idp-name",
 			Namespace:  namespace,
 			UID:        types.UID("minimal-uid"),
-			Generation: generation,
+			Generation: wantObservedGeneration,
 		},
 		Spec: v1alpha1.GitHubIdentityProviderSpec{
 			GitHubAPI: v1alpha1.GitHubAPIConfig{
@@ -134,7 +134,7 @@ func TestController(t *testing.T) {
 			Name:       "some-idp-name",
 			Namespace:  namespace,
 			UID:        types.UID("some-resource-uid"),
-			Generation: generation,
+			Generation: wantObservedGeneration,
 		},
 		Spec: v1alpha1.GitHubIdentityProviderSpec{
 			GitHubAPI: v1alpha1.GitHubAPIConfig{
@@ -165,8 +165,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               HostValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", host),
 		}
@@ -178,8 +178,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               HostValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "InvalidHost",
 			Message:            fmt.Sprintf(`spec.githubAPI.host (%q) is not valid: %s`, host, message),
 		}
@@ -191,8 +191,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               TLSConfigurationValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
 		}
@@ -204,8 +204,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               TLSConfigurationValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "InvalidTLSConfig",
 			Message:            message,
 		}
@@ -217,8 +217,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               OrganizationsPolicyValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.allowAuthentication.organizations.policy (%q) is valid", policy),
 		}
@@ -230,33 +230,34 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               OrganizationsPolicyValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "Invalid",
 			Message:            message,
 		}
 	}
 
-	buildClientCredentialsObtainedTrue := func(t *testing.T, secretName string) metav1.Condition {
+	buildClientCredentialsSecretValidTrue := func(t *testing.T, secretName string) metav1.Condition {
 		t.Helper()
+
 		return metav1.Condition{
-			Type:               ClientCredentialsObtained,
+			Type:               ClientCredentialsSecretValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            fmt.Sprintf("clientID and clientSecret have been read from spec.client.SecretName (%q)", secretName),
 		}
 	}
 
-	buildClientCredentialsObtainedFalse := func(t *testing.T, prefix, secretName, namespace, reason string) metav1.Condition {
+	buildClientCredentialsSecretValidFalse := func(t *testing.T, prefix, secretName, namespace, reason string) metav1.Condition {
 		t.Helper()
 
 		return metav1.Condition{
-			Type:               ClientCredentialsObtained,
+			Type:               ClientCredentialsSecretValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             reason,
 			Message: fmt.Sprintf(
 				`%s: secret from spec.client.SecretName (%q) must be found in namespace %q with type "secrets.pinniped.dev/github-client" and keys "clientID" and "clientSecret"`,
@@ -269,11 +270,12 @@ func TestController(t *testing.T) {
 
 	buildClaimsValidatedTrue := func(t *testing.T) metav1.Condition {
 		t.Helper()
+
 		return metav1.Condition{
 			Type:               ClaimsValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            "spec.claims are valid",
 		}
@@ -281,11 +283,12 @@ func TestController(t *testing.T) {
 
 	buildClaimsValidatedFalse := func(t *testing.T, message string) metav1.Condition {
 		t.Helper()
+
 		return metav1.Condition{
 			Type:               ClaimsValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "Invalid",
 			Message:            message,
 		}
@@ -297,8 +300,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               GitHubConnectionValid,
 			Status:             metav1.ConditionTrue,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             upstreamwatchers.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", host),
 		}
@@ -310,8 +313,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               GitHubConnectionValid,
 			Status:             metav1.ConditionFalse,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "UnableToDialServer",
 			Message:            message,
 		}
@@ -323,8 +326,8 @@ func TestController(t *testing.T) {
 		return metav1.Condition{
 			Type:               GitHubConnectionValid,
 			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: generation,
-			LastTransitionTime: lastTransitionTime,
+			ObservedGeneration: wantObservedGeneration,
+			LastTransitionTime: wantLastTransitionTime,
 			Reason:             "UnableToValidate",
 			Message:            "unable to validate; see other conditions for details",
 		}
@@ -338,8 +341,8 @@ func TestController(t *testing.T) {
 		return fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"github-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"some-namespace","name":"%s","type":"ClaimsValid","status":"False","reason":"Invalid","message":"%s"}`, name, message)
 	}
 
-	buildLogForUpdatingClientCredentialsObtained := func(name, status, reason, message string) string {
-		return fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"github-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"some-namespace","name":"%s","type":"ClientCredentialsObtained","status":"%s","reason":"%s","message":"%s"}`, name, status, reason, message)
+	buildLogForUpdatingClientCredentialsSecretValid := func(name, status, reason, message string) string {
+		return fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"github-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"some-namespace","name":"%s","type":"ClientCredentialsSecretValid","status":"%s","reason":"%s","message":"%s"}`, name, status, reason, message)
 	}
 
 	buildLogForUpdatingOrganizationPolicyValid := func(name, status, reason, message string) string {
@@ -419,7 +422,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -429,7 +432,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -475,7 +478,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validMinimalIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validMinimalIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -485,7 +488,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validMinimalIDP.Spec.GitHubAPI.Host),
@@ -550,7 +553,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, "github.com:443"),
 							buildHostValidTrue(t, "github.com"),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -560,7 +563,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, "github.com"),
@@ -621,7 +624,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, goodServerIPv6Domain),
 							buildHostValidTrue(t, goodServerIPv6Domain),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -631,7 +634,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, goodServerIPv6Domain),
@@ -730,7 +733,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedFalse(
+							buildClientCredentialsSecretValidFalse(
 								t,
 								`secret "no-secret-with-this-name" not found`,
 								"no-secret-with-this-name",
@@ -760,7 +763,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, "other-secret-name"),
+							buildClientCredentialsSecretValidTrue(t, "other-secret-name"),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -775,7 +778,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -785,7 +788,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("invalid-idp-name", "False", "SecretNotFound", `secret \"no-secret-with-this-name\" not found: secret from spec.client.SecretName (\"no-secret-with-this-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
+				buildLogForUpdatingClientCredentialsSecretValid("invalid-idp-name", "False", "SecretNotFound", `secret \"no-secret-with-this-name\" not found: secret from spec.client.SecretName (\"no-secret-with-this-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
 				buildLogForUpdatingClaimsValidTrue("invalid-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("invalid-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("invalid-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -793,7 +796,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingGitHubConnectionValid("invalid-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("invalid-idp-name", "Error"),
 
-				buildLogForUpdatingClientCredentialsObtained("other-idp-name", "True", "Success", `clientID and clientSecret have been read from spec.client.SecretName (\"other-secret-name\")`),
+				buildLogForUpdatingClientCredentialsSecretValid("other-idp-name", "True", "Success", `clientID and clientSecret have been read from spec.client.SecretName (\"other-secret-name\")`),
 				buildLogForUpdatingClaimsValidTrue("other-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("other-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("other-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -801,7 +804,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingGitHubConnectionValid("other-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("other-idp-name", "Ready"),
 
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -832,7 +835,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidUnknown(t),
 							buildHostValidFalse(t, "", "must not be empty"),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -842,7 +845,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: must not be empty`, ""),
@@ -873,7 +876,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidUnknown(t),
 							buildHostValidFalse(t, "https://example.com", `invalid port "//example.com"`),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -883,7 +886,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: invalid port \"//example.com\"`, "https://example.com"),
@@ -914,7 +917,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidUnknown(t),
 							buildHostValidFalse(t, "example.com/foo", `host "example.com/foo" is not a valid hostname or IP address`),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -924,7 +927,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: host \"example.com/foo\" is not a valid hostname or IP address`, "example.com/foo"),
@@ -955,7 +958,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidUnknown(t),
 							buildHostValidFalse(t, "u:p@example.com", `invalid port "p@example.com"`),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -965,7 +968,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: invalid port \"p@example.com\"`, "u:p@example.com"),
@@ -996,7 +999,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidUnknown(t),
 							buildHostValidFalse(t, "example.com?a=b", `host "example.com?a=b" is not a valid hostname or IP address`),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1006,7 +1009,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: host \"example.com?a=b\" is not a valid hostname or IP address`, "example.com?a=b"),
@@ -1037,7 +1040,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidUnknown(t),
 							buildHostValidFalse(t, "example.com#a", `host "example.com#a" is not a valid hostname or IP address`),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1047,7 +1050,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: host \"example.com#a\" is not a valid hostname or IP address`, "example.com#a"),
@@ -1082,7 +1085,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidUnknown(t),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1092,7 +1095,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1124,7 +1127,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidFalse(t, fmt.Sprintf(`cannot dial server spec.githubAPI.host (%q): dial tcp: lookup nowhere.bad-tld: no such host`, "nowhere.bad-tld:443")),
 							buildHostValidTrue(t, "nowhere.bad-tld"),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1134,7 +1137,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, "nowhere.bad-tld"),
@@ -1165,7 +1168,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validMinimalIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidUnknown(t),
 							buildHostValidFalse(t, "0:0:0:0:0:0:0:1:9876", `host "0:0:0:0:0:0:0:1:9876" is not a valid hostname or IP address`),
 							buildOrganizationsPolicyValidTrue(t, *validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1175,7 +1178,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validMinimalIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"0:0:0:0:0:0:0:1:9876\") is not valid: host \"%s\" is not a valid hostname or IP address`, "0:0:0:0:0:0:0:1:9876"),
@@ -1207,7 +1210,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidFalse(t, fmt.Sprintf(`cannot dial server spec.githubAPI.host (%q): tls: failed to verify certificate: x509: certificate signed by unknown authority`, *validFilledOutIDP.Spec.GitHubAPI.Host)),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1217,7 +1220,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1253,7 +1256,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidFalse(t, fmt.Sprintf(`cannot dial server spec.githubAPI.host (%q): tls: failed to verify certificate: x509: certificate signed by unknown authority`, *validFilledOutIDP.Spec.GitHubAPI.Host)),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1263,7 +1266,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1294,7 +1297,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidFalse(t, "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed"),
@@ -1304,7 +1307,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "False", "Invalid", "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed"),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1335,7 +1338,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidFalse(t, "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed"),
@@ -1345,7 +1348,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "False", "Invalid", "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed"),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1376,7 +1379,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidFalse(t, "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed"),
@@ -1386,7 +1389,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "False", "Invalid", "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed"),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1417,7 +1420,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidFalse(t, "spec.allowAuthentication.organizations.policy must be 'AllGitHubUsers' when spec.allowAuthentication.organizations.allowed is empty"),
@@ -1427,7 +1430,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "False", "Invalid", "spec.allowAuthentication.organizations.policy must be 'AllGitHubUsers' when spec.allowAuthentication.organizations.allowed is empty"),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1458,7 +1461,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedFalse(t, "spec.claims.username is required"),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1468,7 +1471,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidFalse("some-idp-name", "spec.claims.username is required"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1499,7 +1502,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedFalse(t, `spec.claims.username ("a") is not valid`),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1509,7 +1512,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidFalse("some-idp-name", `spec.claims.username (\"a\") is not valid`),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1540,7 +1543,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedFalse(t, "spec.claims.groups is required"),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1550,7 +1553,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidFalse("some-idp-name", "spec.claims.groups is required"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1581,7 +1584,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedFalse(t, `spec.claims.groups ("b") is not valid`),
-							buildClientCredentialsObtainedTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
 							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
@@ -1591,7 +1594,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
 				buildLogForUpdatingClaimsValidFalse("some-idp-name", `spec.claims.groups (\"b\") is not valid`),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1618,7 +1621,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedFalse(
+							buildClientCredentialsSecretValidFalse(
 								t,
 								fmt.Sprintf("secret %q not found", validMinimalIDP.Spec.Client.SecretName),
 								validMinimalIDP.Spec.Client.SecretName,
@@ -1634,7 +1637,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "False", "SecretNotFound", `secret \"some-secret-name\" not found: secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "False", "SecretNotFound", `secret \"some-secret-name\" not found: secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1661,7 +1664,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedFalse(
+							buildClientCredentialsSecretValidFalse(
 								t,
 								`wrong secret type "other-type"`,
 								validMinimalIDP.Spec.Client.SecretName,
@@ -1677,7 +1680,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "False", "SecretNotFound", `wrong secret type \"other-type\": secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "False", "SecretNotFound", `wrong secret type \"other-type\": secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validMinimalIDP.Spec.GitHubAPI.Host),
@@ -1704,7 +1707,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedFalse(
+							buildClientCredentialsSecretValidFalse(
 								t,
 								`missing key "clientID"`,
 								validMinimalIDP.Spec.Client.SecretName,
@@ -1720,7 +1723,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "False", "SecretNotFound", `missing key \"clientID\": secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "False", "SecretNotFound", `missing key \"clientID\": secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1747,7 +1750,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedFalse(
+							buildClientCredentialsSecretValidFalse(
 								t,
 								`missing key "clientSecret"`,
 								validMinimalIDP.Spec.Client.SecretName,
@@ -1763,7 +1766,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "False", "SecretNotFound", `missing key \"clientSecret\": secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "False", "SecretNotFound", `missing key \"clientSecret\": secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validMinimalIDP.Spec.GitHubAPI.Host),
@@ -1790,7 +1793,7 @@ func TestController(t *testing.T) {
 						Phase: v1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
-							buildClientCredentialsObtainedFalse(
+							buildClientCredentialsSecretValidFalse(
 								t,
 								"extra keys found",
 								validMinimalIDP.Spec.Client.SecretName,
@@ -1806,7 +1809,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				buildLogForUpdatingClientCredentialsObtained("minimal-idp-name", "False", "SecretNotFound", `extra keys found: secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
+				buildLogForUpdatingClientCredentialsSecretValid("minimal-idp-name", "False", "SecretNotFound", `extra keys found: secret from spec.client.SecretName (\"some-secret-name\") must be found in namespace \"some-namespace\" with type \"secrets.pinniped.dev/github-client\" and keys \"clientID\" and \"clientSecret\"`),
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
@@ -1852,7 +1855,7 @@ func TestController(t *testing.T) {
 				kubeInformers.Core().V1().Secrets(),
 				logger,
 				controllerlib.WithInformer,
-				frozenClock,
+				frozenClockForLastTransitionTime,
 				dialer,
 			)
 
@@ -1879,7 +1882,7 @@ func TestController(t *testing.T) {
 				// Do not expect any particular order in the cache
 				var actualProvider *upstreamgithub.Provider
 				for _, possibleIDP := range actualIDPList {
-					if possibleIDP.GetName() == tt.wantResultingCache[i].Name {
+					if possibleIDP.GetResourceName() == tt.wantResultingCache[i].Name {
 						var ok bool
 						actualProvider, ok = possibleIDP.(*upstreamgithub.Provider)
 						require.True(t, ok)
@@ -1887,7 +1890,7 @@ func TestController(t *testing.T) {
 					}
 				}
 
-				require.Equal(t, tt.wantResultingCache[i].Name, actualProvider.GetName())
+				require.Equal(t, tt.wantResultingCache[i].Name, actualProvider.GetResourceName())
 				require.Equal(t, tt.wantResultingCache[i].ResourceUID, actualProvider.GetResourceUID())
 				require.Equal(t, tt.wantResultingCache[i].OAuth2Config.ClientID, actualProvider.GetClientID())
 				require.Equal(t, tt.wantResultingCache[i].GroupNameAttribute, actualProvider.GetGroupNameAttribute())
@@ -1924,15 +1927,6 @@ func TestController(t *testing.T) {
 
 				require.NotNil(t, actualIDP, "must find IDP with name %s", tt.wantResultingUpstreams[i].Name)
 				require.Len(t, actualIDP.Status.Conditions, countExpectedConditions)
-
-				// Update all expected conditions to the frozenTime.
-				// TODO: Push this out to the test table
-				for j := range countExpectedConditions {
-					// Get this as a pointer so that we can update the value within the array
-					condition := &tt.wantResultingUpstreams[i].Status.Conditions[j]
-					condition.LastTransitionTime = metav1.Time{Time: frozenClock.Now()}
-				}
-
 				require.Equal(t, tt.wantResultingUpstreams[i], *actualIDP)
 			}
 
@@ -1967,8 +1961,9 @@ func TestController_OnlyWantActions(t *testing.T) {
 	oneHourAgo := metav1.Time{Time: time.Now().Add(-1 * time.Hour)}
 	namespace := "existing-conditions-namespace"
 
-	nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
-	frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
+	wantFrozenTime := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
+	frozenClockForLastTransitionTime := clocktesting.NewFakeClock(wantFrozenTime)
+	wantLastTransitionTime := metav1.Time{Time: wantFrozenTime}
 
 	goodSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2051,7 +2046,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					Message:            "spec.claims.username is required",
 				},
 				{
-					Type:               ClientCredentialsObtained,
+					Type:               ClientCredentialsSecretValid,
 					Status:             metav1.ConditionFalse,
 					ObservedGeneration: 333,
 					LastTransitionTime: oneHourAgo,
@@ -2132,7 +2127,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					for i := range idp.Status.Conditions {
 						idp.Status.Conditions[i].ObservedGeneration = 400
 					}
-					idp.Status.Conditions[0].LastTransitionTime = metav1.Time{Time: nowDoesntMatter}
+					idp.Status.Conditions[0].LastTransitionTime = wantLastTransitionTime
 					wantAction := coretesting.NewUpdateSubresourceAction(githubIDPGVR, "status", namespace, idp)
 					return wantAction
 				}(),
@@ -2158,15 +2153,15 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               ClaimsValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            "spec.claims are valid",
 							},
 							{
-								Type:               ClientCredentialsObtained,
+								Type:               ClientCredentialsSecretValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            `clientID and clientSecret have been read from spec.client.SecretName ("some-secret-name")`,
 							},
@@ -2174,7 +2169,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               GitHubConnectionValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", goodServerDomain),
 							},
@@ -2182,7 +2177,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               HostValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", goodServerDomain),
 							},
@@ -2190,7 +2185,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               OrganizationsPolicyValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            `spec.allowAuthentication.organizations.policy ("AllGitHubUsers") is valid`,
 							},
@@ -2198,7 +2193,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Type:               TLSConfigurationValid,
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
-								LastTransitionTime: metav1.NewTime(frozenClock.Now()),
+								LastTransitionTime: wantLastTransitionTime,
 								Reason:             upstreamwatchers.ReasonSuccess,
 								Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
 							},
@@ -2234,7 +2229,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 				kubeInformers.Core().V1().Secrets(),
 				logger,
 				controllerlib.WithInformer,
-				frozenClock,
+				frozenClockForLastTransitionTime,
 				tls.Dial,
 			)
 

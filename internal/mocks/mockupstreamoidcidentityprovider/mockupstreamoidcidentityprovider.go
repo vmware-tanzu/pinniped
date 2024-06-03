@@ -150,9 +150,9 @@ func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetGroupsClaim() *gomoc
 }
 
 // GetName mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) GetName() string {
+func (m *MockUpstreamOIDCIdentityProviderI) GetResourceName() string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetName")
+	ret := m.ctrl.Call(m, "GetResourceName")
 	ret0, _ := ret[0].(string)
 	return ret0
 }
@@ -160,7 +160,7 @@ func (m *MockUpstreamOIDCIdentityProviderI) GetName() string {
 // GetName indicates an expected call of GetName.
 func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) GetName() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetName", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetName))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResourceName", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).GetResourceName))
 }
 
 // GetResourceUID mocks base method.

@@ -17,7 +17,6 @@ import (
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/idtransform"
-	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -103,7 +102,6 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
 ) (*resolvedprovider.Identity, *resolvedprovider.IdentityLoginExtras, error) {
 	accessToken, err := p.Provider.ExchangeAuthcode(ctx, authCode, redirectURI)
 	if err != nil {
-		plog.WarningErr("failed to exchange authcode using GitHub API", err, "upstreamName", p.Provider.GetName())
 		return nil, nil, httperr.Wrap(http.StatusBadGateway,
 			"failed to exchange authcode using GitHub API",
 			err,
@@ -111,8 +109,14 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) LoginFromCallback(
 	}
 
 	user, err := p.Provider.GetUser(ctx, accessToken, p.GetDisplayName())
-	if err != nil {
-		plog.WarningErr("failed to get user info from GitHub API", err, "upstreamName", p.Provider.GetName())
+
+	if errors.As(err, &upstreamprovider.GitHubLoginDeniedError{}) {
+		// We specifically want errors of type GitHubLoginDeniedError to have a user-displayed message.
+		// Don't wrap the error since we include it in the sprintf here.
+		return nil, nil, httperr.Newf(http.StatusForbidden,
+			"login denied due to configuration on GitHubIdentityProvider with display name %q: %s",
+			p.GetDisplayName(), err)
+	} else if err != nil {
 		return nil, nil, httperr.Wrap(http.StatusUnprocessableEntity,
 			"failed to get user info from GitHub API",
 			err,
@@ -151,8 +155,7 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamRefresh(
 	// Get the user's GitHub identity and groups again using the cached access token.
 	refreshedUserInfo, err := p.Provider.GetUser(ctx, githubSessionData.UpstreamAccessToken, p.GetDisplayName())
 	if err != nil {
-		plog.WarningErr("failed to refresh user info from GitHub API", err, "upstreamName", p.Provider.GetName())
-		return nil, p.refreshErr(errors.New("failed to refresh user info from GitHub API"))
+		return nil, p.refreshErr(err)
 	}
 
 	if refreshedUserInfo.DownstreamSubject != identity.DownstreamSubject {
@@ -172,5 +175,5 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) refreshErr(err error) *
 	return resolvedprovider.ErrUpstreamRefreshError().
 		WithHint("Upstream refresh failed.").
 		WithTrace(err).
-		WithDebugf("provider name: %q, provider type: %q", p.Provider.GetName(), p.GetSessionProviderType())
+		WithDebugf("provider name: %q, provider type: %q", p.Provider.GetResourceName(), p.GetSessionProviderType())
 }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/ory/fosite"
@@ -125,7 +126,9 @@ func TestLoginFromCallback(t *testing.T) {
 		wantGetUserArgs          *oidctestutil.GetUserArgs
 		wantIdentity             *resolvedprovider.Identity
 		wantExtras               *resolvedprovider.IdentityLoginExtras
-		wantErr                  string
+		wantErrMsg               string
+		wantErrResponseMsg       string
+		wantErrStatusCode        int
 	}{
 		{
 			name: "happy path",
@@ -176,13 +179,15 @@ func TestLoginFromCallback(t *testing.T) {
 				Authcode:    "fake-authcode",
 				RedirectURI: "https://fake-redirect-uri",
 			},
-			wantGetUserCall: false,
-			wantIdentity:    nil,
-			wantExtras:      nil,
-			wantErr:         "failed to exchange authcode using GitHub API: fake authcode exchange error",
+			wantGetUserCall:    false,
+			wantIdentity:       nil,
+			wantExtras:         nil,
+			wantErrMsg:         "failed to exchange authcode using GitHub API: fake authcode exchange error",
+			wantErrResponseMsg: "Bad Gateway: failed to exchange authcode using GitHub API",
+			wantErrStatusCode:  http.StatusBadGateway,
 		},
 		{
-			name: "error while getting user info",
+			name: "generic error while getting user info",
 			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
 				WithAccessToken("fake-access-token").
 				WithGetUserError(errors.New("fake user info error")).
@@ -202,9 +207,38 @@ func TestLoginFromCallback(t *testing.T) {
 				AccessToken:    "fake-access-token",
 				IDPDisplayName: "fake-display-name",
 			},
-			wantIdentity: nil,
-			wantExtras:   nil,
-			wantErr:      "failed to get user info from GitHub API: fake user info error",
+			wantIdentity:       nil,
+			wantExtras:         nil,
+			wantErrMsg:         "failed to get user info from GitHub API: fake user info error",
+			wantErrResponseMsg: "Unprocessable Entity: failed to get user info from GitHub API",
+			wantErrStatusCode:  http.StatusUnprocessableEntity,
+		},
+		{
+			name: "loginDenied error while getting user info",
+			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+				WithAccessToken("fake-access-token").
+				WithGetUserError(upstreamprovider.NewGitHubLoginDeniedError("some login denied error")).
+				Build(),
+			idpDisplayName:           "fake-display-name",
+			authcode:                 "fake-authcode",
+			redirectURI:              "https://fake-redirect-uri",
+			wantExchangeAuthcodeCall: true,
+			wantExchangeAuthcodeArgs: &oidctestutil.ExchangeAuthcodeArgs{
+				Ctx:         uniqueCtx,
+				Authcode:    "fake-authcode",
+				RedirectURI: "https://fake-redirect-uri",
+			},
+			wantGetUserCall: true,
+			wantGetUserArgs: &oidctestutil.GetUserArgs{
+				Ctx:            uniqueCtx,
+				AccessToken:    "fake-access-token",
+				IDPDisplayName: "fake-display-name",
+			},
+			wantIdentity:       nil,
+			wantExtras:         nil,
+			wantErrMsg:         `login denied due to configuration on GitHubIdentityProvider with display name "fake-display-name": some login denied error`,
+			wantErrResponseMsg: `Forbidden: login denied due to configuration on GitHubIdentityProvider with display name "fake-display-name": some login denied error`,
+			wantErrStatusCode:  http.StatusForbidden,
 		},
 	}
 
@@ -238,12 +272,17 @@ func TestLoginFromCallback(t *testing.T) {
 				require.Zero(t, test.provider.GetUserCallCount())
 			}
 
-			if test.wantErr == "" {
+			if test.wantErrResponseMsg == "" {
 				require.NoError(t, err)
 			} else {
-				errAsResponder, ok := err.(httperr.Responder)
-				require.True(t, ok)
-				require.EqualError(t, errAsResponder, test.wantErr)
+				require.Implements(t, (*httperr.Responder)(nil), err)
+				errAsResponder := err.(httperr.Responder)
+				rec := httptest.NewRecorder()
+				errAsResponder.Respond(rec)
+				require.Equal(t, test.wantErrStatusCode, rec.Code)
+				require.Equal(t, test.wantErrResponseMsg+"\n", rec.Body.String())
+
+				require.EqualError(t, errAsResponder, test.wantErrMsg)
 			}
 			require.Equal(t, test.wantExtras, loginExtras)
 			require.Equal(t, test.wantIdentity, identity)
@@ -297,7 +336,7 @@ func TestUpstreamRefresh(t *testing.T) {
 			name: "error while getting user info",
 			provider: oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
 				WithName("fake-provider-name").
-				WithGetUserError(errors.New("any error message")).
+				WithGetUserError(errors.New("fake github GetUser error message")).
 				Build(),
 			identity: &resolvedprovider.Identity{
 				UpstreamUsername:       "initial-username",
@@ -313,7 +352,7 @@ func TestUpstreamRefresh(t *testing.T) {
 				IDPDisplayName: "fake-display-name",
 			},
 			wantRefreshedIdentity: nil,
-			wantWrappedErr:        "failed to refresh user info from GitHub API",
+			wantWrappedErr:        "fake github GetUser error message",
 		},
 		{
 			name: "wrong session data type, which should not really happen",

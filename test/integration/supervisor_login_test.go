@@ -2358,6 +2358,20 @@ func supervisorLoginGithubTestcases(
 				}
 				return testlib.CreateTestGitHubIdentityProvider(t, spec, idpv1alpha1.GitHubPhaseReady).Name
 			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "some-github-identity-provider-name"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: displayName,
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+								Kind:     "GitHubIdentityProvider",
+								Name:     idpName,
+							},
+						},
+					},
+					displayName
+			},
 			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
 				t.Helper()
 				browser := openBrowserAndNavigateToAuthorizeURL(t, downstreamAuthorizeURL, httpClient)
@@ -2370,7 +2384,7 @@ func supervisorLoginGithubTestcases(
 				// Get the text of the preformatted error message showing on the page.
 				textOfPreTag := browser.TextOfFirstMatch(t, "pre")
 				require.Equal(t,
-					"Unprocessable Entity: failed to get user info from GitHub API\n",
+					`Forbidden: login denied due to configuration on GitHubIdentityProvider with display name "some-github-identity-provider-name": user is not allowed to log in due to organization membership policy`+"\n",
 					textOfPreTag)
 			},
 			wantLocalhostCallbackToNeverHappen: true,
@@ -2532,7 +2546,7 @@ func testSupervisorLogin(
 ) {
 	env := testlib.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 
 	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.

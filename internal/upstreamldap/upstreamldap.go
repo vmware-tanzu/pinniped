@@ -187,7 +187,7 @@ func closeAndLogError(conn Conn, doingWhat string) {
 }
 
 func (p *Provider) PerformRefresh(ctx context.Context, storedRefreshAttributes upstreamprovider.LDAPRefreshAttributes, idpDisplayName string) ([]string, error) {
-	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetName()})
+	t := trace.FromContext(ctx).Nest("slow ldap refresh attempt", trace.Field{Key: "providerName", Value: p.GetResourceName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 	userDN := storedRefreshAttributes.DN
 
@@ -373,7 +373,7 @@ func (p *Provider) tlsConfig() (*tls.Config, error) {
 }
 
 // GetName returns a name for this upstream provider.
-func (p *Provider) GetName() string {
+func (p *Provider) GetResourceName() string {
 	return p.c.Name
 }
 
@@ -435,7 +435,7 @@ func (p *Provider) AuthenticateUser(ctx context.Context, username, password stri
 }
 
 func (p *Provider) authenticateUserImpl(ctx context.Context, username string, bindFunc func(conn Conn, foundUserDN string) error) (*authenticators.Response, bool, error) {
-	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetName()})
+	t := trace.FromContext(ctx).Nest("slow ldap authenticate user attempt", trace.Field{Key: "providerName", Value: p.GetResourceName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 
 	err := p.validateConfig()
@@ -528,7 +528,7 @@ func (p *Provider) validateConfig() error {
 }
 
 func (p *Provider) SearchForDefaultNamingContext(ctx context.Context) (string, error) {
-	t := trace.FromContext(ctx).Nest("slow ldap attempt when searching for default naming context", trace.Field{Key: "providerName", Value: p.GetName()})
+	t := trace.FromContext(ctx).Nest("slow ldap attempt when searching for default naming context", trace.Field{Key: "providerName", Value: p.GetResourceName()})
 	defer t.LogIfLong(500 * time.Millisecond) // to help users debug slow LDAP searches
 
 	conn, err := p.dial(ctx)
@@ -564,7 +564,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	searchResult, err := conn.Search(p.userSearchRequest(username))
 	if err != nil {
 		plog.All(`error searching for user`,
-			"upstreamName", p.GetName(),
+			"upstreamName", p.GetResourceName(),
 			"username", username,
 			"err", err,
 		)
@@ -573,11 +573,11 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	if len(searchResult.Entries) == 0 {
 		if plog.Enabled(plog.LevelAll) {
 			plog.All("error finding user: user not found (if this username is valid, please check the user search configuration)",
-				"upstreamName", p.GetName(),
+				"upstreamName", p.GetResourceName(),
 				"username", username,
 			)
 		} else {
-			plog.Debug("error finding user: user not found (cowardly avoiding printing username because log level is not 'all')", "upstreamName", p.GetName())
+			plog.Debug("error finding user: user not found (cowardly avoiding printing username because log level is not 'all')", "upstreamName", p.GetResourceName())
 		}
 		return nil, nil
 	}
@@ -632,7 +632,7 @@ func (p *Provider) searchAndBindUser(conn Conn, username string, bindFunc func(c
 	err = bindFunc(conn, userEntry.DN)
 	if err != nil {
 		plog.DebugErr("error binding for user (if this is not the expected dn for this username, please check the user search configuration)",
-			err, "upstreamName", p.GetName(), "username", username, "dn", userEntry.DN)
+			err, "upstreamName", p.GetResourceName(), "username", username, "dn", userEntry.DN)
 		ldapErr := &ldap.Error{}
 		if errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultInvalidCredentials {
 			return nil, nil

@@ -74,7 +74,7 @@ func TestGitHubProvider(t *testing.T) {
 		},
 	}, subject.GetConfig())
 
-	require.Equal(t, "foo", subject.GetName())
+	require.Equal(t, "foo", subject.GetResourceName())
 	require.Equal(t, types.UID("resource-uid-12345"), subject.GetResourceUID())
 	require.Equal(t, "fake-client-id", subject.GetClientID())
 	require.Equal(t, "fake-client-id", subject.GetClientID())
@@ -205,7 +205,8 @@ func TestGetUser(t *testing.T) {
 		buildGitHubClientError error
 		buildMockResponses     func(hubInterface *mockgithubclient.MockGitHubInterface)
 		wantUser               *upstreamprovider.GitHubUser
-		wantErr                string
+		wantErrMsg             string
+		wantErr                error
 	}{
 		{
 			name: "happy path with username=login:id",
@@ -303,7 +304,7 @@ func TestGetUser(t *testing.T) {
 				}, nil)
 				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return([]string{"disallowed-org"}, nil)
 			},
-			wantErr: "user is not allowed to log in due to organization membership policy",
+			wantErr: upstreamprovider.NewGitHubLoginDeniedError("user is not allowed to log in due to organization membership policy"),
 		},
 		{
 			name: "happy path with groups=name",
@@ -390,7 +391,7 @@ func TestGetUser(t *testing.T) {
 				HttpClient: someHttpClient,
 			},
 			buildGitHubClientError: errors.New("error from building a github client"),
-			wantErr:                "error from building a github client",
+			wantErrMsg:             "error from building a github client",
 		},
 		{
 			name: "returns errors from githubClient.GetUserInfo()",
@@ -401,7 +402,7 @@ func TestGetUser(t *testing.T) {
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(nil, errors.New("error from githubClient.GetUserInfo"))
 			},
-			wantErr: "error from githubClient.GetUserInfo",
+			wantErrMsg: "error from githubClient.GetUserInfo",
 		},
 		{
 			name: "returns errors from githubClient.GetOrgMembership()",
@@ -414,7 +415,7 @@ func TestGetUser(t *testing.T) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{}, nil)
 				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(nil, errors.New("error from githubClient.GetOrgMembership"))
 			},
-			wantErr: "error from githubClient.GetOrgMembership",
+			wantErrMsg: "error from githubClient.GetOrgMembership",
 		},
 		{
 			name: "returns errors from githubClient.GetTeamMembership()",
@@ -428,7 +429,7 @@ func TestGetUser(t *testing.T) {
 				mockGitHubInterface.EXPECT().GetOrgMembership(someContext).Return(nil, nil)
 				mockGitHubInterface.EXPECT().GetTeamMembership(someContext, gomock.Any()).Return(nil, errors.New("error from githubClient.GetTeamMembership"))
 			},
-			wantErr: "error from githubClient.GetTeamMembership",
+			wantErrMsg: "error from githubClient.GetTeamMembership",
 		},
 		{
 			name: "bad configuration: UsernameAttribute",
@@ -443,7 +444,7 @@ func TestGetUser(t *testing.T) {
 					ID:    "some-github-id",
 				}, nil)
 			},
-			wantErr: "bad configuration: unknown GitHub username attribute: this-is-not-legal-value-from-the-enum",
+			wantErrMsg: "bad configuration: unknown GitHub username attribute: this-is-not-legal-value-from-the-enum",
 		},
 		{
 			name: "bad configuration: GroupNameAttribute",
@@ -467,7 +468,7 @@ func TestGetUser(t *testing.T) {
 					},
 				}, nil)
 			},
-			wantErr: "bad configuration: unknown GitHub group name attribute: this-is-not-legal-value-from-the-enum",
+			wantErrMsg: "bad configuration: unknown GitHub group name attribute: this-is-not-legal-value-from-the-enum",
 		},
 	}
 	for _, test := range tests {
@@ -493,13 +494,18 @@ func TestGetUser(t *testing.T) {
 			}
 
 			actualUser, actualErr := p.GetUser(context.Background(), accessToken, idpDisplayName)
-			if test.wantErr != "" {
-				require.EqualError(t, actualErr, test.wantErr)
+
+			switch {
+			case test.wantErrMsg != "":
+				require.EqualError(t, actualErr, test.wantErrMsg)
 				require.Nil(t, actualUser)
-				return
+			case test.wantErr != nil:
+				require.Equal(t, test.wantErr, actualErr)
+				require.Nil(t, actualUser)
+			default:
+				require.NoError(t, actualErr)
+				require.Equal(t, test.wantUser, actualUser)
 			}
-			require.NoError(t, actualErr)
-			require.Equal(t, test.wantUser, actualUser)
 		})
 	}
 }

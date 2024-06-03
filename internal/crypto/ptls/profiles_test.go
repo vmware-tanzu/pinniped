@@ -6,7 +6,6 @@ package ptls
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -19,7 +18,6 @@ func TestDefault(t *testing.T) {
 
 	aCertPool := x509.NewCertPool()
 
-	actual := Default(aCertPool)
 	expected := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		CipherSuites: []uint16{
@@ -34,7 +32,7 @@ func TestDefault(t *testing.T) {
 		RootCAs:    aCertPool,
 	}
 
-	require.Equal(t, expected, actual)
+	require.Equal(t, expected, Default(aCertPool))
 }
 
 func TestDefaultLDAP(t *testing.T) {
@@ -42,7 +40,6 @@ func TestDefaultLDAP(t *testing.T) {
 
 	aCertPool := x509.NewCertPool()
 
-	actual := DefaultLDAP(aCertPool)
 	expected := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		CipherSuites: []uint16{
@@ -61,7 +58,7 @@ func TestDefaultLDAP(t *testing.T) {
 		RootCAs:    aCertPool,
 	}
 
-	require.Equal(t, expected, actual)
+	require.Equal(t, expected, DefaultLDAP(aCertPool))
 }
 
 func TestSecure(t *testing.T) {
@@ -69,7 +66,6 @@ func TestSecure(t *testing.T) {
 
 	aCertPool := x509.NewCertPool()
 
-	actual := Secure(aCertPool)
 	expected := &tls.Config{
 		MinVersion:   tls.VersionTLS13,
 		CipherSuites: nil, // TLS 1.3 ciphers are not configurable
@@ -77,19 +73,22 @@ func TestSecure(t *testing.T) {
 		RootCAs:      aCertPool,
 	}
 
-	require.Equal(t, expected, actual)
+	require.Equal(t, expected, Secure(aCertPool))
 }
 
 func TestSecureServing(t *testing.T) {
 	t.Parallel()
 
 	opts := &options.SecureServingOptionsWithLoopback{SecureServingOptions: &options.SecureServingOptions{}}
-	SecureServing(opts)
-	require.Equal(t, options.SecureServingOptionsWithLoopback{
+
+	expected := options.SecureServingOptionsWithLoopback{
 		SecureServingOptions: &options.SecureServingOptions{
 			MinTLSVersion: "VersionTLS13",
 		},
-	}, *opts)
+	}
+
+	SecureServing(opts)
+	require.Equal(t, expected, *opts)
 }
 
 func TestCipherSuitesForDefault(t *testing.T) {
@@ -103,31 +102,17 @@ func TestCipherSuitesForDefault(t *testing.T) {
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
 		}
 
-		actual := cipherSuitesForDefault()
-
-		require.Equal(t, len(expected), len(actual))
-		for _, suite := range actual {
-			require.True(t, slices.Contains(expected, suite.ID))
-		}
+		require.Equal(t, expected, Default(nil).CipherSuites)
 	})
 
 	t.Run("is a subset of TestCipherSuitesForDefaultLDAP", func(t *testing.T) {
-		a1 := cipherSuitesForDefault()
-		a2 := cipherSuitesForDefaultLDAP()
+		defaultSuiteIDs := Default(nil).CipherSuites
+		ldapSuiteIDs := DefaultLDAP(nil).CipherSuites
 
-		require.Greater(t, len(a1), 0)
-		require.GreaterOrEqual(t, len(a2), len(a1))
+		require.Greater(t, len(defaultSuiteIDs), 0)
+		require.GreaterOrEqual(t, len(ldapSuiteIDs), len(defaultSuiteIDs))
 
-		a1ids := sets.New[uint16]()
-		for _, suite := range a1 {
-			a1ids.Insert(suite.ID)
-		}
-		a2ids := sets.New[uint16]()
-		for _, suite := range a1 {
-			a2ids.Insert(suite.ID)
-		}
-
-		require.Equal(t, 0, a1ids.Difference(a2ids).Len())
+		require.Equal(t, 0, sets.New[uint16](defaultSuiteIDs...).Difference(sets.New[uint16](ldapSuiteIDs...)).Len())
 	})
 }
 
@@ -148,30 +133,16 @@ func TestCipherSuitesForDefaultLDAP(t *testing.T) {
 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 		}
 
-		actual := cipherSuitesForDefaultLDAP()
-
-		require.Equal(t, len(expected), len(actual))
-		for _, suite := range actual {
-			require.True(t, slices.Contains(expected, suite.ID))
-		}
+		require.Equal(t, expected, DefaultLDAP(nil).CipherSuites)
 	})
 
 	t.Run("is a superset of TestCipherSuitesForDefault", func(t *testing.T) {
-		a1 := cipherSuitesForDefault()
-		a2 := cipherSuitesForDefaultLDAP()
+		defaultSuiteIDs := Default(nil).CipherSuites
+		ldapSuiteIDs := DefaultLDAP(nil).CipherSuites
 
-		require.Greater(t, len(a1), 0)
-		require.GreaterOrEqual(t, len(a2), len(a1))
+		require.Greater(t, len(defaultSuiteIDs), 0)
+		require.GreaterOrEqual(t, len(ldapSuiteIDs), len(defaultSuiteIDs))
 
-		a1ids := sets.New[uint16]()
-		for _, suite := range a1 {
-			a1ids.Insert(suite.ID)
-		}
-		a2ids := sets.New[uint16]()
-		for _, suite := range a1 {
-			a2ids.Insert(suite.ID)
-		}
-
-		require.True(t, a2ids.IsSuperset(a1ids))
+		require.True(t, sets.New[uint16](ldapSuiteIDs...).IsSuperset(sets.New[uint16](defaultSuiteIDs...)))
 	})
 }

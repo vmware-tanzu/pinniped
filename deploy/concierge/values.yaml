@@ -218,8 +218,12 @@ no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.
 #@schema/title "Allowed Ciphers for TLS 1.2"
 #@ allowed_ciphers_for_tls_onedottwo_desc = "When specified, only the ciphers listed will be used for TLS 1.2. \
 #@ This includes both server-side and client-side TLS connections. \
-#@ Specify only secure cipher names from golang's crypto/tls package. \
-#@ This list must only include cipher suites that Pinniped is configured to accept (see the internal/crypto/ptls package). \
+#@ This list must only include cipher suites that Pinniped is configured to accept \
+#@ (see internal/crypto/ptls/profiles.go and internal/crypto/ptls/profiles_fips_strict.go). \
+#@ Allowing too few ciphers may cause critical parts of Pinniped to be unable to function. For example, \
+#@ Kubernetes pod readiness checks, Pinniped pods acting as a client to the Kubernetes API server, \
+#@ Pinniped pods acting as a client to external identity providers, or Pinniped pods acting as an APIService server \
+#@ all need to be able to function with the allowed TLS cipher suites. \
 #@ An empty array means accept Pinniped's defaults."
 #@schema/desc allowed_ciphers_for_tls_onedottwo_desc
 #@schema/examples ("Example with a few secure ciphers", ["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"])

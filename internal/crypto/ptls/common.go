@@ -30,9 +30,9 @@ type SetAllowedCiphers func([]string) error
 // SetUserConfiguredCiphersForTLSOneDotTwo allows configuration/setup components to constrain the allowed TLS ciphers
 // for TLS1.2.
 func SetUserConfiguredCiphersForTLSOneDotTwo(userConfiguredCiphersForTLSOneDotTwo []string) error {
-	plog.Debug("setting user-configured allowed ciphers for TLS 1.2", "userConfiguredAllowedCipherSuites", userConfiguredCiphersForTLSOneDotTwo)
+	plog.Info("setting user-configured allowed ciphers for TLS 1.2", "userConfiguredAllowedCipherSuites", userConfiguredCiphersForTLSOneDotTwo)
 
-	validatedUserConfiguredAllowedCipherSuites, err := validateAllowedCiphers(hardcodedCipherSuites(), userConfiguredCiphersForTLSOneDotTwo)
+	validatedUserConfiguredAllowedCipherSuites, err := validateAllowedCiphers(allHardcodedAllowedCipherSuites(), userConfiguredCiphersForTLSOneDotTwo)
 	if err != nil {
 		return err
 	}
@@ -190,4 +190,24 @@ func validateAllowedCiphers(
 	}
 
 	return validCiphers, nil
+}
+
+// allHardcodedAllowedCipherSuites returns the full list of all hardcoded ciphers that are allowed for any profile.
+// Note that it will return different values depending on if the code was compiled in FIPS or non-FIPS mode.
+func allHardcodedAllowedCipherSuites() []*tls.CipherSuite {
+	// First append all secure and LDAP cipher suites.
+	result := translateIDIntoSecureCipherSuites(append(secureCipherSuiteIDs, additionalSecureCipherSuiteIDsOnlyForLDAPClients...))
+
+	// Then append any insecure cipher suites that might be allowed.
+	// insecureCipherSuiteIDs is empty except when compiled in FIPS mode.
+	for _, golangInsecureCipherSuite := range tls.InsecureCipherSuites() {
+		if !slices.Contains(golangInsecureCipherSuite.SupportedVersions, tls.VersionTLS12) {
+			continue
+		}
+
+		if slices.Contains(insecureCipherSuiteIDs, golangInsecureCipherSuite.ID) {
+			result = append(result, golangInsecureCipherSuite)
+		}
+	}
+	return result
 }

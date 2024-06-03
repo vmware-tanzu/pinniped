@@ -6,8 +6,8 @@ go 1.22.0
 toolchain go1.22.3
 
 require (
-	k8s.io/api v0.30.0
-	k8s.io/apimachinery v0.30.0
+	k8s.io/api v0.30.1
+	k8s.io/apimachinery v0.30.1
 )
 
 require (

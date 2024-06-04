@@ -246,7 +246,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Cont
 	// Try to find the provider that was originally used to create the stored session.
 	var foundOIDCIdentityProviderI upstreamprovider.UpstreamOIDCIdentityProviderI
 	for _, p := range c.idpCache.GetOIDCIdentityProviders() {
-		if p.GetName() == customSessionData.ProviderName && p.GetResourceUID() == customSessionData.ProviderUID {
+		if p.GetResourceName() == customSessionData.ProviderName && p.GetResourceUID() == customSessionData.ProviderUID {
 			foundOIDCIdentityProviderI = p
 			break
 		}

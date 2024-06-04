@@ -15,6 +15,7 @@ const (
 	IDPTypeOIDC            IDPType = "oidc"
 	IDPTypeLDAP            IDPType = "ldap"
 	IDPTypeActiveDirectory IDPType = "activedirectory"
+	IDPTypeGitHub          IDPType = "github"
 
 	IDPFlowCLIPassword     IDPFlow = "cli_password"
 	IDPFlowBrowserAuthcode IDPFlow = "browser_authcode"

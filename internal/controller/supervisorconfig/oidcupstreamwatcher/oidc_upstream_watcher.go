@@ -54,7 +54,7 @@ const (
 	oidcValidatorCacheTTL = 15 * time.Minute
 
 	// Constants related to conditions.
-	typeClientCredentialsValid             = "ClientCredentialsValid" //nolint:gosec // this is not a credential
+	typeClientCredentialsSecretValid       = "ClientCredentialsSecretValid" //nolint:gosec // this is not a credential
 	typeAdditionalAuthorizeParametersValid = "AdditionalAuthorizeParametersValid"
 	typeOIDCDiscoverySucceeded             = "OIDCDiscoverySucceeded"
 
@@ -260,7 +260,7 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 	return nil
 }
 
-// validateSecret validates the .spec.client.secretName field and returns the appropriate ClientCredentialsValid condition.
+// validateSecret validates the .spec.client.secretName field and returns the appropriate ClientCredentialsSecretValid condition.
 func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *metav1.Condition {
 	secretName := upstream.Spec.Client.SecretName
 
@@ -268,7 +268,7 @@ func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityPr
 	secret, err := c.secretInformer.Lister().Secrets(upstream.Namespace).Get(secretName)
 	if err != nil {
 		return &metav1.Condition{
-			Type:    typeClientCredentialsValid,
+			Type:    typeClientCredentialsSecretValid,
 			Status:  metav1.ConditionFalse,
 			Reason:  upstreamwatchers.ReasonNotFound,
 			Message: err.Error(),
@@ -278,7 +278,7 @@ func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityPr
 	// Validate the secret .type field.
 	if secret.Type != oidcClientSecretType {
 		return &metav1.Condition{
-			Type:    typeClientCredentialsValid,
+			Type:    typeClientCredentialsSecretValid,
 			Status:  metav1.ConditionFalse,
 			Reason:  upstreamwatchers.ReasonWrongType,
 			Message: fmt.Sprintf("referenced Secret %q has wrong type %q (should be %q)", secretName, secret.Type, oidcClientSecretType),
@@ -290,7 +290,7 @@ func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityPr
 	clientSecret := secret.Data[clientSecretDataKey]
 	if len(clientID) == 0 || len(clientSecret) == 0 {
 		return &metav1.Condition{
-			Type:    typeClientCredentialsValid,
+			Type:    typeClientCredentialsSecretValid,
 			Status:  metav1.ConditionFalse,
 			Reason:  upstreamwatchers.ReasonMissingKeys,
 			Message: fmt.Sprintf("referenced Secret %q is missing required keys %q", secretName, []string{clientIDDataKey, clientSecretDataKey}),
@@ -301,7 +301,7 @@ func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityPr
 	result.Config.ClientID = string(clientID)
 	result.Config.ClientSecret = string(clientSecret)
 	return &metav1.Condition{
-		Type:    typeClientCredentialsValid,
+		Type:    typeClientCredentialsSecretValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  upstreamwatchers.ReasonSuccess,
 		Message: "loaded client credentials",
@@ -412,7 +412,7 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1al
 	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
-	hadErrorCondition := conditionsutil.MergeIDPConditions(conditions, upstream.Generation, &updated.Status.Conditions, log)
+	hadErrorCondition := conditionsutil.MergeConditions(conditions, upstream.Generation, &updated.Status.Conditions, log, metav1.Now())
 
 	updated.Status.Phase = v1alpha1.PhaseReady
 	if hadErrorCondition {

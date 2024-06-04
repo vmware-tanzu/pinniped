@@ -36,14 +36,11 @@ type PasswordCredentialsGrantAndValidateTokensArgs struct {
 	Password string
 }
 
-// PerformRefreshArgs is used to spy on calls to
+// PerformOIDCRefreshArgs is used to spy on calls to
 // TestUpstreamOIDCIdentityProvider.PerformRefreshFunc().
-type PerformRefreshArgs struct {
-	Ctx              context.Context
-	RefreshToken     string
-	DN               string
-	ExpectedUsername string
-	ExpectedSubject  string
+type PerformOIDCRefreshArgs struct {
+	Ctx          context.Context
+	RefreshToken string
 }
 
 // RevokeTokenArgs is used to spy on calls to
@@ -105,7 +102,7 @@ type TestUpstreamOIDCIdentityProvider struct {
 	passwordCredentialsGrantAndValidateTokensCallCount int
 	passwordCredentialsGrantAndValidateTokensArgs      []*PasswordCredentialsGrantAndValidateTokensArgs
 	performRefreshCallCount                            int
-	performRefreshArgs                                 []*PerformRefreshArgs
+	performRefreshArgs                                 []*PerformOIDCRefreshArgs
 	revokeTokenCallCount                               int
 	revokeTokenArgs                                    []*RevokeTokenArgs
 	validateTokenAndMergeWithUserInfoCallCount         int
@@ -126,7 +123,7 @@ func (u *TestUpstreamOIDCIdentityProvider) GetAdditionalClaimMappings() map[stri
 	return u.AdditionalClaimMappings
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) GetName() string {
+func (u *TestUpstreamOIDCIdentityProvider) GetResourceName() string {
 	return u.Name
 }
 
@@ -217,10 +214,10 @@ func (u *TestUpstreamOIDCIdentityProvider) PasswordCredentialsGrantAndValidateTo
 
 func (u *TestUpstreamOIDCIdentityProvider) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
 	if u.performRefreshArgs == nil {
-		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+		u.performRefreshArgs = make([]*PerformOIDCRefreshArgs, 0)
 	}
 	u.performRefreshCallCount++
-	u.performRefreshArgs = append(u.performRefreshArgs, &PerformRefreshArgs{
+	u.performRefreshArgs = append(u.performRefreshArgs, &PerformOIDCRefreshArgs{
 		Ctx:          ctx,
 		RefreshToken: refreshToken,
 	})
@@ -244,9 +241,9 @@ func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshCallCount() int {
 	return u.performRefreshCallCount
 }
 
-func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshArgs(call int) *PerformRefreshArgs {
+func (u *TestUpstreamOIDCIdentityProvider) PerformRefreshArgs(call int) *PerformOIDCRefreshArgs {
 	if u.performRefreshArgs == nil {
-		u.performRefreshArgs = make([]*PerformRefreshArgs, 0)
+		u.performRefreshArgs = make([]*PerformOIDCRefreshArgs, 0)
 	}
 	return u.performRefreshArgs[call]
 }

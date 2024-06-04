@@ -122,7 +122,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 	spec.Run(t, "Sync", func(t *testing.T, when spec.G, it spec.S) {
 		const (
 			installedInNamespace         = "some-namespace"
-			currentSessionStorageVersion = "7" // update this when you update the storage version in the production code
+			currentSessionStorageVersion = "8" // update this when you update the storage version in the production code
 		)
 
 		var (

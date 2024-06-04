@@ -43,7 +43,6 @@ func TestServerIPv6(t *testing.T, handler http.Handler, f func(*httptest.Server)
 		Listener: listener,
 		Config:   &http.Server{Handler: handler}, //nolint:gosec //ReadHeaderTimeout is not needed for a localhost listener
 	}
-
 	return testServer(t, server, f)
 }
 

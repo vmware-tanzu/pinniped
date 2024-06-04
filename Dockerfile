@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 ARG BUILD_IMAGE=golang:1.22.3@sha256:f43c6f049f04cbbaeb28f0aad3eea15274a7d0a7899a617d0037aec48d7ab010

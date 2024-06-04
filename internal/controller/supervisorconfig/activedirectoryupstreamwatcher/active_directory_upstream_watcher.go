@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package activedirectoryupstreamwatcher implements a controller which watches ActiveDirectoryIdentityProviders.
@@ -344,7 +344,7 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 		UIDAttributeParsingOverrides: map[string]func(*ldap.Entry) (string, error){
 			"objectGUID": microsoftUUIDFromBinaryAttr("objectGUID"),
 		},
-		RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.RefreshAttributes) error{
+		RefreshAttributeChecks: map[string]func(*ldap.Entry, upstreamprovider.LDAPRefreshAttributes) error{
 			pwdLastSetAttribute:                 attributeUnchangedSinceLogin(pwdLastSetAttribute),
 			userAccountControlAttribute:         validUserAccountControl,
 			userAccountControlComputedAttribute: validComputedUserAccountControl,
@@ -368,7 +368,7 @@ func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, ups
 	log := plog.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
-	hadErrorCondition := conditionsutil.MergeIDPConditions(conditions, upstream.Generation, &updated.Status.Conditions, log)
+	hadErrorCondition := conditionsutil.MergeConditions(conditions, upstream.Generation, &updated.Status.Conditions, log, metav1.Now())
 
 	updated.Status.Phase = v1alpha1.ActiveDirectoryPhaseReady
 	if hadErrorCondition {
@@ -445,7 +445,7 @@ func getDomainFromDistinguishedName(distinguishedName string) (string, error) {
 }
 
 //nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
-var validUserAccountControl = func(entry *ldap.Entry, _ upstreamprovider.RefreshAttributes) error {
+var validUserAccountControl = func(entry *ldap.Entry, _ upstreamprovider.LDAPRefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlAttribute))
 	if err != nil {
 		return err
@@ -459,7 +459,7 @@ var validUserAccountControl = func(entry *ldap.Entry, _ upstreamprovider.Refresh
 }
 
 //nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
-var validComputedUserAccountControl = func(entry *ldap.Entry, _ upstreamprovider.RefreshAttributes) error {
+var validComputedUserAccountControl = func(entry *ldap.Entry, _ upstreamprovider.LDAPRefreshAttributes) error {
 	userAccountControl, err := strconv.Atoi(entry.GetAttributeValue(userAccountControlComputedAttribute))
 	if err != nil {
 		return err
@@ -473,8 +473,8 @@ var validComputedUserAccountControl = func(entry *ldap.Entry, _ upstreamprovider
 }
 
 //nolint:gochecknoglobals // this needs to be a global variable so that tests can check pointer equality
-var attributeUnchangedSinceLogin = func(attribute string) func(*ldap.Entry, upstreamprovider.RefreshAttributes) error {
-	return func(entry *ldap.Entry, storedAttributes upstreamprovider.RefreshAttributes) error {
+var attributeUnchangedSinceLogin = func(attribute string) func(*ldap.Entry, upstreamprovider.LDAPRefreshAttributes) error {
+	return func(entry *ldap.Entry, storedAttributes upstreamprovider.LDAPRefreshAttributes) error {
 		prevAttributeValue := storedAttributes.AdditionalAttributes[attribute]
 		newValues := entry.GetRawAttributeValues(attribute)
 

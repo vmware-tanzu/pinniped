@@ -29,7 +29,7 @@ This guide assumes that you are using at least that version.
 ## Summary
 
 External identity providers may be configured in the Supervisor by creating OIDCIdentityProvider,
-ActiveDirectoryIdentityProvider, or LDAPIdentityProvider resources in the same namespace as the Supervisor.
+ActiveDirectoryIdentityProvider, LDAPIdentityProvider, or GitHubIdentityProvider resources in the same namespace as the Supervisor.
 
 There are two ways to configure which of these external identity providers shall be used by a FederationDomain.
 
@@ -37,7 +37,7 @@ There are two ways to configure which of these external identity providers shall
    the one and only identity provider that is configured in the same namespace. This provides backwards compatibility
    with older configurations of Supervisors from before the `spec.identityProviders` setting was added to the
    FederationDomain resource. There must be exactly one OIDCIdentityProvider,
-   ActiveDirectoryIdentityProvider, or LDAPIdentityProvider resource in the same namespace as the Supervisor.
+   ActiveDirectoryIdentityProvider, LDAPIdentityProvider, or GitHubIdentityProvider resource in the same namespace as the Supervisor.
    If there are no identity provider resources, or if there are more than one, then the FederationDomain will
    not allow any users to authenticate, and a error message will be shown in its `status`.
 
@@ -133,8 +133,8 @@ and group names.
 
 ## Identity transformations and policies
 
-When a user authenticates, the configuration of the OIDCIdentityProvider, ActiveDirectoryIdentityProvider, or 
-LDAPIdentityProvider resource determines how the user's username and group names will be extracted from the external
+When a user authenticates, the configuration of the OIDCIdentityProvider, ActiveDirectoryIdentityProvider,
+LDAPIdentityProvider, or GitHubIdentityProvider resource determines how the user's username and group names will be extracted from the external
 identity provider in a protocol-specific way (e.g. via OIDC ID token claims or LDAP record attributes).
 
 Then, operating on the username and group names extracted from the external IDP:
@@ -217,7 +217,7 @@ act as living documentation for your fellow administrators, and also act as unit
 
 Each example declares inputs for the whole pipeline of expressions, and also declares the expected results of the
 entire pipeline running on those inputs. The inputs are examples of the username and list of group names that might
-be determined by the related OIDCIdentityProvider, ActiveDirectoryIdentityProvider, or LDAPIdentityProvider resource.
+be determined by the related OIDCIdentityProvider, ActiveDirectoryIdentityProvider, LDAPIdentityProvider, or GitHubIdentityProvider resource.
 The expected outputs are the username and list of group names, or the authentication rejection, for which your pipeline
 should result upon the given inputs.
 

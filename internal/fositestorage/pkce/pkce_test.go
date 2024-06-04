@@ -29,7 +29,7 @@ import (
 
 const (
 	namespace       = "test-ns"
-	expectedVersion = "7" // update this when you update the storage version in the production code
+	expectedVersion = "8" // update this when you update the storage version in the production code
 )
 
 var (

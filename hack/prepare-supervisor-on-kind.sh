@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -42,6 +42,7 @@ source hack/lib/helpers.sh
 use_oidc_upstream=no
 use_ldap_upstream=no
 use_ad_upstream=no
+use_github_upstream=no
 use_flow=""
 while (("$#")); do
   case "$1" in
@@ -67,6 +68,10 @@ while (("$#")); do
     use_oidc_upstream=yes
     shift
     ;;
+  --github)
+    use_github_upstream=yes
+    shift
+    ;;
   --ad)
     # Use an ActiveDirectoryIdentityProvider.
     # This assumes that you used the --get-active-directory-vars flag with hack/prepare-for-integration-tests.sh.
@@ -84,8 +89,8 @@ while (("$#")); do
   esac
 done
 
-if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" && "$use_ad_upstream" == "no" ]]; then
-  log_error "Error: Please use --oidc, --ldap, or --ad to specify which type(s) of upstream identity provider(s) you would like. May use one or multiple."
+if [[ "$use_oidc_upstream" == "no" && "$use_ldap_upstream" == "no" && "$use_ad_upstream" == "no" && "$use_github_upstream" == "no" ]]; then
+  log_error "Error: Please use --oidc, --ldap, --ad, or --github to specify which type(s) of upstream identity provider(s) you would like. May use one or multiple."
   exit 1
 fi
 
@@ -290,6 +295,39 @@ EOF
     --dry-run=client --output yaml | kubectl apply -f -
 fi
 
+if [[ "$use_github_upstream" == "yes" ]]; then
+  # Make an GitHubIdentityProvider.  Needs to be configured with an actual GitHub App or GitHub OAuth App.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+kind: GitHubIdentityProvider
+metadata:
+  name: my-github-provider
+spec:
+  client:
+    secretName: my-github-provider-client-secret
+  allowAuthentication:
+    organizations:
+      policy: AllGitHubUsers
+EOF
+
+  # Make a Secret for the above GitHubIdentityProvider to describe the GitHub client configured.
+  cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
+apiVersion: v1
+kind: Secret
+type: "secrets.pinniped.dev/github-client"
+metadata:
+  name: my-github-provider-client-secret
+stringData:
+  clientID: "$PINNIPED_TEST_GITHUB_APP_CLIENT_ID"
+  clientSecret: "$PINNIPED_TEST_GITHUB_APP_CLIENT_SECRET"
+EOF
+
+  # Grant the test user some RBAC permissions so we can play with kubectl as that user.
+  kubectl create clusterrolebinding github-test-user-can-view --clusterrole view \
+    --user "$PINNIPED_TEST_GITHUB_USER_USERNAME:$PINNIPED_TEST_GITHUB_USERID" \
+    --dry-run=client --output yaml | kubectl apply -f -
+fi
+
 # Create a CA and TLS serving certificates for the Supervisor's FederationDomain.
 if [[ ! -f "$root_ca_crt_path" ]]; then
   step certificate create \
@@ -406,11 +444,23 @@ if [[ "$use_ad_upstream" == "yes" ]]; then
   # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
   cat <<EOF >>$fd_file
 
-    - displayName: "My AD IDP"
+    - displayName: "My AD IDP 🚀"
       objectRef:
         apiGroup: idp.supervisor.pinniped.dev
         kind: ActiveDirectoryIdentityProvider
         name: my-ad-provider
+EOF
+fi
+
+if [[ "$use_github_upstream" == "yes" ]]; then
+  # Indenting the heredoc by 4 spaces to make it indented the correct amount in the FederationDomain below.
+  cat <<EOF >>$fd_file
+
+    - displayName: "My GitHub IDP 🚀"
+      objectRef:
+        apiGroup: idp.supervisor.pinniped.dev
+        kind: GitHubIdentityProvider
+        name: my-github-provider
 EOF
 fi
 
@@ -496,6 +546,11 @@ if [[ "$use_ad_upstream" == "yes" ]]; then
   https_proxy="$proxy_server" no_proxy="$proxy_except" \
     ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type activedirectory >kubeconfig-ad.yaml
 fi
+if [[ "$use_github_upstream" == "yes" ]]; then
+  echo "Generating GitHub kubeconfig..."
+  https_proxy="$proxy_server" no_proxy="$proxy_except" \
+    ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type github >kubeconfig-github.yaml
+fi
 
 # Clear the local CLI cache to ensure that the kubectl command below will need to perform a fresh login.
 rm -f "$HOME/.config/pinniped/sessions.yaml"
@@ -534,6 +589,12 @@ if [[ "$use_ad_upstream" == "yes" ]]; then
   echo
 fi
 
+if [[ "$use_github_upstream" == "yes" ]]; then
+  echo "    GitHub Username: $PINNIPED_TEST_GITHUB_USER_USERNAME (or use your own account)"
+  echo "    GitHub Password: $PINNIPED_TEST_GITHUB_USER_PASSWORD (also requires OTP, or use your own account)"
+  echo
+fi
+
 # Echo the commands that may be used to login and print the identity of the currently logged in user.
 # Once the CLI has cached your tokens, it will automatically refresh your short-lived credentials whenever
 # they expire, so you should not be prompted to log in again for the rest of the day.
@@ -550,5 +611,10 @@ fi
 if [[ "$use_ad_upstream" == "yes" ]]; then
   echo "To log in using AD, run:"
   echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-ad.yaml"
+  echo
+fi
+if [[ "$use_github_upstream" == "yes" ]]; then
+  echo "To log in using GitHub, run:"
+  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-github.yaml"
   echo
 fi

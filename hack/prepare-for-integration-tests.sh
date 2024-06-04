@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -31,6 +31,7 @@ clean_kind=no
 api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 dockerfile_path=""
 get_active_directory_vars="" # specify a filename for a script to get AD related env variables
+get_github_vars="" # specify a filename for a script to get GitHub related env variables
 alternate_deploy="undefined"
 pre_install="undefined"
 
@@ -66,6 +67,16 @@ while (("$#")); do
       exit 1
     fi
     get_active_directory_vars=$1
+    shift
+    ;;
+  --get-github-vars)
+    shift
+    # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "--get-github-vars requires a script name to be specified"
+      exit 1
+    fi
+    get_github_vars=$1
     shift
     ;;
   --dockerfile-path)
@@ -121,6 +132,7 @@ if [[ "$help" == "yes" ]]; then
   log_note "   -g, --api-group-suffix:          deploy Pinniped with an alternate API group suffix"
   log_note "   -s, --skip-build:                reuse the most recently built image of the app instead of building"
   log_note "   -a, --get-active-directory-vars: specify a script that exports active directory environment variables"
+  log_note "       --get-github-vars:           specify a script that exports GitHub environment variables"
   log_note "       --alternate-deploy:          specify an alternate deploy script to install all components of Pinniped"
   log_note "       --pre-install:               specify an pre-install script such as a build script"
   exit 1
@@ -451,6 +463,15 @@ export PINNIPED_TEST_SHELL_CONTAINER_IMAGE="ghcr.io/pinniped-ci-bot/test-kubectl
 # found in pinniped/test/testlib/env.go.
 if [[ "$get_active_directory_vars" != "" ]]; then
   source $get_active_directory_vars
+fi
+
+# We can't set up an in-cluster GitHub instance, but
+# if you have a GitHub account that you wish to run the tests against,
+# specify a script to set the GitHub environment variables.
+# You will need to set the environment variables that start with "PINNIPED_TEST_GITHUB_"
+# found in pinniped/test/testlib/env.go.
+if [[ "$get_github_vars" != "" ]]; then
+  source $get_github_vars
 fi
 
 read -r -d '' PINNIPED_TEST_CLUSTER_CAPABILITY_YAML << PINNIPED_TEST_CLUSTER_CAPABILITY_YAML_EOF || true

@@ -8,6 +8,8 @@ import (
 
 	"github.com/gorilla/securecookie"
 	"github.com/stretchr/testify/require"
+
+	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 )
 
 // ExpectedUpstreamStateParamFormat is a separate type from the production code to ensure that the state
@@ -52,8 +54,13 @@ func (b *UpstreamStateParamBuilder) WithPKCE(pkce string) *UpstreamStateParamBui
 	return b
 }
 
-func (b *UpstreamStateParamBuilder) WithUpstreamIDPType(upstreamIDPType string) *UpstreamStateParamBuilder {
-	b.T = upstreamIDPType
+func (b *UpstreamStateParamBuilder) WithUpstreamIDPType(upstreamIDPType idpdiscoveryv1alpha1.IDPType) *UpstreamStateParamBuilder {
+	b.T = string(upstreamIDPType)
+	return b
+}
+
+func (b *UpstreamStateParamBuilder) WithUpstreamIDPName(upstreamIDPName string) *UpstreamStateParamBuilder {
+	b.U = upstreamIDPName
 	return b
 }
 

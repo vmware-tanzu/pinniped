@@ -11,6 +11,7 @@ import (
 
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedgithub"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedoidc"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -24,6 +25,7 @@ type TestFederationDomainIdentityProvidersListerFinder struct {
 	upstreamOIDCIdentityProviders            []*oidctestutil.TestUpstreamOIDCIdentityProvider
 	upstreamLDAPIdentityProviders            []*oidctestutil.TestUpstreamLDAPIdentityProvider
 	upstreamActiveDirectoryIdentityProviders []*oidctestutil.TestUpstreamLDAPIdentityProvider
+	upstreamGitHubIdentityProviders          []*oidctestutil.TestUpstreamGitHubIdentityProvider
 	defaultIDPDisplayName                    string
 }
 
@@ -37,7 +39,7 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) IDPCount() int {
 
 func (t *TestFederationDomainIdentityProvidersListerFinder) GetIdentityProviders() []resolvedprovider.FederationDomainResolvedIdentityProvider {
 	fdIDPs := make([]resolvedprovider.FederationDomainResolvedIdentityProvider,
-		len(t.upstreamOIDCIdentityProviders)+len(t.upstreamLDAPIdentityProviders)+len(t.upstreamActiveDirectoryIdentityProviders))
+		len(t.upstreamOIDCIdentityProviders)+len(t.upstreamLDAPIdentityProviders)+len(t.upstreamActiveDirectoryIdentityProviders)+len(t.upstreamGitHubIdentityProviders))
 	i := 0
 	for _, testIDP := range t.upstreamOIDCIdentityProviders {
 		fdIDP := &resolvedoidc.FederationDomainResolvedOIDCIdentityProvider{
@@ -64,6 +66,16 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) GetIdentityProviders
 			DisplayName:         testIDP.DisplayNameForFederationDomain,
 			Provider:            testIDP,
 			SessionProviderType: psession.ProviderTypeActiveDirectory,
+			Transforms:          testIDP.TransformsForFederationDomain,
+		}
+		fdIDPs[i] = fdIDP
+		i++
+	}
+	for _, testIDP := range t.upstreamGitHubIdentityProviders {
+		fdIDP := &resolvedgithub.FederationDomainResolvedGitHubIdentityProvider{
+			DisplayName:         testIDP.DisplayNameForFederationDomain,
+			Provider:            testIDP,
+			SessionProviderType: psession.ProviderTypeGitHub,
 			Transforms:          testIDP.TransformsForFederationDomain,
 		}
 		fdIDPs[i] = fdIDP
@@ -110,6 +122,16 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) FindUpstreamIDPByDis
 			}, nil
 		}
 	}
+	for _, testIDP := range t.upstreamGitHubIdentityProviders {
+		if upstreamIDPDisplayName == testIDP.DisplayNameForFederationDomain {
+			return &resolvedgithub.FederationDomainResolvedGitHubIdentityProvider{
+				DisplayName:         testIDP.DisplayNameForFederationDomain,
+				Provider:            testIDP,
+				SessionProviderType: psession.ProviderTypeGitHub,
+				Transforms:          testIDP.TransformsForFederationDomain,
+			}, nil
+		}
+	}
 	return nil, fmt.Errorf("did not find IDP with name %q", upstreamIDPDisplayName)
 }
 
@@ -125,12 +147,17 @@ func (t *TestFederationDomainIdentityProvidersListerFinder) SetActiveDirectoryId
 	t.upstreamActiveDirectoryIdentityProviders = providers
 }
 
+func (t *TestFederationDomainIdentityProvidersListerFinder) SetGitHubIdentityProviders(providers []*oidctestutil.TestUpstreamGitHubIdentityProvider) {
+	t.upstreamGitHubIdentityProviders = providers
+}
+
 // UpstreamIDPListerBuilder can be used to build either a dynamicupstreamprovider.DynamicUpstreamIDPProvider
 // or a FederationDomainIdentityProvidersListerFinderI for testing.
 type UpstreamIDPListerBuilder struct {
 	upstreamOIDCIdentityProviders            []*oidctestutil.TestUpstreamOIDCIdentityProvider
 	upstreamLDAPIdentityProviders            []*oidctestutil.TestUpstreamLDAPIdentityProvider
 	upstreamActiveDirectoryIdentityProviders []*oidctestutil.TestUpstreamLDAPIdentityProvider
+	upstreamGitHubIdentityProviders          []*oidctestutil.TestUpstreamGitHubIdentityProvider
 	defaultIDPDisplayName                    string
 }
 
@@ -149,6 +176,11 @@ func (b *UpstreamIDPListerBuilder) WithActiveDirectory(upstreamActiveDirectoryId
 	return b
 }
 
+func (b *UpstreamIDPListerBuilder) WithGitHub(upstreamGithubIdentityProviders ...*oidctestutil.TestUpstreamGitHubIdentityProvider) *UpstreamIDPListerBuilder {
+	b.upstreamGitHubIdentityProviders = append(b.upstreamGitHubIdentityProviders, upstreamGithubIdentityProviders...)
+	return b
+}
+
 func (b *UpstreamIDPListerBuilder) WithDefaultIDPDisplayName(defaultIDPDisplayName string) *UpstreamIDPListerBuilder {
 	b.defaultIDPDisplayName = defaultIDPDisplayName
 	return b
@@ -159,6 +191,7 @@ func (b *UpstreamIDPListerBuilder) BuildFederationDomainIdentityProvidersListerF
 		upstreamOIDCIdentityProviders:            b.upstreamOIDCIdentityProviders,
 		upstreamLDAPIdentityProviders:            b.upstreamLDAPIdentityProviders,
 		upstreamActiveDirectoryIdentityProviders: b.upstreamActiveDirectoryIdentityProviders,
+		upstreamGitHubIdentityProviders:          b.upstreamGitHubIdentityProviders,
 		defaultIDPDisplayName:                    b.defaultIDPDisplayName,
 	}
 }
@@ -183,6 +216,12 @@ func (b *UpstreamIDPListerBuilder) BuildDynamicUpstreamIDPProvider() dynamicupst
 		adUpstreams[i] = upstreamprovider.UpstreamLDAPIdentityProviderI(b.upstreamActiveDirectoryIdentityProviders[i])
 	}
 	idpProvider.SetActiveDirectoryIdentityProviders(adUpstreams)
+
+	githubUpstreams := make([]upstreamprovider.UpstreamGithubIdentityProviderI, len(b.upstreamGitHubIdentityProviders))
+	for i := range b.upstreamGitHubIdentityProviders {
+		githubUpstreams[i] = upstreamprovider.UpstreamGithubIdentityProviderI(b.upstreamGitHubIdentityProviders[i])
+	}
+	idpProvider.SetGitHubIdentityProviders(githubUpstreams)
 
 	return idpProvider
 }
@@ -224,7 +263,7 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPasswordCredentialsG
 	)
 }
 
-func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToExchangeAuthcodeAndValidateTokens(
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneOIDCAuthcodeExchange(
 	t *testing.T,
 	expectedPerformedByUpstreamName string,
 	expectedArgs *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs,
@@ -232,79 +271,170 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToExchangeAuthcodeAndVal
 	t.Helper()
 	var actualArgs *oidctestutil.ExchangeAuthcodeAndValidateTokenArgs
 	var actualNameOfUpstreamWhichMadeCall string
-	actualCallCountAcrossAllOIDCUpstreams := 0
-	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		callCountOnThisUpstream := upstreamOIDC.ExchangeAuthcodeAndValidateTokensCallCount()
-		actualCallCountAcrossAllOIDCUpstreams += callCountOnThisUpstream
+	actualCallCount := 0
+	for _, upstream := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstream.ExchangeAuthcodeAndValidateTokensCallCount()
+		actualCallCount += callCountOnThisUpstream
 		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
-			actualArgs = upstreamOIDC.ExchangeAuthcodeAndValidateTokensArgs(0)
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = upstream.ExchangeAuthcodeAndValidateTokensArgs(0)
 		}
 	}
-	require.Equal(t, 1, actualCallCountAcrossAllOIDCUpstreams,
-		"should have been exactly one call to ExchangeAuthcodeAndValidateTokens() by all OIDC upstreams",
+	require.Equal(t, 1, actualCallCount,
+		"expected exactly one call to OIDC ExchangeAuthcodeAndValidateTokens()",
 	)
 	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"ExchangeAuthcodeAndValidateTokens() was called on the wrong OIDC upstream",
+		"OIDC ExchangeAuthcodeAndValidateTokens() was called on the wrong upstream name",
 	)
 	require.Equal(t, expectedArgs, actualArgs)
 }
 
-func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToExchangeAuthcodeAndValidateTokens(t *testing.T) {
-	t.Helper()
-	actualCallCountAcrossAllOIDCUpstreams := 0
-	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		actualCallCountAcrossAllOIDCUpstreams += upstreamOIDC.ExchangeAuthcodeAndValidateTokensCallCount()
-	}
-	require.Equal(t, 0, actualCallCountAcrossAllOIDCUpstreams,
-		"expected exactly zero calls to ExchangeAuthcodeAndValidateTokens()",
-	)
-}
-
-func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToPerformRefresh(
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneGitHubAuthcodeExchange(
 	t *testing.T,
 	expectedPerformedByUpstreamName string,
-	expectedArgs *oidctestutil.PerformRefreshArgs,
+	expectedArgs *oidctestutil.ExchangeAuthcodeArgs,
 ) {
 	t.Helper()
-	var actualArgs *oidctestutil.PerformRefreshArgs
+	var actualArgs *oidctestutil.ExchangeAuthcodeArgs
 	var actualNameOfUpstreamWhichMadeCall string
-	actualCallCountAcrossAllUpstreams := 0
-	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
-		callCountOnThisUpstream := upstreamOIDC.PerformRefreshCallCount()
-		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
+	actualCallCount := 0
+	for _, upstream := range b.upstreamGitHubIdentityProviders {
+		callCountOnThisUpstream := upstream.ExchangeAuthcodeCallCount()
+		actualCallCount += callCountOnThisUpstream
 		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamOIDC.Name
-			actualArgs = upstreamOIDC.PerformRefreshArgs(0)
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = upstream.ExchangeAuthcodeArgs(0)
 		}
 	}
-	for _, upstreamLDAP := range b.upstreamLDAPIdentityProviders {
-		callCountOnThisUpstream := upstreamLDAP.PerformRefreshCallCount()
-		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
-		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamLDAP.Name
-			actualArgs = upstreamLDAP.PerformRefreshArgs(0)
-		}
-	}
-	for _, upstreamAD := range b.upstreamActiveDirectoryIdentityProviders {
-		callCountOnThisUpstream := upstreamAD.PerformRefreshCallCount()
-		actualCallCountAcrossAllUpstreams += callCountOnThisUpstream
-		if callCountOnThisUpstream == 1 {
-			actualNameOfUpstreamWhichMadeCall = upstreamAD.Name
-			actualArgs = upstreamAD.PerformRefreshArgs(0)
-		}
-	}
-	require.Equal(t, 1, actualCallCountAcrossAllUpstreams,
-		"should have been exactly one call to PerformRefresh() by all upstreams",
+	require.Equal(t, 1, actualCallCount,
+		"expected exactly one call to GitHub ExchangeAuthcode()",
 	)
 	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
-		"PerformRefresh() was called on the wrong upstream",
+		"GitHub ExchangeAuthcode() was called on the wrong upstream name",
 	)
 	require.Equal(t, expectedArgs, actualArgs)
 }
 
-func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *testing.T) {
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroAuthcodeExchanges(t *testing.T) {
 	t.Helper()
+	actualCallCount := 0
+	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
+		actualCallCount += upstreamOIDC.ExchangeAuthcodeAndValidateTokensCallCount()
+	}
+	for _, upstreamGitHub := range b.upstreamGitHubIdentityProviders {
+		actualCallCount += upstreamGitHub.ExchangeAuthcodeCallCount()
+	}
+
+	require.Equal(t, 0, actualCallCount,
+		"expected exactly zero calls to OIDC ExchangeAuthcodeAndValidateTokens() or GitHub ExchangeAuthcode()",
+	)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToOIDCPerformRefresh(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *oidctestutil.PerformOIDCRefreshArgs,
+) {
+	t.Helper()
+	var actualArgs *oidctestutil.PerformOIDCRefreshArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	for _, upstream := range b.upstreamOIDCIdentityProviders {
+		callCountOnThisUpstream := upstream.PerformRefreshCallCount()
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = upstream.PerformRefreshArgs(0)
+		}
+	}
+	require.Equal(t, 1, b.CountAllCallsToAnyUpstreamRefresh(),
+		"should have been exactly one call to upstream refresh by all upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"upstream refresh was called on the wrong upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToActiveDirectoryPerformRefresh(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *oidctestutil.PerformLDAPRefreshArgs,
+) {
+	t.Helper()
+	var actualArgs *oidctestutil.PerformLDAPRefreshArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	for _, upstream := range b.upstreamActiveDirectoryIdentityProviders {
+		callCountOnThisUpstream := upstream.PerformRefreshCallCount()
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = upstream.PerformRefreshArgs(0)
+		}
+	}
+	require.Equal(t, 1, b.CountAllCallsToAnyUpstreamRefresh(),
+		"should have been exactly one call to upstream refresh by all upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"upstream refresh was called on the wrong upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToLDAPPerformRefresh(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *oidctestutil.PerformLDAPRefreshArgs,
+) {
+	t.Helper()
+	var actualArgs *oidctestutil.PerformLDAPRefreshArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	for _, upstream := range b.upstreamLDAPIdentityProviders {
+		callCountOnThisUpstream := upstream.PerformRefreshCallCount()
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = upstream.PerformRefreshArgs(0)
+		}
+	}
+	require.Equal(t, 1, b.CountAllCallsToAnyUpstreamRefresh(),
+		"should have been exactly one call to upstream refresh by all upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"upstream refresh was called on the wrong upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToGithubGetUser(
+	t *testing.T,
+	expectedPerformedByUpstreamName string,
+	expectedArgs *oidctestutil.GetUserArgs,
+) {
+	t.Helper()
+	var actualArgs *oidctestutil.GetUserArgs
+	var actualNameOfUpstreamWhichMadeCall string
+	for _, upstream := range b.upstreamGitHubIdentityProviders {
+		// GitHub calls GetUser during both the original authcode exchange and the refresh.
+		callCountOnThisUpstream := upstream.GetUserCallCount()
+		if callCountOnThisUpstream == 1 {
+			actualNameOfUpstreamWhichMadeCall = upstream.Name
+			actualArgs = upstream.GetUserArgs(0)
+		}
+	}
+	require.Equal(t, 1, b.CountAllCallsToAnyUpstreamRefresh(),
+		"should have been exactly one call to upstream refresh by all upstreams",
+	)
+	require.Equal(t, expectedPerformedByUpstreamName, actualNameOfUpstreamWhichMadeCall,
+		"upstream refresh was called on the wrong upstream",
+	)
+	require.Equal(t, expectedArgs, actualArgs)
+}
+
+func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToAnyUpstreamRefresh(t *testing.T) {
+	t.Helper()
+	require.Equal(t, 0, b.CountAllCallsToAnyUpstreamRefresh(),
+		"expected exactly zero calls to any upstream refresh mocks",
+	)
+}
+
+func (b *UpstreamIDPListerBuilder) CountAllCallsToAnyUpstreamRefresh() int {
 	actualCallCountAcrossAllUpstreams := 0
 	for _, upstreamOIDC := range b.upstreamOIDCIdentityProviders {
 		actualCallCountAcrossAllUpstreams += upstreamOIDC.PerformRefreshCallCount()
@@ -315,10 +445,10 @@ func (b *UpstreamIDPListerBuilder) RequireExactlyZeroCallsToPerformRefresh(t *te
 	for _, upstreamActiveDirectory := range b.upstreamActiveDirectoryIdentityProviders {
 		actualCallCountAcrossAllUpstreams += upstreamActiveDirectory.PerformRefreshCallCount()
 	}
-
-	require.Equal(t, 0, actualCallCountAcrossAllUpstreams,
-		"expected exactly zero calls to PerformRefresh()",
-	)
+	for _, upstreamGithub := range b.upstreamGitHubIdentityProviders {
+		actualCallCountAcrossAllUpstreams += upstreamGithub.GetUserCallCount()
+	}
+	return actualCallCountAcrossAllUpstreams
 }
 
 func (b *UpstreamIDPListerBuilder) RequireExactlyOneCallToValidateToken(

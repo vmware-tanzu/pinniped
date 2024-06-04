@@ -160,7 +160,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
@@ -246,7 +246,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
@@ -334,7 +334,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
@@ -458,7 +458,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
@@ -589,7 +589,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
@@ -662,7 +662,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
@@ -1209,6 +1209,93 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
 	})
 
+	t.Run("with Supervisor GitHub upstream IDP and browser flow with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
+		testlib.SkipTestWhenGitHubIsUnavailable(t)
+
+		testCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		t.Cleanup(cancel)
+
+		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
+
+		// Start a fresh browser driver because we don't want to share cookies between the various tests in this file.
+		browser := browsertest.OpenBrowser(t)
+
+		expectedUsername := env.SupervisorUpstreamGithub.TestUserUsername + ":" + env.SupervisorUpstreamGithub.TestUserID
+		expectedGroups := env.SupervisorUpstreamGithub.TestUserExpectedTeamSlugs
+
+		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
+		testlib.CreateTestClusterRoleBinding(t,
+			rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: expectedUsername},
+			rbacv1.RoleRef{Kind: "ClusterRole", APIGroup: rbacv1.GroupName, Name: "view"},
+		)
+		testlib.WaitForUserToHaveAccess(t, expectedUsername, []string{}, &authorizationv1.ResourceAttributes{
+			Verb:     "get",
+			Group:    "",
+			Version:  "v1",
+			Resource: "namespaces",
+		})
+
+		// Create upstream GitHub provider and wait for it to become ready.
+		createdProvider := testlib.CreateTestGitHubIdentityProvider(t, idpv1alpha1.GitHubIdentityProviderSpec{
+			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+				Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+					Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
+				},
+			},
+			Claims: idpv1alpha1.GitHubClaims{
+				Username: ptr.To(idpv1alpha1.GitHubUsernameLoginAndID),
+				Groups:   ptr.To(idpv1alpha1.GitHubUseTeamSlugForGroupName),
+			},
+			Client: idpv1alpha1.GitHubClientSpec{
+				SecretName: testlib.CreateGitHubClientCredentialsSecret(t,
+					env.SupervisorUpstreamGithub.GithubAppClientID,
+					env.SupervisorUpstreamGithub.GithubAppClientSecret,
+				).Name,
+			},
+		}, idpv1alpha1.GitHubPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+
+		// Use a specific session cache for this test.
+		sessionCachePath := tempDir + "/test-sessions.yaml"
+		credentialCachePath := tempDir + "/test-credentials.yaml"
+
+		kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+			"get", "kubeconfig",
+			"--concierge-api-group-suffix", env.APIGroupSuffix,
+			"--concierge-authenticator-type", "jwt",
+			"--concierge-authenticator-name", authenticator.Name,
+			"--oidc-skip-browser",
+			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-session-cache", sessionCachePath,
+			"--credential-cache", credentialCachePath,
+			// use default for --oidc-scopes, which is to request all relevant scopes
+		})
+
+		// Run "kubectl get namespaces" which should trigger a browser login via the plugin.
+		kubectlCmd := exec.CommandContext(testCtx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath, "-v", "6")
+		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+
+		// Run the kubectl command, wait for the Pinniped CLI to print the authorization URL, and open it in the browser.
+		kubectlOutputChan := startKubectlAndOpenAuthorizationURLInBrowser(testCtx, t, kubectlCmd, browser)
+
+		// Confirm that we got to the upstream IDP's login page, fill out the form, and submit the form.
+		browsertest.LoginToUpstreamGitHub(t, browser, env.SupervisorUpstreamGithub)
+
+		// Expect to be redirected to the downstream callback which is serving the form_post HTML.
+		t.Logf("waiting for response page %s", federationDomain.Spec.Issuer)
+		browser.WaitForURL(t, regexp.MustCompile(regexp.QuoteMeta(federationDomain.Spec.Issuer)))
+
+		// The response page should have done the background fetch() and POST'ed to the CLI's callback.
+		// It should now be in the "success" state.
+		formpostExpectSuccessState(t, browser)
+
+		requireKubectlGetNamespaceOutput(t, env, waitForKubectlOutput(t, kubectlOutputChan))
+
+		requireUserCanUseKubectlWithoutAuthenticatingAgain(testCtx, t, env, federationDomain, createdProvider.Name, kubeconfigPath,
+			sessionCachePath, pinnipedExe, expectedUsername, expectedGroups, allScopes)
+	})
+
 	t.Run("with multiple IDPs: one OIDC and one LDAP", func(t *testing.T) {
 		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
 
@@ -1270,7 +1357,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 
@@ -1591,7 +1678,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
 

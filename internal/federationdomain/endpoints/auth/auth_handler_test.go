@@ -55,6 +55,8 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		ldapUpstreamResourceUID              = "ldap-resource-uid"
 		activeDirectoryUpstreamName          = "some-active-directory-idp"
 		activeDirectoryUpstreamResourceUID   = "active-directory-resource-uid"
+		githubUpstreamName                   = "some-github-idp"
+		githubUpstreamResourceUID            = "github-resource-uid"
 
 		oidcUpstreamIssuer                    = "https://my-upstream-issuer.com"
 		oidcUpstreamSubject                   = "abc123-some guid" // has a space character which should get escaped in URL
@@ -291,6 +293,15 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			WithPasswordGrantError(errors.New("should not have used password grant on this instance"))
 	}
 
+	upstreamGitHubIdentityProviderBuilder := func() *oidctestutil.TestUpstreamGitHubIdentityProviderBuilder {
+		return oidctestutil.NewTestUpstreamGitHubIdentityProviderBuilder().
+			WithName(githubUpstreamName).
+			WithResourceUID(githubUpstreamResourceUID).
+			WithClientID("some-github-client-id").
+			WithAuthorizationURL(upstreamAuthURL.String()).
+			WithScopes([]string{"scope1", "scope2"}) // the scopes to request when starting the upstream authorization flow
+	}
+
 	passwordGrantUpstreamOIDCIdentityProviderBuilder := func() *oidctestutil.TestUpstreamOIDCIdentityProviderBuilder {
 		return oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
 			WithName(oidcPasswordGrantUpstreamName).
@@ -463,6 +474,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 	happyGetRequestPathForOIDCPasswordGrantUpstream := modifiedHappyGetRequestPath(map[string]string{"pinniped_idp_name": oidcPasswordGrantUpstreamName})
 	happyGetRequestPathForLDAPUpstream := modifiedHappyGetRequestPath(map[string]string{"pinniped_idp_name": ldapUpstreamName})
 	happyGetRequestPathForADUpstream := modifiedHappyGetRequestPath(map[string]string{"pinniped_idp_name": activeDirectoryUpstreamName})
+	happyGetRequestPathForGithubUpstream := modifiedHappyGetRequestPath(map[string]string{"pinniped_idp_name": githubUpstreamName})
 
 	modifiedHappyGetRequestPathForOIDCUpstream := func(queryOverrides map[string]string) string {
 		queryOverrides["pinniped_idp_name"] = oidcUpstreamName
@@ -478,6 +490,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 	}
 	modifiedHappyGetRequestPathForADUpstream := func(queryOverrides map[string]string) string {
 		queryOverrides["pinniped_idp_name"] = activeDirectoryUpstreamName
+		return modifiedHappyGetRequestPath(queryOverrides)
+	}
+	modifiedHappyGetRequestPathForGithubUpstream := func(queryOverrides map[string]string) string {
+		queryOverrides["pinniped_idp_name"] = githubUpstreamName
 		return modifiedHappyGetRequestPath(queryOverrides)
 	}
 
@@ -529,6 +545,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		}
 		for key, val := range expectedAdditionalParams {
 			query[key] = val
+		}
+		return urlWithQuery(upstreamAuthURL.String(), query)
+	}
+
+	expectedRedirectLocationForUpstreamGithub := func(expectedUpstreamState string) string {
+		query := map[string]string{
+			"response_type": "code",
+			"scope":         "scope1 scope2",
+			"client_id":     "some-github-client-id",
+			"state":         expectedUpstreamState,
+			"redirect_uri":  downstreamIssuer + "/callback",
 		}
 		return urlWithQuery(upstreamAuthURL.String(), query)
 	}
@@ -708,6 +735,41 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantContentType:                        htmlContentType,
 			wantCSRFValueInCookieHeader:            happyCSRF,
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", oidcUpstreamName, "oidc"), nil),
+			wantUpstreamStateParamInLocationHeader: true,
+			wantBodyStringWithLocationInHref:       true,
+		},
+		{
+			name:                                   "GitHub upstream browser flow happy path using GET without a CSRF cookie",
+			idps:                                   testidplister.NewUpstreamIDPListerBuilder().WithGitHub(upstreamGitHubIdentityProviderBuilder().Build()),
+			generateCSRF:                           happyCSRFGenerator,
+			generatePKCE:                           happyPKCEGenerator,
+			generateNonce:                          happyNonceGenerator,
+			stateEncoder:                           happyStateEncoder,
+			cookieEncoder:                          happyCookieEncoder,
+			method:                                 http.MethodGet,
+			path:                                   happyGetRequestPathForGithubUpstream,
+			wantStatus:                             http.StatusSeeOther,
+			wantContentType:                        htmlContentType,
+			wantCSRFValueInCookieHeader:            happyCSRF,
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamGithub(expectedUpstreamStateParam(nil, "", githubUpstreamName, "github")),
+			wantUpstreamStateParamInLocationHeader: true,
+			wantBodyStringWithLocationInHref:       true,
+		},
+		{
+			name:                                   "GitHub upstream browser flow happy path using GET without a CSRF cookie using a dynamic client",
+			idps:                                   testidplister.NewUpstreamIDPListerBuilder().WithGitHub(upstreamGitHubIdentityProviderBuilder().Build()),
+			kubeResources:                          addFullyCapableDynamicClientAndSecretToKubeResources,
+			generateCSRF:                           happyCSRFGenerator,
+			generatePKCE:                           happyPKCEGenerator,
+			generateNonce:                          happyNonceGenerator,
+			stateEncoder:                           happyStateEncoder,
+			cookieEncoder:                          happyCookieEncoder,
+			method:                                 http.MethodGet,
+			path:                                   modifiedHappyGetRequestPathForGithubUpstream(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}),
+			wantStatus:                             http.StatusSeeOther,
+			wantContentType:                        htmlContentType,
+			wantCSRFValueInCookieHeader:            happyCSRF,
+			wantLocationHeader:                     expectedRedirectLocationForUpstreamGithub(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", githubUpstreamName, "github")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
 		},

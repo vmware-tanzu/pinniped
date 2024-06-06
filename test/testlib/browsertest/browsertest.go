@@ -499,6 +499,18 @@ func handleOccasionalGithubLoginPage(t *testing.T, b *Browser, upstream testlib.
 		b.ClickFirstMatch(t, submitConfirmButtonSelector)
 		return true
 
+	case strings.HasPrefix(lowercaseTitle, "verify two-factor authentication"):
+		// Next GitHub might occasionally as you to confirm your MFA settings.
+		// Wait for the page to be rendered.
+		t.Logf("waiting for GitHub skip link")
+		// There are several buttons and links. We want to click this link to "skip 2FA verification":
+		// <button type="submit" data-view-component="true" class="Button--link Button--medium Button">
+		submitSkipButtonSelector := "button.Button--link[type=submit]"
+		b.WaitForVisibleElements(t, submitSkipButtonSelector)
+		t.Logf("clicking skip link")
+		b.ClickFirstMatch(t, submitSkipButtonSelector)
+		return true
+
 	case strings.HasPrefix(lowercaseTitle, "configure passwordless authentication"):
 		// Next GitHub might occasionally ask if we want to configure a passkey for auth.
 		// The URL bar shows https://github.com/sessions/trusted-device for this page.

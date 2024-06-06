@@ -32,7 +32,6 @@ The Pinniped Supervisor supports both.
 
 The instructions below reference the steps needed to configure a GitHub App or GitHub OAuth2 App on https://github.com at the time of writing.
 GitHub UI and documentation changes frequently and may not exactly match the steps below.
-The below steps have not been tested with any version of GitHub Enterprise Server.
 Please submit a PR at the [Pinniped repo](https://github.com/vmware-tanzu/pinniped) to resolve any discrepancies.
 
 ## Alternative 1: Create a GitHub App

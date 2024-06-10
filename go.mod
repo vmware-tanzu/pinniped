@@ -51,7 +51,7 @@ require (
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.2
-	github.com/gorilla/websocket v1.5.1
+	github.com/gorilla/websocket v1.5.2
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/migueleliasweb/go-github-mock v0.0.23
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
@@ -62,7 +62,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
-	github.com/tdewolff/minify/v2 v2.20.32
+	github.com/tdewolff/minify/v2 v2.20.33
 	go.uber.org/mock v0.4.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.24.0

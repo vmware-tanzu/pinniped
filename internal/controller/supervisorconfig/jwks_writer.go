@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -14,7 +14,7 @@ import (
 
 	"github.com/go-jose/go-jose/v3"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -52,7 +52,7 @@ const (
 // generateKey is stubbed out for the purpose of testing. The default behavior is to generate an EC key.
 var generateKey = generateECKey //nolint:gochecknoglobals
 
-func generateECKey(r io.Reader) (interface{}, error) {
+func generateECKey(r io.Reader) (any, error) {
 	return ecdsa.GenerateKey(elliptic.P256(), r)
 }
 
@@ -110,7 +110,7 @@ func NewJWKSWriterController(
 // Sync implements controllerlib.Syncer.
 func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	federationDomain, err := c.federationDomainInformer.Lister().FederationDomains(ctx.Key.Namespace).Get(ctx.Key.Name)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf(
 			"failed to get %s/%s FederationDomain: %w",
@@ -168,7 +168,7 @@ func (c *jwksWriterController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-func (c *jwksWriterController) secretNeedsUpdate(federationDomain *configv1alpha1.FederationDomain) (bool, error) {
+func (c *jwksWriterController) secretNeedsUpdate(federationDomain *supervisorconfigv1alpha1.FederationDomain) (bool, error) {
 	if federationDomain.Status.Secrets.JWKS.Name == "" {
 		// If the FederationDomain says it doesn't have a secret associated with it, then let's create one.
 		return true, nil
@@ -176,7 +176,7 @@ func (c *jwksWriterController) secretNeedsUpdate(federationDomain *configv1alpha
 
 	// This FederationDomain says it has a secret associated with it. Let's try to get it from the cache.
 	secret, err := c.secretInformer.Lister().Secrets(federationDomain.Namespace).Get(federationDomain.Status.Secrets.JWKS.Name)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return false, fmt.Errorf("cannot get secret: %w", err)
 	}
@@ -193,7 +193,7 @@ func (c *jwksWriterController) secretNeedsUpdate(federationDomain *configv1alpha
 	return false, nil
 }
 
-func (c *jwksWriterController) generateSecret(federationDomain *configv1alpha1.FederationDomain) (*corev1.Secret, error) {
+func (c *jwksWriterController) generateSecret(federationDomain *supervisorconfigv1alpha1.FederationDomain) (*corev1.Secret, error) {
 	// Note! This is where we could potentially add more handling of FederationDomain spec fields which tell us how
 	// this FederationDomain should sign and verify ID tokens (e.g., hardcoded token secret, gRPC
 	// connection to KMS, etc).
@@ -231,8 +231,8 @@ func (c *jwksWriterController) generateSecret(federationDomain *configv1alpha1.F
 			Labels:    c.jwksSecretLabels,
 			OwnerReferences: []metav1.OwnerReference{
 				*metav1.NewControllerRef(federationDomain, schema.GroupVersionKind{
-					Group:   configv1alpha1.SchemeGroupVersion.Group,
-					Version: configv1alpha1.SchemeGroupVersion.Version,
+					Group:   supervisorconfigv1alpha1.SchemeGroupVersion.Group,
+					Version: supervisorconfigv1alpha1.SchemeGroupVersion.Version,
 					Kind:    federationDomainKind,
 				}),
 			},
@@ -254,7 +254,7 @@ func (c *jwksWriterController) createOrUpdateSecret(
 	secretClient := c.kubeClient.CoreV1().Secrets(newSecret.Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		oldSecret, err := secretClient.Get(ctx, newSecret.Name, metav1.GetOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		if err != nil && !notFound {
 			return fmt.Errorf("cannot get secret: %w", err)
 		}
@@ -284,7 +284,7 @@ func (c *jwksWriterController) createOrUpdateSecret(
 
 func (c *jwksWriterController) updateFederationDomainStatus(
 	ctx context.Context,
-	newFederationDomain *configv1alpha1.FederationDomain,
+	newFederationDomain *supervisorconfigv1alpha1.FederationDomain,
 ) error {
 	federationDomainClient := c.pinnipedClient.ConfigV1alpha1().FederationDomains(newFederationDomain.Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {

@@ -5,6 +5,7 @@ package testidplister
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -162,17 +163,17 @@ type UpstreamIDPListerBuilder struct {
 }
 
 func (b *UpstreamIDPListerBuilder) WithOIDC(upstreamOIDCIdentityProviders ...*oidctestutil.TestUpstreamOIDCIdentityProvider) *UpstreamIDPListerBuilder {
-	b.upstreamOIDCIdentityProviders = append(b.upstreamOIDCIdentityProviders, upstreamOIDCIdentityProviders...)
+	b.upstreamOIDCIdentityProviders = slices.Concat(b.upstreamOIDCIdentityProviders, upstreamOIDCIdentityProviders)
 	return b
 }
 
 func (b *UpstreamIDPListerBuilder) WithLDAP(upstreamLDAPIdentityProviders ...*oidctestutil.TestUpstreamLDAPIdentityProvider) *UpstreamIDPListerBuilder {
-	b.upstreamLDAPIdentityProviders = append(b.upstreamLDAPIdentityProviders, upstreamLDAPIdentityProviders...)
+	b.upstreamLDAPIdentityProviders = slices.Concat(b.upstreamLDAPIdentityProviders, upstreamLDAPIdentityProviders)
 	return b
 }
 
 func (b *UpstreamIDPListerBuilder) WithActiveDirectory(upstreamActiveDirectoryIdentityProviders ...*oidctestutil.TestUpstreamLDAPIdentityProvider) *UpstreamIDPListerBuilder {
-	b.upstreamActiveDirectoryIdentityProviders = append(b.upstreamActiveDirectoryIdentityProviders, upstreamActiveDirectoryIdentityProviders...)
+	b.upstreamActiveDirectoryIdentityProviders = slices.Concat(b.upstreamActiveDirectoryIdentityProviders, upstreamActiveDirectoryIdentityProviders)
 	return b
 }
 

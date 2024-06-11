@@ -94,7 +94,7 @@ func TestEntrypoint(t *testing.T) {
 			var logBuf bytes.Buffer
 			testLog := log.New(&logBuf, "", 0)
 			exited := "exiting via fatal"
-			fail = func(format string, v ...interface{}) {
+			fail = func(format string, v ...any) {
 				testLog.Printf(format, v...)
 				panic(exited)
 			}

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -24,8 +25,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	authv1alpha "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -83,21 +84,21 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
 	downstream := testlib.CreateTestFederationDomain(ctx, t,
-		configv1alpha1.FederationDomainSpec{
+		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer: issuerURL.String(),
-			TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
 		},
-		configv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
+		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)
 
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
 	// if the FederationDomain is not Ready, the JWTAuthenticator cannot be ready, either.
 	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
-	authenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authv1alpha.JWTAuthenticatorSpec{
+	authenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   downstream.Spec.Issuer,
 		Audience: clusterAudience,
-		TLS:      &authv1alpha.TLSSpec{CertificateAuthorityData: testCABundleBase64},
-	}, authv1alpha.JWTAuthenticatorPhaseError)
+		TLS:      &authenticationv1alpha1.TLSSpec{CertificateAuthorityData: testCABundleBase64},
+	}, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 
 	const (
 		yellowColor = "\u001b[33;1m"
@@ -110,8 +111,8 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
-		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
-		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -129,7 +130,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		var kubectlStdoutPipe io.ReadCloser
 		if runtime.GOOS != "darwin" {
 			// For some unknown reason this breaks the pty library on some MacOS machines.
@@ -219,7 +220,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// 	Run kubectl, which should work without any prompting for authentication.
 		kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd2.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		startTime2 := time.Now()
 		var kubectlStdoutPipe2 io.ReadCloser
 		if runtime.GOOS != "darwin" {
@@ -258,8 +259,8 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		sAMAccountName := expectedUsername + "@" + env.SupervisorUpstreamActiveDirectory.Domain
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, sAMAccountName, env)
-		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
-		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -277,7 +278,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		var kubectlStdoutPipe io.ReadCloser
 		if runtime.GOOS != "darwin" {
 			// For some unknown reason this breaks the pty library on some MacOS machines.
@@ -348,7 +349,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// Run kubectl, which should work without any prompting for authentication.
 		kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd2.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		startTime2 := time.Now()
 		var kubectlStdoutPipe2 io.ReadCloser
 		if runtime.GOOS != "darwin" {
@@ -420,8 +421,8 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}, idpv1alpha1.PhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, configv1alpha1.FederationDomainPhaseReady)
-		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(ctx, t, downstream.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/ldap-test-refresh-sessions.yaml"
@@ -442,7 +443,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		// Run "kubectl get namespaces" which should trigger a cli-based login.
 		start := time.Now()
 		kubectlCmd := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		var kubectlStdoutPipe io.ReadCloser
 		if runtime.GOOS != "darwin" {
 			// For some unknown reason this breaks the pty library on some MacOS machines.
@@ -555,7 +556,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 
 		// 	Run kubectl, which should work without any prompting for authentication.
 		kubectlCmd2 := exec.CommandContext(ctx, "kubectl", "get", "namespace", "--kubeconfig", kubeconfigPath)
-		kubectlCmd2.Env = append(os.Environ(), env.ProxyEnv()...)
+		kubectlCmd2.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		startTime2 := time.Now()
 		var kubectlStdoutPipe2 io.ReadCloser
 		if runtime.GOOS != "darwin" {

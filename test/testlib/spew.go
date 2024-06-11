@@ -1,11 +1,11 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
 
 import "github.com/davecgh/go-spew/spew"
 
-func Sdump(a ...interface{}) string {
+func Sdump(a ...any) string {
 	config := spew.ConfigState{
 		Indent:                  "\t",
 		MaxDepth:                10, // prevent log explosion

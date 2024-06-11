@@ -17,7 +17,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/client-go/kubernetes/fake"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/celtransformer"
@@ -613,8 +613,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
-					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
-					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+					[]supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
+					[]supervisorconfigv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
 					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -647,8 +647,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
-					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
-					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					[]supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
 					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -691,8 +691,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
-					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
-					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					[]supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
 					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -1051,8 +1051,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
-					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
-					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+					[]supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
+					[]supervisorconfigv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
 					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -1071,8 +1071,8 @@ func TestPostLoginEndpoint(t *testing.T) {
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
-					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
-					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					[]supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
 					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -1185,7 +1185,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 					tt.wantDownstreamClient,
 					tt.wantDownstreamRedirectURI,
 					tt.wantDownstreamCustomSessionData,
-					map[string]interface{}{},
+					map[string]any{},
 				)
 			case tt.wantRedirectToLoginPageError != "":
 				// Expecting an error redirect to the login UI page.
@@ -1221,7 +1221,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 					tt.wantDownstreamClient,
 					tt.wantDownstreamRedirectURI,
 					tt.wantDownstreamCustomSessionData,
-					map[string]interface{}{},
+					map[string]any{},
 				)
 			default:
 				require.Failf(t, "test should have expected a redirect or form body",

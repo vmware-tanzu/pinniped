@@ -19,9 +19,8 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -33,7 +32,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
-	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	conciergeconfiginformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/config/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
@@ -194,9 +193,9 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 
 	strategy, err := c.doSync(syncCtx, credIssuer)
 	if err != nil {
-		strategy = &v1alpha1.CredentialIssuerStrategy{
-			Type:           v1alpha1.ImpersonationProxyStrategyType,
-			Status:         v1alpha1.ErrorStrategyStatus,
+		strategy = &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+			Type:           conciergeconfigv1alpha1.ImpersonationProxyStrategyType,
+			Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 			Reason:         strategyReasonForError(err),
 			Message:        err.Error(),
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
@@ -219,12 +218,12 @@ func (c *impersonatorConfigController) Sync(syncCtx controllerlib.Context) error
 // strategyReasonForError returns the proper v1alpha1.StrategyReason for a sync error. Some errors are occasionally
 // expected because there are multiple pods running, in these cases we should  report a Pending reason and we'll
 // recover on a following sync.
-func strategyReasonForError(err error) v1alpha1.StrategyReason {
+func strategyReasonForError(err error) conciergeconfigv1alpha1.StrategyReason {
 	switch {
-	case k8serrors.IsConflict(err), k8serrors.IsAlreadyExists(err):
-		return v1alpha1.PendingStrategyReason
+	case apierrors.IsConflict(err), apierrors.IsAlreadyExists(err):
+		return conciergeconfigv1alpha1.PendingStrategyReason
 	default:
-		return v1alpha1.ErrorDuringSetupStrategyReason
+		return conciergeconfigv1alpha1.ErrorDuringSetupStrategyReason
 	}
 }
 
@@ -244,7 +243,7 @@ type certNameInfo struct {
 	clientEndpoint string
 }
 
-func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, credIssuer *v1alpha1.CredentialIssuer) (*v1alpha1.CredentialIssuerStrategy, error) {
+func (c *impersonatorConfigController) doSync(syncCtx controllerlib.Context, credIssuer *conciergeconfigv1alpha1.CredentialIssuer) (*conciergeconfigv1alpha1.CredentialIssuerStrategy, error) {
 	ctx := syncCtx.Context
 
 	impersonationSpec, err := c.loadImpersonationProxyConfiguration(credIssuer)
@@ -355,7 +354,7 @@ func (c *impersonatorConfigController) ensureCAAndTLSSecrets(
 
 func (c *impersonatorConfigController) evaluateExternallyProvidedTLSSecret(
 	ctx context.Context,
-	tlsSpec *v1alpha1.ImpersonationProxyTLSSpec,
+	tlsSpec *conciergeconfigv1alpha1.ImpersonationProxyTLSSpec,
 ) ([]byte, error) {
 	if tlsSpec.SecretName == "" {
 		return nil, fmt.Errorf("must provide impersonationSpec.TLS.secretName if impersonationSpec.TLS is provided")
@@ -397,7 +396,7 @@ func (c *impersonatorConfigController) evaluateExternallyProvidedTLSSecret(
 	return caBundle, nil
 }
 
-func (c *impersonatorConfigController) loadImpersonationProxyConfiguration(credIssuer *v1alpha1.CredentialIssuer) (*v1alpha1.ImpersonationProxySpec, error) {
+func (c *impersonatorConfigController) loadImpersonationProxyConfiguration(credIssuer *conciergeconfigv1alpha1.CredentialIssuer) (*conciergeconfigv1alpha1.ImpersonationProxySpec, error) {
 	// Make a copy of the spec since we got this object from informer cache.
 	spec := credIssuer.Spec.DeepCopy().ImpersonationProxy
 	if spec == nil {
@@ -406,7 +405,7 @@ func (c *impersonatorConfigController) loadImpersonationProxyConfiguration(credI
 
 	// Default service type to LoadBalancer (this is normally already done via CRD defaulting).
 	if spec.Service.Type == "" {
-		spec.Service.Type = v1alpha1.ImpersonationProxyServiceTypeLoadBalancer
+		spec.Service.Type = conciergeconfigv1alpha1.ImpersonationProxyServiceTypeLoadBalancer
 	}
 
 	if err := validateCredentialIssuerSpec(spec); err != nil {
@@ -416,33 +415,33 @@ func (c *impersonatorConfigController) loadImpersonationProxyConfiguration(credI
 	return spec, nil
 }
 
-func (c *impersonatorConfigController) shouldHaveImpersonator(config *v1alpha1.ImpersonationProxySpec) bool {
-	return c.enabledByAutoMode(config) || config.Mode == v1alpha1.ImpersonationProxyModeEnabled
+func (c *impersonatorConfigController) shouldHaveImpersonator(config *conciergeconfigv1alpha1.ImpersonationProxySpec) bool {
+	return c.enabledByAutoMode(config) || config.Mode == conciergeconfigv1alpha1.ImpersonationProxyModeEnabled
 }
 
-func (c *impersonatorConfigController) enabledByAutoMode(config *v1alpha1.ImpersonationProxySpec) bool {
-	return config.Mode == v1alpha1.ImpersonationProxyModeAuto && !*c.hasControlPlaneNodes
+func (c *impersonatorConfigController) enabledByAutoMode(config *conciergeconfigv1alpha1.ImpersonationProxySpec) bool {
+	return config.Mode == conciergeconfigv1alpha1.ImpersonationProxyModeAuto && !*c.hasControlPlaneNodes
 }
 
-func (c *impersonatorConfigController) disabledByAutoMode(config *v1alpha1.ImpersonationProxySpec) bool {
-	return config.Mode == v1alpha1.ImpersonationProxyModeAuto && *c.hasControlPlaneNodes
+func (c *impersonatorConfigController) disabledByAutoMode(config *conciergeconfigv1alpha1.ImpersonationProxySpec) bool {
+	return config.Mode == conciergeconfigv1alpha1.ImpersonationProxyModeAuto && *c.hasControlPlaneNodes
 }
 
-func (c *impersonatorConfigController) disabledExplicitly(config *v1alpha1.ImpersonationProxySpec) bool {
-	return config.Mode == v1alpha1.ImpersonationProxyModeDisabled
+func (c *impersonatorConfigController) disabledExplicitly(config *conciergeconfigv1alpha1.ImpersonationProxySpec) bool {
+	return config.Mode == conciergeconfigv1alpha1.ImpersonationProxyModeDisabled
 }
 
-func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *v1alpha1.ImpersonationProxySpec) bool {
-	return c.shouldHaveImpersonator(config) && config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeLoadBalancer
+func (c *impersonatorConfigController) shouldHaveLoadBalancer(config *conciergeconfigv1alpha1.ImpersonationProxySpec) bool {
+	return c.shouldHaveImpersonator(config) && config.Service.Type == conciergeconfigv1alpha1.ImpersonationProxyServiceTypeLoadBalancer
 }
 
-func (c *impersonatorConfigController) shouldHaveClusterIPService(config *v1alpha1.ImpersonationProxySpec) bool {
-	return c.shouldHaveImpersonator(config) && config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP
+func (c *impersonatorConfigController) shouldHaveClusterIPService(config *conciergeconfigv1alpha1.ImpersonationProxySpec) bool {
+	return c.shouldHaveImpersonator(config) && config.Service.Type == conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP
 }
 
 func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, *corev1.Service, error) {
 	service, err := c.servicesInformer.Lister().Services(c.namespace).Get(serviceName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if notFound {
 		return false, nil, nil
 	}
@@ -454,7 +453,7 @@ func (c *impersonatorConfigController) serviceExists(serviceName string) (bool, 
 
 func (c *impersonatorConfigController) tlsSecretExists() (bool, *corev1.Secret, error) {
 	secret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if notFound {
 		return false, nil, nil
 	}
@@ -481,7 +480,7 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 			// and we'll have a chance to restart the server.
 			close(c.errorCh) // We don't want ensureImpersonatorIsStopped to block on reading this channel.
 			stoppingErr := c.ensureImpersonatorIsStopped(false)
-			return errors.NewAggregate([]error{runningErr, stoppingErr})
+			return utilerrors.NewAggregate([]error{runningErr, stoppingErr})
 		default:
 			// Seems like it is still running, so nothing to do.
 			return nil
@@ -538,7 +537,7 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStopped(shouldCloseEr
 	return stopErr
 }
 
-func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.Context, config *v1alpha1.ImpersonationProxySpec) error {
+func (c *impersonatorConfigController) ensureLoadBalancerIsStarted(ctx context.Context, config *conciergeconfigv1alpha1.ImpersonationProxySpec) error {
 	appNameLabel := c.labels[appLabelKey]
 	loadBalancer := corev1.Service{
 		Spec: corev1.ServiceSpec{
@@ -581,10 +580,10 @@ func (c *impersonatorConfigController) ensureLoadBalancerIsStopped(ctx context.C
 			ResourceVersion: &service.ResourceVersion,
 		},
 	})
-	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
+	return utilerrors.FilterOut(err, apierrors.IsNotFound)
 }
 
-func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx context.Context, config *v1alpha1.ImpersonationProxySpec) error {
+func (c *impersonatorConfigController) ensureClusterIPServiceIsStarted(ctx context.Context, config *conciergeconfigv1alpha1.ImpersonationProxySpec) error {
 	appNameLabel := c.labels[appLabelKey]
 	clusterIP := corev1.Service{
 		Spec: corev1.ServiceSpec{
@@ -626,7 +625,7 @@ func (c *impersonatorConfigController) ensureClusterIPServiceIsStopped(ctx conte
 			ResourceVersion: &service.ResourceVersion,
 		},
 	})
-	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
+	return utilerrors.FilterOut(err, apierrors.IsNotFound)
 }
 
 func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context, desiredService *corev1.Service) error {
@@ -654,7 +653,7 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 
 	// Get the Service from the informer, and create it if it does not already exist.
 	existingService, err := c.servicesInformer.Lister().Services(c.namespace).Get(desiredService.Name)
-	if k8serrors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		log.Info("creating service for impersonation proxy")
 		_, err := c.k8sClient.CoreV1().Services(c.namespace).Create(ctx, desiredService, metav1.CreateOptions{})
 		return err
@@ -755,7 +754,7 @@ func (c *impersonatorConfigController) readExternalTLSSecret(externalTLSSecretNa
 
 func (c *impersonatorConfigController) ensureTLSSecret(ctx context.Context, nameInfo *certNameInfo, ca *certauthority.CA) error {
 	secretFromInformer, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.tlsSecretName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if !notFound && err != nil {
 		return err
 	}
@@ -898,12 +897,12 @@ func (c *impersonatorConfigController) ensureTLSSecretIsCreatedAndLoaded(ctx con
 
 func (c *impersonatorConfigController) ensureCASecretIsCreated(ctx context.Context) (*certauthority.CA, error) {
 	caSecret, err := c.secretsInformer.Lister().Secrets(c.namespace).Get(c.caSecretName)
-	if err != nil && !k8serrors.IsNotFound(err) {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
 	}
 
 	var impersonationCA *certauthority.CA
-	if k8serrors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		impersonationCA, err = c.createCASecret(ctx)
 	} else {
 		crtBytes := caSecret.Data[caCrtKey]
@@ -951,16 +950,16 @@ func (c *impersonatorConfigController) createCASecret(ctx context.Context) (*cer
 	return impersonationCA, nil
 }
 
-func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *v1alpha1.ImpersonationProxySpec) (*certNameInfo, error) {
+func (c *impersonatorConfigController) findDesiredTLSCertificateName(config *conciergeconfigv1alpha1.ImpersonationProxySpec) (*certNameInfo, error) {
 	if config.ExternalEndpoint != "" {
 		return c.findTLSCertificateNameFromEndpointConfig(config), nil
-	} else if config.Service.Type == v1alpha1.ImpersonationProxyServiceTypeClusterIP {
+	} else if config.Service.Type == conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP {
 		return c.findTLSCertificateNameFromClusterIPService()
 	}
 	return c.findTLSCertificateNameFromLoadBalancer()
 }
 
-func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *v1alpha1.ImpersonationProxySpec) *certNameInfo {
+func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(config *conciergeconfigv1alpha1.ImpersonationProxySpec) *certNameInfo {
 	addr, _ := endpointaddr.Parse(config.ExternalEndpoint, 443)
 	endpoint := strings.TrimSuffix(addr.Endpoint(), ":443")
 
@@ -972,7 +971,7 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromEndpointConfig(
 
 func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() (*certNameInfo, error) {
 	lb, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedLoadBalancerServiceName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if notFound {
 		// We aren't ready and will try again later in this case.
 		return &certNameInfo{ready: false}, nil
@@ -1006,7 +1005,7 @@ func (c *impersonatorConfigController) findTLSCertificateNameFromLoadBalancer() 
 
 func (c *impersonatorConfigController) findTLSCertificateNameFromClusterIPService() (*certNameInfo, error) {
 	clusterIP, err := c.servicesInformer.Lister().Services(c.namespace).Get(c.generatedClusterIPServiceName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if notFound {
 		// We aren't ready and will try again later in this case.
 		return &certNameInfo{ready: false}, nil
@@ -1103,7 +1102,7 @@ func (c *impersonatorConfigController) ensureTLSSecretIsRemoved(ctx context.Cont
 	})
 	// it is okay if we tried to delete and we got a not found error. This probably means
 	// another instance of the concierge got here first so there's nothing to delete.
-	return utilerrors.FilterOut(err, k8serrors.IsNotFound)
+	return utilerrors.FilterOut(err, apierrors.IsNotFound)
 }
 
 func (c *impersonatorConfigController) clearTLSSecret() {
@@ -1137,42 +1136,42 @@ func (c *impersonatorConfigController) clearSignerCA() {
 	c.impersonationSigningCertProvider.UnsetCertKeyContent()
 }
 
-func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, config *v1alpha1.ImpersonationProxySpec, caBundle []byte) *v1alpha1.CredentialIssuerStrategy {
+func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, config *conciergeconfigv1alpha1.ImpersonationProxySpec, caBundle []byte) *conciergeconfigv1alpha1.CredentialIssuerStrategy {
 	switch {
 	case c.disabledExplicitly(config):
-		return &v1alpha1.CredentialIssuerStrategy{
-			Type:           v1alpha1.ImpersonationProxyStrategyType,
-			Status:         v1alpha1.ErrorStrategyStatus,
-			Reason:         v1alpha1.DisabledStrategyReason,
+		return &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+			Type:           conciergeconfigv1alpha1.ImpersonationProxyStrategyType,
+			Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+			Reason:         conciergeconfigv1alpha1.DisabledStrategyReason,
 			Message:        "impersonation proxy was explicitly disabled by configuration",
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
 		}
 	case c.disabledByAutoMode(config):
-		return &v1alpha1.CredentialIssuerStrategy{
-			Type:           v1alpha1.ImpersonationProxyStrategyType,
-			Status:         v1alpha1.ErrorStrategyStatus,
-			Reason:         v1alpha1.DisabledStrategyReason,
+		return &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+			Type:           conciergeconfigv1alpha1.ImpersonationProxyStrategyType,
+			Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+			Reason:         conciergeconfigv1alpha1.DisabledStrategyReason,
 			Message:        "automatically determined that impersonation proxy should be disabled",
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
 		}
 	case !nameInfo.ready:
-		return &v1alpha1.CredentialIssuerStrategy{
-			Type:           v1alpha1.ImpersonationProxyStrategyType,
-			Status:         v1alpha1.ErrorStrategyStatus,
-			Reason:         v1alpha1.PendingStrategyReason,
+		return &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+			Type:           conciergeconfigv1alpha1.ImpersonationProxyStrategyType,
+			Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+			Reason:         conciergeconfigv1alpha1.PendingStrategyReason,
 			Message:        "waiting for load balancer Service to be assigned IP or hostname",
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
 		}
 	default:
-		return &v1alpha1.CredentialIssuerStrategy{
-			Type:           v1alpha1.ImpersonationProxyStrategyType,
-			Status:         v1alpha1.SuccessStrategyStatus,
-			Reason:         v1alpha1.ListeningStrategyReason,
+		return &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+			Type:           conciergeconfigv1alpha1.ImpersonationProxyStrategyType,
+			Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
+			Reason:         conciergeconfigv1alpha1.ListeningStrategyReason,
 			Message:        "impersonation proxy is ready to accept client connections",
 			LastUpdateTime: metav1.NewTime(c.clock.Now()),
-			Frontend: &v1alpha1.CredentialIssuerFrontend{
-				Type: v1alpha1.ImpersonationProxyFrontendType,
-				ImpersonationProxyInfo: &v1alpha1.ImpersonationProxyInfo{
+			Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+				Type: conciergeconfigv1alpha1.ImpersonationProxyFrontendType,
+				ImpersonationProxyInfo: &conciergeconfigv1alpha1.ImpersonationProxyInfo{
 					Endpoint:                 "https://" + nameInfo.clientEndpoint,
 					CertificateAuthorityData: base64.StdEncoding.EncodeToString(caBundle),
 				},
@@ -1181,26 +1180,26 @@ func (c *impersonatorConfigController) doSyncResult(nameInfo *certNameInfo, conf
 	}
 }
 
-func validateCredentialIssuerSpec(spec *v1alpha1.ImpersonationProxySpec) error {
+func validateCredentialIssuerSpec(spec *conciergeconfigv1alpha1.ImpersonationProxySpec) error {
 	// Validate that the mode is one of our known values.
 	switch spec.Mode {
-	case v1alpha1.ImpersonationProxyModeDisabled:
-	case v1alpha1.ImpersonationProxyModeAuto:
-	case v1alpha1.ImpersonationProxyModeEnabled:
+	case conciergeconfigv1alpha1.ImpersonationProxyModeDisabled:
+	case conciergeconfigv1alpha1.ImpersonationProxyModeAuto:
+	case conciergeconfigv1alpha1.ImpersonationProxyModeEnabled:
 	default:
 		return fmt.Errorf("invalid proxy mode %q (expected auto, disabled, or enabled)", spec.Mode)
 	}
 
 	// If disabled, ignore all other fields and consider the configuration valid.
-	if spec.Mode == v1alpha1.ImpersonationProxyModeDisabled {
+	if spec.Mode == conciergeconfigv1alpha1.ImpersonationProxyModeDisabled {
 		return nil
 	}
 
 	// Validate that the service type is one of our known values.
 	switch spec.Service.Type {
-	case v1alpha1.ImpersonationProxyServiceTypeNone:
-	case v1alpha1.ImpersonationProxyServiceTypeLoadBalancer:
-	case v1alpha1.ImpersonationProxyServiceTypeClusterIP:
+	case conciergeconfigv1alpha1.ImpersonationProxyServiceTypeNone:
+	case conciergeconfigv1alpha1.ImpersonationProxyServiceTypeLoadBalancer:
+	case conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP:
 	default:
 		return fmt.Errorf("invalid service type %q (expected None, LoadBalancer, or ClusterIP)", spec.Service.Type)
 	}
@@ -1211,7 +1210,7 @@ func validateCredentialIssuerSpec(spec *v1alpha1.ImpersonationProxySpec) error {
 	}
 
 	// If service is type "None", a non-empty external endpoint must be specified.
-	if spec.ExternalEndpoint == "" && spec.Service.Type == v1alpha1.ImpersonationProxyServiceTypeNone {
+	if spec.ExternalEndpoint == "" && spec.Service.Type == conciergeconfigv1alpha1.ImpersonationProxyServiceTypeNone {
 		return fmt.Errorf("externalEndpoint must be set when service.type is None")
 	}
 

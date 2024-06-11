@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -19,13 +19,13 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 
 	t.Run("invalid missing secret and bad issuer", func(t *testing.T) {
 		t.Parallel()
-		spec := v1alpha1.OIDCIdentityProviderSpec{
+		spec := idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-			Client: v1alpha1.OIDCClient{
+			Client: idpv1alpha1.OIDCClient{
 				SecretName: "does-not-exist",
 			},
 		}
-		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
+		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseError)
 		expectUpstreamConditions(t, upstream, []metav1.Condition{
 			{
 				Type:    "ClientCredentialsSecretValid",
@@ -51,19 +51,19 @@ Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nananananan
 
 	t.Run("invalid issuer with trailing slash", func(t *testing.T) {
 		t.Parallel()
-		spec := v1alpha1.OIDCIdentityProviderSpec{
+		spec := idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer + "/",
-			TLS: &v1alpha1.TLSSpec{
+			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 			},
-			AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
+			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
 				AdditionalScopes: []string{"email", "profile"},
 			},
-			Client: v1alpha1.OIDCClient{
+			Client: idpv1alpha1.OIDCClient{
 				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, "test-client-id", "test-client-secret").Name,
 			},
 		}
-		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseError)
+		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseError)
 		expectUpstreamConditions(t, upstream, []metav1.Condition{
 			{
 				Type:    "ClientCredentialsSecretValid",
@@ -89,19 +89,19 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
-		spec := v1alpha1.OIDCIdentityProviderSpec{
+		spec := idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
-			TLS: &v1alpha1.TLSSpec{
+			TLS: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 			},
-			AuthorizationConfig: v1alpha1.OIDCAuthorizationConfig{
+			AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
 				AdditionalScopes: []string{"email", "profile"},
 			},
-			Client: v1alpha1.OIDCClient{
+			Client: idpv1alpha1.OIDCClient{
 				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, "test-client-id", "test-client-secret").Name,
 			},
 		}
-		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, v1alpha1.PhaseReady)
+		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady)
 		expectUpstreamConditions(t, upstream, []metav1.Condition{
 			{
 				Type:    "ClientCredentialsSecretValid",
@@ -125,7 +125,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 	})
 }
 
-func expectUpstreamConditions(t *testing.T, upstream *v1alpha1.OIDCIdentityProvider, expected []metav1.Condition) {
+func expectUpstreamConditions(t *testing.T, upstream *idpv1alpha1.OIDCIdentityProvider, expected []metav1.Condition) {
 	t.Helper()
 	normalized := make([]metav1.Condition, 0, len(upstream.Status.Conditions))
 	for _, c := range upstream.Status.Conditions {

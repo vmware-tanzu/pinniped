@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -39,7 +40,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructuredscheme"
@@ -61,11 +62,11 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 
-	"go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	pinnipedconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
+	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/httputil/roundtripper"
@@ -121,7 +122,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// Create a WebhookAuthenticator and prepare a TokenCredentialRequestSpec using the authenticator for use later.
 	credentialRequestSpecWithWorkingCredentials := loginv1alpha1.TokenCredentialRequestSpec{
 		Token:         env.TestUser.Token,
-		Authenticator: testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, v1alpha1.WebhookAuthenticatorPhaseReady),
+		Authenticator: testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady),
 	}
 
 	// The address of the ClusterIP service that points at the impersonation proxy's port (used when there is no load balancer).
@@ -132,7 +133,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		mostRecentTokenCredentialRequestResponseLock sync.Mutex
 	)
 
-	refreshCredentialHelper := func(t *testing.T, client pinnipedconciergeclientset.Interface) *loginv1alpha1.ClusterCredential {
+	refreshCredentialHelper := func(t *testing.T, client conciergeclientset.Interface) *loginv1alpha1.ClusterCredential {
 		t.Helper()
 
 		mostRecentTokenCredentialRequestResponseLock.Lock()
@@ -209,11 +210,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	switch {
 	case impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers:
 		// configure the credential issuer spec to have the impersonation proxy in auto mode
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode: conciergev1alpha.ImpersonationProxyModeAuto,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeLoadBalancer,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode: conciergeconfigv1alpha1.ImpersonationProxyModeAuto,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
 					Annotations: map[string]string{
 						"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000",
 					},
@@ -241,9 +242,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		requireDisabledStrategy(ctx, t, env, adminConciergeClient)
 
 		// Create configuration to make the impersonation proxy turn on with no endpoint (i.e. automatically create a load balancer).
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode: conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode: conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 			},
 		})
 
@@ -267,12 +268,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		require.Truef(t, isErr, "wanted error %q to be service unavailable via squid error, but: %s", err, message)
 
 		// Create configuration to make the impersonation proxy turn on with a hard coded endpoint (without a load balancer).
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: proxyServiceEndpoint,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 				},
 			},
 		})
@@ -537,7 +538,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// Make sure that the deleted ConfigMap shows up in the informer's cache.
 			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 				_, err := informer.Lister().ConfigMaps(namespaceName).Get("configmap-3")
-				requireEventually.Truef(k8serrors.IsNotFound(err), "expected a NotFound error from get, got %v", err)
+				requireEventually.Truef(apierrors.IsNotFound(err), "expected a NotFound error from get, got %v", err)
 
 				list, err := informer.Lister().ConfigMaps(namespaceName).List(configMapLabels.AsSelector())
 				requireEventually.NoError(err)
@@ -579,7 +580,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// request similar to the one above, except that it will also have an impersonation header.
 			_, err = nestedImpersonationClient.Kubernetes.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 			// this user is not allowed to impersonate other users
-			require.True(t, k8serrors.IsForbidden(err), err)
+			require.True(t, apierrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
 				`users "other-user-to-impersonate" is forbidden: `+
 					`User "%s" cannot impersonate resource "users" in API group "" at the cluster scope: `+
@@ -594,7 +595,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			require.NoError(t, err)
 
 			expectedGroups := make([]string, 0, len(env.TestUser.ExpectedGroups)+1) // make sure we do not mutate env.TestUser.ExpectedGroups
-			expectedGroups = append(expectedGroups, env.TestUser.ExpectedGroups...)
+			expectedGroups = slices.Concat(expectedGroups, env.TestUser.ExpectedGroups)
 			expectedGroups = append(expectedGroups, "system:authenticated")
 			expectedOriginalUserInfo := authenticationv1.UserInfo{
 				Username: env.TestUser.ExpectedUsername,
@@ -628,7 +629,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				refreshCredential).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 			// this user should not be able to impersonate extra
-			require.True(t, k8serrors.IsForbidden(err), err)
+			require.True(t, apierrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
 				`userextras.authentication.k8s.io "with a dangerous value" is forbidden: `+
 					`User "%s" cannot impersonate resource "userextras/some-fancy-key" in API group "authentication.k8s.io" at the cluster scope: `+
@@ -688,7 +689,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			_, err = nestedImpersonationClient.Kubernetes.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 			// the impersonated user lacks the RBAC to perform this call
-			require.True(t, k8serrors.IsForbidden(err), err)
+			require.True(t, apierrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
 				`secrets "%s" is forbidden: User "other-user-to-impersonate" cannot get resource "secrets" in API group "" in the namespace "%s": `+
 					`decision made by impersonation-proxy.concierge.pinniped.dev`,
@@ -731,8 +732,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			_, err := nestedImpersonationClient.Kubernetes.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 			require.EqualError(t, err, "Internal error occurred: unimplemented functionality - unable to act as current user")
-			require.True(t, k8serrors.IsInternalError(err), err)
-			require.Equal(t, &k8serrors.StatusError{
+			require.True(t, apierrors.IsInternalError(err), err)
+			require.Equal(t, &apierrors.StatusError{
 				ErrStatus: metav1.Status{
 					Status: metav1.StatusFailure,
 					Code:   http.StatusInternalServerError,
@@ -768,8 +769,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			msg := `Internal Server Error: "/api/v1/namespaces/foo/secrets/bar": requested [{UID  some-awesome-uid  authentication.k8s.io/v1  }] without impersonating a user`
 			full := fmt.Sprintf(`an error on the server (%q) has prevented the request from succeeding (get secrets bar)`, msg)
 			require.EqualError(t, errUID, full)
-			require.True(t, k8serrors.IsInternalError(errUID), errUID)
-			require.Equal(t, &k8serrors.StatusError{
+			require.True(t, apierrors.IsInternalError(errUID), errUID)
+			require.Equal(t, &apierrors.StatusError{
 				ErrStatus: metav1.Status{
 					Status: metav1.StatusFailure,
 					Code:   http.StatusInternalServerError,
@@ -804,8 +805,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			_, err := testlib.NewKubeclient(t, nestedImpersonationUID).Kubernetes.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
 			require.EqualError(t, err, "Internal error occurred: unimplemented functionality - unable to act as current user")
-			require.True(t, k8serrors.IsInternalError(err), err)
-			require.Equal(t, &k8serrors.StatusError{
+			require.True(t, apierrors.IsInternalError(err), err)
+			require.Equal(t, &apierrors.StatusError{
 				ErrStatus: metav1.Status{
 					Status: metav1.StatusFailure,
 					Code:   http.StatusInternalServerError,
@@ -833,7 +834,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			_, err := nestedImpersonationClient.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 			// this SA is not yet allowed to impersonate SAs
-			require.True(t, k8serrors.IsForbidden(err), err)
+			require.True(t, apierrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
 				`serviceaccounts "root-ca-cert-publisher" is forbidden: `+
 					`User "%s" cannot impersonate resource "serviceaccounts" in API group "" in the namespace "kube-system": `+
@@ -880,7 +881,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 			require.NoError(t, err, testlib.Sdump(err))
 			expectedGroups := make([]string, 0, len(env.TestUser.ExpectedGroups)+1) // make sure we do not mutate env.TestUser.ExpectedGroups
-			expectedGroups = append(expectedGroups, env.TestUser.ExpectedGroups...)
+			expectedGroups = slices.Concat(expectedGroups, env.TestUser.ExpectedGroups)
 			expectedGroups = append(expectedGroups, "system:authenticated")
 			require.Equal(t,
 				expectedWhoAmIRequestResponse(
@@ -910,7 +911,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					whoAmI,
 				)
 			} else {
-				require.True(t, k8serrors.IsUnauthorized(err), testlib.Sdump(err))
+				require.True(t, apierrors.IsUnauthorized(err), testlib.Sdump(err))
 			}
 
 			// Test using a service account token.
@@ -941,7 +942,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			expectedGroups := []string{"system:serviceaccounts", "system:serviceaccounts:" + namespaceName, "system:authenticated"}
 
 			_, tokenRequestProbeErr := kubeClient.ServiceAccounts(namespaceName).CreateToken(ctx, saName, &authenticationv1.TokenRequest{}, metav1.CreateOptions{})
-			if k8serrors.IsNotFound(tokenRequestProbeErr) && tokenRequestProbeErr.Error() == "the server could not find the requested resource" {
+			if apierrors.IsNotFound(tokenRequestProbeErr) && tokenRequestProbeErr.Error() == "the server could not find the requested resource" {
 				return // stop test early since the token request API is not enabled on this cluster - other errors are caught below
 			}
 
@@ -979,7 +980,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			_, badAudErr := impersonationProxySABadAudPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-			require.True(t, k8serrors.IsUnauthorized(badAudErr), testlib.Sdump(badAudErr))
+			require.True(t, apierrors.IsUnauthorized(badAudErr), testlib.Sdump(badAudErr))
 
 			tokenRequest, err := kubeClient.ServiceAccounts(namespaceName).CreateToken(ctx, saName, &authenticationv1.TokenRequest{
 				Spec: authenticationv1.TokenRequestSpec{
@@ -1385,7 +1386,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 								Authenticator: corev1.TypedLocalObjectReference{APIGroup: ptr.To("anything.pinniped.dev")},
 							},
 						}, metav1.CreateOptions{})
-					require.True(t, k8serrors.IsInvalid(err), testlib.Sdump(err))
+					require.True(t, apierrors.IsInvalid(err), testlib.Sdump(err))
 					require.Equal(t, `.login.concierge.pinniped.dev "" is invalid: spec.token.value: Required value: token must be supplied`, err.Error())
 					require.Equal(t, &loginv1alpha1.TokenCredentialRequest{}, tkr)
 				})
@@ -1409,7 +1410,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					require.Equal(t, "ok", string(healthz))
 
 					healthzLog, errHealthzLog := impersonationProxyAdminRestClientAsAnonymous.Get().AbsPath("/healthz/log").DoRaw(ctx)
-					require.True(t, k8serrors.IsForbidden(errHealthzLog), "%s\n%s", testlib.Sdump(errHealthzLog), string(healthzLog))
+					require.True(t, apierrors.IsForbidden(errHealthzLog), "%s\n%s", testlib.Sdump(errHealthzLog), string(healthzLog))
 					require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"forbidden: User \"system:anonymous\" cannot get path \"/healthz/log\": decision made by impersonation-proxy.concierge.pinniped.dev","reason":"Forbidden","details":{},"code":403}`+"\n", string(healthzLog))
 				})
 			})
@@ -1440,7 +1441,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 					pod, err := impersonationProxyAnonymousClient.Kubernetes.CoreV1().Pods(metav1.NamespaceSystem).
 						Get(ctx, "does-not-matter", metav1.GetOptions{})
-					require.True(t, k8serrors.IsForbidden(err), testlib.Sdump(err))
+					require.True(t, apierrors.IsForbidden(err), testlib.Sdump(err))
 					require.EqualError(t, err, `pods "does-not-matter" is forbidden: User "system:anonymous" cannot get resource "pods" in API group "" in the namespace "kube-system": `+
 						`decision made by impersonation-proxy.concierge.pinniped.dev`, testlib.Sdump(err))
 					require.Equal(t, &corev1.Pod{}, pod)
@@ -1479,7 +1480,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					parallelIfNotEKS(t)
 
 					healthz, err := impersonationProxyAnonymousRestClient.Get().AbsPath("/healthz").DoRaw(ctx)
-					require.True(t, k8serrors.IsUnauthorized(err), testlib.Sdump(err))
+					require.True(t, apierrors.IsUnauthorized(err), testlib.Sdump(err))
 					require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}`+"\n", string(healthz))
 				})
 
@@ -1492,7 +1493,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 					pod, err := impersonationProxyAnonymousClient.Kubernetes.CoreV1().Pods(metav1.NamespaceSystem).
 						Get(ctx, "does-not-matter", metav1.GetOptions{})
-					require.True(t, k8serrors.IsUnauthorized(err), testlib.Sdump(err))
+					require.True(t, apierrors.IsUnauthorized(err), testlib.Sdump(err))
 					require.Equal(t, &corev1.Pod{}, pod)
 				})
 
@@ -1505,7 +1506,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 					whoAmI, err := impersonationProxyAnonymousClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 						Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
-					require.True(t, k8serrors.IsUnauthorized(err), testlib.Sdump(err))
+					require.True(t, apierrors.IsUnauthorized(err), testlib.Sdump(err))
 					require.Equal(t, &identityv1alpha1.WhoAmIRequest{}, whoAmI)
 				})
 			})
@@ -1537,7 +1538,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 		// sanity check default expected error message
 		_, err := impersonationProxySSRRClient.Create(ctx, invalidSSRR, metav1.CreateOptions{})
-		require.True(t, k8serrors.IsBadRequest(err), testlib.Sdump(err))
+		require.True(t, apierrors.IsBadRequest(err), testlib.Sdump(err))
 		require.EqualError(t, err, "no namespace on request")
 
 		// remove the impersonation proxy SA's permissions
@@ -1581,11 +1582,11 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			case errCreate == nil:
 				return false, fmt.Errorf("unexpected nil error for test user create invalid SSRR")
 
-			case k8serrors.IsBadRequest(errCreate) && errCreate.Error() == "no namespace on request":
+			case apierrors.IsBadRequest(errCreate) && errCreate.Error() == "no namespace on request":
 				t.Log("waiting for impersonation proxy service account to lose impersonate permissions")
 				return false, nil // RBAC change has not rolled out yet
 
-			case k8serrors.IsForbidden(errCreate) && errCreate.Error() ==
+			case apierrors.IsForbidden(errCreate) && errCreate.Error() ==
 				`users "`+env.TestUser.ExpectedUsername+`" is forbidden: User "`+saFullName+
 					`" cannot impersonate resource "users" in API group "" at the cluster scope`:
 				return true, nil // expected RBAC error
@@ -1759,12 +1760,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			t.Skip("Skipping ClusterIP test because squid proxy is not present")
 		}
 		clusterIPServiceURL := fmt.Sprintf("%s.%s.svc.cluster.local", impersonationProxyClusterIPName(env), env.ConciergeNamespace)
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: clusterIPServiceURL,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 				},
 			},
 		})
@@ -1815,12 +1816,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Cleanup(func() {
 			// Remove the TLS block from the CredentialIssuer, which should revert the ImpersonationProxy to using an
 			// internally generated TLS serving cert derived from the original CA.
-			updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-				ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-					Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+			updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+				ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+					Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 					ExternalEndpoint: proxyServiceEndpoint,
-					Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-						Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+					Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+						Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 					},
 				},
 			})
@@ -1833,14 +1834,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 2*time.Minute, 500*time.Millisecond)
 		})
 
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: proxyServiceEndpoint,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 				},
-				TLS: &conciergev1alpha.ImpersonationProxyTLSSpec{
+				TLS: &conciergeconfigv1alpha1.ImpersonationProxyTLSSpec{
 					CertificateAuthorityData: base64.StdEncoding.EncodeToString(externallyProvidedCA.Bundle()),
 					SecretName:               externallyProvidedTLSServingCertSecret.Name,
 				},
@@ -1887,12 +1888,12 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Cleanup(func() {
 			// Remove the TLS block from the CredentialIssuer, which should revert the ImpersonationProxy to using an
 			// internally generated TLS serving cert derived from the original CA.
-			updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-				ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-					Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+			updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+				ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+					Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 					ExternalEndpoint: proxyServiceEndpoint,
-					Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-						Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+					Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+						Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 					},
 				},
 			})
@@ -1905,14 +1906,14 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, 2*time.Minute, 500*time.Millisecond)
 		})
 
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode:             conciergev1alpha.ImpersonationProxyModeEnabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode:             conciergeconfigv1alpha1.ImpersonationProxyModeEnabled,
 				ExternalEndpoint: proxyServiceEndpoint,
-				Service: conciergev1alpha.ImpersonationProxyServiceSpec{
-					Type: conciergev1alpha.ImpersonationProxyServiceTypeClusterIP,
+				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
+					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeClusterIP,
 				},
-				TLS: &conciergev1alpha.ImpersonationProxyTLSSpec{
+				TLS: &conciergeconfigv1alpha1.ImpersonationProxyTLSSpec{
 					CertificateAuthorityData: base64.StdEncoding.EncodeToString(externallyProvidedCA.Bundle()),
 					SecretName:               externallyProvidedTLSServingCertSecret.Name,
 				},
@@ -1934,9 +1935,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {
 		// Update configuration to force the proxy to disabled mode
-		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergev1alpha.CredentialIssuerSpec{
-			ImpersonationProxy: &conciergev1alpha.ImpersonationProxySpec{
-				Mode: conciergev1alpha.ImpersonationProxyModeDisabled,
+		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
+			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
+				Mode: conciergeconfigv1alpha1.ImpersonationProxyModeDisabled,
 			},
 		})
 
@@ -1968,7 +1969,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		// when we disable the impersonator.
 		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 			_, err := adminClient.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
-			requireEventually.Truef(k8serrors.IsNotFound(err), "expected NotFound error, got %v", err)
+			requireEventually.Truef(apierrors.IsNotFound(err), "expected NotFound error, got %v", err)
 		}, 2*time.Minute, time.Second)
 
 		// Check that the generated CA cert Secret was not deleted by the controller because it's supposed to keep this
@@ -2101,7 +2102,7 @@ func expectedWhoAmIRequestResponse(username string, groups []string, extra map[s
 }
 
 func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testlib.TestEnv,
-	adminClient kubernetes.Interface, adminConciergeClient pinnipedconciergeclientset.Interface,
+	adminClient kubernetes.Interface, adminConciergeClient conciergeclientset.Interface,
 	refreshCredential func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential) (string, []byte) {
 	t.Helper()
 
@@ -2116,7 +2117,7 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testli
 	require.NoError(t, err)
 
 	expectedGroups := make([]string, 0, len(env.TestUser.ExpectedGroups)+1) // make sure we do not mutate env.TestUser.ExpectedGroups
-	expectedGroups = append(expectedGroups, env.TestUser.ExpectedGroups...)
+	expectedGroups = slices.Concat(expectedGroups, env.TestUser.ExpectedGroups)
 	expectedGroups = append(expectedGroups, "system:authenticated")
 
 	// probe each pod directly for readiness since the concierge status is a lie - it just means a single pod is ready
@@ -2157,7 +2158,7 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testli
 	return impersonationProxyURL, impersonationProxyCACertPEM
 }
 
-func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) (string, []byte) {
+func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient conciergeclientset.Interface) (string, []byte) {
 	t.Helper()
 
 	var impersonationProxyURL string
@@ -2173,7 +2174,7 @@ func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *tes
 		}
 		for _, strategy := range credentialIssuer.Status.Strategies {
 			// There will be other strategy types in the list, so ignore those.
-			if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType && strategy.Status == conciergev1alpha.SuccessStrategyStatus { //nolint:nestif
+			if strategy.Type == conciergeconfigv1alpha1.ImpersonationProxyStrategyType && strategy.Status == conciergeconfigv1alpha1.SuccessStrategyStatus { //nolint:nestif
 				if strategy.Frontend == nil {
 					return false, fmt.Errorf("did not find a Frontend") // unexpected, fail the test
 				}
@@ -2187,10 +2188,10 @@ func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *tes
 					return false, err // unexpected, fail the test
 				}
 				return true, nil // found it, continue the test!
-			} else if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType {
+			} else if strategy.Type == conciergeconfigv1alpha1.ImpersonationProxyStrategyType {
 				t.Logf("Waiting for successful impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
 					credentialIssuerName(env), strategy.Status, strategy.Reason, strategy.Message)
-				if strategy.Reason == conciergev1alpha.ErrorDuringSetupStrategyReason {
+				if strategy.Reason == conciergeconfigv1alpha1.ErrorDuringSetupStrategyReason {
 					// The server encountered an unexpected error while starting the impersonator, so fail the test fast.
 					return false, fmt.Errorf("found impersonation strategy in %s state with message: %s", strategy.Reason, strategy.Message)
 				}
@@ -2204,7 +2205,7 @@ func performImpersonatorDiscoveryURL(ctx context.Context, t *testing.T, env *tes
 	return impersonationProxyURL, impersonationProxyCACertPEM
 }
 
-func requireDisabledStrategy(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface) {
+func requireDisabledStrategy(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient conciergeclientset.Interface) {
 	t.Helper()
 
 	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
@@ -2215,14 +2216,14 @@ func requireDisabledStrategy(ctx context.Context, t *testing.T, env *testlib.Tes
 		}
 		for _, strategy := range credentialIssuer.Status.Strategies {
 			// There will be other strategy types in the list, so ignore those.
-			if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType &&
-				strategy.Status == conciergev1alpha.ErrorStrategyStatus &&
-				strategy.Reason == conciergev1alpha.DisabledStrategyReason {
+			if strategy.Type == conciergeconfigv1alpha1.ImpersonationProxyStrategyType &&
+				strategy.Status == conciergeconfigv1alpha1.ErrorStrategyStatus &&
+				strategy.Reason == conciergeconfigv1alpha1.DisabledStrategyReason {
 				return true, nil // found it, continue the test!
-			} else if strategy.Type == conciergev1alpha.ImpersonationProxyStrategyType {
+			} else if strategy.Type == conciergeconfigv1alpha1.ImpersonationProxyStrategyType {
 				t.Logf("Waiting for disabled impersonation proxy strategy on %s: found status %s with reason %s and message: %s",
 					credentialIssuerName(env), strategy.Status, strategy.Reason, strategy.Message)
-				if strategy.Reason == conciergev1alpha.ErrorDuringSetupStrategyReason {
+				if strategy.Reason == conciergeconfigv1alpha1.ErrorDuringSetupStrategyReason {
 					// The server encountered an unexpected error while stopping the impersonator, so fail the test fast.
 					return false, fmt.Errorf("found impersonation strategy in %s state with message: %s", strategy.Reason, strategy.Message)
 				}
@@ -2283,7 +2284,7 @@ func kubeconfigProxyFunc(t *testing.T, squidProxyURL string) func(req *http.Requ
 	}
 }
 
-func updateCredentialIssuer(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient pinnipedconciergeclientset.Interface, spec conciergev1alpha.CredentialIssuerSpec) {
+func updateCredentialIssuer(ctx context.Context, t *testing.T, env *testlib.TestEnv, adminConciergeClient conciergeclientset.Interface, spec conciergeconfigv1alpha1.CredentialIssuerSpec) {
 	t.Helper()
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -2301,7 +2302,7 @@ func updateCredentialIssuer(ctx context.Context, t *testing.T, env *testlib.Test
 
 func hasImpersonationProxyLoadBalancerService(ctx context.Context, env *testlib.TestEnv, client kubernetes.Interface) (bool, error) {
 	service, err := client.CoreV1().Services(env.ConciergeNamespace).Get(ctx, impersonationProxyLoadBalancerName(env), metav1.GetOptions{})
-	if k8serrors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		return false, nil
 	}
 	if err != nil {
@@ -2339,7 +2340,7 @@ func getImpersonationKubeconfig(t *testing.T, env *testlib.TestEnv, impersonatio
 	var envVarsWithProxy []string
 	if !env.HasCapability(testlib.HasExternalLoadBalancerProvider) {
 		// Only if you don't have a load balancer, use the squid proxy when it's available.
-		envVarsWithProxy = append(os.Environ(), env.ProxyEnv()...)
+		envVarsWithProxy = slices.Concat(os.Environ(), env.ProxyEnv())
 	}
 
 	// Get the kubeconfig.
@@ -2380,7 +2381,7 @@ func getImpersonationKubeconfig(t *testing.T, env *testlib.TestEnv, impersonatio
 func kubectlCommand(timeout context.Context, t *testing.T, kubeconfigPath string, envVarsWithProxy []string, args ...string) (*exec.Cmd, *syncBuffer, *syncBuffer) {
 	t.Helper()
 
-	allArgs := append([]string{"--kubeconfig", kubeconfigPath}, args...)
+	allArgs := slices.Concat([]string{"--kubeconfig", kubeconfigPath}, args)
 	kubectlCmd := exec.CommandContext(timeout, "kubectl", allArgs...)
 	var stdout, stderr syncBuffer
 	kubectlCmd.Stdout = &stdout
@@ -2445,7 +2446,7 @@ func requireClose(t *testing.T, c chan struct{}, timeout time.Duration) {
 
 func createTokenCredentialRequest(
 	spec loginv1alpha1.TokenCredentialRequestSpec,
-	client pinnipedconciergeclientset.Interface,
+	client conciergeclientset.Interface,
 ) (*loginv1alpha1.TokenCredentialRequest, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

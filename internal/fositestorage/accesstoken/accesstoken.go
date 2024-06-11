@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
+	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/constable"
@@ -40,7 +40,7 @@ const (
 )
 
 type RevocationStorage interface {
-	oauth2.AccessTokenStorage
+	fositeoauth2.AccessTokenStorage
 	RevokeAccessToken(ctx context.Context, requestID string) error
 }
 
@@ -115,7 +115,7 @@ func (a *accessTokenStorage) getSession(ctx context.Context, signature string) (
 	session := newValidEmptyAccessTokenSession()
 	rv, err := a.storage.Get(ctx, signature, session)
 
-	if errors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		return nil, "", fosite.ErrNotFound.WithWrap(err).WithDebug(err.Error())
 	}
 

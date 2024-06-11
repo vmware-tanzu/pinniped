@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package tokenexchange
@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
+	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	"github.com/pkg/errors"
 
@@ -27,19 +27,19 @@ type stsParams struct {
 	requestedAudience  string
 }
 
-func HandlerFactory(config fosite.Configurator, storage interface{}, strategy interface{}) interface{} {
+func HandlerFactory(config fosite.Configurator, storage any, strategy any) any {
 	return &tokenExchangeHandler{
 		idTokenStrategy:     strategy.(openid.OpenIDConnectTokenStrategy),
-		accessTokenStrategy: strategy.(oauth2.AccessTokenStrategy),
-		accessTokenStorage:  storage.(oauth2.AccessTokenStorage),
+		accessTokenStrategy: strategy.(fositeoauth2.AccessTokenStrategy),
+		accessTokenStorage:  storage.(fositeoauth2.AccessTokenStorage),
 		fositeConfig:        config,
 	}
 }
 
 type tokenExchangeHandler struct {
 	idTokenStrategy     openid.OpenIDConnectTokenStrategy
-	accessTokenStrategy oauth2.AccessTokenStrategy
-	accessTokenStorage  oauth2.AccessTokenStorage
+	accessTokenStrategy fositeoauth2.AccessTokenStrategy
+	accessTokenStorage  fositeoauth2.AccessTokenStorage
 	fositeConfig        fosite.Configurator
 }
 

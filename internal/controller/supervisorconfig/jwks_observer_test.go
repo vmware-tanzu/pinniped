@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorconfig
@@ -17,9 +17,9 @@ import (
 	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -37,7 +37,7 @@ func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 			r = require.New(t)
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			secretsInformer := k8sinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
-			federationDomainInformer := pinnipedinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().FederationDomains()
+			federationDomainInformer := supervisorinformers.NewSharedInformerFactory(nil, 0).Config().V1alpha1().FederationDomains()
 			_ = NewJWKSObserverController(
 				nil,
 				secretsInformer,
@@ -82,13 +82,13 @@ func TestJWKSObserverControllerInformerFilters(t *testing.T) {
 		when("watching FederationDomain objects", func() {
 			var (
 				subject                 controllerlib.Filter
-				provider, otherProvider *v1alpha1.FederationDomain
+				provider, otherProvider *supervisorconfigv1alpha1.FederationDomain
 			)
 
 			it.Before(func() {
 				subject = federationDomainInformerFilter
-				provider = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
-				otherProvider = &v1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
+				provider = &supervisorconfigv1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "any-name", Namespace: "any-namespace"}}
+				otherProvider = &supervisorconfigv1alpha1.FederationDomain{ObjectMeta: metav1.ObjectMeta{Name: "any-other-name", Namespace: "any-other-namespace"}}
 			})
 
 			when("any FederationDomain changes", func() {
@@ -125,9 +125,9 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 		var (
 			r                       *require.Assertions
 			subject                 controllerlib.Controller
-			pinnipedInformerClient  *pinnipedfake.Clientset
+			pinnipedInformerClient  *supervisorfake.Clientset
 			kubeInformerClient      *kubernetesfake.Clientset
-			pinnipedInformers       pinnipedinformers.SharedInformerFactory
+			pinnipedInformers       supervisorinformers.SharedInformerFactory
 			kubeInformers           k8sinformers.SharedInformerFactory
 			cancelContext           context.Context
 			cancelContextCancelFunc context.CancelFunc
@@ -169,8 +169,8 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 
 			kubeInformerClient = kubernetesfake.NewSimpleClientset()
 			kubeInformers = k8sinformers.NewSharedInformerFactory(kubeInformerClient, 0)
-			pinnipedInformerClient = pinnipedfake.NewSimpleClientset()
-			pinnipedInformers = pinnipedinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
+			pinnipedInformerClient = supervisorfake.NewSimpleClientset()
+			pinnipedInformers = supervisorinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
 			issuerToJWKSSetter = &fakeIssuerToJWKSMapSetter{}
 
 			unrelatedSecret := &corev1.Secret{
@@ -204,78 +204,78 @@ func TestJWKSObserverControllerSync(t *testing.T) {
 			)
 
 			it.Before(func() {
-				federationDomainWithoutSecret1 := &v1alpha1.FederationDomain{
+				federationDomainWithoutSecret1 := &supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "no-secret-federationdomain1",
 						Namespace: installedInNamespace,
 					},
-					Spec:   v1alpha1.FederationDomainSpec{Issuer: "https://no-secret-issuer1.com"},
-					Status: v1alpha1.FederationDomainStatus{}, // no Secrets.JWKS field
+					Spec:   supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://no-secret-issuer1.com"},
+					Status: supervisorconfigv1alpha1.FederationDomainStatus{}, // no Secrets.JWKS field
 				}
-				federationDomainWithoutSecret2 := &v1alpha1.FederationDomain{
+				federationDomainWithoutSecret2 := &supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "no-secret-federationdomain2",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://no-secret-issuer2.com"},
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://no-secret-issuer2.com"},
 					// no Status field
 				}
-				federationDomainWithBadSecret := &v1alpha1.FederationDomain{
+				federationDomainWithBadSecret := &supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "bad-secret-federationdomain",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://bad-secret-issuer.com"},
-					Status: v1alpha1.FederationDomainStatus{
-						Secrets: v1alpha1.FederationDomainSecrets{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://bad-secret-issuer.com"},
+					Status: supervisorconfigv1alpha1.FederationDomainStatus{
+						Secrets: supervisorconfigv1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "bad-secret-name"},
 						},
 					},
 				}
-				federationDomainWithBadJWKSSecret := &v1alpha1.FederationDomain{
+				federationDomainWithBadJWKSSecret := &supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "bad-jwks-secret-federationdomain",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://bad-jwks-secret-issuer.com"},
-					Status: v1alpha1.FederationDomainStatus{
-						Secrets: v1alpha1.FederationDomainSecrets{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://bad-jwks-secret-issuer.com"},
+					Status: supervisorconfigv1alpha1.FederationDomainStatus{
+						Secrets: supervisorconfigv1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "bad-jwks-secret-name"},
 						},
 					},
 				}
-				federationDomainWithBadActiveJWKSecret := &v1alpha1.FederationDomain{
+				federationDomainWithBadActiveJWKSecret := &supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "bad-active-jwk-secret-federationdomain",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://bad-active-jwk-secret-issuer.com"},
-					Status: v1alpha1.FederationDomainStatus{
-						Secrets: v1alpha1.FederationDomainSecrets{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://bad-active-jwk-secret-issuer.com"},
+					Status: supervisorconfigv1alpha1.FederationDomainStatus{
+						Secrets: supervisorconfigv1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "bad-active-jwk-secret-name"},
 						},
 					},
 				}
-				federationDomainWithGoodSecret1 := &v1alpha1.FederationDomain{
+				federationDomainWithGoodSecret1 := &supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "good-secret-federationdomain1",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://issuer-with-good-secret1.com"},
-					Status: v1alpha1.FederationDomainStatus{
-						Secrets: v1alpha1.FederationDomainSecrets{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://issuer-with-good-secret1.com"},
+					Status: supervisorconfigv1alpha1.FederationDomainStatus{
+						Secrets: supervisorconfigv1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "good-jwks-secret-name1"},
 						},
 					},
 				}
-				federationDomainWithGoodSecret2 := &v1alpha1.FederationDomain{
+				federationDomainWithGoodSecret2 := &supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "good-secret-federationdomain2",
 						Namespace: installedInNamespace,
 					},
-					Spec: v1alpha1.FederationDomainSpec{Issuer: "https://issuer-with-good-secret2.com"},
-					Status: v1alpha1.FederationDomainStatus{
-						Secrets: v1alpha1.FederationDomainSecrets{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://issuer-with-good-secret2.com"},
+					Status: supervisorconfigv1alpha1.FederationDomainStatus{
+						Secrets: supervisorconfigv1alpha1.FederationDomainSecrets{
 							JWKS: corev1.LocalObjectReference{Name: "good-jwks-secret-name2"},
 						},
 					},

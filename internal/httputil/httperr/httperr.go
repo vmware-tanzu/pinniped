@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package httperr contains some helpers for nicer error handling in http.Handler implementations.
@@ -21,7 +21,7 @@ func New(code int, msg string) error {
 }
 
 // Newf returns a Responder that emits the given HTTP status code and fmt.Sprintf formatted message.
-func Newf(code int, format string, args ...interface{}) error {
+func Newf(code int, format string, args ...any) error {
 	return httpErr{code: code, msg: fmt.Sprintf(format, args...)}
 }
 

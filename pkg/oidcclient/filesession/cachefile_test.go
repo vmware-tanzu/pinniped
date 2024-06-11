@@ -37,9 +37,9 @@ var validSession = sessionCache{
 				IDToken: &oidctypes.IDToken{
 					Token:  "test-id-token",
 					Expiry: metav1.NewTime(time.Date(2020, 10, 20, 19, 42, 07, 0, time.UTC).Local()),
-					Claims: map[string]interface{}{
+					Claims: map[string]any{
 						"foo": "bar",
-						"nested": map[string]interface{}{
+						"nested": map[string]any{
 							"key1": "value1",
 							"key2": "value2",
 						},

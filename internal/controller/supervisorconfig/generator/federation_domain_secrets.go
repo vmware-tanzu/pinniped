@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package generator
@@ -9,14 +9,14 @@ import (
 	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -26,7 +26,7 @@ import (
 
 type federationDomainSecretsController struct {
 	secretHelper             SecretHelper
-	secretRefFunc            func(domain *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference
+	secretRefFunc            func(domain *supervisorconfigv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference
 	kubeClient               kubernetes.Interface
 	pinnipedClient           supervisorclientset.Interface
 	federationDomainInformer configinformers.FederationDomainInformer
@@ -38,7 +38,7 @@ type federationDomainSecretsController struct {
 // provides the parent/child mapping logic.
 func NewFederationDomainSecretsController(
 	secretHelper SecretHelper,
-	secretRefFunc func(domain *configv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference,
+	secretRefFunc func(domain *supervisorconfigv1alpha1.FederationDomainStatus) *corev1.LocalObjectReference,
 	kubeClient kubernetes.Interface,
 	pinnipedClient supervisorclientset.Interface,
 	secretInformer corev1informers.SecretInformer,
@@ -75,7 +75,7 @@ func NewFederationDomainSecretsController(
 
 func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) error {
 	federationDomain, err := c.federationDomainInformer.Lister().FederationDomains(ctx.Key.Namespace).Get(ctx.Key.Name)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return fmt.Errorf(
 			"failed to get %s/%s FederationDomain: %w",
@@ -144,12 +144,12 @@ func (c *federationDomainSecretsController) Sync(ctx controllerlib.Context) erro
 // secretNeedsUpdate returns whether or not the Secret, with name secretName, for the federationDomain param
 // needs to be updated. It returns the existing secret as its second argument.
 func (c *federationDomainSecretsController) secretNeedsUpdate(
-	federationDomain *configv1alpha1.FederationDomain,
+	federationDomain *supervisorconfigv1alpha1.FederationDomain,
 	secretName string,
 ) (bool, *corev1.Secret, error) {
 	// This FederationDomain says it has a secret associated with it. Let's try to get it from the cache.
 	secret, err := c.secretInformer.Lister().Secrets(federationDomain.Namespace).Get(secretName)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return false, nil, fmt.Errorf("cannot get secret: %w", err)
 	}
@@ -168,13 +168,13 @@ func (c *federationDomainSecretsController) secretNeedsUpdate(
 
 func (c *federationDomainSecretsController) createOrUpdateSecret(
 	ctx context.Context,
-	federationDomain *configv1alpha1.FederationDomain,
+	federationDomain *supervisorconfigv1alpha1.FederationDomain,
 	newSecret **corev1.Secret,
 ) error {
 	secretClient := c.kubeClient.CoreV1().Secrets((*newSecret).Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		oldSecret, err := secretClient.Get(ctx, (*newSecret).Name, metav1.GetOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		if err != nil && !notFound {
 			return fmt.Errorf("failed to get secret %s/%s: %w", (*newSecret).Namespace, (*newSecret).Name, err)
 		}
@@ -207,7 +207,7 @@ func (c *federationDomainSecretsController) createOrUpdateSecret(
 
 func (c *federationDomainSecretsController) updateFederationDomainStatus(
 	ctx context.Context,
-	newFederationDomain *configv1alpha1.FederationDomain,
+	newFederationDomain *supervisorconfigv1alpha1.FederationDomain,
 ) error {
 	federationDomainClient := c.pinnipedClient.ConfigV1alpha1().FederationDomains(newFederationDomain.Namespace)
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {

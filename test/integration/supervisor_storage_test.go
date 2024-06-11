@@ -14,7 +14,7 @@ import (
 	"github.com/ory/fosite/compose"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/federationdomain/clientregistry"
@@ -85,7 +85,7 @@ func TestAuthorizeCodeStorage(t *testing.T) {
 	// trying to create the session again fails because it already exists
 	err = storage.CreateAuthorizeCodeSession(ctx, signature, session.Request)
 	require.Error(t, err)
-	require.True(t, errors.IsAlreadyExists(err))
+	require.True(t, apierrors.IsAlreadyExists(err))
 
 	// check that the data stored in Kube matches what we put in
 	initialSecret, err := secrets.Get(ctx, name, metav1.GetOptions{})

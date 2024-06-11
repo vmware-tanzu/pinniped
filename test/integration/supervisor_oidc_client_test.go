@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -393,7 +393,7 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 			},
 			fixWant: func(t *testing.T, err error, want string) string {
 				// sort the error causes and use that to rebuild a sorted error message
-				statusErr := &errors.StatusError{}
+				statusErr := &apierrors.StatusError{}
 				require.ErrorAs(t, err, &statusErr)
 				require.Len(t, statusErr.ErrStatus.Details.Causes, 4)
 				out := make([]string, 0, len(statusErr.ErrStatus.Details.Causes))

@@ -9,12 +9,12 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configInformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
@@ -94,7 +94,7 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 
 		secret, err := c.secretInformer.Lister().Secrets(oidcClient.Namespace).Get(correspondingSecretName)
 		if err != nil {
-			if !k8serrors.IsNotFound(err) {
+			if !apierrors.IsNotFound(err) {
 				// Anything other than a NotFound error is unexpected when reading from an informer.
 				return fmt.Errorf("failed to get %s/%s secret: %w", oidcClient.Namespace, correspondingSecretName, err)
 			}
@@ -127,7 +127,7 @@ func (c *oidcClientWatcherController) Sync(ctx controllerlib.Context) error {
 
 func (c *oidcClientWatcherController) updateStatus(
 	ctx context.Context,
-	upstream *v1alpha1.OIDCClient,
+	upstream *supervisorconfigv1alpha1.OIDCClient,
 	conditions []*metav1.Condition,
 	totalClientSecrets int,
 ) error {
@@ -136,9 +136,9 @@ func (c *oidcClientWatcherController) updateStatus(
 	hadErrorCondition := conditionsutil.MergeConditions(conditions,
 		upstream.Generation, &updated.Status.Conditions, plog.New(), metav1.Now())
 
-	updated.Status.Phase = v1alpha1.OIDCClientPhaseReady
+	updated.Status.Phase = supervisorconfigv1alpha1.OIDCClientPhaseReady
 	if hadErrorCondition {
-		updated.Status.Phase = v1alpha1.OIDCClientPhaseError
+		updated.Status.Phase = supervisorconfigv1alpha1.OIDCClientPhaseError
 	}
 
 	updated.Status.TotalClientSecrets = int32(totalClientSecrets)

@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructuredscheme"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1010,7 +1010,7 @@ func TestImpersonator(t *testing.T) {
 
 			probeBody, errProbe := rc.Get().AbsPath("/probe").DoRaw(ctx)
 			if tt.anonymousAuthDisabled {
-				require.True(t, errors.IsUnauthorized(errProbe), errProbe)
+				require.True(t, apierrors.IsUnauthorized(errProbe), errProbe)
 				require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}`+"\n", string(probeBody))
 			} else {
 				require.NoError(t, errProbe)
@@ -1019,7 +1019,7 @@ func TestImpersonator(t *testing.T) {
 
 			notTCRBody, errNotTCR := rc.Get().Resource("tokencredentialrequests").DoRaw(ctx)
 			if tt.anonymousAuthDisabled {
-				require.True(t, errors.IsUnauthorized(errNotTCR), errNotTCR)
+				require.True(t, apierrors.IsUnauthorized(errNotTCR), errNotTCR)
 				require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}`+"\n", string(notTCRBody))
 			} else {
 				require.NoError(t, errNotTCR)
@@ -1028,7 +1028,7 @@ func TestImpersonator(t *testing.T) {
 
 			ducksBody, errDucks := rc.Get().Resource("ducks").DoRaw(ctx)
 			if tt.anonymousAuthDisabled {
-				require.True(t, errors.IsUnauthorized(errDucks), errDucks)
+				require.True(t, apierrors.IsUnauthorized(errDucks), errDucks)
 				require.Equal(t, `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}`+"\n", string(ducksBody))
 			} else {
 				require.NoError(t, errDucks)
@@ -1046,7 +1046,7 @@ func TestImpersonator(t *testing.T) {
 			require.NoError(t, err)
 
 			_, errBadCert := tcrBadCert.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{}, metav1.CreateOptions{})
-			require.True(t, errors.IsUnauthorized(errBadCert), errBadCert)
+			require.True(t, apierrors.IsUnauthorized(errBadCert), errBadCert)
 			require.EqualError(t, errBadCert, "Unauthorized")
 		})
 	}

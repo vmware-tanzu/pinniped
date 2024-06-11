@@ -48,6 +48,10 @@ linters:
     - fatcontext
     # - canonicalheader Can't do this one since it alerts on valid headers such as X-XSS-Protection
     - spancheck
+    - importas
+    - makezero
+    - prealloc
+    - gofmt
 
 issues:
   exclude-dirs:
@@ -91,3 +95,64 @@ linters-settings:
     - end
     - record-error
     - set-status
+  importas:
+    no-unaliased: true # All packages explicitly listed below must be aliased
+    no-extra-aliases: false # Allow other aliases than the ones explicitly listed below
+    alias:
+    # k8s.io/apimachinery
+    - pkg: k8s.io/apimachinery/pkg/util/errors
+      alias: utilerrors
+    - pkg: k8s.io/apimachinery/pkg/api/errors
+      alias: apierrors
+    - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
+      alias: metav1
+    # k8s.io
+    - pkg: k8s.io/api/core/v1
+      alias: corev1
+    # OAuth2/OIDC/Fosite
+    - pkg: github.com/coreos/go-oidc/v3/oidc
+      alias: coreosoidc
+    - pkg: github.com/ory/fosite/handler/oauth2
+      alias: fositeoauth2
+    # Generated Pinniped
+    - pkg: go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1
+      alias: authenticationv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1
+      alias: clientsecretv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1
+      alias: supervisorconfigv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1
+      alias: conciergeconfigv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned
+      alias: conciergeclientset
+    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme
+      alias: conciergeclientsetscheme
+    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake
+      alias: conciergefake
+    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned
+      alias: supervisorclientset
+    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme
+      alias: supervisorclientsetscheme
+    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake
+      alias: supervisorfake
+    - pkg: go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1
+      alias: idpv1alpha1
+    - pkg: go.pinniped.dev/generated/latest/client/concierge/informers/externalversions
+      alias: conciergeinformers
+    - pkg: go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions
+      alias: supervisorinformers
+    # Pinniped internal
+    - pkg: go.pinniped.dev/internal/concierge/scheme
+      alias: conciergescheme
+  gofmt:
+    # Simplify code: gofmt with `-s` option.
+    # Default: true
+    simplify: false
+    # Apply the rewrite rules to the source before reformatting.
+    # https://pkg.go.dev/cmd/gofmt
+    # Default: []
+    rewrite-rules:
+    - pattern: 'interface{}'
+      replacement: 'any'
+    - pattern: 'a[b:len(a)]'
+      replacement: 'a[b:]'

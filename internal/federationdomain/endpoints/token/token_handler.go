@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/ory/fosite"
@@ -16,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/warning"
-	"k8s.io/utils/strings/slices"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
@@ -298,7 +298,7 @@ func validateAndGetDownstreamGroupsFromSession(session *psession.PinnipedSession
 	if downstreamGroupsInterface == nil {
 		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
-	downstreamGroupsInterfaceList, ok := downstreamGroupsInterface.([]interface{})
+	downstreamGroupsInterfaceList, ok := downstreamGroupsInterface.([]any)
 	if !ok {
 		return nil, errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}

@@ -22,10 +22,10 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
@@ -38,11 +38,11 @@ import (
 func TestFederationDomainWatcherControllerInformerFilters(t *testing.T) {
 	t.Parallel()
 
-	federationDomainInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
-	oidcIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().OIDCIdentityProviders()
-	ldapIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().LDAPIdentityProviders()
-	adIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().ActiveDirectoryIdentityProviders()
-	githubIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().GitHubIdentityProviders()
+	federationDomainInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).Config().V1alpha1().FederationDomains()
+	oidcIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().OIDCIdentityProviders()
+	ldapIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().LDAPIdentityProviders()
+	adIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().ActiveDirectoryIdentityProviders()
+	githubIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().GitHubIdentityProviders()
 
 	tests := []struct {
 		name       string
@@ -54,7 +54,7 @@ func TestFederationDomainWatcherControllerInformerFilters(t *testing.T) {
 	}{
 		{
 			name:       "any FederationDomain changes",
-			obj:        &configv1alpha1.FederationDomain{},
+			obj:        &supervisorconfigv1alpha1.FederationDomain{},
 			informer:   federationDomainInformer,
 			wantAdd:    true,
 			wantUpdate: true,
@@ -132,8 +132,8 @@ func (f *fakeFederationDomainsSetter) SetFederationDomains(federationDomains ...
 }
 
 var federationDomainGVR = schema.GroupVersionResource{
-	Group:    configv1alpha1.SchemeGroupVersion.Group,
-	Version:  configv1alpha1.SchemeGroupVersion.Version,
+	Group:    supervisorconfigv1alpha1.SchemeGroupVersion.Group,
+	Version:  supervisorconfigv1alpha1.SchemeGroupVersion.Version,
 	Resource: "federationdomains",
 }
 
@@ -179,19 +179,19 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		},
 	}
 
-	federationDomain1 := &configv1alpha1.FederationDomain{
+	federationDomain1 := &supervisorconfigv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-		Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer1.com"},
+		Spec:       supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://issuer1.com"},
 	}
 
-	federationDomain2 := &configv1alpha1.FederationDomain{
+	federationDomain2 := &supervisorconfigv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
-		Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer2.com"},
+		Spec:       supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://issuer2.com"},
 	}
 
-	invalidIssuerURLFederationDomain := &configv1alpha1.FederationDomain{
+	invalidIssuerURLFederationDomain := &supervisorconfigv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{Name: "invalid-config", Namespace: namespace, Generation: 123},
-		Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://invalid-issuer.com?some=query"},
+		Spec:       supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://invalid-issuer.com?some=query"},
 	}
 
 	federationDomainIssuerWithIDPs := func(t *testing.T, fedDomainIssuer string, fdIDPs []*federationdomainproviders.FederationDomainIdentityProvider) *federationdomainproviders.FederationDomainIssuer {
@@ -538,9 +538,9 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 	tests := []struct {
 		name              string
 		inputObjects      []runtime.Object
-		configClient      func(*pinnipedfake.Clientset)
+		configClient      func(*supervisorfake.Clientset)
 		wantErr           string
-		wantStatusUpdates []*configv1alpha1.FederationDomain
+		wantStatusUpdates []*supervisorconfigv1alpha1.FederationDomain
 		wantFDIssuers     []*federationdomainproviders.FederationDomainIssuer
 	}{
 		{
@@ -561,13 +561,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -585,13 +585,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, ldapIdentityProvider.ObjectMeta),
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, ldapIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, ldapIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, ldapIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -609,13 +609,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, adIdentityProvider.ObjectMeta),
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, adIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, adIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, adIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -633,13 +633,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, gitHubIdentityProvider.ObjectMeta),
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, gitHubIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, gitHubIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, gitHubIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -649,11 +649,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				"the out-of-date FederationDomain",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: federationDomain1.Name, Namespace: federationDomain1.Namespace, Generation: 123},
-					Spec:       configv1alpha1.FederationDomainSpec{Issuer: federationDomain1.Spec.Issuer},
-					Status: configv1alpha1.FederationDomainStatus{
-						Phase:      configv1alpha1.FederationDomainPhaseReady,
+					Spec:       supervisorconfigv1alpha1.FederationDomainSpec{Issuer: federationDomain1.Spec.Issuer},
+					Status: supervisorconfigv1alpha1.FederationDomainStatus{
+						Phase:      supervisorconfigv1alpha1.FederationDomainPhaseReady,
 						Conditions: allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 					},
 				},
@@ -663,10 +663,10 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				// only one update, because the other FederationDomain already had the right status
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -675,11 +675,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			name: "when the status of the FederationDomains is based on an old generation, it is updated",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: federationDomain1.Name, Namespace: federationDomain1.Namespace, Generation: 123},
-					Spec:       configv1alpha1.FederationDomainSpec{Issuer: federationDomain1.Spec.Issuer},
-					Status: configv1alpha1.FederationDomainStatus{
-						Phase: configv1alpha1.FederationDomainPhaseReady,
+					Spec:       supervisorconfigv1alpha1.FederationDomainSpec{Issuer: federationDomain1.Spec.Issuer},
+					Status: supervisorconfigv1alpha1.FederationDomainStatus{
+						Phase: supervisorconfigv1alpha1.FederationDomainPhaseReady,
 						Conditions: allHappyConditionsLegacyConfigurationSuccess(
 							federationDomain1.Spec.Issuer,
 							oidcIdentityProvider.Name,
@@ -692,10 +692,10 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
 				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				// only one update, because the other FederationDomain already had the right status
 				expectedFederationDomainStatusUpdate(federationDomain1,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(
 						federationDomain1.Spec.Issuer,
 						oidcIdentityProvider.Name,
@@ -712,12 +712,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomain2,
 				oidcIdentityProvider,
 			},
-			configClient: func(client *pinnipedfake.Clientset) {
+			configClient: func(client *supervisorfake.Clientset) {
 				client.PrependReactor(
 					"update",
 					"federationdomains",
 					func(action coretesting.Action) (bool, runtime.Object, error) {
-						fd := action.(coretesting.UpdateAction).GetObject().(*configv1alpha1.FederationDomain)
+						fd := action.(coretesting.UpdateAction).GetObject().(*supervisorconfigv1alpha1.FederationDomain)
 						if fd.Name == federationDomain1.Name {
 							return true, nil, errors.New("some update error")
 						}
@@ -730,13 +730,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -753,9 +753,9 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				// only the valid FederationDomain
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -764,7 +764,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						}),
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -777,12 +777,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomain2,
 				oidcIdentityProvider,
 			},
-			configClient: func(client *pinnipedfake.Clientset) {
+			configClient: func(client *supervisorfake.Clientset) {
 				client.PrependReactor(
 					"update",
 					"federationdomains",
 					func(action coretesting.Action) (bool, runtime.Object, error) {
-						fd := action.(coretesting.UpdateAction).GetObject().(*configv1alpha1.FederationDomain)
+						fd := action.(coretesting.UpdateAction).GetObject().(*supervisorconfigv1alpha1.FederationDomain)
 						if fd.Name == invalidIssuerURLFederationDomain.Name {
 							return true, nil, errors.New("some update error")
 						}
@@ -795,9 +795,9 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				// only the valid FederationDomain
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, oidcIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(invalidIssuerURLFederationDomain,
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -806,7 +806,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						}),
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -815,29 +815,29 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			name: "when there are FederationDomains with duplicate issuer strings these particular FederationDomains " +
 				"will report error on IssuerUnique conditions",
 			inputObjects: []runtime.Object{
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace, Generation: 123},
-					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
+					Spec:       supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://iSSueR-duPlicAte.cOm/a"},
 				},
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace, Generation: 123},
-					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/a"},
+					Spec:       supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/a"},
 				},
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace, Generation: 123},
-					Spec:       configv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/A"}, // different path (paths are case-sensitive)
+					Spec:       supervisorconfigv1alpha1.FederationDomainSpec{Issuer: "https://issuer-duplicate.com/A"}, // different path (paths are case-sensitive)
 				},
 				oidcIdentityProvider,
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
 				federationDomainIssuerWithDefaultIDP(t, "https://issuer-duplicate.com/A", oidcIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "duplicate1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess("https://iSSueR-duPlicAte.cOm/a", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -846,10 +846,10 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						}),
 				),
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "duplicate2", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate.com/a", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -858,10 +858,10 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						}),
 				),
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "not-duplicate", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate.com/A", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -870,34 +870,34 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			name: "when there are FederationDomains with the same issuer DNS hostname using different secretNames these " +
 				"particular FederationDomains will report errors on OneTLSSecretPerIssuerHostname conditions",
 			inputObjects: []runtime.Object{
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://iSSueR-duPlicAte-adDress.cOm/path1",
-						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
+						TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
 					},
 				},
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						// Validation treats these as the same DNS hostname even though they have different port numbers,
 						// because SNI information on the incoming requests is not going to include port numbers.
 						Issuer: "https://issuer-duplicate-address.com:1234/path2",
-						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret2"},
+						TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: "secret2"},
 					},
 				},
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressFederationDomain", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer-not-duplicate.com",
-						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
+						TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
 					},
 				},
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: invalidIssuerURL,
-						TLS:    &configv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
+						TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: "secret1"},
 					},
 				},
 				oidcIdentityProvider,
@@ -905,12 +905,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
 				federationDomainIssuerWithDefaultIDP(t, "https://issuer-not-duplicate.com", oidcIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "fd1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess("https://iSSueR-duPlicAte-adDress.cOm/path1", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -919,10 +919,10 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						}),
 				),
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "fd2", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess("https://issuer-duplicate-address.com:1234/path2", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -931,10 +931,10 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						}),
 				),
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "invalidIssuerURLFederationDomain", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(invalidIssuerURL, oidcIdentityProvider.Name, frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -945,10 +945,10 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						}),
 				),
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "differentIssuerAddressFederationDomain", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess("https://issuer-not-duplicate.com", oidcIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
@@ -960,9 +960,9 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomain2,
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, "", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -971,7 +971,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						}),
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, "", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -991,9 +991,9 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				gitHubIdentityProvider,
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, "", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1006,11 +1006,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 		{
 			name: "the federation domain specifies identity providers that cannot be found",
 			inputObjects: []runtime.Object{
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "cant-find-me",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1048,12 +1048,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1078,11 +1078,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				ldapIdentityProvider,
 				adIdentityProvider,
 				gitHubIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "can-find-me",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1144,12 +1144,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						},
 					}),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 				),
 			},
@@ -1161,11 +1161,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				ldapIdentityProvider,
 				adIdentityProvider,
 				gitHubIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "duplicate1",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1227,12 +1227,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1249,11 +1249,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				ldapIdentityProvider,
 				adIdentityProvider,
 				gitHubIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1299,12 +1299,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1328,11 +1328,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				ldapIdentityProvider,
 				adIdentityProvider,
 				gitHubIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1362,12 +1362,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1386,11 +1386,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			name: "the federation domain has transformation expressions which don't compile",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1398,8 +1398,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{Type: "username/v1", Expression: "this is not a valid cel expression"},
 										{Type: "groups/v1", Expression: "this is also not a valid cel expression"},
 										{Type: "username/v1", Expression: "username"}, // valid
@@ -1412,12 +1412,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1449,11 +1449,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			name: "the federation domain has transformation examples which don't pass",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1461,18 +1461,18 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{Type: "policy/v1", Expression: `username == "ryan" || username == "rejectMeWithDefaultMessage"`, Message: "only ryan allowed"},
 										{Type: "policy/v1", Expression: `username != "rejectMeWithDefaultMessage"`}, // no message specified
 										{Type: "username/v1", Expression: `"pre:" + username`},
 										{Type: "groups/v1", Expression: `groups.map(g, "pre:" + g)`},
 									},
-									Examples: []configv1alpha1.FederationDomainTransformsExample{
+									Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 										{ // this example should pass
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "pre:ryan",
 												Groups:   []string{"pre:b", "pre:a", "pre:b", "pre:a"}, // order and repeats don't matter, treated like a set
 												Rejected: false,
@@ -1480,7 +1480,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										},
 										{ // this example should pass
 											Username: "other",
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Rejected: true,
 												Message:  "only ryan allowed",
 											},
@@ -1488,7 +1488,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										{ // this example should fail because it expects the user to be rejected but the user was actually not rejected
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Rejected: true,
 												Message:  "this input is ignored in this case",
 											},
@@ -1496,7 +1496,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										{ // this example should fail because it expects the user not to be rejected but they were actually rejected
 											Username: "other",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "pre:other",
 												Groups:   []string{"pre:a", "pre:b"},
 												Rejected: false,
@@ -1505,7 +1505,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										{ // this example should fail because it expects the wrong rejection message
 											Username: "other",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Rejected: true,
 												Message:  "wrong message",
 											},
@@ -1514,14 +1514,14 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 											// because the message assertions defaults to asserting the default rejection message
 											Username: "rejectMeWithDefaultMessage",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Rejected: true,
 											},
 										},
 										{ // this example should fail because it expects both the wrong username and groups
 											Username: "ryan",
 											Groups:   []string{"b", "a"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "wrong",
 												Groups:   []string{},
 												Rejected: false,
@@ -1530,7 +1530,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										{ // this example should fail because it expects the wrong username only
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "wrong",
 												Groups:   []string{"pre:b", "pre:a"},
 												Rejected: false,
@@ -1539,7 +1539,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										{ // this example should fail because it expects the wrong groups only
 											Username: "ryan",
 											Groups:   []string{"b", "a"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "pre:ryan",
 												Groups:   []string{"wrong2", "wrong1"},
 												Rejected: false,
@@ -1548,7 +1548,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										{ // this example should fail because it does not expect anything but the auth actually was successful
 											Username: "ryan",
 											Groups:   []string{"b", "a"},
-											Expects:  configv1alpha1.FederationDomainTransformsExampleExpects{},
+											Expects:  supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{},
 										},
 									},
 								},
@@ -1558,12 +1558,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1613,11 +1613,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			name: "the federation domain has transformation expressions that return illegal values with examples which exercise them",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1625,25 +1625,25 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{Type: "username/v1", Expression: `username == "ryan" ? "" : username`}, // not allowed to return an empty string as the transformed username
 									},
-									Examples: []configv1alpha1.FederationDomainTransformsExample{
+									Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 										{ // every example which encounters an unexpected error should fail because the transformation pipeline returned an error
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects:  configv1alpha1.FederationDomainTransformsExampleExpects{},
+											Expects:  supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{},
 										},
 										{ // every example which encounters an unexpected error should fail because the transformation pipeline returned an error
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects:  configv1alpha1.FederationDomainTransformsExampleExpects{},
+											Expects:  supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{},
 										},
 										{ // this should pass
 											Username: "other",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "other",
 												Groups:   []string{"a", "b"},
 												Rejected: false,
@@ -1657,12 +1657,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1684,11 +1684,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			name: "the federation domain has lots of errors including errors from multiple IDPs, which are all shown in the status conditions using IDP indices in the messages",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://not-unique.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "not unique",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1696,19 +1696,19 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "OIDCIdentityProvider",
 									Name:     "this will not be found",
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 										{Name: "foo", Type: "string", StringValue: "bar"},
 										{Name: "bar", Type: "string", StringValue: "baz"},
 									},
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{Type: "username/v1", Expression: `username + ":suffix"`},
 									},
-									Examples: []configv1alpha1.FederationDomainTransformsExample{
+									Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 										{ // this should fail
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "this is wrong string",
 												Groups:   []string{"this is wrong string list"},
 											},
@@ -1716,7 +1716,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										{ // this should fail
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "this is also wrong string",
 												Groups:   []string{"this is also wrong string list"},
 											},
@@ -1731,19 +1731,19 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "this is wrong",
 									Name:     "foo",
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 										{Name: "foo", Type: "string", StringValue: "bar"},
 										{Name: "bar", Type: "string", StringValue: "baz"},
 									},
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{Type: "username/v1", Expression: `username + ":suffix"`},
 									},
-									Examples: []configv1alpha1.FederationDomainTransformsExample{
+									Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 										{ // this should pass
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "ryan:suffix",
 												Groups:   []string{"a", "b"},
 											},
@@ -1751,7 +1751,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										{ // this should fail
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "this is still wrong string",
 												Groups:   []string{"this is still wrong string list"},
 											},
@@ -1766,8 +1766,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "OIDCIdentityProvider",
 									Name:     "foo",
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{Type: "username/v1", Expression: `username`},
 										{Type: "username/v1", Expression: `this does not compile`},
 										{Type: "username/v1", Expression: `username`},
@@ -1778,11 +1778,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						},
 					},
 				},
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://not-unique.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1790,8 +1790,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{Type: "username/v1", Expression: `username`},
 										{Type: "username/v1", Expression: `this still does not compile`},
 										{Type: "username/v1", Expression: `username`},
@@ -1804,12 +1804,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1866,10 +1866,10 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 						}),
 				),
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config2", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseError,
+					supervisorconfigv1alpha1.FederationDomainPhaseError,
 					conditionstestutil.Replace(
 						allHappyConditionsSuccess("https://not-unique.com", frozenMetav1Now, 123),
 						[]metav1.Condition{
@@ -1898,11 +1898,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
 				ldapIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "name1",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -1910,22 +1910,22 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{Type: "policy/v1", Expression: `username == "ryan" || username == "rejectMeWithDefaultMessage"`, Message: "only ryan allowed"},
 										{Type: "policy/v1", Expression: `username != "rejectMeWithDefaultMessage"`}, // no message specified
 										{Type: "username/v1", Expression: `"pre:" + username`},
 										{Type: "groups/v1", Expression: `groups.map(g, "pre:" + g)`},
 									},
-									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+									Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 										{Name: "str", Type: "string", StringValue: "abc"},
 										{Name: "strL", Type: "stringList", StringListValue: []string{"def"}},
 									},
-									Examples: []configv1alpha1.FederationDomainTransformsExample{
+									Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 										{
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "pre:ryan",
 												Groups:   []string{"pre:b", "pre:a"},
 												Rejected: false,
@@ -1933,21 +1933,21 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 										},
 										{
 											Username: "other",
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Rejected: true,
 												Message:  "only ryan allowed",
 											},
 										},
 										{
 											Username: "rejectMeWithDefaultMessage",
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Rejected: true,
 												// Not specifying message is the same as expecting the default message.
 											},
 										},
 										{
 											Username: "rejectMeWithDefaultMessage",
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Rejected: true,
 												Message:  "authentication was rejected by a configured policy", // this is the default message
 											},
@@ -1962,15 +1962,15 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "LDAPIdentityProvider",
 									Name:     ldapIdentityProvider.Name,
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{Type: "username/v1", Expression: `"pre:" + username`},
 									},
-									Examples: []configv1alpha1.FederationDomainTransformsExample{
+									Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
 										{
 											Username: "ryan",
 											Groups:   []string{"a", "b"},
-											Expects: configv1alpha1.FederationDomainTransformsExampleExpects{
+											Expects: supervisorconfigv1alpha1.FederationDomainTransformsExampleExpects{
 												Username: "pre:ryan",
 												Groups:   []string{"b", "a"},
 												Rejected: false,
@@ -2010,12 +2010,12 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					},
 				}),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(
-					&configv1alpha1.FederationDomain{
+					&supervisorconfigv1alpha1.FederationDomain{
 						ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					},
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsSuccess("https://issuer1.com", frozenMetav1Now, 123),
 				),
 			},
@@ -2024,11 +2024,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			name: "the federation domain specifies illegal const type, which shouldn't really happen since the CRD validates it",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "can-find-me",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -2036,8 +2036,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Constants: []configv1alpha1.FederationDomainTransformsConstant{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
 										{
 											Type: "this is illegal",
 										},
@@ -2054,11 +2054,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			name: "the federation domain specifies illegal expression type, which shouldn't really happen since the CRD validates it",
 			inputObjects: []runtime.Object{
 				oidcIdentityProvider,
-				&configv1alpha1.FederationDomain{
+				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
-					Spec: configv1alpha1.FederationDomainSpec{
+					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
 						Issuer: "https://issuer1.com",
-						IdentityProviders: []configv1alpha1.FederationDomainIdentityProvider{
+						IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 							{
 								DisplayName: "can-find-me",
 								ObjectRef: corev1.TypedLocalObjectReference{
@@ -2066,8 +2066,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Kind:     "OIDCIdentityProvider",
 									Name:     oidcIdentityProvider.Name,
 								},
-								Transforms: configv1alpha1.FederationDomainTransforms{
-									Expressions: []configv1alpha1.FederationDomainTransformsExpression{
+								Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+									Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
 										{
 											Type: "this is illegal",
 										},
@@ -2087,8 +2087,8 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			t.Parallel()
 
 			federationDomainsSetter := &fakeFederationDomainsSetter{}
-			pinnipedAPIClient := pinnipedfake.NewSimpleClientset()
-			pinnipedInformerClient := pinnipedfake.NewSimpleClientset()
+			pinnipedAPIClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformerClient := supervisorfake.NewSimpleClientset()
 			for _, o := range tt.inputObjects {
 				require.NoError(t, pinnipedAPIClient.Tracker().Add(o))
 				require.NoError(t, pinnipedInformerClient.Tracker().Add(o))
@@ -2096,7 +2096,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			if tt.configClient != nil {
 				tt.configClient(pinnipedAPIClient)
 			}
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(pinnipedInformerClient, 0)
 
 			controller := NewFederationDomainWatcherController(
 				federationDomainsSetter,
@@ -2165,7 +2165,7 @@ type comparableFederationDomainIssuer struct {
 type comparableFederationDomainIdentityProvider struct {
 	DisplayName      string
 	UID              types.UID
-	TransformsSource []interface{}
+	TransformsSource []any
 }
 
 func makeFederationDomainIdentityProviderComparable(fdi *federationdomainproviders.FederationDomainIdentityProvider) *comparableFederationDomainIdentityProvider {
@@ -2182,9 +2182,10 @@ func makeFederationDomainIdentityProviderComparable(fdi *federationdomainprovide
 func convertToComparableType(fdis []*federationdomainproviders.FederationDomainIssuer) []*comparableFederationDomainIssuer {
 	result := []*comparableFederationDomainIssuer{}
 	for _, fdi := range fdis {
-		comparableFDIs := make([]*comparableFederationDomainIdentityProvider, len(fdi.IdentityProviders()))
-		for _, idp := range fdi.IdentityProviders() {
-			comparableFDIs = append(comparableFDIs, makeFederationDomainIdentityProviderComparable(idp))
+		identityProviders := fdi.IdentityProviders()
+		comparableFDIs := make([]*comparableFederationDomainIdentityProvider, len(identityProviders))
+		for i, idp := range fdi.IdentityProviders() {
+			comparableFDIs[i] = makeFederationDomainIdentityProviderComparable(idp)
 		}
 		converted := &comparableFederationDomainIssuer{
 			issuer:                  fdi.Issuer(),
@@ -2197,15 +2198,15 @@ func convertToComparableType(fdis []*federationdomainproviders.FederationDomainI
 }
 
 func expectedFederationDomainStatusUpdate(
-	fd *configv1alpha1.FederationDomain,
-	phase configv1alpha1.FederationDomainPhase,
+	fd *supervisorconfigv1alpha1.FederationDomain,
+	phase supervisorconfigv1alpha1.FederationDomainPhase,
 	conditions []metav1.Condition,
-) *configv1alpha1.FederationDomain {
+) *supervisorconfigv1alpha1.FederationDomain {
 	fdCopy := fd.DeepCopy()
 
 	// We don't care about the spec of a FederationDomain in an update status action,
 	// so clear it out to make it easier to write expected values.
-	fdCopy.Spec = configv1alpha1.FederationDomainSpec{}
+	fdCopy.Spec = supervisorconfigv1alpha1.FederationDomainSpec{}
 
 	fdCopy.Status.Phase = phase
 	fdCopy.Status.Conditions = conditions
@@ -2213,8 +2214,8 @@ func expectedFederationDomainStatusUpdate(
 	return fdCopy
 }
 
-func getFederationDomainStatusUpdates(t *testing.T, actions []coretesting.Action) []*configv1alpha1.FederationDomain {
-	federationDomains := []*configv1alpha1.FederationDomain{}
+func getFederationDomainStatusUpdates(t *testing.T, actions []coretesting.Action) []*supervisorconfigv1alpha1.FederationDomain {
+	federationDomains := []*supervisorconfigv1alpha1.FederationDomain{}
 
 	for _, action := range actions {
 		updateAction, ok := action.(coretesting.UpdateAction)
@@ -2222,14 +2223,14 @@ func getFederationDomainStatusUpdates(t *testing.T, actions []coretesting.Action
 		require.Equal(t, federationDomainGVR, updateAction.GetResource(), "an update action should have updated a FederationDomain but updated something else")
 		require.Equal(t, "status", updateAction.GetSubresource(), "an update action should have updated the status subresource but updated something else")
 
-		fd, ok := updateAction.GetObject().(*configv1alpha1.FederationDomain)
+		fd, ok := updateAction.GetObject().(*supervisorconfigv1alpha1.FederationDomain)
 		require.True(t, ok, "failed to cast an action's object as a FederationDomain: %#v", updateAction.GetObject())
 		require.Equal(t, fd.Namespace, updateAction.GetNamespace(), "an update action might have been called on the wrong namespace for a FederationDomain")
 
 		// We don't care about the spec of a FederationDomain in an update status action,
 		// so clear it out to make it easier to write expected values.
 		copyOfFD := fd.DeepCopy()
-		copyOfFD.Spec = configv1alpha1.FederationDomainSpec{}
+		copyOfFD.Spec = supervisorconfigv1alpha1.FederationDomainSpec{}
 
 		federationDomains = append(federationDomains, copyOfFD)
 	}
@@ -2237,7 +2238,7 @@ func getFederationDomainStatusUpdates(t *testing.T, actions []coretesting.Action
 	return federationDomains
 }
 
-func sortFederationDomainsByName(federationDomains []*configv1alpha1.FederationDomain) {
+func sortFederationDomainsByName(federationDomains []*supervisorconfigv1alpha1.FederationDomain) {
 	sort.SliceStable(federationDomains, func(a, b int) bool {
 		return federationDomains[a].GetName() < federationDomains[b].GetName()
 	})
@@ -2317,7 +2318,7 @@ func TestTransformationPipelinesCanBeTestedForEqualityUsingSourceToMakeTestingEa
 	equalPipeline := idtransform.NewTransformationPipeline()
 	differentPipeline1 := idtransform.NewTransformationPipeline()
 	differentPipeline2 := idtransform.NewTransformationPipeline()
-	expectedSourceList := []interface{}{}
+	expectedSourceList := []any{}
 
 	for i, transform := range transforms {
 		// Compile and append to a pipeline.

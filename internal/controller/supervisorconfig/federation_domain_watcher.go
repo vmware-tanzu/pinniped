@@ -13,15 +13,15 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	errorsutil "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/clock"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	configinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/config/v1alpha1"
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
@@ -196,15 +196,15 @@ func (c *federationDomainWatcherController) Sync(ctx controllerlib.Context) erro
 		}
 	}
 
-	return errorsutil.NewAggregate(errs)
+	return utilerrors.NewAggregate(errs)
 }
 
 func (c *federationDomainWatcherController) processAllFederationDomains(
 	ctx context.Context,
-	federationDomains []*configv1alpha1.FederationDomain,
-) ([]*federationdomainproviders.FederationDomainIssuer, map[*configv1alpha1.FederationDomain][]*metav1.Condition, error) {
+	federationDomains []*supervisorconfigv1alpha1.FederationDomain,
+) ([]*federationdomainproviders.FederationDomainIssuer, map[*supervisorconfigv1alpha1.FederationDomain][]*metav1.Condition, error) {
 	federationDomainIssuers := make([]*federationdomainproviders.FederationDomainIssuer, 0)
-	fdToConditionsMap := map[*configv1alpha1.FederationDomain][]*metav1.Condition{}
+	fdToConditionsMap := map[*supervisorconfigv1alpha1.FederationDomain][]*metav1.Condition{}
 	crossDomainConfigValidator := newCrossFederationDomainConfigValidator(federationDomains)
 
 	for _, federationDomain := range federationDomains {
@@ -233,7 +233,7 @@ func (c *federationDomainWatcherController) processAllFederationDomains(
 
 func (c *federationDomainWatcherController) makeFederationDomainIssuer(
 	ctx context.Context,
-	federationDomain *configv1alpha1.FederationDomain,
+	federationDomain *supervisorconfigv1alpha1.FederationDomain,
 	conditions []*metav1.Condition,
 ) (*federationdomainproviders.FederationDomainIssuer, []*metav1.Condition, error) {
 	var err error
@@ -257,7 +257,7 @@ func (c *federationDomainWatcherController) makeFederationDomainIssuer(
 }
 
 func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
-	federationDomain *configv1alpha1.FederationDomain,
+	federationDomain *supervisorconfigv1alpha1.FederationDomain,
 	conditions []*metav1.Condition,
 ) (*federationdomainproviders.FederationDomainIssuer, []*metav1.Condition, error) {
 	var defaultFederationDomainIdentityProvider *federationdomainproviders.FederationDomainIdentityProvider
@@ -355,7 +355,7 @@ func (c *federationDomainWatcherController) makeLegacyFederationDomainIssuer(
 //nolint:funlen
 func (c *federationDomainWatcherController) makeFederationDomainIssuerWithExplicitIDPs(
 	ctx context.Context,
-	federationDomain *configv1alpha1.FederationDomain,
+	federationDomain *supervisorconfigv1alpha1.FederationDomain,
 	conditions []*metav1.Condition,
 ) (*federationdomainproviders.FederationDomainIssuer, []*metav1.Condition, error) {
 	federationDomainIdentityProviders := []*federationdomainproviders.FederationDomainIdentityProvider{}
@@ -474,7 +474,7 @@ func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef cor
 	switch {
 	case err == nil:
 		idpResourceUID = foundIDP.GetUID()
-	case errors.IsNotFound(err):
+	case apierrors.IsNotFound(err):
 		return "", false, nil
 	default:
 		return "", false, err // unexpected error from the informer
@@ -484,7 +484,7 @@ func (c *federationDomainWatcherController) findIDPsUIDByObjectRef(objectRef cor
 
 func (c *federationDomainWatcherController) makeTransformationPipelineAndEvaluateExamplesForIdentityProvider(
 	ctx context.Context,
-	idp configv1alpha1.FederationDomainIdentityProvider,
+	idp supervisorconfigv1alpha1.FederationDomainIdentityProvider,
 	idpIndex int,
 	validationErrorMessages *transformsValidationErrorMessages,
 ) (*idtransform.TransformationPipeline, bool, error) {
@@ -510,7 +510,7 @@ func (c *federationDomainWatcherController) makeTransformationPipelineAndEvaluat
 }
 
 func (c *federationDomainWatcherController) makeTransformsConstantsForIdentityProvider(
-	idp configv1alpha1.FederationDomainIdentityProvider,
+	idp supervisorconfigv1alpha1.FederationDomainIdentityProvider,
 ) (*celtransformer.TransformationConstants, error) {
 	consts := &celtransformer.TransformationConstants{
 		StringConstants:     map[string]string{},
@@ -538,7 +538,7 @@ func (c *federationDomainWatcherController) makeTransformsConstantsForIdentityPr
 }
 
 func (c *federationDomainWatcherController) makeTransformationPipelineForIdentityProvider(
-	idp configv1alpha1.FederationDomainIdentityProvider,
+	idp supervisorconfigv1alpha1.FederationDomainIdentityProvider,
 	idpIndex int,
 	consts *celtransformer.TransformationConstants,
 ) (*idtransform.TransformationPipeline, string, error) {
@@ -584,7 +584,7 @@ func (c *federationDomainWatcherController) makeTransformationPipelineForIdentit
 
 func (c *federationDomainWatcherController) evaluateExamplesForIdentityProvider(
 	ctx context.Context,
-	idp configv1alpha1.FederationDomainIdentityProvider,
+	idp supervisorconfigv1alpha1.FederationDomainIdentityProvider,
 	idpIndex int,
 	pipeline *idtransform.TransformationPipeline,
 ) (bool, string) {
@@ -682,7 +682,7 @@ func appendIdentityProviderObjectRefKindCondition(expectedKinds []string, badSuf
 
 func appendIdentityProvidersFoundCondition(
 	idpNotFoundIndices []int,
-	federationDomainIdentityProviders []configv1alpha1.FederationDomainIdentityProvider,
+	federationDomainIdentityProviders []supervisorconfigv1alpha1.FederationDomainIdentityProvider,
 	conditions []*metav1.Condition,
 ) []*metav1.Condition {
 	if len(idpNotFoundIndices) != 0 {
@@ -809,13 +809,13 @@ func appendIssuerURLValidCondition(err error, conditions []*metav1.Condition) []
 
 func (c *federationDomainWatcherController) updateStatus(
 	ctx context.Context,
-	federationDomain *configv1alpha1.FederationDomain,
+	federationDomain *supervisorconfigv1alpha1.FederationDomain,
 	conditions []*metav1.Condition,
 ) error {
 	updated := federationDomain.DeepCopy()
 
 	if conditionsutil.HadErrorCondition(conditions) {
-		updated.Status.Phase = configv1alpha1.FederationDomainPhaseError
+		updated.Status.Phase = supervisorconfigv1alpha1.FederationDomainPhaseError
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionFalse,
@@ -823,7 +823,7 @@ func (c *federationDomainWatcherController) updateStatus(
 			Message: "the FederationDomain is not ready: see other conditions for details",
 		})
 	} else {
-		updated.Status.Phase = configv1alpha1.FederationDomainPhaseReady
+		updated.Status.Phase = supervisorconfigv1alpha1.FederationDomainPhaseReady
 		conditions = append(conditions, &metav1.Condition{
 			Type:   typeReady,
 			Status: metav1.ConditionTrue,
@@ -878,7 +878,7 @@ func issuerURLToIssuerKey(issuerURL *url.URL) string {
 	return fmt.Sprintf("%s://%s%s", issuerURL.Scheme, strings.ToLower(issuerURL.Host), issuerURL.Path)
 }
 
-func (v *crossFederationDomainConfigValidator) Validate(federationDomain *configv1alpha1.FederationDomain, conditions []*metav1.Condition) []*metav1.Condition {
+func (v *crossFederationDomainConfigValidator) Validate(federationDomain *supervisorconfigv1alpha1.FederationDomain, conditions []*metav1.Condition) []*metav1.Condition {
 	issuerURL, urlParseErr := url.Parse(federationDomain.Spec.Issuer)
 
 	if urlParseErr != nil {
@@ -933,7 +933,7 @@ func (v *crossFederationDomainConfigValidator) Validate(federationDomain *config
 	return conditions
 }
 
-func newCrossFederationDomainConfigValidator(federationDomains []*configv1alpha1.FederationDomain) *crossFederationDomainConfigValidator {
+func newCrossFederationDomainConfigValidator(federationDomains []*supervisorconfigv1alpha1.FederationDomain) *crossFederationDomainConfigValidator {
 	// Make a map of issuer strings -> count of how many times we saw that issuer string.
 	// This will help us complain when there are duplicate issuer strings.
 	// Also make a helper function for forming keys into this map.

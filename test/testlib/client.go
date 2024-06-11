@@ -19,7 +19,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -27,10 +27,10 @@ import (
 	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	"k8s.io/utils/ptr"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
@@ -175,8 +175,8 @@ func NewKubeclient(t *testing.T, config *rest.Config) *kubeclient.Client {
 func CreateTestWebhookAuthenticator(
 	ctx context.Context,
 	t *testing.T,
-	webhookSpec *auth1alpha1.WebhookAuthenticatorSpec,
-	expectedStatus auth1alpha1.WebhookAuthenticatorPhase) corev1.TypedLocalObjectReference {
+	webhookSpec *authenticationv1alpha1.WebhookAuthenticatorSpec,
+	expectedStatus authenticationv1alpha1.WebhookAuthenticatorPhase) corev1.TypedLocalObjectReference {
 	t.Helper()
 
 	client := NewConciergeClientset(t)
@@ -185,7 +185,7 @@ func CreateTestWebhookAuthenticator(
 	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	webhook, err := webhooks.Create(createContext, &auth1alpha1.WebhookAuthenticator{
+	webhook, err := webhooks.Create(createContext, &authenticationv1alpha1.WebhookAuthenticator{
 		ObjectMeta: TestObjectMeta(t, "webhook"),
 		Spec:       *webhookSpec,
 	}, metav1.CreateOptions{})
@@ -206,7 +206,7 @@ func CreateTestWebhookAuthenticator(
 	}
 
 	return corev1.TypedLocalObjectReference{
-		APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+		APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
 		Kind:     "WebhookAuthenticator",
 		Name:     webhook.Name,
 	}
@@ -216,7 +216,7 @@ func WaitForWebhookAuthenticatorStatusPhase(
 	ctx context.Context,
 	t *testing.T,
 	webhookName string,
-	expectPhase auth1alpha1.WebhookAuthenticatorPhase) {
+	expectPhase authenticationv1alpha1.WebhookAuthenticatorPhase) {
 	t.Helper()
 	webhookAuthenticatorClientSet := NewConciergeClientset(t).AuthenticationV1alpha1().WebhookAuthenticators()
 
@@ -257,25 +257,25 @@ func WaitForWebhookAuthenticatorStatusConditions(ctx context.Context, t *testing
 // deleted at the end of the current test's lifetime.
 //
 // CreateTestJWTAuthenticatorForCLIUpstream gets the OIDC issuer info from IntegrationEnv().CLIUpstreamOIDC.
-func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T) *auth1alpha1.JWTAuthenticator {
+func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T) *authenticationv1alpha1.JWTAuthenticator {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
-	spec := auth1alpha1.JWTAuthenticatorSpec{
+	spec := authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   testEnv.CLIUpstreamOIDC.Issuer,
 		Audience: testEnv.CLIUpstreamOIDC.ClientID,
 		// The default UsernameClaim is "username" but the upstreams that we use for
 		// integration tests won't necessarily have that claim, so use "sub" here.
-		Claims: auth1alpha1.JWTTokenClaims{Username: "sub"},
+		Claims: authenticationv1alpha1.JWTTokenClaims{Username: "sub"},
 	}
 	// If the test upstream does not have a CA bundle specified, then don't configure one in the
 	// JWTAuthenticator. Leaving TLSSpec set to nil will result in OIDC discovery using the OS's root
 	// CA store.
 	if testEnv.CLIUpstreamOIDC.CABundle != "" {
-		spec.TLS = &auth1alpha1.TLSSpec{
+		spec.TLS = &authenticationv1alpha1.TLSSpec{
 			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(testEnv.CLIUpstreamOIDC.CABundle)),
 		}
 	}
-	authenticator := CreateTestJWTAuthenticator(ctx, t, spec, auth1alpha1.JWTAuthenticatorPhaseReady)
+	authenticator := CreateTestJWTAuthenticator(ctx, t, spec, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 	return authenticator
 }
 
@@ -284,8 +284,8 @@ func CreateTestJWTAuthenticatorForCLIUpstream(ctx context.Context, t *testing.T)
 func CreateTestJWTAuthenticator(
 	ctx context.Context,
 	t *testing.T,
-	spec auth1alpha1.JWTAuthenticatorSpec,
-	expectedStatus auth1alpha1.JWTAuthenticatorPhase) *auth1alpha1.JWTAuthenticator {
+	spec authenticationv1alpha1.JWTAuthenticatorSpec,
+	expectedStatus authenticationv1alpha1.JWTAuthenticatorPhase) *authenticationv1alpha1.JWTAuthenticator {
 	t.Helper()
 
 	client := NewConciergeClientset(t)
@@ -294,7 +294,7 @@ func CreateTestJWTAuthenticator(
 	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
-	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &auth1alpha1.JWTAuthenticator{
+	jwtAuthenticator, err := jwtAuthenticators.Create(createContext, &authenticationv1alpha1.JWTAuthenticator{
 		ObjectMeta: TestObjectMeta(t, "jwt-authenticator"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
@@ -315,7 +315,7 @@ func CreateTestJWTAuthenticator(
 	return jwtAuthenticator
 }
 
-func WaitForJWTAuthenticatorStatusPhase(ctx context.Context, t *testing.T, jwtAuthenticatorName string, expectPhase auth1alpha1.JWTAuthenticatorPhase) {
+func WaitForJWTAuthenticatorStatusPhase(ctx context.Context, t *testing.T, jwtAuthenticatorName string, expectPhase authenticationv1alpha1.JWTAuthenticatorPhase) {
 	t.Helper()
 	jwtAuthenticatorClientSet := NewConciergeClientset(t).AuthenticationV1alpha1().JWTAuthenticators()
 
@@ -358,9 +358,9 @@ func WaitForJWTAuthenticatorStatusConditions(ctx context.Context, t *testing.T, 
 func CreateTestFederationDomain(
 	ctx context.Context,
 	t *testing.T,
-	spec configv1alpha1.FederationDomainSpec,
-	expectStatus configv1alpha1.FederationDomainPhase,
-) *configv1alpha1.FederationDomain {
+	spec supervisorconfigv1alpha1.FederationDomainSpec,
+	expectStatus supervisorconfigv1alpha1.FederationDomainPhase,
+) *supervisorconfigv1alpha1.FederationDomain {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 
@@ -368,7 +368,7 @@ func CreateTestFederationDomain(
 	defer cancel()
 
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
-	federationDomain, err := federationDomainsClient.Create(createContext, &configv1alpha1.FederationDomain{
+	federationDomain, err := federationDomainsClient.Create(createContext, &supervisorconfigv1alpha1.FederationDomain{
 		ObjectMeta: TestObjectMeta(t, "oidc-provider"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
@@ -381,7 +381,7 @@ func CreateTestFederationDomain(
 		deleteCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		err := federationDomainsClient.Delete(deleteCtx, federationDomain.Name, metav1.DeleteOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
 			require.NoErrorf(t, err, "could not cleanup test FederationDomain %s/%s", federationDomain.Namespace, federationDomain.Name)
@@ -394,7 +394,7 @@ func CreateTestFederationDomain(
 	return federationDomain
 }
 
-func WaitForFederationDomainStatusPhase(ctx context.Context, t *testing.T, federationDomainName string, expectPhase configv1alpha1.FederationDomainPhase) {
+func WaitForFederationDomainStatusPhase(ctx context.Context, t *testing.T, federationDomainName string, expectPhase supervisorconfigv1alpha1.FederationDomainPhase) {
 	t.Helper()
 	testEnv := IntegrationEnv(t)
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
@@ -405,7 +405,7 @@ func WaitForFederationDomainStatusPhase(ctx context.Context, t *testing.T, feder
 		requireEventually.Equalf(expectPhase, fd.Status.Phase, "actual status conditions were: %#v", fd.Status.Conditions)
 
 		// If the FederationDomain was successfully created, ensure all secrets are present before continuing
-		if expectPhase == configv1alpha1.FederationDomainPhaseReady {
+		if expectPhase == supervisorconfigv1alpha1.FederationDomainPhaseReady {
 			requireEventually.NotEmpty(fd.Status.Secrets.JWKS.Name, "expected status.secrets.jwks.name not to be empty")
 			requireEventually.NotEmpty(fd.Status.Secrets.TokenSigningKey.Name, "expected status.secrets.tokenSigningKey.name not to be empty")
 			requireEventually.NotEmpty(fd.Status.Secrets.StateSigningKey.Name, "expected status.secrets.stateSigningKey.name not to be empty")
@@ -521,7 +521,7 @@ func createClientCredentialsSecret(t *testing.T, clientID string, clientSecret s
 	)
 }
 
-func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expectedPhase configv1alpha1.OIDCClientPhase) (string, string) {
+func CreateOIDCClient(t *testing.T, spec supervisorconfigv1alpha1.OIDCClientSpec, expectedPhase supervisorconfigv1alpha1.OIDCClientPhase) (string, string) {
 	t.Helper()
 	env := IntegrationEnv(t)
 	client := NewSupervisorClientset(t)
@@ -531,7 +531,7 @@ func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expected
 	oidcClientClient := client.ConfigV1alpha1().OIDCClients(env.SupervisorNamespace)
 
 	// Create the OIDCClient using GenerateName to get a random name.
-	created, err := oidcClientClient.Create(ctx, &configv1alpha1.OIDCClient{
+	created, err := oidcClientClient.Create(ctx, &supervisorconfigv1alpha1.OIDCClient{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "client.oauth.pinniped.dev-test-", // use the required name prefix
 			Labels:       map[string]string{"pinniped.dev/test": ""},
@@ -553,7 +553,7 @@ func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expected
 	clientSecret := createOIDCClientSecret(t, created)
 
 	// Wait for the OIDCClient to enter the expected phase (or time out).
-	var result *configv1alpha1.OIDCClient
+	var result *supervisorconfigv1alpha1.OIDCClient
 	RequireEventuallyf(t, func(requireEventually *require.Assertions) {
 		var err error
 		result, err = oidcClientClient.Get(ctx, created.Name, metav1.GetOptions{})
@@ -564,7 +564,7 @@ func CreateOIDCClient(t *testing.T, spec configv1alpha1.OIDCClientSpec, expected
 	return created.Name, clientSecret
 }
 
-func createOIDCClientSecret(t *testing.T, forOIDCClient *configv1alpha1.OIDCClient) string {
+func createOIDCClientSecret(t *testing.T, forOIDCClient *supervisorconfigv1alpha1.OIDCClient) string {
 	t.Helper()
 	env := IntegrationEnv(t)
 	supervisorClient := NewSupervisorClientset(t)
@@ -620,7 +620,7 @@ func CreateTestGitHubIdentityProviderWithObjectMeta(t *testing.T, spec idpv1alph
 	t.Cleanup(func() {
 		t.Logf("cleaning up test GitHubIdentityProvider %s/%s", created.Namespace, created.Name)
 		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
 			require.NoErrorf(t, err, "could not cleanup test GitHubIdentityProvider %s/%s", created.Namespace, created.Name)
@@ -664,7 +664,7 @@ func CreateTestOIDCIdentityProviderWithObjectMeta(t *testing.T, spec idpv1alpha1
 	t.Cleanup(func() {
 		t.Logf("cleaning up test OIDCIdentityProvider %s/%s", created.Namespace, created.Name)
 		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
 			require.NoErrorf(t, err, "could not cleanup test OIDCIdentityProvider %s/%s", created.Namespace, created.Name)

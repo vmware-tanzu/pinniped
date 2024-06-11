@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 )
 
 func TestMergeStrategy(t *testing.T) {
@@ -23,27 +23,27 @@ func TestMergeStrategy(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		configToUpdate v1alpha1.CredentialIssuerStatus
-		strategy       v1alpha1.CredentialIssuerStrategy
-		expected       v1alpha1.CredentialIssuerStatus
+		configToUpdate conciergeconfigv1alpha1.CredentialIssuerStatus
+		strategy       conciergeconfigv1alpha1.CredentialIssuerStrategy
+		expected       conciergeconfigv1alpha1.CredentialIssuerStatus
 	}{
 		{
 			name: "new entry",
-			configToUpdate: v1alpha1.CredentialIssuerStatus{
+			configToUpdate: conciergeconfigv1alpha1.CredentialIssuerStatus{
 				Strategies: nil,
 			},
-			strategy: v1alpha1.CredentialIssuerStrategy{
+			strategy: conciergeconfigv1alpha1.CredentialIssuerStrategy{
 				Type:           "Type1",
-				Status:         v1alpha1.SuccessStrategyStatus,
+				Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 				Reason:         "some reason",
 				Message:        "some message",
 				LastUpdateTime: t1,
 			},
-			expected: v1alpha1.CredentialIssuerStatus{
-				Strategies: []v1alpha1.CredentialIssuerStrategy{
+			expected: conciergeconfigv1alpha1.CredentialIssuerStatus{
+				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 					{
 						Type:           "Type1",
-						Status:         v1alpha1.SuccessStrategyStatus,
+						Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 						Reason:         "some reason",
 						Message:        "some message",
 						LastUpdateTime: t1,
@@ -53,41 +53,41 @@ func TestMergeStrategy(t *testing.T) {
 		},
 		{
 			name: "new entry updating deprecated kubeConfigInfo",
-			configToUpdate: v1alpha1.CredentialIssuerStatus{
+			configToUpdate: conciergeconfigv1alpha1.CredentialIssuerStatus{
 				Strategies: nil,
 			},
-			strategy: v1alpha1.CredentialIssuerStrategy{
+			strategy: conciergeconfigv1alpha1.CredentialIssuerStrategy{
 				Type:           "Type1",
-				Status:         v1alpha1.SuccessStrategyStatus,
+				Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 				Reason:         "some reason",
 				Message:        "some message",
 				LastUpdateTime: t1,
-				Frontend: &v1alpha1.CredentialIssuerFrontend{
+				Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
 					Type: "TokenCredentialRequestAPI",
-					TokenCredentialRequestAPIInfo: &v1alpha1.TokenCredentialRequestAPIInfo{
+					TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 						Server:                   "https://test-server",
 						CertificateAuthorityData: "test-ca-bundle",
 					},
 				},
 			},
-			expected: v1alpha1.CredentialIssuerStatus{
-				Strategies: []v1alpha1.CredentialIssuerStrategy{
+			expected: conciergeconfigv1alpha1.CredentialIssuerStatus{
+				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 					{
 						Type:           "Type1",
-						Status:         v1alpha1.SuccessStrategyStatus,
+						Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 						Reason:         "some reason",
 						Message:        "some message",
 						LastUpdateTime: t1,
-						Frontend: &v1alpha1.CredentialIssuerFrontend{
+						Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
 							Type: "TokenCredentialRequestAPI",
-							TokenCredentialRequestAPIInfo: &v1alpha1.TokenCredentialRequestAPIInfo{
+							TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 								Server:                   "https://test-server",
 								CertificateAuthorityData: "test-ca-bundle",
 							},
 						},
 					},
 				},
-				KubeConfigInfo: &v1alpha1.CredentialIssuerKubeConfigInfo{
+				KubeConfigInfo: &conciergeconfigv1alpha1.CredentialIssuerKubeConfigInfo{
 					Server:                   "https://test-server",
 					CertificateAuthorityData: "test-ca-bundle",
 				},
@@ -95,29 +95,29 @@ func TestMergeStrategy(t *testing.T) {
 		},
 		{
 			name: "existing entry to update",
-			configToUpdate: v1alpha1.CredentialIssuerStatus{
-				Strategies: []v1alpha1.CredentialIssuerStrategy{
+			configToUpdate: conciergeconfigv1alpha1.CredentialIssuerStatus{
+				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 					{
 						Type:           "Type1",
-						Status:         v1alpha1.ErrorStrategyStatus,
+						Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 						Reason:         "some starting reason",
 						Message:        "some starting message",
 						LastUpdateTime: t2,
 					},
 				},
 			},
-			strategy: v1alpha1.CredentialIssuerStrategy{
+			strategy: conciergeconfigv1alpha1.CredentialIssuerStrategy{
 				Type:           "Type1",
-				Status:         v1alpha1.SuccessStrategyStatus,
+				Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 				Reason:         "some reason",
 				Message:        "some message",
 				LastUpdateTime: t1,
 			},
-			expected: v1alpha1.CredentialIssuerStatus{
-				Strategies: []v1alpha1.CredentialIssuerStrategy{
+			expected: conciergeconfigv1alpha1.CredentialIssuerStatus{
+				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 					{
 						Type:           "Type1",
-						Status:         v1alpha1.SuccessStrategyStatus,
+						Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 						Reason:         "some reason",
 						Message:        "some message",
 						LastUpdateTime: t1,
@@ -127,29 +127,29 @@ func TestMergeStrategy(t *testing.T) {
 		},
 		{
 			name: "existing entry matches except for LastUpdated time",
-			configToUpdate: v1alpha1.CredentialIssuerStatus{
-				Strategies: []v1alpha1.CredentialIssuerStrategy{
+			configToUpdate: conciergeconfigv1alpha1.CredentialIssuerStatus{
+				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 					{
 						Type:           "Type1",
-						Status:         v1alpha1.ErrorStrategyStatus,
+						Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 						Reason:         "some starting reason",
 						Message:        "some starting message",
 						LastUpdateTime: t1,
 					},
 				},
 			},
-			strategy: v1alpha1.CredentialIssuerStrategy{
+			strategy: conciergeconfigv1alpha1.CredentialIssuerStrategy{
 				Type:           "Type1",
-				Status:         v1alpha1.ErrorStrategyStatus,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 				Reason:         "some starting reason",
 				Message:        "some starting message",
 				LastUpdateTime: t2,
 			},
-			expected: v1alpha1.CredentialIssuerStatus{
-				Strategies: []v1alpha1.CredentialIssuerStrategy{
+			expected: conciergeconfigv1alpha1.CredentialIssuerStatus{
+				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 					{
 						Type:           "Type1",
-						Status:         v1alpha1.ErrorStrategyStatus,
+						Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 						Reason:         "some starting reason",
 						Message:        "some starting message",
 						LastUpdateTime: t1,
@@ -159,36 +159,36 @@ func TestMergeStrategy(t *testing.T) {
 		},
 		{
 			name: "new entry among others",
-			configToUpdate: v1alpha1.CredentialIssuerStatus{
-				Strategies: []v1alpha1.CredentialIssuerStrategy{
+			configToUpdate: conciergeconfigv1alpha1.CredentialIssuerStatus{
+				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 					{
 						Type:           "Type0",
-						Status:         v1alpha1.ErrorStrategyStatus,
+						Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 						Reason:         "some starting reason 0",
 						Message:        "some starting message 0",
 						LastUpdateTime: t2,
 					},
 					{
 						Type:           "Type2",
-						Status:         v1alpha1.ErrorStrategyStatus,
+						Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 						Reason:         "some starting reason 0",
 						Message:        "some starting message 0",
 						LastUpdateTime: t2,
 					},
 				},
 			},
-			strategy: v1alpha1.CredentialIssuerStrategy{
+			strategy: conciergeconfigv1alpha1.CredentialIssuerStrategy{
 				Type:           "Type1",
-				Status:         v1alpha1.SuccessStrategyStatus,
+				Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 				Reason:         "some reason",
 				Message:        "some message",
 				LastUpdateTime: t1,
 			},
-			expected: v1alpha1.CredentialIssuerStatus{
-				Strategies: []v1alpha1.CredentialIssuerStrategy{
+			expected: conciergeconfigv1alpha1.CredentialIssuerStatus{
+				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 					{
 						Type:           "Type0",
-						Status:         v1alpha1.ErrorStrategyStatus,
+						Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 						Reason:         "some starting reason 0",
 						Message:        "some starting message 0",
 						LastUpdateTime: t2,
@@ -196,14 +196,14 @@ func TestMergeStrategy(t *testing.T) {
 					// Expect the Type1 entry to be sorted alphanumerically between the existing entries.
 					{
 						Type:           "Type1",
-						Status:         v1alpha1.SuccessStrategyStatus,
+						Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 						Reason:         "some reason",
 						Message:        "some message",
 						LastUpdateTime: t1,
 					},
 					{
 						Type:           "Type2",
-						Status:         v1alpha1.ErrorStrategyStatus,
+						Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 						Reason:         "some starting reason 0",
 						Message:        "some starting message 0",
 						LastUpdateTime: t2,
@@ -222,9 +222,9 @@ func TestMergeStrategy(t *testing.T) {
 }
 
 func TestStrategySorting(t *testing.T) {
-	expected := []v1alpha1.CredentialIssuerStrategy{
-		{Type: v1alpha1.KubeClusterSigningCertificateStrategyType},
-		{Type: v1alpha1.ImpersonationProxyStrategyType},
+	expected := []conciergeconfigv1alpha1.CredentialIssuerStrategy{
+		{Type: conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType},
+		{Type: conciergeconfigv1alpha1.ImpersonationProxyStrategyType},
 		{Type: "Type1"},
 		{Type: "Type2"},
 		{Type: "Type3"},
@@ -233,7 +233,7 @@ func TestStrategySorting(t *testing.T) {
 		// Create a randomly shuffled copy of the expected output.
 		//nolint:gosec // this is not meant to be a secure random, just a seeded RNG for shuffling deterministically
 		rng := rand.New(rand.NewSource(seed))
-		output := make([]v1alpha1.CredentialIssuerStrategy, len(expected))
+		output := make([]conciergeconfigv1alpha1.CredentialIssuerStrategy, len(expected))
 		copy(output, expected)
 		rng.Shuffle(
 			len(output),

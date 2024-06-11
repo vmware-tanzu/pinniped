@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -49,7 +49,7 @@ func RequireEqualContentType(t *testing.T, actual string, expected string) {
 
 func RequireNumberOfSecretsMatchingLabelSelector(t *testing.T, secrets v1.SecretInterface, labelSet labels.Set, expectedNumberOfSecrets int) {
 	t.Helper()
-	storedAuthcodeSecrets, err := secrets.List(context.Background(), v12.ListOptions{
+	storedAuthcodeSecrets, err := secrets.List(context.Background(), metav1.ListOptions{
 		LabelSelector: labelSet.String(),
 	})
 	require.NoError(t, err)
@@ -66,7 +66,7 @@ func RequireNumberOfSecretsExcludingLabelSelector(t *testing.T, secrets v1.Secre
 		selector = selector.Add(*requirement)
 	}
 
-	storedAuthcodeSecrets, err := secrets.List(context.Background(), v12.ListOptions{
+	storedAuthcodeSecrets, err := secrets.List(context.Background(), metav1.ListOptions{
 		LabelSelector: selector.String(),
 	})
 	require.NoError(t, err)
@@ -163,7 +163,7 @@ func WantExactErrorString(wantErrStr string) RequireErrorStringFunc {
 
 // WantSprintfErrorString can be used to set up an expected value for an error string in a test table.
 // Use when you want to express that an expected string built using fmt.Sprintf semantics must be an exact match.
-func WantSprintfErrorString(wantErrSprintfSpecifier string, a ...interface{}) RequireErrorStringFunc {
+func WantSprintfErrorString(wantErrSprintfSpecifier string, a ...any) RequireErrorStringFunc {
 	wantErrStr := fmt.Sprintf(wantErrSprintfSpecifier, a...)
 	return func(t *testing.T, actualErrorStr string) {
 		require.Equal(t, wantErrStr, actualErrorStr)

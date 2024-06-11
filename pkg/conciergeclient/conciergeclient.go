@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package conciergeclient provides login helpers for the Pinniped concierge.
@@ -18,7 +18,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	"go.pinniped.dev/internal/constable"
@@ -49,10 +49,10 @@ func WithAuthenticator(authType, authName string) Option {
 		authenticator := corev1.TypedLocalObjectReference{Name: authName}
 		switch strings.ToLower(authType) {
 		case "webhook":
-			authenticator.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
+			authenticator.APIGroup = &authenticationv1alpha1.SchemeGroupVersion.Group
 			authenticator.Kind = "WebhookAuthenticator"
 		case "jwt":
-			authenticator.APIGroup = &auth1alpha1.SchemeGroupVersion.Group
+			authenticator.APIGroup = &authenticationv1alpha1.SchemeGroupVersion.Group
 			authenticator.Kind = "JWTAuthenticator"
 		default:
 			return fmt.Errorf(`invalid authenticator type: %q, supported values are "webhook" and "jwt"`, authType)

@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -74,7 +74,7 @@ const (
 )
 
 type activeDirectoryUpstreamGenericLDAPImpl struct {
-	activeDirectoryIdentityProvider v1alpha1.ActiveDirectoryIdentityProvider
+	activeDirectoryIdentityProvider idpv1alpha1.ActiveDirectoryIdentityProvider
 }
 
 func (g *activeDirectoryUpstreamGenericLDAPImpl) Spec() upstreamwatchers.UpstreamGenericLDAPSpec {
@@ -98,14 +98,14 @@ func (g *activeDirectoryUpstreamGenericLDAPImpl) Status() upstreamwatchers.Upstr
 }
 
 type activeDirectoryUpstreamGenericLDAPSpec struct {
-	activeDirectoryIdentityProvider v1alpha1.ActiveDirectoryIdentityProvider
+	activeDirectoryIdentityProvider idpv1alpha1.ActiveDirectoryIdentityProvider
 }
 
 func (s *activeDirectoryUpstreamGenericLDAPSpec) Host() string {
 	return s.activeDirectoryIdentityProvider.Spec.Host
 }
 
-func (s *activeDirectoryUpstreamGenericLDAPSpec) TLSSpec() *v1alpha1.TLSSpec {
+func (s *activeDirectoryUpstreamGenericLDAPSpec) TLSSpec() *idpv1alpha1.TLSSpec {
 	return s.activeDirectoryIdentityProvider.Spec.TLS
 }
 
@@ -161,7 +161,7 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx cont
 }
 
 type activeDirectoryUpstreamGenericLDAPUserSearch struct {
-	userSearch v1alpha1.ActiveDirectoryIdentityProviderUserSearch
+	userSearch idpv1alpha1.ActiveDirectoryIdentityProviderUserSearch
 }
 
 func (u *activeDirectoryUpstreamGenericLDAPUserSearch) Base() string {
@@ -190,7 +190,7 @@ func (u *activeDirectoryUpstreamGenericLDAPUserSearch) UIDAttribute() string {
 }
 
 type activeDirectoryUpstreamGenericLDAPGroupSearch struct {
-	groupSearch v1alpha1.ActiveDirectoryIdentityProviderGroupSearch
+	groupSearch idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearch
 }
 
 func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) Base() string {
@@ -216,7 +216,7 @@ func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) GroupNameAttribute() str
 }
 
 type activeDirectoryUpstreamGenericLDAPStatus struct {
-	activeDirectoryIdentityProvider v1alpha1.ActiveDirectoryIdentityProvider
+	activeDirectoryIdentityProvider idpv1alpha1.ActiveDirectoryIdentityProvider
 }
 
 func (s *activeDirectoryUpstreamGenericLDAPStatus) Conditions() []metav1.Condition {
@@ -318,7 +318,7 @@ func (c *activeDirectoryWatcherController) Sync(ctx controllerlib.Context) error
 	return nil
 }
 
-func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider) (p upstreamprovider.UpstreamLDAPIdentityProviderI, requeue bool) {
+func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context, upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) (p upstreamprovider.UpstreamLDAPIdentityProviderI, requeue bool) {
 	spec := upstream.Spec
 
 	adUpstreamImpl := &activeDirectoryUpstreamGenericLDAPImpl{activeDirectoryIdentityProvider: *upstream}
@@ -364,15 +364,15 @@ func (c *activeDirectoryWatcherController) validateUpstream(ctx context.Context,
 	return upstreamwatchers.EvaluateConditions(conditions, config)
 }
 
-func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.ActiveDirectoryIdentityProvider, conditions []*metav1.Condition) {
+func (c *activeDirectoryWatcherController) updateStatus(ctx context.Context, upstream *idpv1alpha1.ActiveDirectoryIdentityProvider, conditions []*metav1.Condition) {
 	log := plog.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
 	hadErrorCondition := conditionsutil.MergeConditions(conditions, upstream.Generation, &updated.Status.Conditions, log, metav1.Now())
 
-	updated.Status.Phase = v1alpha1.ActiveDirectoryPhaseReady
+	updated.Status.Phase = idpv1alpha1.ActiveDirectoryPhaseReady
 	if hadErrorCondition {
-		updated.Status.Phase = v1alpha1.ActiveDirectoryPhaseError
+		updated.Status.Phase = idpv1alpha1.ActiveDirectoryPhaseError
 	}
 
 	if equality.Semantic.DeepEqual(upstream, updated) {

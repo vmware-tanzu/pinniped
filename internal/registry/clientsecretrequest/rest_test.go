@@ -29,7 +29,7 @@ import (
 	"k8s.io/klog/v2"
 
 	clientsecretapi "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret"
-	"go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 	"go.pinniped.dev/internal/plog"
@@ -113,7 +113,7 @@ func TestCreate(t *testing.T) {
 	tests := []struct {
 		name              string
 		args              args
-		seedOIDCClients   []*v1alpha1.OIDCClient
+		seedOIDCClients   []*supervisorconfigv1alpha1.OIDCClient
 		seedHashes        func(storage *oidcclientsecretstorage.OIDCClientSecretStorage)
 		addReactors       func(*kubefake.Clientset, *supervisorfake.Clientset)
 		fakeByteGenerator io.Reader
@@ -548,7 +548,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-no-secret-for-oidcclient",
 					Namespace: namespace,
@@ -593,7 +593,7 @@ func TestCreate(t *testing.T) {
 				},
 			},
 			fakeByteGenerator: readerAlwaysErrors{},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-fail-to-generate-secret",
 					Namespace: namespace,
@@ -636,7 +636,7 @@ func TestCreate(t *testing.T) {
 			fakeHasher: func(password []byte, cost int) ([]byte, error) {
 				return nil, errors.New("can't hash stuff")
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-fail-to-hash-secret",
 					Namespace: namespace,
@@ -677,7 +677,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-happy-new-secret",
 					Namespace: namespace,
@@ -745,7 +745,7 @@ func TestCreate(t *testing.T) {
 					),
 				)
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-append-new-secret-hash",
 					Namespace: namespace,
@@ -813,7 +813,7 @@ func TestCreate(t *testing.T) {
 						},
 					))
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-append-new-secret-hash",
 					Namespace: namespace,
@@ -879,7 +879,7 @@ func TestCreate(t *testing.T) {
 						},
 					))
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -946,7 +946,7 @@ func TestCreate(t *testing.T) {
 						},
 					))
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1012,7 +1012,7 @@ func TestCreate(t *testing.T) {
 						},
 					))
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1061,7 +1061,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1111,7 +1111,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1165,7 +1165,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1213,7 +1213,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-happy-new-secret",
 					Namespace: namespace,
@@ -1257,7 +1257,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1301,7 +1301,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1365,7 +1365,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1430,7 +1430,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1499,7 +1499,7 @@ func TestCreate(t *testing.T) {
 					},
 				},
 			},
-			seedOIDCClients: []*v1alpha1.OIDCClient{{
+			seedOIDCClients: []*supervisorconfigv1alpha1.OIDCClient{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "client.oauth.pinniped.dev-some-client",
 					Namespace: namespace,
@@ -1664,7 +1664,7 @@ func requireLogLinesContain(t *testing.T, fullLog string, wantLines []string) {
 		require.Empty(t, fullLog)
 		return
 	}
-	var jsonLog map[string]interface{}
+	var jsonLog map[string]any
 	err := json.Unmarshal([]byte(fullLog), &jsonLog)
 	require.NoError(t, err)
 	require.Contains(t, jsonLog, "message")

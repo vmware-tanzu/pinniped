@@ -8,7 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/setutil"
@@ -37,8 +37,8 @@ type TestUpstreamGitHubIdentityProviderBuilder struct {
 	scopes                         []string
 	displayNameForFederationDomain string
 	transformsForFederationDomain  *idtransform.TransformationPipeline
-	usernameAttribute              v1alpha1.GitHubUsernameAttribute
-	groupNameAttribute             v1alpha1.GitHubGroupNameAttribute
+	usernameAttribute              idpv1alpha1.GitHubUsernameAttribute
+	groupNameAttribute             idpv1alpha1.GitHubGroupNameAttribute
 	allowedOrganizations           *setutil.CaseInsensitiveSet
 	authorizationURL               string
 	authcodeExchangeErr            error
@@ -72,12 +72,12 @@ func (u *TestUpstreamGitHubIdentityProviderBuilder) WithDisplayNameForFederation
 	return u
 }
 
-func (u *TestUpstreamGitHubIdentityProviderBuilder) WithUsernameAttribute(value v1alpha1.GitHubUsernameAttribute) *TestUpstreamGitHubIdentityProviderBuilder {
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithUsernameAttribute(value idpv1alpha1.GitHubUsernameAttribute) *TestUpstreamGitHubIdentityProviderBuilder {
 	u.usernameAttribute = value
 	return u
 }
 
-func (u *TestUpstreamGitHubIdentityProviderBuilder) WithGroupNameAttribute(value v1alpha1.GitHubGroupNameAttribute) *TestUpstreamGitHubIdentityProviderBuilder {
+func (u *TestUpstreamGitHubIdentityProviderBuilder) WithGroupNameAttribute(value idpv1alpha1.GitHubGroupNameAttribute) *TestUpstreamGitHubIdentityProviderBuilder {
 	u.groupNameAttribute = value
 	return u
 }
@@ -163,8 +163,8 @@ type TestUpstreamGitHubIdentityProvider struct {
 	Scopes                         []string
 	DisplayNameForFederationDomain string
 	TransformsForFederationDomain  *idtransform.TransformationPipeline
-	UsernameAttribute              v1alpha1.GitHubUsernameAttribute
-	GroupNameAttribute             v1alpha1.GitHubGroupNameAttribute
+	UsernameAttribute              idpv1alpha1.GitHubUsernameAttribute
+	GroupNameAttribute             idpv1alpha1.GitHubGroupNameAttribute
 	AllowedOrganizations           *setutil.CaseInsensitiveSet
 	AuthorizationURL               string
 	GetUserFunc                    func(ctx context.Context, accessToken string) (*upstreamprovider.GitHubUser, error)
@@ -195,11 +195,11 @@ func (u *TestUpstreamGitHubIdentityProvider) GetClientID() string {
 	return u.ClientID
 }
 
-func (u *TestUpstreamGitHubIdentityProvider) GetUsernameAttribute() v1alpha1.GitHubUsernameAttribute {
+func (u *TestUpstreamGitHubIdentityProvider) GetUsernameAttribute() idpv1alpha1.GitHubUsernameAttribute {
 	return u.UsernameAttribute
 }
 
-func (u *TestUpstreamGitHubIdentityProvider) GetGroupNameAttribute() v1alpha1.GitHubGroupNameAttribute {
+func (u *TestUpstreamGitHubIdentityProvider) GetGroupNameAttribute() idpv1alpha1.GitHubGroupNameAttribute {
 	return u.GroupNameAttribute
 }
 

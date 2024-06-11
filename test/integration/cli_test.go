@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 
-	"go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	conciergescheme "go.pinniped.dev/internal/concierge/scheme"
 	"go.pinniped.dev/pkg/oidcclient"
@@ -43,7 +44,7 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
 
-	authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, v1alpha1.WebhookAuthenticatorPhaseReady)
+	authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
 
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)
@@ -106,9 +107,9 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 
 type testingT interface {
 	Helper()
-	Errorf(format string, args ...interface{})
+	Errorf(format string, args ...any)
 	FailNow()
-	Logf(format string, args ...interface{})
+	Logf(format string, args ...any)
 }
 
 func runPinnipedCLI(t testingT, envVars []string, pinnipedExe string, args ...string) (string, string) {
@@ -142,7 +143,7 @@ func assertWhoami(ctx context.Context, t *testing.T, useProxy bool, pinnipedExe,
 		apiGroupSuffix,
 	)
 	if useProxy {
-		cmd.Env = append(os.Environ(), testlib.IntegrationEnv(t).ProxyEnv()...)
+		cmd.Env = slices.Concat(os.Environ(), testlib.IntegrationEnv(t).ProxyEnv())
 	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -194,7 +195,7 @@ func TestCLILoginOIDC_Browser(t *testing.T) {
 	require.NotEmpty(t, credOutput.Status.Token)
 	jws, err := jose.ParseSigned(credOutput.Status.Token)
 	require.NoError(t, err)
-	claims := map[string]interface{}{}
+	claims := map[string]any{}
 	require.NoError(t, json.Unmarshal(jws.UnsafePayloadWithoutVerification(), &claims))
 	require.Equal(t, env.CLIUpstreamOIDC.Issuer, claims["iss"])
 	require.Equal(t, env.CLIUpstreamOIDC.ClientID, claims["aud"])
@@ -427,6 +428,6 @@ func oidcLoginCommand(ctx context.Context, t *testing.T, pinnipedExe string, ses
 	}
 
 	// If there is a custom proxy, set it using standard environment variables.
-	cmd.Env = append(os.Environ(), env.ProxyEnv()...)
+	cmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 	return cmd
 }

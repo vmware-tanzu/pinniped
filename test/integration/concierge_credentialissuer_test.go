@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -57,9 +57,9 @@ func TestCredentialIssuer(t *testing.T) {
 
 		// The details of the ImpersonationProxy type is tested by a different integration test for the impersonator.
 		// Grab the KubeClusterSigningCertificate result so we can check it in detail below.
-		var actualStatusStrategy configv1alpha1.CredentialIssuerStrategy
+		var actualStatusStrategy conciergeconfigv1alpha1.CredentialIssuerStrategy
 		for _, s := range actualStatusStrategies {
-			if s.Type == configv1alpha1.KubeClusterSigningCertificateStrategyType {
+			if s.Type == conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType {
 				actualStatusStrategy = s
 				break
 			}
@@ -67,12 +67,12 @@ func TestCredentialIssuer(t *testing.T) {
 		require.NotNil(t, actualStatusStrategy)
 
 		if env.HasCapability(testlib.ClusterSigningKeyIsAvailable) {
-			require.Equal(t, configv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
-			require.Equal(t, configv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
+			require.Equal(t, conciergeconfigv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
+			require.Equal(t, conciergeconfigv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Equal(t, "key was fetched successfully", actualStatusStrategy.Message)
 			require.NotNil(t, actualStatusStrategy.Frontend)
-			require.Equal(t, configv1alpha1.TokenCredentialRequestAPIFrontendType, actualStatusStrategy.Frontend.Type)
-			expectedTokenRequestAPIInfo := configv1alpha1.TokenCredentialRequestAPIInfo{
+			require.Equal(t, conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType, actualStatusStrategy.Frontend.Type)
+			expectedTokenRequestAPIInfo := conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 				Server:                   config.Host,
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
 			}
@@ -81,15 +81,15 @@ func TestCredentialIssuer(t *testing.T) {
 			// Verify the published kube config info.
 			require.Equal(
 				t,
-				&configv1alpha1.CredentialIssuerKubeConfigInfo{
+				&conciergeconfigv1alpha1.CredentialIssuerKubeConfigInfo{
 					Server:                   expectedTokenRequestAPIInfo.Server,
 					CertificateAuthorityData: expectedTokenRequestAPIInfo.CertificateAuthorityData,
 				},
 				actualStatusKubeConfigInfo,
 			)
 		} else {
-			require.Equal(t, configv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
-			require.Equal(t, configv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
+			require.Equal(t, conciergeconfigv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
+			require.Equal(t, conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Contains(t, actualStatusStrategy.Message, "could not find a healthy kube-controller-manager pod (0 candidates): "+
 				"note that this error is the expected behavior for some cluster types, including most cloud provider clusters (e.g. GKE, AKS, EKS)")
 			require.Nil(t, actualStatusKubeConfigInfo)

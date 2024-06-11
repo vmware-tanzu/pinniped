@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
@@ -111,7 +111,7 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			},
 			addKubeReactions: func(clientset *kubefake.Clientset) {
 				clientset.PrependReactor("delete", "*", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, k8serrors.NewNotFound(action.GetResource().GroupResource(), "")
+					return true, nil, apierrors.NewNotFound(action.GetResource().GroupResource(), "")
 				})
 			},
 			wantDistinctErrors: []string{""},
@@ -129,7 +129,7 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			},
 			addKubeReactions: func(clientset *kubefake.Clientset) {
 				clientset.PrependReactor("get", "*", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, k8serrors.NewNotFound(action.GetResource().GroupResource(), "")
+					return true, nil, apierrors.NewNotFound(action.GetResource().GroupResource(), "")
 				})
 			},
 			wantDistinctErrors: []string{""},

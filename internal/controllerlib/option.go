@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controllerlib
@@ -60,7 +60,7 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 		}
 
 		_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
+			AddFunc: func(obj any) {
 				object := metaOrDie(obj)
 				if filter.Add(object) {
 					plog.Debug("handling add",
@@ -73,7 +73,7 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 					c.add(filter, object)
 				}
 			},
-			UpdateFunc: func(oldObj, newObj interface{}) {
+			UpdateFunc: func(oldObj, newObj any) {
 				oldObject := metaOrDie(oldObj)
 				newObject := metaOrDie(newObj)
 				if filter.Update(oldObject, newObject) {
@@ -87,7 +87,7 @@ func WithInformer(getter InformerGetter, filter Filter, opt InformerOption) Opti
 					c.add(filter, newObject)
 				}
 			},
-			DeleteFunc: func(obj interface{}) {
+			DeleteFunc: func(obj any) {
 				accessor, err := meta.Accessor(obj)
 				if err != nil {
 					tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -146,7 +146,7 @@ func toOnceOpt(opt Option) Option {
 	}
 }
 
-func metaOrDie(obj interface{}) metav1.Object {
+func metaOrDie(obj any) metav1.Object {
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
 		panic(err) // this should never happen

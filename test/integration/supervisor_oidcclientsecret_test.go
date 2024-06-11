@@ -10,16 +10,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
+	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
@@ -104,7 +105,7 @@ func TestKubectlOIDCClientSecretRequest_Parallel(t *testing.T) {
 				return []string{"create", "-f", filePath, "-o", "yaml"}
 			},
 			assertOnStdOut: func(t *testing.T, oidcClientName string, stdOutString string) {
-				var yamlObj map[string]interface{}
+				var yamlObj map[string]any
 				err := yaml.Unmarshal([]byte(stdOutString), &yamlObj)
 				require.NoError(t, err)
 
@@ -112,7 +113,7 @@ func TestKubectlOIDCClientSecretRequest_Parallel(t *testing.T) {
 				require.Equal(t, yamlObj["apiVersion"], fmt.Sprintf("clientsecret.supervisor.%s/v1alpha1", env.APIGroupSuffix))
 				require.Equal(t, yamlObj["kind"], "OIDCClientSecretRequest")
 
-				metadataMap, ok := yamlObj["metadata"].(map[string]interface{})
+				metadataMap, ok := yamlObj["metadata"].(map[string]any)
 				require.True(t, ok, "metadata should be a map")
 				require.Len(t, metadataMap, 3, "metadata should contain only 3 keys (creationTimestamp, name, namespace): %v", metadataMap)
 				require.Equal(t, metadataMap["name"], oidcClientName)
@@ -124,13 +125,13 @@ func TestKubectlOIDCClientSecretRequest_Parallel(t *testing.T) {
 				require.NoError(t, err)
 				testutil.RequireTimeInDelta(t, parsedTime, time.Now(), 1*time.Minute)
 
-				specMap, ok := yamlObj["spec"].(map[string]interface{})
+				specMap, ok := yamlObj["spec"].(map[string]any)
 				require.True(t, ok, "spec should be a map")
 				require.Len(t, specMap, 2, "spec should contain only 2 keys (generateNewSecret, revokeOldSecrets): %v", specMap)
 				require.Equal(t, specMap["generateNewSecret"], true)
 				require.Equal(t, specMap["revokeOldSecrets"], false)
 
-				statusMap, ok := yamlObj["status"].(map[string]interface{})
+				statusMap, ok := yamlObj["status"].(map[string]any)
 				require.True(t, ok, "status should be a map")
 				require.Len(t, specMap, 2, "status should contain only 2 keys (generatedSecret, totalClientSecrets): %v", statusMap)
 				require.Regexp(t, "^[0-9a-z]{64}$", statusMap["generatedSecret"], "generated secret must be precisely 40 hex encoded characters")
@@ -273,7 +274,7 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	type testRequest struct {
-		secretRequest   *v1alpha1.OIDCClientSecretRequest
+		secretRequest   *clientsecretv1alpha1.OIDCClientSecretRequest
 		wantSecretCount int
 		wantErr         func(string) string
 	}
@@ -291,12 +292,12 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
@@ -310,24 +311,24 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 1,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 								RevokeOldSecrets:  false,
 							},
@@ -342,24 +343,24 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 1,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 								RevokeOldSecrets:  true,
 							},
@@ -374,12 +375,12 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: false,
 								RevokeOldSecrets:  true,
 							},
@@ -394,12 +395,12 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: false,
 								RevokeOldSecrets:  false,
 							},
@@ -414,24 +415,24 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 1,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: false,
 								RevokeOldSecrets:  false,
 							},
@@ -446,24 +447,24 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 1,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: false,
 								RevokeOldSecrets:  true,
 							},
@@ -478,24 +479,24 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 1,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 								RevokeOldSecrets:  true,
 							},
@@ -511,72 +512,72 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 1,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 2,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 3,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 4,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 5,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 								RevokeOldSecrets:  true,
 							},
@@ -593,72 +594,72 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 1,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 2,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 3,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 4,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 5,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: false,
 								RevokeOldSecrets:  true,
 							},
@@ -673,72 +674,72 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 1,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 2,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 3,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 4,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
 						wantSecretCount: 5,
 					},
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: env.SupervisorNamespace,
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 								RevokeOldSecrets:  false,
 							},
@@ -756,11 +757,11 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								GenerateName: "some-generate-name-prefix-",
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: false,
 								RevokeOldSecrets:  true,
 							},
@@ -780,11 +781,11 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name: "client.oauth.pinniped.dev-",
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: false,
 								RevokeOldSecrets:  true,
 							},
@@ -804,11 +805,11 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name: "doesnt-contain-prefix",
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: false,
 								RevokeOldSecrets:  true,
 							},
@@ -828,12 +829,12 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name:      name,
 								Namespace: "some-other-namespace",
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: true,
 							},
 						},
@@ -850,11 +851,11 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 			clientSecretRequests: func(name string) []testRequest {
 				return []testRequest{
 					{
-						secretRequest: &v1alpha1.OIDCClientSecretRequest{
+						secretRequest: &clientsecretv1alpha1.OIDCClientSecretRequest{
 							ObjectMeta: metav1.ObjectMeta{
 								Name: "client.oauth.pinniped.dev-client-that-does-not-exist",
 							},
-							Spec: v1alpha1.OIDCClientSecretRequestSpec{
+							Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 								GenerateNewSecret: false,
 								RevokeOldSecrets:  true,
 							},
@@ -916,7 +917,7 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 					_, err := kubeClient.CoreV1().Secrets(oidcClient.Namespace).
 						Get(cleanupCtx, oidcclientsecretstorage.New(nil).GetName(oidcClient.UID), metav1.GetOptions{})
 					requireEventually.Error(err, "deleting OIDCClient should result in deleting storage secrets")
-					requireEventually.True(k8serrors.IsNotFound(err),
+					requireEventually.True(apierrors.IsNotFound(err),
 						"deleting OIDCClient should result in deleting storage secrets")
 				}, 2*time.Minute, 250*time.Millisecond)
 			})
@@ -984,7 +985,7 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 					Get(ctx, oidcclientsecretstorage.New(nil).GetName(oidcClient.UID), metav1.GetOptions{})
 				if !hasSecretBeenGenerated {
 					require.Error(t, getStorageSecretError, "expected not found error")
-					require.True(t, k8serrors.IsNotFound(getStorageSecretError), "expected not found error")
+					require.True(t, apierrors.IsNotFound(getStorageSecretError), "expected not found error")
 					// no storage secret was created, so no reason to continue making assertions
 					continue
 				}
@@ -1020,10 +1021,7 @@ func retainOnlyMostRecentSecret(list []string) []string {
 }
 
 func prependSecret(list []string, newItem string) []string {
-	newList := make([]string, 0, len(list)+1)
-	newList = append(newList, newItem)
-	newList = append(newList, list...)
-	return newList
+	return slices.Concat([]string{newItem}, list)
 }
 
 func TestOIDCClientSecretRequestUnauthenticated_Parallel(t *testing.T) {
@@ -1035,8 +1033,8 @@ func TestOIDCClientSecretRequestUnauthenticated_Parallel(t *testing.T) {
 	client := testlib.NewAnonymousSupervisorClientset(t)
 
 	_, err := client.ClientsecretV1alpha1().OIDCClientSecretRequests(env.SupervisorNamespace).Create(ctx,
-		&v1alpha1.OIDCClientSecretRequest{
-			Spec: v1alpha1.OIDCClientSecretRequestSpec{
+		&clientsecretv1alpha1.OIDCClientSecretRequest{
+			Spec: clientsecretv1alpha1.OIDCClientSecretRequestSpec{
 				GenerateNewSecret: true,
 			},
 		}, metav1.CreateOptions{})

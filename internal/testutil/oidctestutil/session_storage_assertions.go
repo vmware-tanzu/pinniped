@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +18,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	kubetesting "k8s.io/client-go/testing"
-	"k8s.io/utils/strings/slices"
 
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
@@ -46,7 +46,7 @@ func RequireAuthCodeRegexpMatch(
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
 	wantCustomSessionData *psession.CustomSessionData,
-	wantDownstreamAdditionalClaims map[string]interface{},
+	wantDownstreamAdditionalClaims map[string]any,
 ) {
 	t.Helper()
 
@@ -138,7 +138,7 @@ func validateAuthcodeStorage(
 	wantDownstreamClientID string,
 	wantDownstreamRedirectURI string,
 	wantCustomSessionData *psession.CustomSessionData,
-	wantDownstreamAdditionalClaims map[string]interface{},
+	wantDownstreamAdditionalClaims map[string]any,
 ) (*fosite.Request, *psession.PinnipedSession) {
 	t.Helper()
 
@@ -221,8 +221,8 @@ func validateAuthcodeStorage(
 		require.Nil(t, actualDownstreamIDTokenGroups)
 	}
 	if len(wantDownstreamAdditionalClaims) > 0 {
-		actualAdditionalClaims, ok := actualClaims.Get("additionalClaims").(map[string]interface{})
-		require.True(t, ok, "expected additionalClaims to be a map[string]interface{}")
+		actualAdditionalClaims, ok := actualClaims.Get("additionalClaims").(map[string]any)
+		require.True(t, ok, "expected additionalClaims to be a map[string]any")
 		require.Equal(t, wantDownstreamAdditionalClaims, actualAdditionalClaims)
 	} else {
 		require.NotContains(t, actualClaims.Extra, "additionalClaims", "additionalClaims must not be present when there are no wanted additional claims")

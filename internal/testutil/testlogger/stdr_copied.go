@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlogger
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"slices"
 	"sort"
 
 	"github.com/go-logr/logr"
@@ -28,7 +29,7 @@ func newStdLogger(std stdr.StdLogger) logr.Logger {
 type logger struct {
 	std    stdr.StdLogger
 	prefix string
-	values []interface{}
+	values []any
 }
 
 func (l logger) clone() logger {
@@ -37,8 +38,8 @@ func (l logger) clone() logger {
 	return out
 }
 
-func copySlice(in []interface{}) []interface{} {
-	out := make([]interface{}, len(in))
+func copySlice(in []any) []any {
+	out := make([]any, len(in))
 	copy(out, in)
 	return out
 }
@@ -60,15 +61,15 @@ func framesToCaller() int {
 	return 1 // something went wrong, this is safe
 }
 
-func flatten(kvList ...interface{}) string {
+func flatten(kvList ...any) string {
 	keys := make([]string, 0, len(kvList))
-	vals := make(map[string]interface{}, len(kvList))
+	vals := make(map[string]any, len(kvList))
 	for i := 0; i < len(kvList); i += 2 {
 		k, ok := kvList[i].(string)
 		if !ok {
 			panic(fmt.Sprintf("key is not a string: %s", pretty(kvList[i])))
 		}
-		var v interface{}
+		var v any
 		if i+1 < len(kvList) {
 			v = kvList[i+1]
 		}
@@ -89,14 +90,14 @@ func flatten(kvList ...interface{}) string {
 	return buf.String()
 }
 
-func pretty(value interface{}) string {
+func pretty(value any) string {
 	jb, _ := json.Marshal(value)
 	return string(jb)
 }
 
-func (l logger) Info(level int, msg string, kvList ...interface{}) {
+func (l logger) Info(level int, msg string, kvList ...any) {
 	if l.Enabled(level) {
-		builtin := make([]interface{}, 0, 4)
+		builtin := make([]any, 0, 4)
 		builtin = append(builtin, "level", level, "msg", msg)
 		builtinStr := flatten(builtin...)
 		fixedStr := flatten(l.values...)
@@ -109,11 +110,11 @@ func (l logger) Enabled(_level int) bool {
 	return true
 }
 
-func (l logger) Error(err error, msg string, kvList ...interface{}) {
-	builtin := make([]interface{}, 0, 4)
+func (l logger) Error(err error, msg string, kvList ...any) {
+	builtin := make([]any, 0, 4)
 	builtin = append(builtin, "msg", msg)
 	builtinStr := flatten(builtin...)
-	var loggableErr interface{}
+	var loggableErr any
 	if err != nil {
 		loggableErr = err.Error()
 	}
@@ -152,9 +153,9 @@ func (l logger) WithName(name string) logr.LogSink {
 
 // WithValues returns a new logr.Logger with the specified key-and-values
 // saved.
-func (l logger) WithValues(kvList ...interface{}) logr.LogSink {
+func (l logger) WithValues(kvList ...any) logr.LogSink {
 	lgr := l.clone()
-	lgr.values = append(lgr.values, kvList...)
+	lgr.values = slices.Concat(lgr.values, kvList)
 	return lgr
 }
 

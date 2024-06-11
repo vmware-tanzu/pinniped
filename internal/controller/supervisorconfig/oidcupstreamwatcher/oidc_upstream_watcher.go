@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
@@ -102,7 +102,7 @@ type lruValidatorCacheEntry struct {
 	client   *http.Client
 }
 
-func (c *lruValidatorCache) getProvider(spec *v1alpha1.OIDCIdentityProviderSpec) (*coreosoidc.Provider, *http.Client) {
+func (c *lruValidatorCache) getProvider(spec *idpv1alpha1.OIDCIdentityProviderSpec) (*coreosoidc.Provider, *http.Client) {
 	if result, ok := c.cache.Get(c.cacheKey(spec)); ok {
 		entry := result.(*lruValidatorCacheEntry)
 		return entry.provider, entry.client
@@ -110,11 +110,11 @@ func (c *lruValidatorCache) getProvider(spec *v1alpha1.OIDCIdentityProviderSpec)
 	return nil, nil
 }
 
-func (c *lruValidatorCache) putProvider(spec *v1alpha1.OIDCIdentityProviderSpec, provider *coreosoidc.Provider, client *http.Client) {
+func (c *lruValidatorCache) putProvider(spec *idpv1alpha1.OIDCIdentityProviderSpec, provider *coreosoidc.Provider, client *http.Client) {
 	c.cache.Set(c.cacheKey(spec), &lruValidatorCacheEntry{provider: provider, client: client}, oidcValidatorCacheTTL)
 }
 
-func (c *lruValidatorCache) cacheKey(spec *v1alpha1.OIDCIdentityProviderSpec) interface{} {
+func (c *lruValidatorCache) cacheKey(spec *idpv1alpha1.OIDCIdentityProviderSpec) any {
 	var key struct{ issuer, caBundle string }
 	key.issuer = spec.Issuer
 	if spec.TLS != nil {
@@ -130,8 +130,8 @@ type oidcWatcherController struct {
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
 	validatorCache               interface {
-		getProvider(*v1alpha1.OIDCIdentityProviderSpec) (*coreosoidc.Provider, *http.Client)
-		putProvider(*v1alpha1.OIDCIdentityProviderSpec, *coreosoidc.Provider, *http.Client)
+		getProvider(*idpv1alpha1.OIDCIdentityProviderSpec) (*coreosoidc.Provider, *http.Client)
+		putProvider(*idpv1alpha1.OIDCIdentityProviderSpec, *coreosoidc.Provider, *http.Client)
 	}
 }
 
@@ -191,9 +191,9 @@ func (c *oidcWatcherController) Sync(ctx controllerlib.Context) error {
 	return nil
 }
 
-// validateUpstream validates the provided v1alpha1.OIDCIdentityProvider and returns the validated configuration as a
-// provider.UpstreamOIDCIdentityProvider. As a side effect, it also updates the status of the v1alpha1.OIDCIdentityProvider.
-func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upstream *v1alpha1.OIDCIdentityProvider) *upstreamoidc.ProviderConfig {
+// validateUpstream validates the provided idpv1alpha1.OIDCIdentityProvider and returns the validated configuration as a
+// provider.UpstreamOIDCIdentityProvider. As a side effect, it also updates the status of the idpv1alpha1.OIDCIdentityProvider.
+func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upstream *idpv1alpha1.OIDCIdentityProvider) *upstreamoidc.ProviderConfig {
 	authorizationConfig := upstream.Spec.AuthorizationConfig
 
 	additionalAuthcodeAuthorizeParameters := map[string]string{}
@@ -261,7 +261,7 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 }
 
 // validateSecret validates the .spec.client.secretName field and returns the appropriate ClientCredentialsSecretValid condition.
-func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *metav1.Condition {
+func (c *oidcWatcherController) validateSecret(upstream *idpv1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *metav1.Condition {
 	secretName := upstream.Spec.Client.SecretName
 
 	// Fetch the Secret from informer cache.
@@ -309,7 +309,7 @@ func (c *oidcWatcherController) validateSecret(upstream *v1alpha1.OIDCIdentityPr
 }
 
 // validateIssuer validates the .spec.issuer field, performs OIDC discovery, and returns the appropriate OIDCDiscoverySucceeded condition.
-func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *metav1.Condition {
+func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *idpv1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *metav1.Condition {
 	// Get the provider and HTTP Client from cache if possible.
 	discoveredProvider, httpClient := c.validatorCache.getProvider(&upstream.Spec)
 
@@ -408,15 +408,15 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *v1
 	}
 }
 
-func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1alpha1.OIDCIdentityProvider, conditions []*metav1.Condition) {
+func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *idpv1alpha1.OIDCIdentityProvider, conditions []*metav1.Condition) {
 	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
 	hadErrorCondition := conditionsutil.MergeConditions(conditions, upstream.Generation, &updated.Status.Conditions, log, metav1.Now())
 
-	updated.Status.Phase = v1alpha1.PhaseReady
+	updated.Status.Phase = idpv1alpha1.PhaseReady
 	if hadErrorCondition {
-		updated.Status.Phase = v1alpha1.PhaseError
+		updated.Status.Phase = idpv1alpha1.PhaseError
 	}
 
 	if equality.Semantic.DeepEqual(upstream, updated) {
@@ -432,7 +432,7 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *v1al
 	}
 }
 
-func getClient(upstream *v1alpha1.OIDCIdentityProvider) (*http.Client, error) {
+func getClient(upstream *idpv1alpha1.OIDCIdentityProvider) (*http.Client, error) {
 	if upstream.Spec.TLS == nil || upstream.Spec.TLS.CertificateAuthorityData == "" {
 		return defaultClientShortTimeout(nil), nil
 	}

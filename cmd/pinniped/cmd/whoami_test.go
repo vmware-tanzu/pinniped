@@ -8,14 +8,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/clientcmd"
 
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
-	fakeconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/here"
 )
@@ -273,7 +273,7 @@ func TestWhoami(t *testing.T) {
 		},
 		{
 			name:          "calling API fails because WhoAmI API is not installed",
-			callingAPIErr: errors.NewNotFound(identityv1alpha1.SchemeGroupVersion.WithResource("whoamirequests").GroupResource(), "whatever"),
+			callingAPIErr: apierrors.NewNotFound(identityv1alpha1.SchemeGroupVersion.WithResource("whoamirequests").GroupResource(), "whatever"),
 			wantError:     true,
 			wantStderr:    "Error: could not complete WhoAmIRequest (is the Pinniped WhoAmI API running and healthy?): whoamirequests.identity.concierge.pinniped.dev \"whatever\" not found\n",
 		},
@@ -284,7 +284,7 @@ func TestWhoami(t *testing.T) {
 				if test.gettingClientsetErr != nil {
 					return nil, test.gettingClientsetErr
 				}
-				clientset := fakeconciergeclientset.NewSimpleClientset()
+				clientset := conciergefake.NewSimpleClientset()
 				clientset.PrependReactor("create", "whoamirequests", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					if test.callingAPIErr != nil {
 						return true, nil, test.callingAPIErr

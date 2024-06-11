@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -39,9 +40,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/utils/ptr"
-	"k8s.io/utils/strings/slices"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/crud"
@@ -305,7 +305,7 @@ type tokenEndpointResponseExpectedValues struct {
 	wantUpstreamOIDCValidateTokenCall      *expectedOIDCUpstreamValidateTokens
 	wantCustomSessionDataStored            *psession.CustomSessionData
 	wantWarnings                           []RecordedWarning
-	wantAdditionalClaims                   map[string]interface{}
+	wantAdditionalClaims                   map[string]any
 	// The expected lifetime of the ID tokens issued by authcode exchange and refresh, but not token exchange.
 	// When zero, will assume that the test wants the default value for ID token lifetime.
 	wantIDTokenLifetimeSeconds int
@@ -391,10 +391,10 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 			authcodeExchange: authcodeExchangeInputs{
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid profile email username groups") },
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
@@ -410,13 +410,13 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"openid", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
-					wantAdditionalClaims: map[string]interface{}{
+					wantAdditionalClaims: map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999.0, // note: this is deserialized as float64
-						"upstreamObj": map[string]interface{}{
+						"upstreamObj": map[string]any{
 							"name": "value",
 						},
 					},
@@ -474,10 +474,10 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				},
 				modifyTokenRequest: modifyAuthcodeTokenRequestWithDynamicClientAuth,
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
@@ -493,13 +493,13 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
-					wantAdditionalClaims: map[string]interface{}{
+					wantAdditionalClaims: map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999.0, // note: this is deserialized as float64
-						"upstreamObj": map[string]interface{}{
+						"upstreamObj": map[string]any{
 							"name": "value",
 						},
 					},
@@ -981,7 +981,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			subject, rsp, authCode, _, secrets, oauthStore := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, testidplister.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
-			var parsedResponseBody map[string]interface{}
+			var parsedResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
 
 			// Second call - should be unsuccessful since auth code was already used.
@@ -1088,10 +1088,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					authRequest.Form.Set("scope", "openid pinniped:request-audience username groups")
 				},
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
@@ -1107,13 +1107,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
-					wantAdditionalClaims: map[string]interface{}{
+					wantAdditionalClaims: map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999.0, // note: this is deserialized as float64
-						"upstreamObj": map[string]interface{}{
+						"upstreamObj": map[string]any{
 							"name": "value",
 						},
 					},
@@ -1183,10 +1183,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					authRequest.Form.Set("scope", "openid pinniped:request-audience username groups")
 				},
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
@@ -1203,13 +1203,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
-					wantAdditionalClaims: map[string]interface{}{
+					wantAdditionalClaims: map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999.0, // note: this is deserialized as float64
-						"upstreamObj": map[string]interface{}{
+						"upstreamObj": map[string]any{
 							"name": "value",
 						},
 					},
@@ -1256,12 +1256,12 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			name: "dynamic client lacks the required urn:ietf:params:oauth:grant-type:token-exchange grant type",
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				namespace, clientID, clientUID, redirectURI := "some-namespace", dynamicClientID, dynamicClientUID, goodRedirectURI
-				oidcClient := &configv1alpha1.OIDCClient{
+				oidcClient := &supervisorconfigv1alpha1.OIDCClient{
 					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: clientID, Generation: 1, UID: types.UID(clientUID)},
-					Spec: configv1alpha1.OIDCClientSpec{
-						AllowedGrantTypes:   []configv1alpha1.GrantType{"authorization_code", "refresh_token"},        // does not have the grant type
-						AllowedScopes:       []configv1alpha1.Scope{"openid", "offline_access", "username", "groups"}, // would be invalid if it also asked for pinniped:request-audience since it lacks the grant type
-						AllowedRedirectURIs: []configv1alpha1.RedirectURI{configv1alpha1.RedirectURI(redirectURI)},
+					Spec: supervisorconfigv1alpha1.OIDCClientSpec{
+						AllowedGrantTypes:   []supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"},        // does not have the grant type
+						AllowedScopes:       []supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username", "groups"}, // would be invalid if it also asked for pinniped:request-audience since it lacks the grant type
+						AllowedRedirectURIs: []supervisorconfigv1alpha1.RedirectURI{supervisorconfigv1alpha1.RedirectURI(redirectURI)},
 					},
 				}
 				secret := testutil.OIDCClientSecretStorageSecretForUID(t, namespace, clientUID, []string{testutil.HashedPassword1AtGoMinCost, testutil.HashedPassword2AtGoMinCost})
@@ -1659,7 +1659,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
 			subject, rsp, _, _, secrets, storage := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, testidplister.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
-			var parsedAuthcodeExchangeResponseBody map[string]interface{}
+			var parsedAuthcodeExchangeResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
 
 			request := happyTokenExchangeRequest(test.requestedAudience, parsedAuthcodeExchangeResponseBody["access_token"].(string))
@@ -1695,7 +1695,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.Equal(t, test.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
 
-			var parsedResponseBody map[string]interface{}
+			var parsedResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
 
 			if rsp.Code != http.StatusOK {
@@ -1714,7 +1714,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				return
 			}
 
-			claimsOfFirstIDToken := map[string]interface{}{}
+			claimsOfFirstIDToken := map[string]any{}
 			originalIDToken := parsedAuthcodeExchangeResponseBody["id_token"].(string)
 			firstIDTokenDecoded, _ := josejwt.ParseSigned(originalIDToken)
 			err = firstIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfFirstIDToken)
@@ -1727,7 +1727,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			// Parse the returned token.
 			parsedJWT, err := jose.ParseSigned(parsedResponseBody["access_token"].(string))
 			require.NoError(t, err)
-			var tokenClaims map[string]interface{}
+			var tokenClaims map[string]any
 			require.NoError(t, json.Unmarshal(parsedJWT.UnsafePayloadWithoutVerification(), &tokenClaims))
 
 			// Make sure that these are the only fields in the token.
@@ -1765,7 +1765,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			if len(test.authcodeExchange.want.wantAdditionalClaims) > 0 {
 				require.Equal(t, test.authcodeExchange.want.wantAdditionalClaims, tokenClaims["additionalClaims"])
 			}
-			additionalClaims, ok := tokenClaims["additionalClaims"].(map[string]interface{})
+			additionalClaims, ok := tokenClaims["additionalClaims"].(map[string]any)
 			if ok && tokenClaims["additionalClaims"] != nil {
 				require.True(t, len(additionalClaims) > 0, "additionalClaims may never be present and empty in the id token")
 			}
@@ -2070,7 +2070,7 @@ func TestRefreshGrant(t *testing.T) {
 		return want
 	}
 
-	happyRefreshTokenResponseForOpenIDAndOfflineAccessWithAdditionalClaims := func(wantCustomSessionDataStored *psession.CustomSessionData, expectToValidateToken *oauth2.Token, wantAdditionalClaims map[string]interface{}) tokenEndpointResponseExpectedValues {
+	happyRefreshTokenResponseForOpenIDAndOfflineAccessWithAdditionalClaims := func(wantCustomSessionDataStored *psession.CustomSessionData, expectToValidateToken *oauth2.Token, wantAdditionalClaims map[string]any) tokenEndpointResponseExpectedValues {
 		want := happyRefreshTokenResponseForOpenIDAndOfflineAccess(wantCustomSessionDataStored, expectToValidateToken)
 		want.wantAdditionalClaims = wantAdditionalClaims
 		return want
@@ -2105,7 +2105,7 @@ func TestRefreshGrant(t *testing.T) {
 
 	refreshedUpstreamTokensWithIDAndRefreshTokens := func() *oauth2.Token {
 		return refreshedUpstreamTokensWithRefreshTokenWithoutIDToken().
-			WithExtra(map[string]interface{}{"id_token": oidcUpstreamRefreshedIDToken})
+			WithExtra(map[string]any{"id_token": oidcUpstreamRefreshedIDToken})
 	}
 
 	refreshedUpstreamTokensWithIDTokenWithoutRefreshToken := func() *oauth2.Token {
@@ -2186,7 +2186,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -2204,7 +2204,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -2252,7 +2252,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{},
+						Claims: map[string]any{},
 					},
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken()).
 					WithTransformsForFederationDomain(prefixUsernameAndGroupsPipeline).Build()),
@@ -2291,7 +2291,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -2331,7 +2331,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -2371,7 +2371,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -2380,10 +2380,10 @@ func TestRefreshGrant(t *testing.T) {
 				customSessionData: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 				modifyAuthRequest: func(r *http.Request) { r.Form.Set("scope", "openid offline_access username groups") },
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
@@ -2400,13 +2400,13 @@ func TestRefreshGrant(t *testing.T) {
 					wantCustomSessionDataStored: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 					wantUsername:                goodUsername,
 					wantGroups:                  goodGroups,
-					wantAdditionalClaims: map[string]interface{}{
+					wantAdditionalClaims: map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999.0, // note: this is deserialized as float64
-						"upstreamObj": map[string]interface{}{
+						"upstreamObj": map[string]any{
 							"name": "value",
 						},
 					},
@@ -2416,13 +2416,13 @@ func TestRefreshGrant(t *testing.T) {
 				want: happyRefreshTokenResponseForOpenIDAndOfflineAccessWithAdditionalClaims(
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
-					map[string]interface{}{
+					map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999.0, // note: this is deserialized as float64
-						"upstreamObj": map[string]interface{}{
+						"upstreamObj": map[string]any{
 							"name": "value",
 						},
 					},
@@ -2434,7 +2434,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -2462,7 +2462,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -2498,7 +2498,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -2511,10 +2511,10 @@ func TestRefreshGrant(t *testing.T) {
 					r.Form.Set("scope", "openid offline_access username groups")
 				},
 				modifySession: func(session *psession.PinnipedSession) {
-					session.IDTokenClaims().Extra["additionalClaims"] = map[string]interface{}{
+					session.IDTokenClaims().Extra["additionalClaims"] = map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999,
 						"upstreamObj": map[string]string{
@@ -2532,13 +2532,13 @@ func TestRefreshGrant(t *testing.T) {
 					wantCustomSessionDataStored: initialUpstreamOIDCRefreshTokenCustomSessionData(),
 					wantUsername:                goodUsername,
 					wantGroups:                  goodGroups,
-					wantAdditionalClaims: map[string]interface{}{
+					wantAdditionalClaims: map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999.0, // note: this is deserialized as float64
-						"upstreamObj": map[string]interface{}{
+						"upstreamObj": map[string]any{
 							"name": "value",
 						},
 					},
@@ -2549,13 +2549,13 @@ func TestRefreshGrant(t *testing.T) {
 				want: withWantDynamicClientID(happyRefreshTokenResponseForOpenIDAndOfflineAccessWithAdditionalClaims(
 					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 					refreshedUpstreamTokensWithIDAndRefreshTokens(),
-					map[string]interface{}{
+					map[string]any{
 						"upstreamString": "string value",
 						"upstreamBool":   true,
-						"upstreamArray":  []interface{}{"hello", true},
+						"upstreamArray":  []any{"hello", true},
 						"upstreamFloat":  42.0,
 						"upstreamInt":    999.0, // note: this is deserialized as float64
-						"upstreamObj": map[string]interface{}{
+						"upstreamObj": map[string]any{
 							"name": "value",
 						},
 					},
@@ -2567,7 +2567,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"some-claim":     "some-value",
 							"sub":            goodUpstreamSubject,
 							"username-claim": goodUsername,
@@ -2614,7 +2614,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"some-claim":     "some-value",
 							"sub":            goodUpstreamSubject,
 							"username-claim": goodUsername,
@@ -2635,7 +2635,7 @@ func TestRefreshGrant(t *testing.T) {
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").
 					WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 						IDToken: &oidctypes.IDToken{
-							Claims: map[string]interface{}{
+							Claims: map[string]any{
 								"some-claim":     "some-value",
 								"sub":            goodUpstreamSubject,
 								"username-claim": goodUsername,
@@ -2678,7 +2678,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{},
+						Claims: map[string]any{},
 					},
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken()).Build()),
 			authcodeExchange: authcodeExchangeInputs{
@@ -2715,7 +2715,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{},
+						Claims: map[string]any{},
 					},
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithRefreshTokenWithoutIDToken()).Build()),
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
@@ -2739,7 +2739,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub":             goodUpstreamSubject,
 							"my-groups-claim": []string{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
 						},
@@ -2770,7 +2770,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub":             goodUpstreamSubject,
 							"my-groups-claim": []string{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
 						},
@@ -2804,13 +2804,13 @@ func TestRefreshGrant(t *testing.T) {
 			},
 		},
 		{
-			name: "happy path refresh grant when the upstream refresh returns new group memberships (as interface{} types) from the merged ID token and userinfo results, it updates groups",
+			name: "happy path refresh grant when the upstream refresh returns new group memberships (as any types) from the merged ID token and userinfo results, it updates groups",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub":             goodUpstreamSubject,
-							"my-groups-claim": []interface{}{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
+							"my-groups-claim": []any{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
 						},
 					},
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
@@ -2839,7 +2839,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub":             goodUpstreamSubject,
 							"my-groups-claim": []string{}, // refreshed groups claims is updated to be an empty list
 						},
@@ -2869,7 +2869,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 							// "my-groups-claim" is omitted from the refreshed claims
 						},
@@ -3097,7 +3097,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub":             goodUpstreamSubject,
 							"my-groups-claim": []string{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
 						},
@@ -3144,7 +3144,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub":             goodUpstreamSubject,
 							"my-groups-claim": []string{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
 						},
@@ -3194,7 +3194,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub":             goodUpstreamSubject,
 							"my-groups-claim": []string{"new-group1", "new-group2", "new-group3"}, // refreshed claims includes updated groups
 						},
@@ -3297,7 +3297,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithGroupsClaim("my-groups-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub":             goodUpstreamSubject,
 							"my-groups-claim": nil,
 						},
@@ -3318,7 +3318,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -3336,7 +3336,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -3357,7 +3357,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -3401,7 +3401,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -3552,7 +3552,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -3573,7 +3573,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -3604,7 +3604,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": goodUpstreamSubject,
 						},
 					},
@@ -3946,7 +3946,7 @@ func TestRefreshGrant(t *testing.T) {
 				// This is the current format of the errors returned by the production code version of ValidateTokenAndMergeWithUserInfo, see ValidateTokenAndMergeWithUserInfo in upstreamoidc.go
 				WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"sub": "something-different",
 						},
 					},
@@ -3972,7 +3972,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"some-claim": "some-value",
 						},
 					},
@@ -3997,7 +3997,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"some-claim":     "some-value",
 							"sub":            goodUpstreamSubject,
 							"username-claim": "some-changed-username",
@@ -4024,7 +4024,7 @@ func TestRefreshGrant(t *testing.T) {
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				upstreamOIDCIdentityProviderBuilder().WithUsernameClaim("username-claim").WithValidatedAndMergedWithUserInfoTokens(&oidctypes.Token{
 					IDToken: &oidctypes.IDToken{
-						Claims: map[string]interface{}{
+						Claims: map[string]any{
 							"some-claim": "some-value",
 							"sub":        goodUpstreamSubject,
 							"iss":        "some-changed-issuer",
@@ -4710,7 +4710,7 @@ func TestRefreshGrant(t *testing.T) {
 			// just populating a secret in storage.
 			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, test.idps.BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
-			var parsedAuthcodeExchangeResponseBody map[string]interface{}
+			var parsedAuthcodeExchangeResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
 
 			// Performing an authcode exchange should not have caused any upstream refresh, which should only
@@ -4814,7 +4814,7 @@ func TestRefreshGrant(t *testing.T) {
 			if test.refreshRequest.want.wantStatus == http.StatusOK {
 				wantIDToken := slices.Contains(test.refreshRequest.want.wantSuccessBodyFields, "id_token")
 
-				var parsedRefreshResponseBody map[string]interface{}
+				var parsedRefreshResponseBody map[string]any
 				require.NoError(t, json.Unmarshal(refreshResponse.Body.Bytes(), &parsedRefreshResponseBody))
 
 				// Check that we got back new tokens.
@@ -4830,12 +4830,12 @@ func TestRefreshGrant(t *testing.T) {
 				require.Equal(t, parsedAuthcodeExchangeResponseBody["scope"].(string), parsedRefreshResponseBody["scope"].(string))
 
 				if wantIDToken {
-					var claimsOfFirstIDToken map[string]interface{}
+					var claimsOfFirstIDToken map[string]any
 					firstIDTokenDecoded, _ := josejwt.ParseSigned(parsedAuthcodeExchangeResponseBody["id_token"].(string))
 					err := firstIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfFirstIDToken)
 					require.NoError(t, err)
 
-					var claimsOfSecondIDToken map[string]interface{}
+					var claimsOfSecondIDToken map[string]any
 					secondIDTokenDecoded, _ := josejwt.ParseSigned(parsedRefreshResponseBody["id_token"].(string))
 					err = secondIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfSecondIDToken)
 					require.NoError(t, err)
@@ -4858,13 +4858,13 @@ func TestRefreshGrant(t *testing.T) {
 	}
 }
 
-func requireClaimsAreNotEqual(t *testing.T, claimName string, claimsOfTokenA map[string]interface{}, claimsOfTokenB map[string]interface{}) {
+func requireClaimsAreNotEqual(t *testing.T, claimName string, claimsOfTokenA map[string]any, claimsOfTokenB map[string]any) {
 	require.NotEmpty(t, claimsOfTokenA[claimName])
 	require.NotEmpty(t, claimsOfTokenB[claimName])
 	require.NotEqual(t, claimsOfTokenA[claimName], claimsOfTokenB[claimName])
 }
 
-func requireClaimsAreEqual(t *testing.T, claimName string, claimsOfTokenA map[string]interface{}, claimsOfTokenB map[string]interface{}) {
+func requireClaimsAreEqual(t *testing.T, claimName string, claimsOfTokenA map[string]any, claimsOfTokenB map[string]any) {
 	require.NotEmpty(t, claimsOfTokenA[claimName])
 	require.NotEmpty(t, claimsOfTokenB[claimName])
 	require.Equal(t, claimsOfTokenA[claimName], claimsOfTokenB[claimName])
@@ -4976,7 +4976,7 @@ func requireTokenEndpointBehavior(
 	if test.wantStatus == http.StatusOK {
 		require.NotNil(t, test.wantSuccessBodyFields, "problem with test table setup: wanted success but did not specify expected response body")
 
-		var parsedResponseBody map[string]interface{}
+		var parsedResponseBody map[string]any
 		require.NoError(t, json.Unmarshal(tokenEndpointResponse.Body.Bytes(), &parsedResponseBody))
 		require.ElementsMatch(t, test.wantSuccessBodyFields, getMapKeys(parsedResponseBody))
 
@@ -5149,7 +5149,7 @@ func simulateAuthEndpointHavingAlreadyRun(
 				Subject:     goodSubject,
 				RequestedAt: goodRequestedAtTime,
 				AuthTime:    goodAuthTime,
-				Extra:       map[string]interface{}{},
+				Extra:       map[string]any{},
 			},
 			Subject:  "", // not used, note that the authorization and callback endpoints do not set this
 			Username: "", // not used, note that the authorization and callback endpoints do not set this
@@ -5233,7 +5233,7 @@ func requireInvalidAuthCodeStorage(
 
 func requireValidRefreshTokenStorage(
 	t *testing.T,
-	body map[string]interface{},
+	body map[string]any,
 	storage fositeoauth2.CoreStorage,
 	wantClientID string,
 	wantRequestedScopes []string,
@@ -5241,7 +5241,7 @@ func requireValidRefreshTokenStorage(
 	wantUsername string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
-	wantAdditionalClaims map[string]interface{},
+	wantAdditionalClaims map[string]any,
 	secrets v1.SecretInterface,
 	requestTime time.Time,
 ) {
@@ -5280,7 +5280,7 @@ func requireValidRefreshTokenStorage(
 
 func requireValidAccessTokenStorage(
 	t *testing.T,
-	body map[string]interface{},
+	body map[string]any,
 	storage fositeoauth2.CoreStorage,
 	wantClientID string,
 	wantRequestedScopes []string,
@@ -5288,7 +5288,7 @@ func requireValidAccessTokenStorage(
 	wantUsername string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
-	wantAdditionalClaims map[string]interface{},
+	wantAdditionalClaims map[string]any,
 	secrets v1.SecretInterface,
 	requestTime time.Time,
 ) {
@@ -5346,7 +5346,7 @@ func requireValidAccessTokenStorage(
 
 func requireInvalidAccessTokenStorage(
 	t *testing.T,
-	body map[string]interface{},
+	body map[string]any,
 	storage fositeoauth2.CoreStorage,
 ) {
 	t.Helper()
@@ -5391,7 +5391,7 @@ func requireValidStoredRequest(
 	wantUsername string,
 	wantGroups []string,
 	wantCustomSessionData *psession.CustomSessionData,
-	wantAdditionalClaims map[string]interface{},
+	wantAdditionalClaims map[string]any,
 	requestTime time.Time,
 ) {
 	t.Helper()
@@ -5416,7 +5416,7 @@ func requireValidStoredRequest(
 	require.Equal(t, goodSubject, claims.Subject)
 
 	// Our custom claims from the authorize endpoint should still be set.
-	expectedExtra := map[string]interface{}{}
+	expectedExtra := map[string]any{}
 	if wantUsername != "" {
 		expectedExtra["username"] = wantUsername
 	}
@@ -5510,13 +5510,13 @@ func requireGarbageCollectTimeInDelta(t *testing.T, tokenString string, typeLabe
 
 func requireValidIDToken(
 	t *testing.T,
-	body map[string]interface{},
+	body map[string]any,
 	jwtSigningKey *ecdsa.PrivateKey,
 	wantClientID string,
 	wantNonceValueInIDToken bool,
 	wantUsernameInIDToken string,
 	wantGroupsInIDToken []string,
-	wantAdditionalClaims map[string]interface{},
+	wantAdditionalClaims map[string]any,
 	wantIDTokenLifetimeSeconds int,
 	actualAccessToken string,
 	requestTime time.Time,
@@ -5532,19 +5532,19 @@ func requireValidIDToken(
 	token := oidctestutil.VerifyECDSAIDToken(t, goodIssuer, wantClientID, jwtSigningKey, idTokenString)
 
 	var claims struct {
-		Subject          string                 `json:"sub"`
-		Audience         []string               `json:"aud"`
-		Issuer           string                 `json:"iss"`
-		JTI              string                 `json:"jti"`
-		Nonce            string                 `json:"nonce"`
-		AccessTokenHash  string                 `json:"at_hash"`
-		ExpiresAt        int64                  `json:"exp"`
-		IssuedAt         int64                  `json:"iat"`
-		RequestedAt      int64                  `json:"rat"`
-		AuthTime         int64                  `json:"auth_time"`
-		Groups           []string               `json:"groups"`
-		Username         string                 `json:"username"`
-		AdditionalClaims map[string]interface{} `json:"additionalClaims"`
+		Subject          string         `json:"sub"`
+		Audience         []string       `json:"aud"`
+		Issuer           string         `json:"iss"`
+		JTI              string         `json:"jti"`
+		Nonce            string         `json:"nonce"`
+		AccessTokenHash  string         `json:"at_hash"`
+		ExpiresAt        int64          `json:"exp"`
+		IssuedAt         int64          `json:"iat"`
+		RequestedAt      int64          `json:"rat"`
+		AuthTime         int64          `json:"auth_time"`
+		Groups           []string       `json:"groups"`
+		Username         string         `json:"username"`
+		AdditionalClaims map[string]any `json:"additionalClaims"`
 	}
 
 	idTokenFields := []string{"sub", "aud", "iss", "jti", "auth_time", "exp", "iat", "rat", "azp", "at_hash"}
@@ -5562,7 +5562,7 @@ func requireValidIDToken(
 	}
 
 	// make sure that these are the only fields in the token
-	var m map[string]interface{}
+	var m map[string]any
 	require.NoError(t, token.Claims(&m))
 	require.ElementsMatch(t, idTokenFields, getMapKeys(m))
 
@@ -5578,7 +5578,7 @@ func requireValidIDToken(
 	require.Equal(t, goodIssuer, claims.Issuer)
 	require.NotEmpty(t, claims.JTI)
 	require.Equal(t, wantAdditionalClaims, claims.AdditionalClaims)
-	require.NotEqual(t, map[string]interface{}{}, claims.AdditionalClaims, "additionalClaims may never be present and empty in the id token")
+	require.NotEqual(t, map[string]any{}, claims.AdditionalClaims, "additionalClaims may never be present and empty in the id token")
 
 	if wantNonceValueInIDToken {
 		require.Equal(t, goodNonce, claims.Nonce)
@@ -5615,7 +5615,7 @@ func deepCopyRequestForm(r *http.Request) *http.Request {
 	return &http.Request{Form: copied}
 }
 
-func getMapKeys(m map[string]interface{}) []string {
+func getMapKeys(m map[string]any) []string {
 	keys := make([]string, 0)
 	for key := range m {
 		keys = append(keys, key)
@@ -5623,8 +5623,8 @@ func getMapKeys(m map[string]interface{}) []string {
 	return keys
 }
 
-func toSliceOfInterface(s []string) []interface{} {
-	r := make([]interface{}, len(s))
+func toSliceOfInterface(s []string) []any {
+	r := make([]any, len(s))
 	for i := range s {
 		r[i] = s[i]
 	}

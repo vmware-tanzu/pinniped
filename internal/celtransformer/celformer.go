@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package celtransformer is an implementation of upstream-to-downstream identity transformations
@@ -228,8 +228,8 @@ func (c *baseCompiledTransformation) evalProgram(ctx context.Context, username s
 
 	// Evaluation is thread-safe and side effect free. Many inputs can be sent to the same cel.Program
 	// and if fields are present in the input, but not referenced in the expression, they are ignored.
-	// The argument to Eval may either be an `interpreter.Activation` or a `map[string]interface{}`.
-	val, _, err := c.program.ContextEval(timeoutCtx, map[string]interface{}{
+	// The argument to Eval may either be an `interpreter.Activation` or a `map[string]any`.
+	val, _, err := c.program.ContextEval(timeoutCtx, map[string]any{
 		usernameVariableName:        username,
 		groupsVariableName:          groups,
 		constStringVariableName:     c.consts.StringConstants,
@@ -311,15 +311,15 @@ type CELTransformationSource struct {
 	Consts *TransformationConstants
 }
 
-func (c *compiledUsernameTransformation) Source() interface{} {
+func (c *compiledUsernameTransformation) Source() any {
 	return &CELTransformationSource{Expr: c.sourceExpr, Consts: c.consts}
 }
 
-func (c *compiledGroupsTransformation) Source() interface{} {
+func (c *compiledGroupsTransformation) Source() any {
 	return &CELTransformationSource{Expr: c.sourceExpr, Consts: c.consts}
 }
 
-func (c *compiledAllowAuthenticationPolicy) Source() interface{} {
+func (c *compiledAllowAuthenticationPolicy) Source() any {
 	return &CELTransformationSource{Expr: c.sourceExpr, Consts: c.consts}
 }
 

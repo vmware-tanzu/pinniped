@@ -14,9 +14,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	authv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/testutil"
 )
@@ -66,14 +66,14 @@ func TestMiddlware(t *testing.T) {
 	}
 
 	var ok bool
-	pinnipedOwner := &configv1alpha1.FederationDomain{
+	pinnipedOwner := &supervisorconfigv1alpha1.FederationDomain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "some-name",
 			UID:  "some-uid",
 		},
 	}
-	pinnipedOwnerGVK := configv1alpha1.SchemeGroupVersion.WithKind("FederationDomain")
-	pinnipedOwnerWithNewGroupGVK := configv1alpha1.SchemeGroupVersion.WithKind("FederationDomain")
+	pinnipedOwnerGVK := supervisorconfigv1alpha1.SchemeGroupVersion.WithKind("FederationDomain")
+	pinnipedOwnerWithNewGroupGVK := supervisorconfigv1alpha1.SchemeGroupVersion.WithKind("FederationDomain")
 	pinnipedOwnerWithNewGroupGVK.Group, ok = Replace(pinnipedOwnerWithNewGroupGVK.Group, newSuffix)
 	require.True(t, ok)
 	podWithPinnipedOwner := &corev1.Pod{
@@ -105,9 +105,9 @@ func TestMiddlware(t *testing.T) {
 		},
 	}
 
-	federationDomainWithPinnipedOwner := &configv1alpha1.FederationDomain{
+	federationDomainWithPinnipedOwner := &supervisorconfigv1alpha1.FederationDomain{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: configv1alpha1.SchemeGroupVersion.String(),
+			APIVersion: supervisorconfigv1alpha1.SchemeGroupVersion.String(),
 			Kind:       "FederationDomain",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -119,9 +119,9 @@ func TestMiddlware(t *testing.T) {
 			},
 		},
 	}
-	federationDomainWithNewGroupAndPinnipedOwner := &configv1alpha1.FederationDomain{
+	federationDomainWithNewGroupAndPinnipedOwner := &supervisorconfigv1alpha1.FederationDomain{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: replaceGV(t, configv1alpha1.SchemeGroupVersion, newSuffix).String(),
+			APIVersion: replaceGV(t, supervisorconfigv1alpha1.SchemeGroupVersion, newSuffix).String(),
 			Kind:       "FederationDomain",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -133,9 +133,9 @@ func TestMiddlware(t *testing.T) {
 			},
 		},
 	}
-	federationDomainWithNewGroupAndPinnipedOwnerWithNewGroup := &configv1alpha1.FederationDomain{
+	federationDomainWithNewGroupAndPinnipedOwnerWithNewGroup := &supervisorconfigv1alpha1.FederationDomain{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: replaceGV(t, configv1alpha1.SchemeGroupVersion, newSuffix).String(),
+			APIVersion: replaceGV(t, supervisorconfigv1alpha1.SchemeGroupVersion, newSuffix).String(),
 			Kind:       "FederationDomain",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -154,11 +154,11 @@ func TestMiddlware(t *testing.T) {
 	)
 	tokenCredentialRequestWithPinnipedAuthenticator := with(
 		tokenCredentialRequest,
-		authenticatorAPIGroup(authv1alpha1.SchemeGroupVersion.Group),
+		authenticatorAPIGroup(authenticationv1alpha1.SchemeGroupVersion.Group),
 	)
 	tokenCredentialRequestWithCustomAPIGroupAuthenticator := with(
 		tokenCredentialRequest,
-		authenticatorAPIGroup(replaceGV(t, authv1alpha1.SchemeGroupVersion, newSuffix).Group),
+		authenticatorAPIGroup(replaceGV(t, authenticationv1alpha1.SchemeGroupVersion, newSuffix).Group),
 	)
 	tokenCredentialRequestWithNewGroup := with(
 		tokenCredentialRequest,
@@ -166,11 +166,11 @@ func TestMiddlware(t *testing.T) {
 	)
 	tokenCredentialRequestWithNewGroupAndPinnipedAuthenticator := with(
 		tokenCredentialRequestWithNewGroup,
-		authenticatorAPIGroup(authv1alpha1.SchemeGroupVersion.Group),
+		authenticatorAPIGroup(authenticationv1alpha1.SchemeGroupVersion.Group),
 	)
 	tokenCredentialRequestWithNewGroupAndCustomAPIGroupAuthenticator := with(
 		tokenCredentialRequestWithNewGroup,
-		authenticatorAPIGroup(replaceGV(t, authv1alpha1.SchemeGroupVersion, newSuffix).Group),
+		authenticatorAPIGroup(replaceGV(t, authenticationv1alpha1.SchemeGroupVersion, newSuffix).Group),
 	)
 
 	tests := []struct {
@@ -308,7 +308,7 @@ func TestMiddlware(t *testing.T) {
 			rt: (&testutil.RoundTrip{}).
 				WithVerb(kubeclient.VerbCreate).
 				WithNamespace("some-namespace").
-				WithResource(configv1alpha1.SchemeGroupVersion.WithResource("federationdomains")),
+				WithResource(supervisorconfigv1alpha1.SchemeGroupVersion.WithResource("federationdomains")),
 			requestObj:          federationDomainWithPinnipedOwner,
 			responseObj:         federationDomainWithNewGroupAndPinnipedOwnerWithNewGroup,
 			wantMutateRequests:  2,
@@ -323,7 +323,7 @@ func TestMiddlware(t *testing.T) {
 			rt: (&testutil.RoundTrip{}).
 				WithVerb(kubeclient.VerbUpdate).
 				WithNamespace("some-namespace").
-				WithResource(configv1alpha1.SchemeGroupVersion.WithResource("federationdomains")),
+				WithResource(supervisorconfigv1alpha1.SchemeGroupVersion.WithResource("federationdomains")),
 			requestObj:          federationDomainWithPinnipedOwner,
 			responseObj:         federationDomainWithNewGroupAndPinnipedOwnerWithNewGroup,
 			wantMutateRequests:  2,

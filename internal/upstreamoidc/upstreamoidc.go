@@ -48,7 +48,7 @@ type ProviderConfig struct {
 	RevocationURL            *url.URL // will commonly be nil: many providers do not offer this
 	Provider                 interface {
 		Verifier(*coreosoidc.Config) *coreosoidc.IDTokenVerifier
-		Claims(v interface{}) error
+		Claims(v any) error
 		UserInfo(ctx context.Context, tokenSource oauth2.TokenSource) (*coreosoidc.UserInfo, error)
 	}
 }
@@ -282,7 +282,7 @@ func (p *ProviderConfig) tryRevokeToken(
 // ValidateTokenAndMergeWithUserInfo will validate the ID token. It will also merge the claims from the userinfo endpoint response,
 // if the provider offers the userinfo endpoint.
 func (p *ProviderConfig) ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken bool, requireUserInfo bool) (*oidctypes.Token, error) {
-	var validatedClaims = make(map[string]interface{})
+	var validatedClaims = make(map[string]any)
 
 	var idTokenExpiry time.Time
 	// if we require the id token, make sure we have it.
@@ -319,7 +319,7 @@ func (p *ProviderConfig) ValidateTokenAndMergeWithUserInfo(ctx context.Context, 
 	}, nil
 }
 
-func (p *ProviderConfig) validateIDToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, validatedClaims map[string]interface{}, requireIDToken bool) (time.Time, string, error) {
+func (p *ProviderConfig) validateIDToken(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, validatedClaims map[string]any, requireIDToken bool) (time.Time, string, error) {
 	idTok, hasIDTok := tok.Extra("id_token").(string)
 	if !hasIDTok && !requireIDToken {
 		return time.Time{}, "", nil // exit early
@@ -351,7 +351,7 @@ func (p *ProviderConfig) validateIDToken(ctx context.Context, tok *oauth2.Token,
 	return idTokenExpiry, idTok, nil
 }
 
-func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]interface{}, requireIDToken bool, requireUserInfo bool) error {
+func (p *ProviderConfig) maybeFetchUserInfoAndMergeClaims(ctx context.Context, tok *oauth2.Token, claims map[string]any, requireIDToken bool, requireUserInfo bool) error {
 	idTokenSubject, _ := claims[oidcapi.IDTokenClaimSubject].(string)
 
 	userInfo, err := p.maybeFetchUserInfo(ctx, tok, requireUserInfo)
@@ -414,7 +414,7 @@ func (p *ProviderConfig) maybeFetchUserInfo(ctx context.Context, tok *oauth2.Tok
 	return userInfo, nil
 }
 
-func maybeLogClaims(msg, name string, claims map[string]interface{}) {
+func maybeLogClaims(msg, name string, claims map[string]any) {
 	if plog.Enabled(plog.LevelAll) { // log keys and values at all level
 		data, _ := json.Marshal(claims) // nothing we can do if it fails, but it really never should
 		plog.All(msg, "providerName", name, "claims", string(data))

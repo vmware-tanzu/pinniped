@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	"go.uber.org/mock/gomock"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,14 +29,14 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	conciergeinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
-	"go.pinniped.dev/internal/controller/kubecertagent/mocks"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/kubeclient"
+	mocks "go.pinniped.dev/internal/mocks/mockkubecertagent"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/test/testlib"
@@ -45,7 +46,7 @@ func TestAgentController(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2021, 4, 13, 9, 57, 0, 0, time.UTC)
 
-	initialCredentialIssuer := &configv1alpha1.CredentialIssuer{
+	initialCredentialIssuer := &conciergeconfigv1alpha1.CredentialIssuer{
 		ObjectMeta: metav1.ObjectMeta{Name: "pinniped-concierge-config"},
 	}
 
@@ -247,7 +248,7 @@ func TestAgentController(t *testing.T) {
 		wantAgentDeployment              *appsv1.Deployment
 		wantDeploymentActionVerbs        []string
 		wantDeploymentDeleteActionOpts   []metav1.DeleteOptions
-		wantStrategy                     *configv1alpha1.CredentialIssuerStrategy
+		wantStrategy                     *conciergeconfigv1alpha1.CredentialIssuerStrategy
 	}{
 		{
 			name: "no CredentialIssuer found",
@@ -273,10 +274,10 @@ func TestAgentController(t *testing.T) {
 				"could not find a healthy kube-controller-manager pod (0 candidates): " +
 					"note that this error is the expected behavior for some cluster types, including most cloud provider clusters (e.g. GKE, AKS, EKS)",
 			},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:   configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status: configv1alpha1.ErrorStrategyStatus,
-				Reason: configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:   conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status: conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason: conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message: "could not find a healthy kube-controller-manager pod (0 candidates): " +
 					"note that this error is the expected behavior for some cluster types, including most cloud provider clusters (e.g. GKE, AKS, EKS)",
 				LastUpdateTime: metav1.NewTime(now),
@@ -317,10 +318,10 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors: []string{
 				"could not find a healthy kube-controller-manager pod (2 candidates)",
 			},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not find a healthy kube-controller-manager pod (2 candidates)",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -344,10 +345,10 @@ func TestAgentController(t *testing.T) {
 			wantDistinctLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not ensure agent deployment: some creation error",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -393,10 +394,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not find a healthy agent pod (1 candidate)",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -442,10 +443,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeploymentWithDefaultedPaths,
 			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not find a healthy agent pod (1 candidate)",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -472,10 +473,10 @@ func TestAgentController(t *testing.T) {
 			wantDeploymentDeleteActionOpts: []metav1.DeleteOptions{
 				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
 			},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not find a healthy agent pod (1 candidate)",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -508,10 +509,10 @@ func TestAgentController(t *testing.T) {
 				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
 				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
 			},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not ensure agent deployment: some delete error",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -545,10 +546,10 @@ func TestAgentController(t *testing.T) {
 			wantDeploymentDeleteActionOpts: []metav1.DeleteOptions{
 				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
 			},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not ensure agent deployment: some create error",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -591,10 +592,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeploymentWithExtraLabels,
 			wantDeploymentActionVerbs: []string{"list", "watch", "update"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not find a healthy agent pod (1 candidate)",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -614,10 +615,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeploymentWithHostNetwork,
 			wantDeploymentActionVerbs: []string{"list", "watch", "update"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotGetClusterInfoStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotGetClusterInfoStrategyReason,
 				Message:        "failed to get kube-public/cluster-info configmap: configmap \"cluster-info\" not found",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -640,10 +641,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotGetClusterInfoStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotGetClusterInfoStrategyReason,
 				Message:        "failed to get kube-public/cluster-info configmap: configmap \"cluster-info\" not found",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -667,10 +668,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotGetClusterInfoStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotGetClusterInfoStrategyReason,
 				Message:        "could not extract Kubernetes API endpoint info from kube-public/cluster-info configmap: missing \"kubeconfig\" key",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -694,10 +695,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotGetClusterInfoStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotGetClusterInfoStrategyReason,
 				Message:        "could not extract Kubernetes API endpoint info from kube-public/cluster-info configmap: key \"kubeconfig\" does not contain a valid kubeconfig",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -721,10 +722,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotGetClusterInfoStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotGetClusterInfoStrategyReason,
 				Message:        "could not extract Kubernetes API endpoint info from kube-public/cluster-info configmap: kubeconfig in key \"kubeconfig\" does not contain any clusters",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -750,10 +751,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not exec into agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: some exec error",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -779,10 +780,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        `failed to decode signing cert/key JSON from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: invalid character 'b' looking for beginning of value`,
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -808,10 +809,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        `failed to decode signing cert base64 from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: illegal base64 data at input byte 4`,
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -837,10 +838,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        `failed to decode signing key base64 from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: illegal base64 data at input byte 4`,
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -869,10 +870,10 @@ func TestAgentController(t *testing.T) {
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "failed to set signing cert/key content from agent pod concierge/pinniped-concierge-kube-cert-agent-xyz-1234: some dynamic cert error",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -895,15 +896,15 @@ func TestAgentController(t *testing.T) {
 			wantDistinctErrors:        []string{""},
 			wantAgentDeployment:       healthyAgentDeployment,
 			wantDeploymentActionVerbs: []string{"list", "watch"},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.SuccessStrategyStatus,
-				Reason:         configv1alpha1.FetchedKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.FetchedKeyStrategyReason,
 				Message:        "key was fetched successfully",
 				LastUpdateTime: metav1.NewTime(now),
-				Frontend: &configv1alpha1.CredentialIssuerFrontend{
-					Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
-					TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+				Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+					Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+					TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 						Server:                   "https://test-kubernetes-endpoint.example.com",
 						CertificateAuthorityData: "dGVzdC1rdWJlcm5ldGVzLWNh",
 					},
@@ -941,10 +942,10 @@ func TestAgentController(t *testing.T) {
 				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
 				testutil.NewPreconditions(healthyAgentDeploymentWithOldStyleSelector.UID, healthyAgentDeploymentWithOldStyleSelector.ResourceVersion),
 			},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.ErrorStrategyStatus,
-				Reason:         configv1alpha1.CouldNotFetchKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
 				Message:        "could not ensure agent deployment: some delete error",
 				LastUpdateTime: metav1.NewTime(now),
 			},
@@ -967,15 +968,15 @@ func TestAgentController(t *testing.T) {
 			wantDistinctLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).loadSigningKey","message":"successfully loaded signing key from agent pod into cache"}`,
 			},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.SuccessStrategyStatus,
-				Reason:         configv1alpha1.FetchedKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.FetchedKeyStrategyReason,
 				Message:        "key was fetched successfully",
 				LastUpdateTime: metav1.NewTime(now),
-				Frontend: &configv1alpha1.CredentialIssuerFrontend{
-					Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
-					TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+				Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+					Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+					TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 						Server:                   "https://test-kubernetes-endpoint.example.com",
 						CertificateAuthorityData: "dGVzdC1rdWJlcm5ldGVzLWNh",
 					},
@@ -1001,15 +1002,15 @@ func TestAgentController(t *testing.T) {
 			wantDistinctLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).loadSigningKey","message":"successfully loaded signing key from agent pod into cache"}`,
 			},
-			wantStrategy: &configv1alpha1.CredentialIssuerStrategy{
-				Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-				Status:         configv1alpha1.SuccessStrategyStatus,
-				Reason:         configv1alpha1.FetchedKeyStrategyReason,
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.FetchedKeyStrategyReason,
 				Message:        "key was fetched successfully",
 				LastUpdateTime: metav1.NewTime(now),
-				Frontend: &configv1alpha1.CredentialIssuerFrontend{
-					Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
-					TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+				Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+					Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+					TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 						Server:                   "https://overridden-server.example.com/some/path",
 						CertificateAuthorityData: "dGVzdC1rdWJlcm5ldGVzLWNh",
 					},
@@ -1081,8 +1082,7 @@ func TestAgentController(t *testing.T) {
 			actualErrors := deduplicate(errorMessages)
 			assert.Subsetf(t, actualErrors, tt.wantDistinctErrors, "required error(s) were not found in the actual errors")
 
-			allAllowedErrors := append([]string{}, tt.wantDistinctErrors...)
-			allAllowedErrors = append(allAllowedErrors, tt.alsoAllowUndesiredDistinctErrors...)
+			allAllowedErrors := slices.Concat(tt.wantDistinctErrors, tt.alsoAllowUndesiredDistinctErrors)
 			assert.Subsetf(t, allAllowedErrors, actualErrors, "actual errors contained additional error(s) which is not expected by the test")
 
 			assert.Equal(t, tt.wantDistinctLogs, deduplicate(testutil.SplitByNewline(buf.String())), "unexpected logs")
@@ -1267,7 +1267,7 @@ func hasDeploymentSynced(client kubernetes.Interface, kubeInformers informers.Sh
 			cachedDep, cachedErr := kubeInformers.Apps().V1().Deployments().Lister().Deployments("concierge").
 				Get("pinniped-concierge-kube-cert-agent")
 
-			if errors.IsNotFound(realErr) && errors.IsNotFound(cachedErr) {
+			if apierrors.IsNotFound(realErr) && apierrors.IsNotFound(cachedErr) {
 				return
 			}
 

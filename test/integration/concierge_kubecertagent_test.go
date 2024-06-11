@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -11,12 +11,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/utils/ptr"
 
-	conciergev1alpha "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
 
@@ -60,7 +60,7 @@ func TestKubeCertAgent(t *testing.T) {
 		}
 
 		// If there's no successful strategy yet, wait until there is.
-		strategy := findSuccessfulStrategy(credentialIssuer, conciergev1alpha.KubeClusterSigningCertificateStrategyType)
+		strategy := findSuccessfulStrategy(credentialIssuer, conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType)
 		if strategy == nil {
 			t.Log("could not find a successful TokenCredentialRequestAPI strategy in the CredentialIssuer:")
 			for _, s := range credentialIssuer.Status.Strategies {
@@ -73,19 +73,19 @@ func TestKubeCertAgent(t *testing.T) {
 		if strategy.Frontend == nil {
 			return false, fmt.Errorf("strategy did not find a Frontend")
 		}
-		if strategy.Frontend.Type != conciergev1alpha.TokenCredentialRequestAPIFrontendType {
+		if strategy.Frontend.Type != conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType {
 			return false, fmt.Errorf("strategy had unexpected frontend type %q", strategy.Frontend.Type)
 		}
 		return true, nil
 	}, 3*time.Minute, 2*time.Second)
 }
 
-func findSuccessfulStrategy(credentialIssuer *conciergev1alpha.CredentialIssuer, strategyType conciergev1alpha.StrategyType) *conciergev1alpha.CredentialIssuerStrategy {
+func findSuccessfulStrategy(credentialIssuer *conciergeconfigv1alpha1.CredentialIssuer, strategyType conciergeconfigv1alpha1.StrategyType) *conciergeconfigv1alpha1.CredentialIssuerStrategy {
 	for _, strategy := range credentialIssuer.Status.Strategies {
 		if strategy.Type != strategyType {
 			continue
 		}
-		if strategy.Status != conciergev1alpha.SuccessStrategyStatus {
+		if strategy.Status != conciergeconfigv1alpha1.SuccessStrategyStatus {
 			continue
 		}
 		return &strategy
@@ -133,7 +133,7 @@ func TestLegacyPodCleaner_Parallel(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
 		err := kubeClient.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)})
-		if !k8serrors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			require.NoError(t, err, "failed to clean up fake legacy agent pod")
 		}
 	})
@@ -141,7 +141,7 @@ func TestLegacyPodCleaner_Parallel(t *testing.T) {
 	// Expect the legacy-pod-cleaner controller to delete the pod.
 	testlib.RequireEventuallyWithoutError(t, func() (bool, error) {
 		_, err := kubeClient.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
-		if k8serrors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			t.Logf("fake legacy agent pod %s/%s was deleted as expected", pod.Namespace, pod.Name)
 			return true, nil
 		}

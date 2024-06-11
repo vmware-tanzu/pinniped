@@ -18,15 +18,14 @@ import (
 	"golang.org/x/oauth2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	errorsutil "k8s.io/apimachinery/pkg/util/errors"
-	k8sutilerrors "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/utils/clock"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	idpinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/idp/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -106,7 +105,7 @@ func New(
 		withInformer(
 			gitHubIdentityProviderInformer,
 			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				gitHubIDP, ok := obj.(*v1alpha1.GitHubIdentityProvider)
+				gitHubIDP, ok := obj.(*idpv1alpha1.GitHubIdentityProvider)
 				return ok && gitHubIDP.Namespace == namespace
 			}, pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
@@ -127,7 +126,7 @@ func (c *gitHubWatcherController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Sort them by name just so that the logs output is consistent
-	slices.SortStableFunc(actualUpstreams, func(a, b *v1alpha1.GitHubIdentityProvider) int {
+	slices.SortStableFunc(actualUpstreams, func(a, b *idpv1alpha1.GitHubIdentityProvider) int {
 		return strings.Compare(a.Name, b.Name)
 	})
 
@@ -151,14 +150,14 @@ func (c *gitHubWatcherController) Sync(ctx controllerlib.Context) error {
 		applicationErrors = append([]error{controllerlib.ErrSyntheticRequeue}, applicationErrors...)
 	}
 
-	return errorsutil.NewAggregate(applicationErrors)
+	return utilerrors.NewAggregate(applicationErrors)
 }
 
 func (c *gitHubWatcherController) validateClientSecret(secretName string) (*metav1.Condition, string, string, error) {
 	secret, unableToRetrieveSecretErr := c.secretInformer.Lister().Secrets(c.namespace).Get(secretName)
 
 	// This error requires user interaction, so ignore it.
-	if k8sapierrors.IsNotFound(unableToRetrieveSecretErr) {
+	if apierrors.IsNotFound(unableToRetrieveSecretErr) {
 		unableToRetrieveSecretErr = nil
 	}
 
@@ -207,16 +206,16 @@ func (c *gitHubWatcherController) validateClientSecret(secretName string) (*meta
 	}, clientID, clientSecret, nil
 }
 
-func validateOrganizationsPolicy(organizationsSpec *v1alpha1.GitHubOrganizationsSpec) *metav1.Condition {
-	var policy v1alpha1.GitHubAllowedAuthOrganizationsPolicy
+func validateOrganizationsPolicy(organizationsSpec *idpv1alpha1.GitHubOrganizationsSpec) *metav1.Condition {
+	var policy idpv1alpha1.GitHubAllowedAuthOrganizationsPolicy
 	if organizationsSpec.Policy != nil {
 		policy = *organizationsSpec.Policy
 	}
 
 	// Should not happen due to CRD defaulting, enum validation, and CEL validation (for recent versions of K8s only!)
 	// That is why the message here is very minimal
-	if (policy == v1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers && len(organizationsSpec.Allowed) == 0) ||
-		(policy == v1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations && len(organizationsSpec.Allowed) > 0) {
+	if (policy == idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers && len(organizationsSpec.Allowed) == 0) ||
+		(policy == idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations && len(organizationsSpec.Allowed) > 0) {
 		return &metav1.Condition{
 			Type:    OrganizationsPolicyValid,
 			Status:  metav1.ConditionTrue,
@@ -242,7 +241,7 @@ func validateOrganizationsPolicy(organizationsSpec *v1alpha1.GitHubOrganizations
 	}
 }
 
-func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx controllerlib.Context, upstream *v1alpha1.GitHubIdentityProvider) (
+func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx controllerlib.Context, upstream *idpv1alpha1.GitHubIdentityProvider) (
 	*upstreamgithub.Provider, // If validated, returns the config
 	error, // This error will only refer to programmatic errors such as inability to perform a Dial or dereference a pointer, not configuration errors
 ) {
@@ -285,7 +284,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	// Status: metav1.ConditionFalse, never be omitted.
 	if len(conditions) != countExpectedConditions { // untested since all code paths return the same number of conditions
 		applicationErrors = append(applicationErrors, fmt.Errorf("expected %d conditions but found %d conditions", countExpectedConditions, len(conditions)))
-		return nil, k8sutilerrors.NewAggregate(applicationErrors)
+		return nil, utilerrors.NewAggregate(applicationErrors)
 	}
 	hadErrorCondition, updateStatusErr := c.updateStatus(ctx.Context, upstream, conditions)
 	if updateStatusErr != nil {
@@ -293,7 +292,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	}
 	// Any error condition means we will not add the IDP to the cache, so just return nil here
 	if hadErrorCondition {
-		return nil, k8sutilerrors.NewAggregate(applicationErrors)
+		return nil, utilerrors.NewAggregate(applicationErrors)
 	}
 
 	provider := upstreamgithub.New(
@@ -320,7 +319,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 			HttpClient:           httpClient,
 		},
 	)
-	return provider, k8sutilerrors.NewAggregate(applicationErrors)
+	return provider, utilerrors.NewAggregate(applicationErrors)
 }
 
 func apiBaseUrl(upstreamSpecHost string, hostURL string) string {
@@ -330,7 +329,7 @@ func apiBaseUrl(upstreamSpecHost string, hostURL string) string {
 	return defaultApiBaseURL
 }
 
-func validateHost(gitHubAPIConfig v1alpha1.GitHubAPIConfig) (*metav1.Condition, *endpointaddr.HostPort) {
+func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Condition, *endpointaddr.HostPort) {
 	buildInvalidHost := func(host, reason string) *metav1.Condition {
 		return &metav1.Condition{
 			Type:    HostValid,
@@ -360,7 +359,7 @@ func validateHost(gitHubAPIConfig v1alpha1.GitHubAPIConfig) (*metav1.Condition, 
 	}, &hostPort
 }
 
-func (c *gitHubWatcherController) validateTLSConfiguration(tlsSpec *v1alpha1.TLSSpec) (*metav1.Condition, *x509.CertPool) {
+func (c *gitHubWatcherController) validateTLSConfiguration(tlsSpec *idpv1alpha1.TLSSpec) (*metav1.Condition, *x509.CertPool) {
 	certPool, _, buildCertPoolErr := pinnipedcontroller.BuildCertPoolIDP(tlsSpec)
 	if buildCertPoolErr != nil {
 		// buildCertPoolErr is not recoverable with a resync.
@@ -428,7 +427,7 @@ func buildDialErrorMessage(tlsDialErr error) string {
 	return reason
 }
 
-func validateUserAndGroupAttributes(upstream *v1alpha1.GitHubIdentityProvider) (*metav1.Condition, v1alpha1.GitHubGroupNameAttribute, v1alpha1.GitHubUsernameAttribute) {
+func validateUserAndGroupAttributes(upstream *idpv1alpha1.GitHubIdentityProvider) (*metav1.Condition, idpv1alpha1.GitHubGroupNameAttribute, idpv1alpha1.GitHubUsernameAttribute) {
 	buildInvalidCondition := func(message string) *metav1.Condition {
 		return &metav1.Condition{
 			Type:    ClaimsValid,
@@ -438,14 +437,14 @@ func validateUserAndGroupAttributes(upstream *v1alpha1.GitHubIdentityProvider) (
 		}
 	}
 
-	var usernameAttribute v1alpha1.GitHubUsernameAttribute
+	var usernameAttribute idpv1alpha1.GitHubUsernameAttribute
 	if upstream.Spec.Claims.Username == nil {
 		return buildInvalidCondition("spec.claims.username is required"), "", ""
 	} else {
 		usernameAttribute = *upstream.Spec.Claims.Username
 	}
 
-	var groupNameAttribute v1alpha1.GitHubGroupNameAttribute
+	var groupNameAttribute idpv1alpha1.GitHubGroupNameAttribute
 	if upstream.Spec.Claims.Groups == nil {
 		return buildInvalidCondition("spec.claims.groups is required"), "", ""
 	} else {
@@ -453,17 +452,17 @@ func validateUserAndGroupAttributes(upstream *v1alpha1.GitHubIdentityProvider) (
 	}
 
 	switch usernameAttribute {
-	case v1alpha1.GitHubUsernameLoginAndID:
-	case v1alpha1.GitHubUsernameLogin:
-	case v1alpha1.GitHubUsernameID:
+	case idpv1alpha1.GitHubUsernameLoginAndID:
+	case idpv1alpha1.GitHubUsernameLogin:
+	case idpv1alpha1.GitHubUsernameID:
 	default:
 		// Should not happen due to CRD enum validation
 		return buildInvalidCondition(fmt.Sprintf("spec.claims.username (%q) is not valid", usernameAttribute)), "", ""
 	}
 
 	switch groupNameAttribute {
-	case v1alpha1.GitHubUseTeamNameForGroupName:
-	case v1alpha1.GitHubUseTeamSlugForGroupName:
+	case idpv1alpha1.GitHubUseTeamNameForGroupName:
+	case idpv1alpha1.GitHubUseTeamSlugForGroupName:
 	default:
 		// Should not happen due to CRD enum validation
 		return buildInvalidCondition(fmt.Sprintf("spec.claims.groups (%q) is not valid", groupNameAttribute)), "", ""
@@ -479,7 +478,7 @@ func validateUserAndGroupAttributes(upstream *v1alpha1.GitHubIdentityProvider) (
 
 func (c *gitHubWatcherController) updateStatus(
 	ctx context.Context,
-	upstream *v1alpha1.GitHubIdentityProvider,
+	upstream *idpv1alpha1.GitHubIdentityProvider,
 	conditions []*metav1.Condition) (bool, error) {
 	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
@@ -492,9 +491,9 @@ func (c *gitHubWatcherController) updateStatus(
 		metav1.NewTime(c.clock.Now()),
 	)
 
-	updated.Status.Phase = v1alpha1.GitHubPhaseReady
+	updated.Status.Phase = idpv1alpha1.GitHubPhaseReady
 	if hadErrorCondition {
-		updated.Status.Phase = v1alpha1.GitHubPhaseError
+		updated.Status.Phase = idpv1alpha1.GitHubPhaseError
 	}
 
 	if equality.Semantic.DeepEqual(upstream, updated) {

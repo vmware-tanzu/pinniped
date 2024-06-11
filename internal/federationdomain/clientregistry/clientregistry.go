@@ -12,10 +12,10 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/ory/fosite"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	supervisorclient "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
@@ -95,7 +95,7 @@ func (m *ClientManager) GetClient(ctx context.Context, id string) (fosite.Client
 
 	// Try to look up an OIDCClient with the given client ID (which will be the Name of the OIDCClient).
 	oidcClient, err := m.oidcClientsClient.Get(ctx, id, metav1.GetOptions{})
-	if errors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		return nil, fosite.ErrNotFound.WithDescription("no such client")
 	}
 	if err != nil {
@@ -179,7 +179,7 @@ func PinnipedCLI() *Client {
 	}
 }
 
-func oidcClientCRToFositeClient(oidcClient *configv1alpha1.OIDCClient, clientSecrets []string) *Client {
+func oidcClientCRToFositeClient(oidcClient *supervisorconfigv1alpha1.OIDCClient, clientSecrets []string) *Client {
 	// Allow the user to optionally override the default timeouts for these clients.
 	idTokenLifetimeOverrideInSeconds := oidcClient.Spec.TokenLifetimes.IDTokenSeconds
 	var idTokenLifetime time.Duration
@@ -215,7 +215,7 @@ func oidcClientCRToFositeClient(oidcClient *configv1alpha1.OIDCClient, clientSec
 	}
 }
 
-func scopesToArguments(scopes []configv1alpha1.Scope) fosite.Arguments {
+func scopesToArguments(scopes []supervisorconfigv1alpha1.Scope) fosite.Arguments {
 	a := make(fosite.Arguments, len(scopes))
 	for i, scope := range scopes {
 		a[i] = string(scope)
@@ -223,7 +223,7 @@ func scopesToArguments(scopes []configv1alpha1.Scope) fosite.Arguments {
 	return a
 }
 
-func grantTypesToArguments(grantTypes []configv1alpha1.GrantType) fosite.Arguments {
+func grantTypesToArguments(grantTypes []supervisorconfigv1alpha1.GrantType) fosite.Arguments {
 	a := make(fosite.Arguments, len(grantTypes))
 	for i, grantType := range grantTypes {
 		a[i] = string(grantType)
@@ -231,7 +231,7 @@ func grantTypesToArguments(grantTypes []configv1alpha1.GrantType) fosite.Argumen
 	return a
 }
 
-func redirectURIsToStrings(uris []configv1alpha1.RedirectURI) []string {
+func redirectURIsToStrings(uris []supervisorconfigv1alpha1.RedirectURI) []string {
 	s := make([]string, len(uris))
 	for i, uri := range uris {
 		s[i] = string(uri)

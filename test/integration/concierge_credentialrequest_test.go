@@ -13,11 +13,11 @@ import (
 	"github.com/go-jose/go-jose/v3/jwt"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
@@ -33,7 +33,7 @@ func TestUnsuccessfulCredentialRequest_Parallel(t *testing.T) {
 		loginv1alpha1.TokenCredentialRequestSpec{
 			Token: env.TestUser.Token,
 			Authenticator: corev1.TypedLocalObjectReference{
-				APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+				APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
 				Kind:     "WebhookAuthenticator",
 				Name:     "some-webhook-that-does-not-exist",
 			},
@@ -62,7 +62,7 @@ func TestSuccessfulCredentialRequest_Browser(t *testing.T) {
 		{
 			name: "webhook",
 			authenticator: func(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
-				return testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, auth1alpha1.WebhookAuthenticatorPhaseReady)
+				return testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
 			},
 			token: func(t *testing.T) (string, string, []string) {
 				return testlib.IntegrationEnv(t).TestUser.Token, env.TestUser.ExpectedUsername, env.TestUser.ExpectedGroups
@@ -73,7 +73,7 @@ func TestSuccessfulCredentialRequest_Browser(t *testing.T) {
 			authenticator: func(ctx context.Context, t *testing.T) corev1.TypedLocalObjectReference {
 				authenticator := testlib.CreateTestJWTAuthenticatorForCLIUpstream(ctx, t)
 				return corev1.TypedLocalObjectReference{
-					APIGroup: &auth1alpha1.SchemeGroupVersion.Group,
+					APIGroup: &authenticationv1alpha1.SchemeGroupVersion.Group,
 					Kind:     "JWTAuthenticator",
 					Name:     authenticator.Name,
 				}
@@ -148,7 +148,7 @@ func TestFailedCredentialRequestWhenTheRequestIsValidButTheTokenDoesNotAuthentic
 	// TokenCredentialRequest API.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, auth1alpha1.WebhookAuthenticatorPhaseReady)
+	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
 
 	response, err := testlib.CreateTokenCredentialRequest(context.Background(), t,
 		loginv1alpha1.TokenCredentialRequestSpec{Token: "not a good token", Authenticator: testWebhook},
@@ -169,14 +169,14 @@ func TestCredentialRequest_ShouldFailWhenRequestDoesNotIncludeToken_Parallel(t *
 	// TokenCredentialRequest API.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, auth1alpha1.WebhookAuthenticatorPhaseReady)
+	testWebhook := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
 
 	response, err := testlib.CreateTokenCredentialRequest(context.Background(), t,
 		loginv1alpha1.TokenCredentialRequestSpec{Token: "", Authenticator: testWebhook},
 	)
 
 	require.Error(t, err)
-	statusError, isStatus := err.(*errors.StatusError)
+	statusError, isStatus := err.(*apierrors.StatusError)
 	require.True(t, isStatus, testlib.Sdump(err))
 
 	require.Equal(t, 1, len(statusError.ErrStatus.Details.Causes))

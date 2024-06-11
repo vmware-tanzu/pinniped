@@ -278,8 +278,8 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Cont
 	return nil
 }
 
-func logKV(secret *corev1.Secret) []interface{} {
-	return []interface{}{
+func logKV(secret *corev1.Secret) []any {
+	return []any{
 		"secretName", secret.Name,
 		"secretNamespace", secret.Namespace,
 		"secretType", string(secret.Type),

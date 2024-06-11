@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -99,7 +99,7 @@ func runWhoami(output io.Writer, getClientset getConciergeClientsetFunc, flags *
 	whoAmI, err := clientset.IdentityV1alpha1().WhoAmIRequests().Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	if err != nil {
 		hint := ""
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			hint = " (is the Pinniped WhoAmI API running and healthy?)"
 		}
 		return fmt.Errorf("could not complete WhoAmIRequest%s: %w", hint, err)

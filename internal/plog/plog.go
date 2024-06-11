@@ -29,6 +29,7 @@ package plog
 
 import (
 	"os"
+	"slices"
 
 	"github.com/go-logr/logr"
 )
@@ -40,18 +41,18 @@ const errorKey = "error" // this matches zapr's default for .Error calls (which 
 // If test assertions are desired, Logger should be passed in as an input.  New should be used as the
 // production implementation and TestLogger should be used to write test assertions.
 type Logger interface {
-	Error(msg string, err error, keysAndValues ...interface{})
-	Warning(msg string, keysAndValues ...interface{})
-	WarningErr(msg string, err error, keysAndValues ...interface{})
-	Info(msg string, keysAndValues ...interface{})
-	InfoErr(msg string, err error, keysAndValues ...interface{})
-	Debug(msg string, keysAndValues ...interface{})
-	DebugErr(msg string, err error, keysAndValues ...interface{})
-	Trace(msg string, keysAndValues ...interface{})
-	TraceErr(msg string, err error, keysAndValues ...interface{})
-	All(msg string, keysAndValues ...interface{})
-	Always(msg string, keysAndValues ...interface{})
-	WithValues(keysAndValues ...interface{}) Logger
+	Error(msg string, err error, keysAndValues ...any)
+	Warning(msg string, keysAndValues ...any)
+	WarningErr(msg string, err error, keysAndValues ...any)
+	Info(msg string, keysAndValues ...any)
+	InfoErr(msg string, err error, keysAndValues ...any)
+	Debug(msg string, keysAndValues ...any)
+	DebugErr(msg string, err error, keysAndValues ...any)
+	Trace(msg string, keysAndValues ...any)
+	TraceErr(msg string, err error, keysAndValues ...any)
+	All(msg string, keysAndValues ...any)
+	Always(msg string, keysAndValues ...any)
+	WithValues(keysAndValues ...any) Logger
 	WithName(name string) Logger
 
 	// does not include Fatal on purpose because that is not a method you should be using
@@ -63,7 +64,7 @@ type Logger interface {
 
 // MinLogger is the overlap between Logger and logr.Logger.
 type MinLogger interface {
-	Info(msg string, keysAndValues ...interface{})
+	Info(msg string, keysAndValues ...any)
 }
 
 var _ Logger = pLogger{}
@@ -78,82 +79,82 @@ func New() Logger {
 	return pLogger{}
 }
 
-func (p pLogger) Error(msg string, err error, keysAndValues ...interface{}) {
+func (p pLogger) Error(msg string, err error, keysAndValues ...any) {
 	p.logr().WithCallDepth(p.depth+1).Error(err, msg, keysAndValues...)
 }
 
-func (p pLogger) warningDepth(msg string, depth int, keysAndValues ...interface{}) {
+func (p pLogger) warningDepth(msg string, depth int, keysAndValues ...any) {
 	if p.logr().V(klogLevelWarning).Enabled() {
 		// klog's structured logging has no concept of a warning (i.e. no WarningS function)
 		// Thus we use info at log level zero as a proxy
 		// klog's info logs have an I prefix and its warning logs have a W prefix
 		// Since we lose the W prefix by using InfoS, just add a key to make these easier to find
-		keysAndValues = append([]interface{}{"warning", true}, keysAndValues...)
+		keysAndValues = slices.Concat([]any{"warning", true}, keysAndValues)
 		p.logr().V(klogLevelWarning).WithCallDepth(depth+1).Info(msg, keysAndValues...)
 	}
 }
 
-func (p pLogger) Warning(msg string, keysAndValues ...interface{}) {
+func (p pLogger) Warning(msg string, keysAndValues ...any) {
 	p.warningDepth(msg, p.depth+1, keysAndValues...)
 }
 
-func (p pLogger) WarningErr(msg string, err error, keysAndValues ...interface{}) {
-	p.warningDepth(msg, p.depth+1, append([]interface{}{errorKey, err}, keysAndValues...)...)
+func (p pLogger) WarningErr(msg string, err error, keysAndValues ...any) {
+	p.warningDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
-func (p pLogger) infoDepth(msg string, depth int, keysAndValues ...interface{}) {
+func (p pLogger) infoDepth(msg string, depth int, keysAndValues ...any) {
 	if p.logr().V(KlogLevelInfo).Enabled() {
 		p.logr().V(KlogLevelInfo).WithCallDepth(depth+1).Info(msg, keysAndValues...)
 	}
 }
 
-func (p pLogger) Info(msg string, keysAndValues ...interface{}) {
+func (p pLogger) Info(msg string, keysAndValues ...any) {
 	p.infoDepth(msg, p.depth+1, keysAndValues...)
 }
 
-func (p pLogger) InfoErr(msg string, err error, keysAndValues ...interface{}) {
-	p.infoDepth(msg, p.depth+1, append([]interface{}{errorKey, err}, keysAndValues...)...)
+func (p pLogger) InfoErr(msg string, err error, keysAndValues ...any) {
+	p.infoDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
-func (p pLogger) debugDepth(msg string, depth int, keysAndValues ...interface{}) {
+func (p pLogger) debugDepth(msg string, depth int, keysAndValues ...any) {
 	if p.logr().V(KlogLevelDebug).Enabled() {
 		p.logr().V(KlogLevelDebug).WithCallDepth(depth+1).Info(msg, keysAndValues...)
 	}
 }
 
-func (p pLogger) Debug(msg string, keysAndValues ...interface{}) {
+func (p pLogger) Debug(msg string, keysAndValues ...any) {
 	p.debugDepth(msg, p.depth+1, keysAndValues...)
 }
 
-func (p pLogger) DebugErr(msg string, err error, keysAndValues ...interface{}) {
-	p.debugDepth(msg, p.depth+1, append([]interface{}{errorKey, err}, keysAndValues...)...)
+func (p pLogger) DebugErr(msg string, err error, keysAndValues ...any) {
+	p.debugDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
-func (p pLogger) traceDepth(msg string, depth int, keysAndValues ...interface{}) {
+func (p pLogger) traceDepth(msg string, depth int, keysAndValues ...any) {
 	if p.logr().V(KlogLevelTrace).Enabled() {
 		p.logr().V(KlogLevelTrace).WithCallDepth(depth+1).Info(msg, keysAndValues...)
 	}
 }
 
-func (p pLogger) Trace(msg string, keysAndValues ...interface{}) {
+func (p pLogger) Trace(msg string, keysAndValues ...any) {
 	p.traceDepth(msg, p.depth+1, keysAndValues...)
 }
 
-func (p pLogger) TraceErr(msg string, err error, keysAndValues ...interface{}) {
-	p.traceDepth(msg, p.depth+1, append([]interface{}{errorKey, err}, keysAndValues...)...)
+func (p pLogger) TraceErr(msg string, err error, keysAndValues ...any) {
+	p.traceDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
-func (p pLogger) All(msg string, keysAndValues ...interface{}) {
+func (p pLogger) All(msg string, keysAndValues ...any) {
 	if p.logr().V(klogLevelAll).Enabled() {
 		p.logr().V(klogLevelAll).WithCallDepth(p.depth+1).Info(msg, keysAndValues...)
 	}
 }
 
-func (p pLogger) Always(msg string, keysAndValues ...interface{}) {
+func (p pLogger) Always(msg string, keysAndValues ...any) {
 	p.logr().WithCallDepth(p.depth+1).Info(msg, keysAndValues...)
 }
 
-func (p pLogger) WithValues(keysAndValues ...interface{}) Logger {
+func (p pLogger) WithValues(keysAndValues ...any) Logger {
 	if len(keysAndValues) == 0 {
 		return p
 	}
@@ -182,7 +183,7 @@ func (p pLogger) withDepth(d int) Logger {
 func (p pLogger) withLogrMod(mod func(logr.Logger) logr.Logger) Logger {
 	out := p // make a copy and carefully avoid mutating the mods slice
 	mods := make([]func(logr.Logger) logr.Logger, 0, len(out.mods)+1)
-	mods = append(mods, out.mods...)
+	mods = slices.Concat(mods, out.mods)
 	mods = append(mods, mod)
 	out.mods = mods
 	return out
@@ -198,51 +199,51 @@ func (p pLogger) logr() logr.Logger {
 
 var logger = New().withDepth(1) //nolint:gochecknoglobals
 
-func Error(msg string, err error, keysAndValues ...interface{}) {
+func Error(msg string, err error, keysAndValues ...any) {
 	logger.Error(msg, err, keysAndValues...)
 }
 
-func Warning(msg string, keysAndValues ...interface{}) {
+func Warning(msg string, keysAndValues ...any) {
 	logger.Warning(msg, keysAndValues...)
 }
 
-func WarningErr(msg string, err error, keysAndValues ...interface{}) {
+func WarningErr(msg string, err error, keysAndValues ...any) {
 	logger.WarningErr(msg, err, keysAndValues...)
 }
 
-func Info(msg string, keysAndValues ...interface{}) {
+func Info(msg string, keysAndValues ...any) {
 	logger.Info(msg, keysAndValues...)
 }
 
-func InfoErr(msg string, err error, keysAndValues ...interface{}) {
+func InfoErr(msg string, err error, keysAndValues ...any) {
 	logger.InfoErr(msg, err, keysAndValues...)
 }
 
-func Debug(msg string, keysAndValues ...interface{}) {
+func Debug(msg string, keysAndValues ...any) {
 	logger.Debug(msg, keysAndValues...)
 }
 
-func DebugErr(msg string, err error, keysAndValues ...interface{}) {
+func DebugErr(msg string, err error, keysAndValues ...any) {
 	logger.DebugErr(msg, err, keysAndValues...)
 }
 
-func Trace(msg string, keysAndValues ...interface{}) {
+func Trace(msg string, keysAndValues ...any) {
 	logger.Trace(msg, keysAndValues...)
 }
 
-func TraceErr(msg string, err error, keysAndValues ...interface{}) {
+func TraceErr(msg string, err error, keysAndValues ...any) {
 	logger.TraceErr(msg, err, keysAndValues...)
 }
 
-func All(msg string, keysAndValues ...interface{}) {
+func All(msg string, keysAndValues ...any) {
 	logger.All(msg, keysAndValues...)
 }
 
-func Always(msg string, keysAndValues ...interface{}) {
+func Always(msg string, keysAndValues ...any) {
 	logger.Always(msg, keysAndValues...)
 }
 
-func WithValues(keysAndValues ...interface{}) Logger {
+func WithValues(keysAndValues ...any) Logger {
 	// this looks weird but it is the same as New().WithValues(keysAndValues...) because it returns a new logger rooted at the call site
 	return logger.withDepth(-1).WithValues(keysAndValues...)
 }
@@ -252,7 +253,7 @@ func WithName(name string) Logger {
 	return logger.withDepth(-1).WithName(name)
 }
 
-func Fatal(err error, keysAndValues ...interface{}) {
+func Fatal(err error, keysAndValues ...any) {
 	logger.Error("unrecoverable error encountered", err, keysAndValues...)
 	globalFlush()
 	os.Exit(1)

@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	certificatesv1 "k8s.io/api/certificates/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/discovery"
 )
 
@@ -66,7 +66,7 @@ func CheckServiceAccountExtraFieldsAccountingForChangesInK8s1_30[M ~map[string]V
 	t *testing.T,
 	discoveryClient discovery.DiscoveryInterface,
 	actualExtras M,
-	expectedPodValues *v1.Pod,
+	expectedPodValues *corev1.Pod,
 ) {
 	t.Helper()
 

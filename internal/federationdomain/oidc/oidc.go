@@ -76,12 +76,12 @@ const (
 
 // Encoder is the encoding side of the securecookie.Codec interface.
 type Encoder interface {
-	Encode(name string, value interface{}) (string, error)
+	Encode(name string, value any) (string, error)
 }
 
 // Decoder is the decoding side of the securecookie.Codec interface.
 type Decoder interface {
-	Decode(name, value string, into interface{}) error
+	Decode(name, value string, into any) error
 }
 
 // Codec is both the encoding and decoding sides of the securecookie.Codec interface. It is
@@ -225,7 +225,7 @@ func DefaultOIDCTimeoutsConfiguration() timeouts.Configuration {
 }
 
 func FositeOauth2Helper(
-	oauthStore interface{},
+	oauthStore any,
 	issuer string,
 	hmacSecretOfLengthAtLeast32Func func() []byte,
 	jwksProvider jwks.DynamicJWKSProvider,
@@ -293,9 +293,9 @@ func FositeOauth2Helper(
 //	    plog.Info("some error", FositeErrorForLog(err)...)
 //	    ...
 //	}
-func FositeErrorForLog(err error) []interface{} {
+func FositeErrorForLog(err error) []any {
 	rfc6749Error := fosite.ErrorToRFC6749Error(err)
-	keysAndValues := make([]interface{}, 0)
+	keysAndValues := make([]any, 0)
 	keysAndValues = append(keysAndValues, "name")
 	keysAndValues = append(keysAndValues, rfc6749Error.Error()) // Error() returns the ErrorField
 	keysAndValues = append(keysAndValues, "status")

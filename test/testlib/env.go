@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 )
 
 type Capability string
@@ -39,22 +39,22 @@ type TestEnv struct {
 
 	skipPodRestartAssertions bool
 
-	ToolsNamespace                 string                               `json:"toolsNamespace"`
-	ConciergeNamespace             string                               `json:"conciergeNamespace"`
-	SupervisorNamespace            string                               `json:"supervisorNamespace"`
-	ConciergeAppName               string                               `json:"conciergeAppName"`
-	SupervisorAppName              string                               `json:"supervisorAppName"`
-	SupervisorCustomLabels         map[string]string                    `json:"supervisorCustomLabels"`
-	ConciergeCustomLabels          map[string]string                    `json:"conciergeCustomLabels"`
-	KubernetesDistribution         KubeDistro                           `json:"kubernetesDistribution"`
-	Capabilities                   map[Capability]bool                  `json:"capabilities"`
-	TestWebhook                    auth1alpha1.WebhookAuthenticatorSpec `json:"testWebhook"`
-	SupervisorHTTPSAddress         string                               `json:"supervisorHttpsAddress"`
-	SupervisorHTTPSIngressAddress  string                               `json:"supervisorHttpsIngressAddress"`
-	SupervisorHTTPSIngressCABundle string                               `json:"supervisorHttpsIngressCABundle"`
-	Proxy                          string                               `json:"proxy"`
-	APIGroupSuffix                 string                               `json:"apiGroupSuffix"`
-	ShellContainerImage            string                               `json:"shellContainer"`
+	ToolsNamespace                 string                                          `json:"toolsNamespace"`
+	ConciergeNamespace             string                                          `json:"conciergeNamespace"`
+	SupervisorNamespace            string                                          `json:"supervisorNamespace"`
+	ConciergeAppName               string                                          `json:"conciergeAppName"`
+	SupervisorAppName              string                                          `json:"supervisorAppName"`
+	SupervisorCustomLabels         map[string]string                               `json:"supervisorCustomLabels"`
+	ConciergeCustomLabels          map[string]string                               `json:"conciergeCustomLabels"`
+	KubernetesDistribution         KubeDistro                                      `json:"kubernetesDistribution"`
+	Capabilities                   map[Capability]bool                             `json:"capabilities"`
+	TestWebhook                    authenticationv1alpha1.WebhookAuthenticatorSpec `json:"testWebhook"`
+	SupervisorHTTPSAddress         string                                          `json:"supervisorHttpsAddress"`
+	SupervisorHTTPSIngressAddress  string                                          `json:"supervisorHttpsIngressAddress"`
+	SupervisorHTTPSIngressCABundle string                                          `json:"supervisorHttpsIngressCABundle"`
+	Proxy                          string                                          `json:"proxy"`
+	APIGroupSuffix                 string                                          `json:"apiGroupSuffix"`
+	ShellContainerImage            string                                          `json:"shellContainer"`
 
 	TestUser struct {
 		Token            string   `json:"token"`
@@ -243,7 +243,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	result.TestWebhook.Endpoint = needEnv(t, "PINNIPED_TEST_WEBHOOK_ENDPOINT")
 	result.SupervisorNamespace = needEnv(t, "PINNIPED_TEST_SUPERVISOR_NAMESPACE")
 	result.SupervisorAppName = needEnv(t, "PINNIPED_TEST_SUPERVISOR_APP_NAME")
-	result.TestWebhook.TLS = &auth1alpha1.TLSSpec{CertificateAuthorityData: needEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
+	result.TestWebhook.TLS = &authenticationv1alpha1.TLSSpec{CertificateAuthorityData: needEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
 
 	result.SupervisorHTTPSIngressAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")
 	result.SupervisorHTTPSAddress = needEnv(t, "PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS")

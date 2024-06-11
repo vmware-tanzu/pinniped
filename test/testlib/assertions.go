@@ -25,7 +25,7 @@ type (
 	// assertionFailure is a single error observed during an iteration of the RequireEventually() loop.
 	assertionFailure struct {
 		format string
-		args   []interface{}
+		args   []any
 	}
 )
 
@@ -33,7 +33,7 @@ type (
 var _ require.TestingT = (*loopTestingT)(nil)
 
 // Errorf is called by the assert.Assertions methods to record an error.
-func (e *loopTestingT) Errorf(format string, args ...interface{}) {
+func (e *loopTestingT) Errorf(format string, args ...any) {
 	*e = append(*e, assertionFailure{format, args})
 }
 
@@ -62,7 +62,7 @@ func RequireEventuallyf(
 	waitFor time.Duration,
 	tick time.Duration,
 	msg string,
-	args ...interface{},
+	args ...any,
 ) {
 	t.Helper()
 	RequireEventually(t, f, waitFor, tick, fmt.Sprintf(msg, args...))
@@ -75,7 +75,7 @@ func RequireEventually(
 	f func(requireEventually *require.Assertions),
 	waitFor time.Duration,
 	tick time.Duration,
-	msgAndArgs ...interface{},
+	msgAndArgs ...any,
 ) {
 	t.Helper()
 
@@ -129,7 +129,7 @@ func RequireEventuallyWithoutError(
 	f func() (bool, error),
 	waitFor time.Duration,
 	tick time.Duration,
-	msgAndArgs ...interface{},
+	msgAndArgs ...any,
 ) {
 	t.Helper()
 	// This previously used wait.PollImmediate (now deprecated), which did not take a ctx arg in the func.
@@ -146,7 +146,7 @@ func RequireNeverWithoutError(
 	f func() (bool, error),
 	waitFor time.Duration,
 	tick time.Duration,
-	msgAndArgs ...interface{},
+	msgAndArgs ...any,
 ) {
 	t.Helper()
 	// This previously used wait.PollImmediate (now deprecated), which did not take a ctx arg in the func.

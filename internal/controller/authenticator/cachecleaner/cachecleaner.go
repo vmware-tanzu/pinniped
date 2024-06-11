@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package cachecleaner implements a controller for garbage collecting authenticators from an authenticator cache.
@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	authinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/authenticator"
@@ -74,7 +74,7 @@ func (c *controller) Sync(_ controllerlib.Context) error {
 		key := authncache.Key{
 			Name:     webhook.Name,
 			Kind:     "WebhookAuthenticator",
-			APIGroup: auth1alpha1.SchemeGroupVersion.Group,
+			APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
 		}
 		authenticatorSet[key] = true
 	}
@@ -82,14 +82,14 @@ func (c *controller) Sync(_ controllerlib.Context) error {
 		key := authncache.Key{
 			Name:     jwtAuthenticator.Name,
 			Kind:     "JWTAuthenticator",
-			APIGroup: auth1alpha1.SchemeGroupVersion.Group,
+			APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
 		}
 		authenticatorSet[key] = true
 	}
 
 	// Delete any entries from the cache which are no longer in the cluster.
 	for _, key := range c.cache.Keys() {
-		if key.APIGroup != auth1alpha1.SchemeGroupVersion.Group || (key.Kind != "WebhookAuthenticator" && key.Kind != "JWTAuthenticator") {
+		if key.APIGroup != authenticationv1alpha1.SchemeGroupVersion.Group || (key.Kind != "WebhookAuthenticator" && key.Kind != "JWTAuthenticator") {
 			continue
 		}
 		if _, exists := authenticatorSet[key]; !exists {

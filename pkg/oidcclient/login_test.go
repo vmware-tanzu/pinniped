@@ -2629,7 +2629,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						IDToken: &oidctypes.IDToken{
 							Token:  testToken.IDToken.Token,
 							Expiry: testToken.IDToken.Expiry,
-							Claims: map[string]interface{}{"aud": "request-this-test-audience"},
+							Claims: map[string]any{"aud": "request-this-test-audience"},
 						},
 						RefreshToken: testToken.RefreshToken,
 					}}
@@ -2659,7 +2659,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				IDToken: &oidctypes.IDToken{
 					Token:  testToken.IDToken.Token,
 					Expiry: testToken.IDToken.Expiry,
-					Claims: map[string]interface{}{"aud": "request-this-test-audience"},
+					Claims: map[string]any{"aud": "request-this-test-audience"},
 				},
 				RefreshToken: testToken.RefreshToken,
 			},
@@ -2675,7 +2675,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						IDToken: &oidctypes.IDToken{
 							Token:  testToken.IDToken.Token,
 							Expiry: metav1.NewTime(time.Now().Add(9 * time.Minute)), // less than Now() + minIDTokenValidity
-							Claims: map[string]interface{}{"aud": "test-custom-request-audience"},
+							Claims: map[string]any{"aud": "test-custom-request-audience"},
 						},
 						RefreshToken: testToken.RefreshToken,
 					}}
@@ -2691,7 +2691,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 						require.Equal(t, &oidctypes.IDToken{
 							Token:  testToken.IDToken.Token,
 							Expiry: metav1.NewTime(fakeUniqueTime),
-							Claims: map[string]interface{}{"aud": "test-custom-request-audience"},
+							Claims: map[string]any{"aud": "test-custom-request-audience"},
 						}, cache.sawPutTokens[0].IDToken)
 					})
 					require.NoError(t, WithClient(buildHTTPClientForPEM(successServerCA))(h))
@@ -2707,7 +2707,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 								IDToken: &oidctypes.IDToken{
 									Token:  testToken.IDToken.Token,
 									Expiry: metav1.NewTime(fakeUniqueTime), // less than Now() + minIDTokenValidity but does not matter because this is a freshly refreshed ID token
-									Claims: map[string]interface{}{"aud": "test-custom-request-audience"},
+									Claims: map[string]any{"aud": "test-custom-request-audience"},
 								},
 								RefreshToken: testToken.RefreshToken,
 							}, nil)
@@ -2732,7 +2732,7 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 				IDToken: &oidctypes.IDToken{
 					Token:  testToken.IDToken.Token,
 					Expiry: metav1.NewTime(fakeUniqueTime),
-					Claims: map[string]interface{}{"aud": "test-custom-request-audience"},
+					Claims: map[string]any{"aud": "test-custom-request-audience"},
 				},
 				RefreshToken: testToken.RefreshToken,
 			},
@@ -3452,11 +3452,11 @@ func mockUpstream(t *testing.T) *mockupstreamoidcidentityprovider.MockUpstreamOI
 // hasAccessTokenMatcher is a gomock.Matcher that expects an *oauth2.Token with a particular access token.
 type hasAccessTokenMatcher struct{ expected string }
 
-func (m hasAccessTokenMatcher) Matches(arg interface{}) bool {
+func (m hasAccessTokenMatcher) Matches(arg any) bool {
 	return arg.(*oauth2.Token).AccessToken == m.expected
 }
 
-func (m hasAccessTokenMatcher) Got(got interface{}) string {
+func (m hasAccessTokenMatcher) Got(got any) string {
 	return got.(*oauth2.Token).AccessToken
 }
 

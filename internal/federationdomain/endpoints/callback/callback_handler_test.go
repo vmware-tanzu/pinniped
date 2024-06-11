@@ -20,7 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -242,7 +242,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamPKCEChallenge       string
 		wantDownstreamPKCEChallengeMethod string
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
-		wantDownstreamAdditionalClaims    map[string]interface{}
+		wantDownstreamAdditionalClaims    map[string]any
 		wantOIDCAuthcodeExchangeCall      *expectedOIDCAuthcodeExchange
 		wantGitHubAuthcodeExchangeCall    *expectedGitHubAuthcodeExchange
 	}{
@@ -346,7 +346,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
 			},
-			wantDownstreamAdditionalClaims: map[string]interface{}{
+			wantDownstreamAdditionalClaims: map[string]any{
 				"downstreamCustomClaim": "i am a claim value",
 				"downstreamOtherClaim":  "other claim value",
 			},
@@ -795,7 +795,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		{
 			name: "upstream IDP's configured groups claim in the ID token is a slice of interfaces",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
-				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
+				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []any{"group1", "group2"}).Build(),
 			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyOIDCState).String(),
@@ -889,8 +889,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
-					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
-					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+					[]supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
+					[]supervisorconfigv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
 					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -932,8 +932,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
-					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
-					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					[]supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
 					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -1199,8 +1199,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
-					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
-					[]configv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
+					[]supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude username scope)
+					[]supervisorconfigv1alpha1.Scope{"openid", "offline_access", "groups"},      // username not allowed
 					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -1228,8 +1228,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			kubeResources: func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset) {
 				oidcClient, secret := testutil.OIDCClientAndStorageSecret(t,
 					"some-namespace", downstreamDynamicClientID, downstreamDynamicClientUID,
-					[]configv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
-					[]configv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
+					[]supervisorconfigv1alpha1.GrantType{"authorization_code", "refresh_token"}, // token exchange not allowed (required to exclude groups scope)
+					[]supervisorconfigv1alpha1.Scope{"openid", "offline_access", "username"},    // groups not allowed
 					downstreamRedirectURI, nil, []string{testutil.HashedPassword1AtGoMinCost}, oidcclientvalidator.Validate)
 				require.NoError(t, supervisorClient.Tracker().Add(oidcClient))
 				require.NoError(t, kubeClient.Tracker().Add(secret))
@@ -1675,7 +1675,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		{
 			name: "upstream ID token contains groups claim where one element is invalid",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
-				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
+				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []any{"foo", 7}).Build(),
 			),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyOIDCState).String(),

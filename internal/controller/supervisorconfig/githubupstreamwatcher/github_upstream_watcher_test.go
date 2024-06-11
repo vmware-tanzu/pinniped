@@ -30,9 +30,9 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
@@ -49,12 +49,12 @@ import (
 
 var (
 	githubIDPGVR = schema.GroupVersionResource{
-		Group:    v1alpha1.SchemeGroupVersion.Group,
-		Version:  v1alpha1.SchemeGroupVersion.Version,
+		Group:    idpv1alpha1.SchemeGroupVersion.Group,
+		Version:  idpv1alpha1.SchemeGroupVersion.Version,
 		Resource: "githubidentityproviders",
 	}
 
-	githubIDPKind = v1alpha1.SchemeGroupVersion.WithKind("GitHubIdentityProvider")
+	githubIDPKind = idpv1alpha1.SchemeGroupVersion.WithKind("GitHubIdentityProvider")
 )
 
 func TestController(t *testing.T) {
@@ -98,62 +98,62 @@ func TestController(t *testing.T) {
 		},
 	}
 
-	validMinimalIDP := &v1alpha1.GitHubIdentityProvider{
+	validMinimalIDP := &idpv1alpha1.GitHubIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "minimal-idp-name",
 			Namespace:  namespace,
 			UID:        types.UID("minimal-uid"),
 			Generation: wantObservedGeneration,
 		},
-		Spec: v1alpha1.GitHubIdentityProviderSpec{
-			GitHubAPI: v1alpha1.GitHubAPIConfig{
+		Spec: idpv1alpha1.GitHubIdentityProviderSpec{
+			GitHubAPI: idpv1alpha1.GitHubAPIConfig{
 				Host: ptr.To(goodServerDomain),
-				TLS: &v1alpha1.TLSSpec{
+				TLS: &idpv1alpha1.TLSSpec{
 					CertificateAuthorityData: goodServerCAB64,
 				},
 			},
-			Client: v1alpha1.GitHubClientSpec{
+			Client: idpv1alpha1.GitHubClientSpec{
 				SecretName: goodSecret.Name,
 			},
 			// These claims are optional when using the actual Kubernetes CRD.
 			// However, they are required here because CRD defaulting/validation does not occur during testing.
-			Claims: v1alpha1.GitHubClaims{
-				Username: ptr.To(v1alpha1.GitHubUsernameLogin),
-				Groups:   ptr.To(v1alpha1.GitHubUseTeamSlugForGroupName),
+			Claims: idpv1alpha1.GitHubClaims{
+				Username: ptr.To(idpv1alpha1.GitHubUsernameLogin),
+				Groups:   ptr.To(idpv1alpha1.GitHubUseTeamSlugForGroupName),
 			},
-			AllowAuthentication: v1alpha1.GitHubAllowAuthenticationSpec{
-				Organizations: v1alpha1.GitHubOrganizationsSpec{
-					Policy: ptr.To(v1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
+			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+				Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+					Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
 				},
 			},
 		},
 	}
 
-	validFilledOutIDP := &v1alpha1.GitHubIdentityProvider{
+	validFilledOutIDP := &idpv1alpha1.GitHubIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "some-idp-name",
 			Namespace:  namespace,
 			UID:        types.UID("some-resource-uid"),
 			Generation: wantObservedGeneration,
 		},
-		Spec: v1alpha1.GitHubIdentityProviderSpec{
-			GitHubAPI: v1alpha1.GitHubAPIConfig{
+		Spec: idpv1alpha1.GitHubIdentityProviderSpec{
+			GitHubAPI: idpv1alpha1.GitHubAPIConfig{
 				Host: ptr.To(goodServerDomain),
-				TLS: &v1alpha1.TLSSpec{
+				TLS: &idpv1alpha1.TLSSpec{
 					CertificateAuthorityData: goodServerCAB64,
 				},
 			},
-			Claims: v1alpha1.GitHubClaims{
-				Username: ptr.To(v1alpha1.GitHubUsernameID),
-				Groups:   ptr.To(v1alpha1.GitHubUseTeamNameForGroupName),
+			Claims: idpv1alpha1.GitHubClaims{
+				Username: ptr.To(idpv1alpha1.GitHubUsernameID),
+				Groups:   ptr.To(idpv1alpha1.GitHubUseTeamNameForGroupName),
 			},
-			AllowAuthentication: v1alpha1.GitHubAllowAuthenticationSpec{
-				Organizations: v1alpha1.GitHubOrganizationsSpec{
-					Policy:  ptr.To(v1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations),
+			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+				Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+					Policy:  ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations),
 					Allowed: []string{"organization1", "org2"},
 				},
 			},
-			Client: v1alpha1.GitHubClientSpec{
+			Client: idpv1alpha1.GitHubClientSpec{
 				SecretName: goodSecret.Name,
 			},
 		},
@@ -211,7 +211,7 @@ func TestController(t *testing.T) {
 		}
 	}
 
-	buildOrganizationsPolicyValidTrue := func(t *testing.T, policy v1alpha1.GitHubAllowedAuthOrganizationsPolicy) metav1.Condition {
+	buildOrganizationsPolicyValidTrue := func(t *testing.T, policy idpv1alpha1.GitHubAllowedAuthOrganizationsPolicy) metav1.Condition {
 		t.Helper()
 
 		return metav1.Condition{
@@ -377,12 +377,12 @@ func TestController(t *testing.T) {
 		wantErr                 string
 		wantLogs                []string
 		wantResultingCache      []*upstreamgithub.ProviderConfig
-		wantResultingUpstreams  []v1alpha1.GitHubIdentityProvider
+		wantResultingUpstreams  []idpv1alpha1.GitHubIdentityProvider
 	}{
 		{
 			name:                   "no GitHubIdentityProviders",
 			wantResultingCache:     []*upstreamgithub.ProviderConfig{},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{},
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{},
 			wantLogs:               []string{},
 		},
 		{
@@ -414,12 +414,12 @@ func TestController(t *testing.T) {
 					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
 					Spec:       validFilledOutIDP.Spec,
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseReady,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -470,12 +470,12 @@ func TestController(t *testing.T) {
 					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
 					Spec:       validMinimalIDP.Spec,
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseReady,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
@@ -540,17 +540,17 @@ func TestController(t *testing.T) {
 					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						githubIDP := validMinimalIDP.DeepCopy()
 						githubIDP.Spec.GitHubAPI.Host = ptr.To("github.com")
 						// don't change the CA because we are not really going to dial github.com in this test
 						return githubIDP.Spec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseReady,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
@@ -579,7 +579,7 @@ func TestController(t *testing.T) {
 				func() runtime.Object {
 					ipv6IDP := validMinimalIDP.DeepCopy()
 					ipv6IDP.Spec.GitHubAPI.Host = ptr.To(goodServerIPv6Domain)
-					ipv6IDP.Spec.GitHubAPI.TLS = &v1alpha1.TLSSpec{
+					ipv6IDP.Spec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: goodServerIPv6CAB64,
 					}
 					return ipv6IDP
@@ -608,20 +608,20 @@ func TestController(t *testing.T) {
 					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						otherSpec := validMinimalIDP.Spec.DeepCopy()
 						otherSpec.GitHubAPI.Host = ptr.To(goodServerIPv6Domain)
-						otherSpec.GitHubAPI.TLS = &v1alpha1.TLSSpec{
+						otherSpec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
 							CertificateAuthorityData: goodServerIPv6CAB64,
 						}
 						return *otherSpec
 					}(),
 
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseReady,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
@@ -663,7 +663,7 @@ func TestController(t *testing.T) {
 					otherIDP.Spec.Client.SecretName = "other-secret-name"
 
 					// No other test happens to that this particular value passes validation
-					otherIDP.Spec.Claims.Username = ptr.To(v1alpha1.GitHubUsernameLoginAndID)
+					otherIDP.Spec.Claims.Username = ptr.To(idpv1alpha1.GitHubUsernameLoginAndID)
 					return otherIDP
 				}(),
 				func() runtime.Object {
@@ -717,20 +717,20 @@ func TestController(t *testing.T) {
 					HttpClient:           nil, // let the test runner populate this for us
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: func() metav1.ObjectMeta {
 						otherMeta := validFilledOutIDP.ObjectMeta.DeepCopy()
 						otherMeta.Name = "invalid-idp-name"
 						return *otherMeta
 					}(),
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						otherSpec := validFilledOutIDP.Spec.DeepCopy()
 						otherSpec.Client.SecretName = "no-secret-with-this-name"
 						return *otherSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidFalse(
@@ -753,14 +753,14 @@ func TestController(t *testing.T) {
 						otherMeta.Name = "other-idp-name"
 						return *otherMeta
 					}(),
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						otherSpec := validFilledOutIDP.Spec.DeepCopy()
 						otherSpec.Client.SecretName = "other-secret-name"
-						otherSpec.Claims.Username = ptr.To(v1alpha1.GitHubUsernameLoginAndID)
+						otherSpec.Claims.Username = ptr.To(idpv1alpha1.GitHubUsernameLoginAndID)
 						return *otherSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseReady,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, "other-secret-name"),
@@ -774,8 +774,8 @@ func TestController(t *testing.T) {
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
 					Spec:       validFilledOutIDP.Spec,
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseReady,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -823,16 +823,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.Host = nil
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -864,16 +864,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validMinimalIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.Host = ptr.To("https://example.com")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -905,16 +905,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validMinimalIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.Host = ptr.To("example.com/foo")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
@@ -946,16 +946,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validMinimalIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.Host = ptr.To("u:p@example.com")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
@@ -987,16 +987,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validMinimalIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.Host = ptr.To("example.com?a=b")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
@@ -1028,16 +1028,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validMinimalIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.Host = ptr.To("example.com#a")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
@@ -1065,24 +1065,24 @@ func TestController(t *testing.T) {
 			githubIdentityProviders: []runtime.Object{
 				func() runtime.Object {
 					badIDP := validFilledOutIDP.DeepCopy()
-					badIDP.Spec.GitHubAPI.TLS = &v1alpha1.TLSSpec{
+					badIDP.Spec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte("foo")),
 					}
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
-						badSpec.GitHubAPI.TLS = &v1alpha1.TLSSpec{
+						badSpec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
 							CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte("foo")),
 						}
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1115,16 +1115,16 @@ func TestController(t *testing.T) {
 				}(),
 			},
 			wantErr: "dial tcp: lookup nowhere.bad-tld: no such host",
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validMinimalIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.Host = ptr.To("nowhere.bad-tld")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
@@ -1156,16 +1156,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validMinimalIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.Host = ptr.To("0:0:0:0:0:0:0:1:9876")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validMinimalIDP.Spec.Client.SecretName),
@@ -1198,16 +1198,16 @@ func TestController(t *testing.T) {
 				}(),
 			},
 			wantErr: "tls: failed to verify certificate: x509: certificate signed by unknown authority",
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.TLS = nil
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1235,25 +1235,25 @@ func TestController(t *testing.T) {
 			githubIdentityProviders: []runtime.Object{
 				func() runtime.Object {
 					badIDP := validFilledOutIDP.DeepCopy()
-					badIDP.Spec.GitHubAPI.TLS = &v1alpha1.TLSSpec{
+					badIDP.Spec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
 						CertificateAuthorityData: base64.StdEncoding.EncodeToString(unknownServerCABytes),
 					}
 					return badIDP
 				}(),
 			},
 			wantErr: "tls: failed to verify certificate: x509: certificate signed by unknown authority",
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
-						badSpec.GitHubAPI.TLS = &v1alpha1.TLSSpec{
+						badSpec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
 							CertificateAuthorityData: base64.StdEncoding.EncodeToString(unknownServerCABytes),
 						}
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1285,16 +1285,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
 						badSpec.AllowAuthentication.Organizations.Policy = nil
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1322,20 +1322,20 @@ func TestController(t *testing.T) {
 			githubIdentityProviders: []runtime.Object{
 				func() runtime.Object {
 					badIDP := validFilledOutIDP.DeepCopy()
-					badIDP.Spec.AllowAuthentication.Organizations.Policy = ptr.To[v1alpha1.GitHubAllowedAuthOrganizationsPolicy]("a")
+					badIDP.Spec.AllowAuthentication.Organizations.Policy = ptr.To[idpv1alpha1.GitHubAllowedAuthOrganizationsPolicy]("a")
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
-						badSpec.AllowAuthentication.Organizations.Policy = ptr.To[v1alpha1.GitHubAllowedAuthOrganizationsPolicy]("a")
+						badSpec.AllowAuthentication.Organizations.Policy = ptr.To[idpv1alpha1.GitHubAllowedAuthOrganizationsPolicy]("a")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1363,20 +1363,20 @@ func TestController(t *testing.T) {
 			githubIdentityProviders: []runtime.Object{
 				func() runtime.Object {
 					badIDP := validFilledOutIDP.DeepCopy()
-					badIDP.Spec.AllowAuthentication.Organizations.Policy = ptr.To(v1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers)
+					badIDP.Spec.AllowAuthentication.Organizations.Policy = ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers)
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
-						badSpec.AllowAuthentication.Organizations.Policy = ptr.To(v1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers)
+						badSpec.AllowAuthentication.Organizations.Policy = ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers)
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1408,16 +1408,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
 						badSpec.AllowAuthentication.Organizations.Allowed = nil
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1449,16 +1449,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
 						badSpec.Claims.Username = nil
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedFalse(t, "spec.claims.username is required"),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1486,20 +1486,20 @@ func TestController(t *testing.T) {
 			githubIdentityProviders: []runtime.Object{
 				func() runtime.Object {
 					badIDP := validFilledOutIDP.DeepCopy()
-					badIDP.Spec.Claims.Username = ptr.To[v1alpha1.GitHubUsernameAttribute]("a")
+					badIDP.Spec.Claims.Username = ptr.To[idpv1alpha1.GitHubUsernameAttribute]("a")
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
-						badSpec.Claims.Username = ptr.To[v1alpha1.GitHubUsernameAttribute]("a")
+						badSpec.Claims.Username = ptr.To[idpv1alpha1.GitHubUsernameAttribute]("a")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedFalse(t, `spec.claims.username ("a") is not valid`),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1531,16 +1531,16 @@ func TestController(t *testing.T) {
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
 						badSpec.Claims.Groups = nil
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedFalse(t, "spec.claims.groups is required"),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1568,20 +1568,20 @@ func TestController(t *testing.T) {
 			githubIdentityProviders: []runtime.Object{
 				func() runtime.Object {
 					badIDP := validFilledOutIDP.DeepCopy()
-					badIDP.Spec.Claims.Groups = ptr.To[v1alpha1.GitHubGroupNameAttribute]("b")
+					badIDP.Spec.Claims.Groups = ptr.To[idpv1alpha1.GitHubGroupNameAttribute]("b")
 					return badIDP
 				}(),
 			},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validFilledOutIDP.ObjectMeta,
-					Spec: func() v1alpha1.GitHubIdentityProviderSpec {
+					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
-						badSpec.Claims.Groups = ptr.To[v1alpha1.GitHubGroupNameAttribute]("b")
+						badSpec.Claims.Groups = ptr.To[idpv1alpha1.GitHubGroupNameAttribute]("b")
 						return *badSpec
 					}(),
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedFalse(t, `spec.claims.groups ("b") is not valid`),
 							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
@@ -1613,12 +1613,12 @@ func TestController(t *testing.T) {
 				}(),
 			},
 			githubIdentityProviders: []runtime.Object{validMinimalIDP},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
 					Spec:       validMinimalIDP.Spec,
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidFalse(
@@ -1656,12 +1656,12 @@ func TestController(t *testing.T) {
 				}(),
 			},
 			githubIdentityProviders: []runtime.Object{validMinimalIDP},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
 					Spec:       validMinimalIDP.Spec,
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidFalse(
@@ -1699,12 +1699,12 @@ func TestController(t *testing.T) {
 				}(),
 			},
 			githubIdentityProviders: []runtime.Object{validMinimalIDP},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
 					Spec:       validMinimalIDP.Spec,
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidFalse(
@@ -1742,12 +1742,12 @@ func TestController(t *testing.T) {
 				}(),
 			},
 			githubIdentityProviders: []runtime.Object{validMinimalIDP},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
 					Spec:       validMinimalIDP.Spec,
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidFalse(
@@ -1785,12 +1785,12 @@ func TestController(t *testing.T) {
 				}(),
 			},
 			githubIdentityProviders: []runtime.Object{validMinimalIDP},
-			wantResultingUpstreams: []v1alpha1.GitHubIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
 					Spec:       validMinimalIDP.Spec,
-					Status: v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseError,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseError,
 						Conditions: []metav1.Condition{
 							buildClaimsValidatedTrue(t),
 							buildClientCredentialsSecretValidFalse(
@@ -1825,7 +1825,7 @@ func TestController(t *testing.T) {
 			t.Parallel()
 
 			fakeSupervisorClient := supervisorfake.NewSimpleClientset(tt.githubIdentityProviders...)
-			supervisorInformers := pinnipedinformers.NewSharedInformerFactory(fakeSupervisorClient, 0)
+			supervisorInformers := supervisorinformers.NewSharedInformerFactory(fakeSupervisorClient, 0)
 
 			fakeKubeClient := kubernetesfake.NewSimpleClientset(tt.secrets...)
 			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(fakeKubeClient, 0)
@@ -1898,7 +1898,7 @@ func TestController(t *testing.T) {
 				require.Equal(t, tt.wantResultingCache[i].AllowedOrganizations, actualProvider.GetAllowedOrganizations())
 
 				require.GreaterOrEqual(t, len(tt.githubIdentityProviders), i+1, "there must be at least as many input identity providers as items in the cache")
-				githubIDP, ok := tt.githubIdentityProviders[i].(*v1alpha1.GitHubIdentityProvider)
+				githubIDP, ok := tt.githubIdentityProviders[i].(*idpv1alpha1.GitHubIdentityProvider)
 				require.True(t, ok)
 				certPool, _, err := pinnipedcontroller.BuildCertPoolIDP(githubIDP.Spec.GitHubAPI.TLS)
 				require.NoError(t, err)
@@ -1917,7 +1917,7 @@ func TestController(t *testing.T) {
 				require.Len(t, tt.wantResultingUpstreams[i].Status.Conditions, countExpectedConditions)
 
 				// Do not expect any particular order in the K8s objects
-				var actualIDP *v1alpha1.GitHubIdentityProvider
+				var actualIDP *idpv1alpha1.GitHubIdentityProvider
 				for _, possibleMatch := range allGitHubIDPs.Items {
 					if possibleMatch.GetName() == tt.wantResultingUpstreams[i].Name {
 						actualIDP = ptr.To(possibleMatch)
@@ -1977,65 +1977,65 @@ func TestController_OnlyWantActions(t *testing.T) {
 		},
 	}
 
-	validMinimalIDP := &v1alpha1.GitHubIdentityProvider{
+	validMinimalIDP := &idpv1alpha1.GitHubIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "minimal-idp-name",
 			Namespace:  namespace,
 			UID:        types.UID("minimal-uid"),
 			Generation: 1234,
 		},
-		Spec: v1alpha1.GitHubIdentityProviderSpec{
-			GitHubAPI: v1alpha1.GitHubAPIConfig{
+		Spec: idpv1alpha1.GitHubIdentityProviderSpec{
+			GitHubAPI: idpv1alpha1.GitHubAPIConfig{
 				Host: ptr.To(goodServerDomain),
-				TLS: &v1alpha1.TLSSpec{
+				TLS: &idpv1alpha1.TLSSpec{
 					CertificateAuthorityData: goodServerCAB64,
 				},
 			},
 			// These claims are optional when using the actual Kubernetes CRD.
 			// However, they are required here because CRD defaulting/validation does not occur during testing.
-			Claims: v1alpha1.GitHubClaims{
-				Username: ptr.To(v1alpha1.GitHubUsernameLogin),
-				Groups:   ptr.To(v1alpha1.GitHubUseTeamSlugForGroupName),
+			Claims: idpv1alpha1.GitHubClaims{
+				Username: ptr.To(idpv1alpha1.GitHubUsernameLogin),
+				Groups:   ptr.To(idpv1alpha1.GitHubUseTeamSlugForGroupName),
 			},
-			Client: v1alpha1.GitHubClientSpec{
+			Client: idpv1alpha1.GitHubClientSpec{
 				SecretName: goodSecret.Name,
 			},
-			AllowAuthentication: v1alpha1.GitHubAllowAuthenticationSpec{
-				Organizations: v1alpha1.GitHubOrganizationsSpec{
-					Policy: ptr.To(v1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
+			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+				Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+					Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
 				},
 			},
 		},
 	}
 
-	alreadyInvalidExistingIDP := &v1alpha1.GitHubIdentityProvider{
+	alreadyInvalidExistingIDP := &idpv1alpha1.GitHubIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "already-existing-invalid-idp-name",
 			Namespace:  namespace,
 			UID:        types.UID("some-resource-uid"),
 			Generation: 333,
 		},
-		Spec: v1alpha1.GitHubIdentityProviderSpec{
-			GitHubAPI: v1alpha1.GitHubAPIConfig{
+		Spec: idpv1alpha1.GitHubIdentityProviderSpec{
+			GitHubAPI: idpv1alpha1.GitHubAPIConfig{
 				Host: ptr.To(goodServerDomain),
-				TLS: &v1alpha1.TLSSpec{
+				TLS: &idpv1alpha1.TLSSpec{
 					CertificateAuthorityData: goodServerCAB64,
 				},
 			},
-			AllowAuthentication: v1alpha1.GitHubAllowAuthenticationSpec{
-				Organizations: v1alpha1.GitHubOrganizationsSpec{
-					Policy: ptr.To(v1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
+			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+				Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+					Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
 				},
 			},
-			Claims: v1alpha1.GitHubClaims{
-				Groups: ptr.To(v1alpha1.GitHubUseTeamSlugForGroupName),
+			Claims: idpv1alpha1.GitHubClaims{
+				Groups: ptr.To(idpv1alpha1.GitHubUseTeamSlugForGroupName),
 			},
-			Client: v1alpha1.GitHubClientSpec{
+			Client: idpv1alpha1.GitHubClientSpec{
 				SecretName: "unknown-secret",
 			},
 		},
-		Status: v1alpha1.GitHubIdentityProviderStatus{
-			Phase: v1alpha1.GitHubPhaseError,
+		Status: idpv1alpha1.GitHubIdentityProviderStatus{
+			Phase: idpv1alpha1.GitHubPhaseError,
 			Conditions: []metav1.Condition{
 				{
 					Type:               ClaimsValid,
@@ -2114,7 +2114,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 				func() runtime.Object {
 					otherIDP := alreadyInvalidExistingIDP.DeepCopy()
 					otherIDP.Generation = 400
-					otherIDP.Status.Phase = v1alpha1.GitHubPhaseReady
+					otherIDP.Status.Phase = idpv1alpha1.GitHubPhaseReady
 					otherIDP.Status.Conditions[0].Status = metav1.ConditionTrue
 					otherIDP.Status.Conditions[0].Message = "some other message indicating that things are good"
 					return otherIDP
@@ -2146,8 +2146,8 @@ func TestController_OnlyWantActions(t *testing.T) {
 			wantActions: []coretesting.Action{
 				coretesting.NewUpdateSubresourceAction(githubIDPGVR, "status", namespace, func() runtime.Object {
 					idpWithConditions := validMinimalIDP.DeepCopy()
-					idpWithConditions.Status = v1alpha1.GitHubIdentityProviderStatus{
-						Phase: v1alpha1.GitHubPhaseReady,
+					idpWithConditions.Status = idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseReady,
 						Conditions: []metav1.Condition{
 							{
 								Type:               ClaimsValid,
@@ -2210,7 +2210,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 			t.Parallel()
 
 			fakeSupervisorClient := supervisorfake.NewSimpleClientset(tt.githubIdentityProviders...)
-			supervisorInformers := pinnipedinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(tt.githubIdentityProviders...), 0)
+			supervisorInformers := supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(tt.githubIdentityProviders...), 0)
 
 			if tt.addSupervisorReactors != nil {
 				tt.addSupervisorReactors(fakeSupervisorClient)
@@ -2335,7 +2335,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				namespace,
 				dynamicupstreamprovider.NewDynamicUpstreamIDPProvider(),
 				supervisorfake.NewSimpleClientset(),
-				pinnipedinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders(),
+				supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders(),
 				secretInformer,
 				logger,
 				observableInformers.WithInformer,
@@ -2355,7 +2355,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 
 func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 	namespace := "some-namespace"
-	goodIDP := &v1alpha1.GitHubIdentityProvider{
+	goodIDP := &idpv1alpha1.GitHubIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 		},
@@ -2397,7 +2397,7 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 			var log bytes.Buffer
 			logger := plog.TestLogger(t, &log)
 
-			gitHubIdentityProviderInformer := pinnipedinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders()
+			gitHubIdentityProviderInformer := supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders()
 			observableInformers := testutil.NewObservableWithInformerOption()
 
 			_ = New(
@@ -2412,7 +2412,7 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 				tls.Dial,
 			)
 
-			unrelated := &v1alpha1.GitHubIdentityProvider{}
+			unrelated := &idpv1alpha1.GitHubIdentityProvider{}
 			filter := observableInformers.GetFilterForInformer(gitHubIdentityProviderInformer)
 			require.Equal(t, tt.wantAdd, filter.Add(tt.idp))
 			require.Equal(t, tt.wantUpdate, filter.Update(unrelated, tt.idp))

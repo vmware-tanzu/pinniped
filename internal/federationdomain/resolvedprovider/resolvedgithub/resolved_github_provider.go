@@ -58,14 +58,14 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) GetTransforms() *idtran
 	return p.Transforms
 }
 
-func (p *FederationDomainResolvedGitHubIdentityProvider) CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) interface{} {
+func (p *FederationDomainResolvedGitHubIdentityProvider) CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) any {
 	if session.GitHub == nil {
 		return nil
 	}
 	return session.GitHub.Clone()
 }
 
-func (p *FederationDomainResolvedGitHubIdentityProvider) ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData interface{}) {
+func (p *FederationDomainResolvedGitHubIdentityProvider) ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData any) {
 	session.GitHub = idpSpecificSessionData.(*psession.GitHubSessionData)
 }
 

@@ -290,7 +290,7 @@ type TestUpstreamOIDCIdentityProviderBuilder struct {
 	resourceUID                          types.UID
 	clientID                             string
 	scopes                               []string
-	idToken                              map[string]interface{}
+	idToken                              map[string]any
 	refreshToken                         *oidctypes.RefreshToken
 	accessToken                          *oidctypes.AccessToken
 	usernameClaim                        string
@@ -371,9 +371,9 @@ func (u *TestUpstreamOIDCIdentityProviderBuilder) WithoutGroupsClaim() *TestUpst
 	return u
 }
 
-func (u *TestUpstreamOIDCIdentityProviderBuilder) WithIDTokenClaim(name string, value interface{}) *TestUpstreamOIDCIdentityProviderBuilder {
+func (u *TestUpstreamOIDCIdentityProviderBuilder) WithIDTokenClaim(name string, value any) *TestUpstreamOIDCIdentityProviderBuilder {
 	if u.idToken == nil {
-		u.idToken = map[string]interface{}{}
+		u.idToken = map[string]any{}
 	}
 	u.idToken[name] = value
 	return u

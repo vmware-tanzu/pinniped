@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/ory/fosite"
-	"github.com/ory/fosite/handler/oauth2"
+	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/internal/constable"
@@ -40,7 +40,7 @@ const (
 	authorizeCodeStorageVersion = "8"
 )
 
-var _ oauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
+var _ fositeoauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
 
 type authorizeCodeStorage struct {
 	storage  crud.Storage
@@ -53,7 +53,7 @@ type Session struct {
 	Version string          `json:"version"`
 }
 
-func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime timeouts.StorageLifetime) oauth2.AuthorizeCodeStorage {
+func New(secrets corev1client.SecretInterface, clock func() time.Time, sessionStorageLifetime timeouts.StorageLifetime) fositeoauth2.AuthorizeCodeStorage {
 	return &authorizeCodeStorage{storage: crud.New(TypeLabelValue, secrets, clock), lifetime: sessionStorageLifetime}
 }
 
@@ -131,7 +131,7 @@ func (a *authorizeCodeStorage) InvalidateAuthorizeCodeSession(ctx context.Contex
 
 	session.Active = false
 	if _, err := a.storage.Update(ctx, signature, rv, session); err != nil {
-		if errors.IsConflict(err) {
+		if apierrors.IsConflict(err) {
 			return &errSerializationFailureWithCause{cause: err}
 		}
 		return err
@@ -144,7 +144,7 @@ func (a *authorizeCodeStorage) getSession(ctx context.Context, signature string)
 	session := NewValidEmptyAuthorizeCodeSession()
 	rv, err := a.storage.Get(ctx, signature, session)
 
-	if errors.IsNotFound(err) {
+	if apierrors.IsNotFound(err) {
 		return nil, "", fosite.ErrNotFound.WithWrap(err).WithDebug(err.Error())
 	}
 

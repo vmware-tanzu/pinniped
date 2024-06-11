@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package here
@@ -18,6 +18,6 @@ func Doc(s string) string {
 	return strings.ReplaceAll(heredoc.Doc(s), tab, fourSpaces)
 }
 
-func Docf(raw string, args ...interface{}) string {
+func Docf(raw string, args ...any) string {
 	return strings.ReplaceAll(heredoc.Docf(raw, args...), tab, fourSpaces)
 }

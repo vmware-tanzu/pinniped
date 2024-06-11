@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controllerlib
@@ -34,7 +34,7 @@ type Key struct {
 	Name      string
 
 	// TODO determine if it makes sense to add a field like:
-	//  Extra interface{}
+	//  Extra any
 	//  This would allow a custom ParentFunc to pass extra data through to the Syncer
 	//  The boxed type would have to be comparable (i.e. usable as a map key)
 }

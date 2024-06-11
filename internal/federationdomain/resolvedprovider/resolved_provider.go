@@ -40,7 +40,7 @@ type Identity struct {
 	// The portion of the user's session data which is specific to the upstream identity provider type.
 	// Refer to the fields of psession.CustomSessionData whose types are specific to an identity provider type.
 	// Must not be nil.
-	IDPSpecificSessionData interface{}
+	IDPSpecificSessionData any
 }
 
 // IdentityLoginExtras are additional information that an identity provider may choose to determine
@@ -49,7 +49,7 @@ type Identity struct {
 // refreshes. Its fields are optional and may be nil.
 type IdentityLoginExtras struct {
 	// The downstream additional claims determined for this user in an identity provider-specific way, if any.
-	DownstreamAdditionalClaims map[string]interface{}
+	DownstreamAdditionalClaims map[string]any
 
 	// Login warnings to show the user after they exchange their downstream authcode, if any.
 	Warnings []string
@@ -76,7 +76,7 @@ type RefreshedIdentity struct {
 	// Refer to the fields of psession.CustomSessionData whose types are specific to an identity provider type.
 	// Set this to be the potentially updated IDP-specific session data. If no updates were required, then
 	// set this to nil.
-	IDPSpecificSessionData interface{}
+	IDPSpecificSessionData any
 }
 
 // UpstreamAuthorizeRequestState is the state capturing the downstream authorization request, used as a parameter to
@@ -117,7 +117,7 @@ type FederationDomainResolvedIdentityProvider interface {
 	// of the field which is specific to the upstream identity provider type. If the session's field is
 	// nil, then return nil.
 	// Refer to the fields of psession.CustomSessionData whose types are specific to an identity provider type.
-	CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) interface{}
+	CloneIDPSpecificSessionDataFromSession(session *psession.CustomSessionData) any
 
 	// ApplyIDPSpecificSessionDataToSession assigns the IDP-specific portion of the session data into a session.
 	// The IDP-specific session data provided to this function will be from an Identity that was returned by
@@ -125,7 +125,7 @@ type FederationDomainResolvedIdentityProvider interface {
 	// assumptions about the type of idpSpecificSessionData for casting, based upon how it chooses to return
 	// IDPSpecificSessionData in Identity structs. If the given session already has any IDP-specific session
 	// data, it should be overwritten by this function.
-	ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData interface{})
+	ApplyIDPSpecificSessionDataToSession(session *psession.CustomSessionData, idpSpecificSessionData any)
 
 	// UpstreamAuthorizeRedirectURL returns the URL to which the user's browser can be redirected to continue
 	// the downstream browser-based authorization flow. Returned errors should be of type fosite.RFC6749Error.

@@ -14,9 +14,9 @@ import (
 
 	k8sauthv1beta1 "k8s.io/api/authentication/v1beta1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	errorsutil "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	k8snetutil "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
@@ -24,7 +24,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	authinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/authentication/v1alpha1"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
@@ -94,7 +94,7 @@ type webhookCacheFillerController struct {
 // Sync implements controllerlib.Syncer.
 func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	obj, err := c.webhooks.Lister().Get(ctx.Key.Name)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && apierrors.IsNotFound(err) {
 		c.log.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
 		return nil
 	}
@@ -125,7 +125,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 
 	if !conditionsutil.HadErrorCondition(conditions) {
 		c.cache.Store(authncache.Key{
-			APIGroup: auth1alpha1.GroupName,
+			APIGroup: authenticationv1alpha1.GroupName,
 			Kind:     "WebhookAuthenticator",
 			Name:     ctx.Key.Name,
 		}, webhookAuthenticator)
@@ -140,7 +140,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	//   object. The controller simply must wait for a user to correct before running again.
 	// - other errors, such as networking errors, etc. are the types of errors that should return here
 	//   and signal the controller to retry the sync loop. These may be corrected by machines.
-	return errorsutil.NewAggregate(errs)
+	return utilerrors.NewAggregate(errs)
 }
 
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle
@@ -263,7 +263,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 	return conditions, nil
 }
 
-func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
+func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
 	rootCAs, pemBytes, err := pinnipedcontroller.BuildCertPoolAuth(tlsSpec)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
@@ -336,13 +336,13 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 
 func (c *webhookCacheFillerController) updateStatus(
 	ctx context.Context,
-	original *auth1alpha1.WebhookAuthenticator,
+	original *authenticationv1alpha1.WebhookAuthenticator,
 	conditions []*metav1.Condition,
 ) error {
 	updated := original.DeepCopy()
 
 	if conditionsutil.HadErrorCondition(conditions) {
-		updated.Status.Phase = auth1alpha1.WebhookAuthenticatorPhaseError
+		updated.Status.Phase = authenticationv1alpha1.WebhookAuthenticatorPhaseError
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionFalse,
@@ -350,7 +350,7 @@ func (c *webhookCacheFillerController) updateStatus(
 			Message: "the WebhookAuthenticator is not ready: see other conditions for details",
 		})
 	} else {
-		updated.Status.Phase = auth1alpha1.WebhookAuthenticatorPhaseReady
+		updated.Status.Phase = authenticationv1alpha1.WebhookAuthenticatorPhaseReady
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionTrue,

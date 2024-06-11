@@ -244,4 +244,4 @@ func TestNewServingCert(t *testing.T) {
 
 type fakeT struct{}
 
-func (fakeT) Errorf(string, ...interface{}) {}
+func (fakeT) Errorf(string, ...any) {}

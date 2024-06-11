@@ -21,9 +21,9 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	pinnipedfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
-	pinnipedinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
@@ -73,8 +73,8 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			fakePinnipedClient := pinnipedfake.NewSimpleClientset()
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakePinnipedClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			ldapIDPInformer := pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders()
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
@@ -105,7 +105,7 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 	}{
 		{
 			name: "any LDAPIdentityProvider",
-			idp: &v1alpha1.LDAPIdentityProvider{
+			idp: &idpv1alpha1.LDAPIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
 			wantAdd:    true,
@@ -117,8 +117,8 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			fakePinnipedClient := pinnipedfake.NewSimpleClientset()
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakePinnipedClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			ldapIDPInformer := pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders()
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
@@ -175,37 +175,37 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	testCABundle := testCA.Bundle()
 	testCABundleBase64Encoded := base64.StdEncoding.EncodeToString(testCABundle)
 
-	validUpstream := &v1alpha1.LDAPIdentityProvider{
+	validUpstream := &idpv1alpha1.LDAPIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       testName,
 			Namespace:  testNamespace,
 			Generation: 1234,
 			UID:        testResourceUID,
 		},
-		Spec: v1alpha1.LDAPIdentityProviderSpec{
+		Spec: idpv1alpha1.LDAPIdentityProviderSpec{
 			Host: testHost,
-			TLS:  &v1alpha1.TLSSpec{CertificateAuthorityData: testCABundleBase64Encoded},
-			Bind: v1alpha1.LDAPIdentityProviderBind{SecretName: testBindSecretName},
-			UserSearch: v1alpha1.LDAPIdentityProviderUserSearch{
+			TLS:  &idpv1alpha1.TLSSpec{CertificateAuthorityData: testCABundleBase64Encoded},
+			Bind: idpv1alpha1.LDAPIdentityProviderBind{SecretName: testBindSecretName},
+			UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
 				Base:   testUserSearchBase,
 				Filter: testUserSearchFilter,
-				Attributes: v1alpha1.LDAPIdentityProviderUserSearchAttributes{
+				Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
 					Username: testUserSearchUsernameAttrName,
 					UID:      testUserSearchUIDAttrName,
 				},
 			},
-			GroupSearch: v1alpha1.LDAPIdentityProviderGroupSearch{
+			GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
 				Base:                   testGroupSearchBase,
 				Filter:                 testGroupSearchFilter,
 				UserAttributeForFilter: testGroupSearchUserAttributeForFilter,
-				Attributes: v1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+				Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
 					GroupName: testGroupSearchNameAttrName,
 				},
 				SkipGroupRefresh: false,
 			},
 		},
 	}
-	editedValidUpstream := func(editFunc func(*v1alpha1.LDAPIdentityProvider)) *v1alpha1.LDAPIdentityProvider {
+	editedValidUpstream := func(editFunc func(*idpv1alpha1.LDAPIdentityProvider)) *idpv1alpha1.LDAPIdentityProvider {
 		deepCopy := validUpstream.DeepCopy()
 		editFunc(deepCopy)
 		return deepCopy
@@ -303,7 +303,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		dialErrors               map[string]error
 		wantErr                  string
 		wantResultingCache       []*upstreamldap.ProviderConfig
-		wantResultingUpstreams   []v1alpha1.LDAPIdentityProvider
+		wantResultingUpstreams   []idpv1alpha1.LDAPIdentityProvider
 		wantValidatedSettings    map[string]upstreamwatchers.ValidatedSettings
 	}{
 		{
@@ -320,9 +320,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
@@ -342,9 +342,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			inputSecrets:       []runtime.Object{},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						{
@@ -370,9 +370,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						{
@@ -397,9 +397,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						{
@@ -417,15 +417,15 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "CertificateAuthorityData is not base64 encoded",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.TLS.CertificateAuthorityData = "this-is-not-base64-encoded"
 			})},
 			inputSecrets:       []runtime.Object{validBindUserSecret("")},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
@@ -443,15 +443,15 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "CertificateAuthorityData is not valid pem data",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.TLS.CertificateAuthorityData = base64.StdEncoding.EncodeToString([]byte("this is not pem data"))
 			})},
 			inputSecrets:       []runtime.Object{validBindUserSecret("")},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
@@ -469,7 +469,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "nil TLS configuration is valid",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.TLS = nil
 			})},
 			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
@@ -501,9 +501,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
@@ -530,7 +530,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "when TLS connection fails it tries to use StartTLS instead: without a specified port it automatically switches ports",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.Host = "ldap.example.com" // when the port is not specified, automatically switch ports for StartTLS
 			})},
 			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
@@ -566,9 +566,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
@@ -604,7 +604,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "when TLS connection fails it tries to use StartTLS instead: with a specified port it does not automatically switch ports",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.Host = "ldap.example.com:5678" // when the port is specified, do not automatically switch ports for StartTLS
 			})},
 			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
@@ -639,9 +639,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				},
 			},
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
@@ -663,7 +663,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "non-nil TLS configuration with empty CertificateAuthorityData is valid",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.TLS.CertificateAuthorityData = ""
 			})},
 			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
@@ -695,9 +695,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
@@ -713,7 +713,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "one valid upstream and one invalid upstream updates the cache to include only the valid upstream",
-			inputUpstreams: []runtime.Object{validUpstream, editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{validUpstream, editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Name = "other-upstream"
 				upstream.Generation = 42
 				upstream.Spec.Bind.SecretName = "non-existent-secret"
@@ -727,10 +727,10 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "other-upstream", Generation: 42, UID: "other-uid"},
-					Status: v1alpha1.LDAPIdentityProviderStatus{
+					Status: idpv1alpha1.LDAPIdentityProviderStatus{
 						Phase: "Error",
 						Conditions: []metav1.Condition{
 							{
@@ -747,7 +747,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-					Status: v1alpha1.LDAPIdentityProviderStatus{
+					Status: idpv1alpha1.LDAPIdentityProviderStatus{
 						Phase:      "Ready",
 						Conditions: allConditionsTrue(1234, "4242"),
 					},
@@ -774,9 +774,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
@@ -798,7 +798,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "when the LDAP server connection was already validated using TLS for the current resource generation and secret version, then do not validate it again and keep using TLS",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Generation = 1234
 				upstream.Status.Conditions = []metav1.Condition{
 					ldapConnectionValidTrueCondition(1234, "4242"),
@@ -817,9 +817,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				// Should not perform a test dial and bind. No mocking here means the test will fail if Bind() or Close() are called.
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
@@ -835,7 +835,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "when the LDAP server connection was already validated using StartTLS for the current resource generation and secret version, then do not validate it again and keep using StartTLS",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Generation = 1234
 				upstream.Status.Conditions = []metav1.Condition{
 					ldapConnectionValidTrueCondition(1234, "4242"),
@@ -854,9 +854,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				// Should not perform a test dial and bind. No mocking here means the test will fail if Bind() or Close() are called.
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithStartTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
@@ -872,7 +872,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "when the LDAP server connection was validated for an older resource generation, then try to validate it again",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Generation = 1234 // current generation
 				upstream.Status.Conditions = []metav1.Condition{
 					ldapConnectionValidTrueCondition(1233, "4242"), // older spec generation!
@@ -892,9 +892,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
@@ -910,7 +910,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "when the LDAP server connection condition failed to update previously, then write the cached condition from the previous connection validation",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Generation = 1234 // current generation
 				upstream.Status.Conditions = []metav1.Condition{
 					ldapConnectionValidTrueCondition(1234, "4200"), // old version of the condition, as if the previous update of conditions had failed
@@ -930,9 +930,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				// Should not perform a test dial and bind. No mocking here means the test will fail if Bind() or Close() are called.
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"), // updated version of the condition using the cached condition value
 				},
@@ -948,7 +948,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "when the LDAP server connection validation previously failed for this resource generation, then try to validate it again",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Generation = 1234
 				upstream.Status.Conditions = []metav1.Condition{
 					{
@@ -968,9 +968,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
@@ -987,7 +987,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		{
 			name: "when the validated settings cache is incomplete, then try to validate it again",
 			// this shouldn't happen, but if it does, just throw it out and try again.
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Generation = 1234
 				upstream.Status.Conditions = []metav1.Condition{
 					{
@@ -1011,9 +1011,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
@@ -1029,7 +1029,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		},
 		{
 			name: "when the LDAP server connection was already validated for this resource generation but the bind secret has changed, then try to validate it again",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Generation = 1234
 				upstream.Status.Conditions = []metav1.Condition{
 					ldapConnectionValidTrueCondition(1234, "4241"), // same spec generation, old secret version
@@ -1049,9 +1049,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				conn.EXPECT().Close().Times(1)
 			},
 			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
@@ -1066,7 +1066,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}}},
 		{
 			name: "skipping group refresh is valid",
-			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *v1alpha1.LDAPIdentityProvider) {
+			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.LDAPIdentityProvider) {
 				upstream.Spec.GroupSearch.SkipGroupRefresh = true
 			})},
 			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
@@ -1099,9 +1099,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				},
 			},
-			wantResultingUpstreams: []v1alpha1.LDAPIdentityProvider{{
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
-				Status: v1alpha1.LDAPIdentityProviderStatus{
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
@@ -1132,8 +1132,8 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			fakePinnipedClient := pinnipedfake.NewSimpleClientset(tt.inputUpstreams...)
-			pinnipedInformers := pinnipedinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakePinnipedClient := supervisorfake.NewSimpleClientset(tt.inputUpstreams...)
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
 			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
@@ -1226,13 +1226,13 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	}
 }
 
-func normalizeLDAPUpstreams(upstreams []v1alpha1.LDAPIdentityProvider, now metav1.Time) []v1alpha1.LDAPIdentityProvider {
-	result := make([]v1alpha1.LDAPIdentityProvider, 0, len(upstreams))
+func normalizeLDAPUpstreams(upstreams []idpv1alpha1.LDAPIdentityProvider, now metav1.Time) []idpv1alpha1.LDAPIdentityProvider {
+	result := make([]idpv1alpha1.LDAPIdentityProvider, 0, len(upstreams))
 	for _, u := range upstreams {
 		normalized := u.DeepCopy()
 
 		// We're only interested in comparing the status, so zero out the spec.
-		normalized.Spec = v1alpha1.LDAPIdentityProviderSpec{}
+		normalized.Spec = idpv1alpha1.LDAPIdentityProviderSpec{}
 
 		// Round down the LastTransitionTime values to `now` if they were just updated. This makes
 		// it much easier to encode assertions about the expected timestamps.

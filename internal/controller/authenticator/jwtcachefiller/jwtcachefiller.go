@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	errorsutil "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
@@ -29,7 +29,7 @@ import (
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
 
-	auth1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	authinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/authentication/v1alpha1"
@@ -103,7 +103,7 @@ type tokenAuthenticatorCloser interface {
 
 type cachedJWTAuthenticator struct {
 	authenticator.Token
-	spec   *auth1alpha1.JWTAuthenticatorSpec
+	spec   *authenticationv1alpha1.JWTAuthenticatorSpec
 	cancel context.CancelFunc
 }
 
@@ -161,7 +161,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	cacheKey := authncache.Key{
-		APIGroup: auth1alpha1.GroupName,
+		APIGroup: authenticationv1alpha1.GroupName,
 		Kind:     "JWTAuthenticator",
 		Name:     ctx.Key.Name,
 	}
@@ -229,7 +229,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	//   object. The controller simply must wait for a user to correct before running again.
 	// - Other errors, such as networking errors, etc. are the types of errors that should return here
 	//   and signal the controller to retry the sync loop. These may be corrected by machines.
-	return errorsutil.NewAggregate(errs)
+	return utilerrors.NewAggregate(errs)
 }
 
 func (c *jwtCacheFillerController) extractValueAsJWTAuthenticator(value authncache.Value) *cachedJWTAuthenticator {
@@ -245,7 +245,7 @@ func (c *jwtCacheFillerController) extractValueAsJWTAuthenticator(value authncac
 	return jwtAuthenticator
 }
 
-func (c *jwtCacheFillerController) validateTLS(tlsSpec *auth1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
+func (c *jwtCacheFillerController) validateTLS(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
 	rootCAs, _, err := pinnipedcontroller.BuildCertPoolAuth(tlsSpec)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
@@ -504,7 +504,7 @@ func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksUR
 }
 
 // newCachedJWTAuthenticator creates a jwt authenticator from the provided spec.
-func (c *jwtCacheFillerController) newCachedJWTAuthenticator(client *http.Client, spec *auth1alpha1.JWTAuthenticatorSpec, keySet *coreosoidc.RemoteKeySet, conditions []*metav1.Condition, prereqOk bool) (*cachedJWTAuthenticator, []*metav1.Condition, error) {
+func (c *jwtCacheFillerController) newCachedJWTAuthenticator(client *http.Client, spec *authenticationv1alpha1.JWTAuthenticatorSpec, keySet *coreosoidc.RemoteKeySet, conditions []*metav1.Condition, prereqOk bool) (*cachedJWTAuthenticator, []*metav1.Condition, error) {
 	if !prereqOk {
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeAuthenticatorValid,
@@ -580,13 +580,13 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(client *http.Client
 
 func (c *jwtCacheFillerController) updateStatus(
 	ctx context.Context,
-	original *auth1alpha1.JWTAuthenticator,
+	original *authenticationv1alpha1.JWTAuthenticator,
 	conditions []*metav1.Condition,
 ) error {
 	updated := original.DeepCopy()
 
 	if conditionsutil.HadErrorCondition(conditions) {
-		updated.Status.Phase = auth1alpha1.JWTAuthenticatorPhaseError
+		updated.Status.Phase = authenticationv1alpha1.JWTAuthenticatorPhaseError
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionFalse,
@@ -594,7 +594,7 @@ func (c *jwtCacheFillerController) updateStatus(
 			Message: "the JWTAuthenticator is not ready: see other conditions for details",
 		})
 	} else {
-		updated.Status.Phase = auth1alpha1.JWTAuthenticatorPhaseReady
+		updated.Status.Phase = authenticationv1alpha1.JWTAuthenticatorPhaseReady
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionTrue,

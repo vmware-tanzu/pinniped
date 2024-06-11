@@ -26,8 +26,8 @@ import (
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/clientcertissuer"
-	"go.pinniped.dev/internal/mocks/credentialrequestmocks"
-	"go.pinniped.dev/internal/mocks/issuermocks"
+	"go.pinniped.dev/internal/mocks/mockcredentialrequest"
+	"go.pinniped.dev/internal/mocks/mockissuer"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -89,14 +89,14 @@ func TestCreate(t *testing.T) {
 		it("CreateSucceedsWhenGivenATokenAndTheWebhookAuthenticatesTheToken", func() {
 			req := validCredentialRequest()
 
-			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
 				Return(&user.DefaultInfo{
 					Name:   "test-user",
 					Groups: []string{"test-group-1", "test-group-2"},
 				}, nil)
 
-			clientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+			clientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 			clientCertIssuer.EXPECT().IssueClientCertPEM(
 				"test-user",
 				[]string{"test-group-1", "test-group-2"},
@@ -130,14 +130,14 @@ func TestCreate(t *testing.T) {
 		it("CreateFailsWithValidTokenWhenCertIssuerFails", func() {
 			req := validCredentialRequest()
 
-			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
 				Return(&user.DefaultInfo{
 					Name:   "test-user",
 					Groups: []string{"test-group-1", "test-group-2"},
 				}, nil)
 
-			clientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+			clientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 			clientCertIssuer.EXPECT().
 				IssueClientCertPEM(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(nil, nil, fmt.Errorf("some certificate authority error"))
@@ -152,7 +152,7 @@ func TestCreate(t *testing.T) {
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenGivenATokenAndTheWebhookReturnsNilUser", func() {
 			req := validCredentialRequest()
 
-			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).Return(nil, nil)
 
 			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{})
@@ -166,7 +166,7 @@ func TestCreate(t *testing.T) {
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookFails", func() {
 			req := validCredentialRequest()
 
-			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
 				Return(nil, errors.New("some webhook error"))
 
@@ -181,7 +181,7 @@ func TestCreate(t *testing.T) {
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAnEmptyUsername", func() {
 			req := validCredentialRequest()
 
-			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
 				Return(&user.DefaultInfo{Name: ""}, nil)
 
@@ -196,7 +196,7 @@ func TestCreate(t *testing.T) {
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAUserWithUID", func() {
 			req := validCredentialRequest()
 
-			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
 				Return(&user.DefaultInfo{
 					Name:   "test-user",
@@ -215,7 +215,7 @@ func TestCreate(t *testing.T) {
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAUserWithExtra", func() {
 			req := validCredentialRequest()
 
-			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
 				Return(&user.DefaultInfo{
 					Name:   "test-user",
@@ -271,7 +271,7 @@ func TestCreate(t *testing.T) {
 		it("CreateDoesNotAllowValidationFunctionToMutateRequest", func() {
 			req := validCredentialRequest()
 
-			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req.DeepCopy()).
 				Return(&user.DefaultInfo{Name: "test-user"}, nil)
 
@@ -292,7 +292,7 @@ func TestCreate(t *testing.T) {
 		it("CreateDoesNotAllowValidationFunctionToSeeTheActualRequestToken", func() {
 			req := validCredentialRequest()
 
-			requestAuthenticator := credentialrequestmocks.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req.DeepCopy()).
 				Return(&user.DefaultInfo{Name: "test-user"}, nil)
 
@@ -398,7 +398,7 @@ func requireSuccessfulResponseWithAuthenticationFailureMessage(t *testing.T, err
 }
 
 func successfulIssuer(ctrl *gomock.Controller) clientcertissuer.ClientCertIssuer {
-	clientCertIssuer := issuermocks.NewMockClientCertIssuer(ctrl)
+	clientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 	clientCertIssuer.EXPECT().
 		IssueClientCertPEM(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return([]byte("test-cert"), []byte("test-key"), nil)

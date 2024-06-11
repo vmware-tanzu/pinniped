@@ -147,7 +147,7 @@ func (t *fakeT) FailNow() {
 	t.Errorf("fakeT ignored FailNow")
 }
 
-func (t *fakeT) Errorf(format string, args ...interface{}) {
+func (t *fakeT) Errorf(format string, args ...any) {
 	t.Cleanup(func() {
 		if !t.Failed() {
 			return

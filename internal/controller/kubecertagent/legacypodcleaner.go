@@ -1,4 +1,4 @@
-// Copyright 2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -44,7 +44,7 @@ func NewLegacyPodCleanerController(
 				// avoid blind writes to the API
 				agentPod, err := podClient.Get(ctx.Context, ctx.Key.Name, metav1.GetOptions{})
 				if err != nil {
-					if k8serrors.IsNotFound(err) {
+					if apierrors.IsNotFound(err) {
 						return nil
 					}
 					return fmt.Errorf("could not get legacy agent pod: %w", err)
@@ -56,7 +56,7 @@ func NewLegacyPodCleanerController(
 						ResourceVersion: &agentPod.ResourceVersion,
 					},
 				}); err != nil {
-					if k8serrors.IsNotFound(err) {
+					if apierrors.IsNotFound(err) {
 						return nil
 					}
 					return fmt.Errorf("could not delete legacy agent pod: %w", err)

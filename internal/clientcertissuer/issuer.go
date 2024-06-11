@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package clientcertissuer
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"go.pinniped.dev/internal/constable"
 )
@@ -48,7 +48,7 @@ func (c ClientCertIssuers) IssueClientCertPEM(username string, groups []string, 
 		errs = append(errs, fmt.Errorf("%s failed to issue client cert: %w", issuer.Name(), err))
 	}
 
-	if err := errors.NewAggregate(errs); err != nil {
+	if err := utilerrors.NewAggregate(errs); err != nil {
 		return nil, nil, err
 	}
 

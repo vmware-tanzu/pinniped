@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package strategy
@@ -9,7 +9,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
-	"github.com/ory/fosite/handler/oauth2"
+	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	errorsx "github.com/pkg/errors"
 
 	"go.pinniped.dev/internal/federationdomain/storage"
@@ -44,7 +44,7 @@ type DynamicOauth2HMACStrategy struct {
 	keyFunc      func() []byte
 }
 
-var _ oauth2.CoreStrategy = &DynamicOauth2HMACStrategy{}
+var _ fositeoauth2.CoreStrategy = &DynamicOauth2HMACStrategy{}
 
 func NewDynamicOauth2HMACStrategy(
 	fositeConfig *fosite.Config,
@@ -156,6 +156,6 @@ func (s *DynamicOauth2HMACStrategy) ValidateAuthorizeCode(
 	return s.delegate().ValidateAuthorizeCode(ctx, requester, replacePrefix(token, pinAuthcodePrefix, oryAuthcodePrefix))
 }
 
-func (s *DynamicOauth2HMACStrategy) delegate() *oauth2.HMACSHAStrategy {
+func (s *DynamicOauth2HMACStrategy) delegate() *fositeoauth2.HMACSHAStrategy {
 	return compose.NewOAuth2HMACStrategy(storage.NewDynamicGlobalSecretConfig(s.fositeConfig, s.keyFunc))
 }

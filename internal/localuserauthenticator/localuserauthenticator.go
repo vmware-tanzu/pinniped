@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package localuserauthenticator provides a authentication webhook program.
@@ -27,7 +27,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sinformers "k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
@@ -114,7 +114,7 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	defer func() { _ = req.Body.Close() }()
 
 	secret, err := w.secretInformer.Lister().Secrets(namespace).Get(username)
-	notFound := k8serrors.IsNotFound(err)
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		plog.Debug("could not get secret", "err", err)
 		rsp.WriteHeader(http.StatusInternalServerError)

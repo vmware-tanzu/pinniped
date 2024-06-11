@@ -50,6 +50,9 @@ function main() {
     KUBE_PANIC_WATCH_DECODE_ERROR=${kube_panic_watch_decode_error} \
     go test -short -race ./...
     ;;
+  'generate')
+    go generate ./internal/mocks/...
+    ;;
   *)
     usage
     ;;

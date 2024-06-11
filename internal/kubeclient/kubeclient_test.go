@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1184,7 +1185,7 @@ func makeClient(t *testing.T, restConfig *rest.Config, f func(*rest.Config), opt
 
 	f(restConfig)
 
-	client, err := New(append([]Option{WithConfig(restConfig)}, opts...)...)
+	client, err := New(slices.Concat([]Option{WithConfig(restConfig)}, opts)...)
 	require.NoError(t, err)
 
 	return client

@@ -787,7 +787,7 @@ func TestTransformer(t *testing.T) {
 			require.NoError(t, err)
 
 			pipeline := idtransform.NewTransformationPipeline()
-			expectedPipelineSource := []interface{}{}
+			expectedPipelineSource := []any{}
 
 			for _, transform := range tt.transforms {
 				compiledTransform, err := transformer.CompileTransformation(transform, tt.consts)

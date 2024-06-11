@@ -700,7 +700,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		wantUnnecessaryStoredRecords      int
 		wantPasswordGrantCall             *expectedPasswordGrant
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
-		wantDownstreamAdditionalClaims    map[string]interface{}
+		wantDownstreamAdditionalClaims    map[string]any
 	}
 	tests := []testCase{
 		{
@@ -991,7 +991,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 					"downstreamMissingClaim": "upstreamMissingClaim",
 				}).
 				WithIDTokenClaim("upstreamCustomClaim", "i am a claim value").
-				WithIDTokenClaim("upstreamOtherClaim", []interface{}{"hello", true}).
+				WithIDTokenClaim("upstreamOtherClaim", []any{"hello", true}).
 				Build()),
 			method:                            http.MethodGet,
 			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
@@ -1011,9 +1011,9 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
-			wantDownstreamAdditionalClaims: map[string]interface{}{
+			wantDownstreamAdditionalClaims: map[string]any{
 				"downstreamCustomClaim": "i am a claim value",
-				"downstreamOtherClaim":  []interface{}{"hello", true},
+				"downstreamOtherClaim":  []any{"hello", true},
 			},
 		},
 		{
@@ -3023,7 +3023,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			name: "OIDC upstream password grant: upstream IDP's configured groups claim in the ID token is a slice of interfaces",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
 				passwordGrantUpstreamOIDCIdentityProviderBuilder().
-					WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
+					WithIDTokenClaim(oidcUpstreamGroupsClaim, []any{"group1", "group2"}).Build(),
 			),
 			method:                            http.MethodGet,
 			path:                              happyGetRequestPathForOIDCPasswordGrantUpstream,
@@ -3231,7 +3231,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		{
 			name: "OIDC upstream password grant: upstream ID token contains groups claim where one element is invalid",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
-				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
+				passwordGrantUpstreamOIDCIdentityProviderBuilder().WithIDTokenClaim(oidcUpstreamGroupsClaim, []any{"foo", 7}).Build(),
 			),
 			method:                http.MethodGet,
 			path:                  happyGetRequestPathForOIDCPasswordGrantUpstream,
@@ -3700,7 +3700,7 @@ type errorReturningEncoder struct {
 	oidc.Codec
 }
 
-func (*errorReturningEncoder) Encode(_ string, _ interface{}) (string, error) {
+func (*errorReturningEncoder) Encode(_ string, _ any) (string, error) {
 	return "", fmt.Errorf("some encoding error")
 }
 

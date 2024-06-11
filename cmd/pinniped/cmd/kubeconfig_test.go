@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -20,10 +21,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/ptr"
 
-	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
-	fakeconciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
+	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
@@ -44,16 +45,16 @@ func TestGetKubeconfig(t *testing.T) {
 	require.NoError(t, os.WriteFile(testConciergeCABundlePath, testConciergeCA.Bundle(), 0600))
 
 	credentialIssuer := func() runtime.Object {
-		return &configv1alpha1.CredentialIssuer{
+		return &conciergeconfigv1alpha1.CredentialIssuer{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
-			Status: configv1alpha1.CredentialIssuerStatus{
-				Strategies: []configv1alpha1.CredentialIssuerStrategy{{
-					Type:   configv1alpha1.KubeClusterSigningCertificateStrategyType,
-					Status: configv1alpha1.SuccessStrategyStatus,
-					Reason: configv1alpha1.FetchedKeyStrategyReason,
-					Frontend: &configv1alpha1.CredentialIssuerFrontend{
-						Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
-						TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+			Status: conciergeconfigv1alpha1.CredentialIssuerStatus{
+				Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{{
+					Type:   conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+					Status: conciergeconfigv1alpha1.SuccessStrategyStatus,
+					Reason: conciergeconfigv1alpha1.FetchedKeyStrategyReason,
+					Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+						Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+						TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 							Server:                   "https://concierge-endpoint.example.com",
 							CertificateAuthorityData: base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
 						},
@@ -64,12 +65,12 @@ func TestGetKubeconfig(t *testing.T) {
 	}
 
 	jwtAuthenticator := func(issuerCABundle string, issuerURL string) runtime.Object {
-		return &conciergev1alpha1.JWTAuthenticator{
+		return &authenticationv1alpha1.JWTAuthenticator{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
-			Spec: conciergev1alpha1.JWTAuthenticatorSpec{
+			Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 				Issuer:   issuerURL,
 				Audience: "test-audience",
-				TLS: &conciergev1alpha1.TLSSpec{
+				TLS: &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(issuerCABundle)),
 				},
 			},
@@ -271,7 +272,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+					&conciergeconfigv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 				}
 			},
 			wantError: true,
@@ -290,7 +291,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+					&conciergeconfigv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -314,7 +315,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+					&conciergeconfigv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -338,7 +339,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+					&conciergeconfigv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -360,7 +361,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+					&conciergeconfigv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -391,7 +392,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+					&conciergeconfigv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 				}
 			},
 			conciergeReactions: []kubetesting.Reactor{
@@ -422,7 +423,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+					&conciergeconfigv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -444,11 +445,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
-					&conciergev1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-1"}},
-					&conciergev1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-2"}},
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-3"}},
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-4"}},
+					&conciergeconfigv1alpha1.CredentialIssuer{ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"}},
+					&authenticationv1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-1"}},
+					&authenticationv1alpha1.JWTAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-2"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-3"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator-4"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -474,18 +475,18 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{
+					&conciergeconfigv1alpha1.CredentialIssuer{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
-						Status: configv1alpha1.CredentialIssuerStatus{
-							Strategies: []configv1alpha1.CredentialIssuerStrategy{{
+						Status: conciergeconfigv1alpha1.CredentialIssuerStatus{
+							Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{{
 								Type:    "SomeType",
-								Status:  configv1alpha1.ErrorStrategyStatus,
+								Status:  conciergeconfigv1alpha1.ErrorStrategyStatus,
 								Reason:  "SomeReason",
 								Message: "Some message",
 							}},
 						},
 					},
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -508,36 +509,36 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{
+					&conciergeconfigv1alpha1.CredentialIssuer{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
-						Status: configv1alpha1.CredentialIssuerStatus{
-							Strategies: []configv1alpha1.CredentialIssuerStrategy{
+						Status: conciergeconfigv1alpha1.CredentialIssuerStatus{
+							Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 								{
 									Type:           "SomeBrokenType",
-									Status:         configv1alpha1.ErrorStrategyStatus,
+									Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
 									Reason:         "SomeFailureReason",
 									Message:        "Some error message",
 									LastUpdateTime: metav1.Now(),
 								},
 								{
 									Type:           "SomeUnknownType",
-									Status:         configv1alpha1.SuccessStrategyStatus,
+									Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 									Reason:         "SomeReason",
 									Message:        "Some error message",
 									LastUpdateTime: metav1.Now(),
-									Frontend: &configv1alpha1.CredentialIssuerFrontend{
+									Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
 										Type: "SomeUnknownFrontendType",
 									},
 								},
 								{
 									Type:           "SomeType",
-									Status:         configv1alpha1.SuccessStrategyStatus,
+									Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 									Reason:         "SomeReason",
 									Message:        "Some message",
 									LastUpdateTime: metav1.Now(),
-									Frontend: &configv1alpha1.CredentialIssuerFrontend{
-										Type: configv1alpha1.ImpersonationProxyFrontendType,
-										ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+									Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+										Type: conciergeconfigv1alpha1.ImpersonationProxyFrontendType,
+										ImpersonationProxyInfo: &conciergeconfigv1alpha1.ImpersonationProxyInfo{
 											Endpoint:                 "https://impersonation-endpoint",
 											CertificateAuthorityData: "invalid-base-64",
 										},
@@ -546,7 +547,7 @@ func TestGetKubeconfig(t *testing.T) {
 							},
 						},
 					},
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -571,7 +572,7 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
 					credentialIssuer(),
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -597,17 +598,17 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{
+					&conciergeconfigv1alpha1.CredentialIssuer{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
-						Status: configv1alpha1.CredentialIssuerStatus{
-							KubeConfigInfo: &configv1alpha1.CredentialIssuerKubeConfigInfo{
+						Status: conciergeconfigv1alpha1.CredentialIssuerStatus{
+							KubeConfigInfo: &conciergeconfigv1alpha1.CredentialIssuerKubeConfigInfo{
 								Server:                   "https://concierge-endpoint",
 								CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
 							},
-							Strategies: []configv1alpha1.CredentialIssuerStrategy{{
-								Type:           configv1alpha1.KubeClusterSigningCertificateStrategyType,
-								Status:         configv1alpha1.SuccessStrategyStatus,
-								Reason:         configv1alpha1.FetchedKeyStrategyReason,
+							Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{{
+								Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+								Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
+								Reason:         conciergeconfigv1alpha1.FetchedKeyStrategyReason,
 								Message:        "Successfully fetched key",
 								LastUpdateTime: metav1.Now(),
 								// Simulate a previous version of CredentialIssuer that's missing this Frontend field.
@@ -615,12 +616,12 @@ func TestGetKubeconfig(t *testing.T) {
 							}},
 						},
 					},
-					&conciergev1alpha1.JWTAuthenticator{
+					&authenticationv1alpha1.JWTAuthenticator{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
-						Spec: conciergev1alpha1.JWTAuthenticatorSpec{
+						Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 							Issuer:   issuerURL,
 							Audience: "some-test-audience",
-							TLS: &conciergev1alpha1.TLSSpec{
+							TLS: &authenticationv1alpha1.TLSSpec{
 								CertificateAuthorityData: "invalid-base64",
 							},
 						},
@@ -653,12 +654,12 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
 					credentialIssuer(),
-					&conciergev1alpha1.JWTAuthenticator{
+					&authenticationv1alpha1.JWTAuthenticator{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
-						Spec: conciergev1alpha1.JWTAuthenticatorSpec{
+						Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 							Issuer:   issuerURL,
 							Audience: "some-test-audience.pinniped.dev-invalid-substring",
-							TLS: &conciergev1alpha1.TLSSpec{
+							TLS: &authenticationv1alpha1.TLSSpec{
 								CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(issuerCABundle)),
 							},
 						},
@@ -758,7 +759,7 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
 					credentialIssuer(),
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -1009,9 +1010,9 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
 					credentialIssuer(),
-					&conciergev1alpha1.JWTAuthenticator{
+					&authenticationv1alpha1.JWTAuthenticator{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
-						Spec: conciergev1alpha1.JWTAuthenticatorSpec{
+						Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 							Issuer:   issuerURL,
 							Audience: "test-audience",
 						},
@@ -1048,9 +1049,9 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
 					credentialIssuer(),
-					&conciergev1alpha1.JWTAuthenticator{
+					&authenticationv1alpha1.JWTAuthenticator{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
-						Spec: conciergev1alpha1.JWTAuthenticatorSpec{
+						Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 							Issuer:   issuerURL,
 							Audience: "test-audience",
 						},
@@ -1398,7 +1399,7 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
 					credentialIssuer(),
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -1462,7 +1463,7 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
 					credentialIssuer(),
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -1616,7 +1617,7 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
 					credentialIssuer(),
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 				}
 			},
 			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
@@ -1687,21 +1688,21 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{
+					&conciergeconfigv1alpha1.CredentialIssuer{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
-						Status: configv1alpha1.CredentialIssuerStatus{
-							Strategies: []configv1alpha1.CredentialIssuerStrategy{
+						Status: conciergeconfigv1alpha1.CredentialIssuerStatus{
+							Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 								// This TokenCredentialRequestAPI strategy would normally be chosen, but
 								// --concierge-mode=ImpersonationProxy should force it to be skipped.
 								{
 									Type:           "SomeType",
-									Status:         configv1alpha1.SuccessStrategyStatus,
+									Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 									Reason:         "SomeReason",
 									Message:        "Some message",
 									LastUpdateTime: metav1.Now(),
-									Frontend: &configv1alpha1.CredentialIssuerFrontend{
-										Type: configv1alpha1.TokenCredentialRequestAPIFrontendType,
-										TokenCredentialRequestAPIInfo: &configv1alpha1.TokenCredentialRequestAPIInfo{
+									Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+										Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+										TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 											Server:                   "https://token-credential-request-api-endpoint.test",
 											CertificateAuthorityData: "dGVzdC10Y3ItYXBpLWNh",
 										},
@@ -1710,13 +1711,13 @@ func TestGetKubeconfig(t *testing.T) {
 								// The endpoint and CA from this impersonation proxy strategy should be autodiscovered.
 								{
 									Type:           "SomeOtherType",
-									Status:         configv1alpha1.SuccessStrategyStatus,
+									Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 									Reason:         "SomeOtherReason",
 									Message:        "Some other message",
 									LastUpdateTime: metav1.Now(),
-									Frontend: &configv1alpha1.CredentialIssuerFrontend{
-										Type: configv1alpha1.ImpersonationProxyFrontendType,
-										ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+									Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+										Type: conciergeconfigv1alpha1.ImpersonationProxyFrontendType,
+										ImpersonationProxyInfo: &conciergeconfigv1alpha1.ImpersonationProxyInfo{
 											Endpoint:                 "https://impersonation-proxy-endpoint.test",
 											CertificateAuthorityData: base64.StdEncoding.EncodeToString(testConciergeCA.Bundle()),
 										},
@@ -1798,19 +1799,19 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
-					&configv1alpha1.CredentialIssuer{
+					&conciergeconfigv1alpha1.CredentialIssuer{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
-						Status: configv1alpha1.CredentialIssuerStatus{
-							Strategies: []configv1alpha1.CredentialIssuerStrategy{
+						Status: conciergeconfigv1alpha1.CredentialIssuerStatus{
+							Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{
 								{
 									Type:           "SomeType",
-									Status:         configv1alpha1.SuccessStrategyStatus,
+									Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 									Reason:         "SomeReason",
 									Message:        "Some message",
 									LastUpdateTime: metav1.Now(),
-									Frontend: &configv1alpha1.CredentialIssuerFrontend{
-										Type: configv1alpha1.ImpersonationProxyFrontendType,
-										ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+									Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+										Type: conciergeconfigv1alpha1.ImpersonationProxyFrontendType,
+										ImpersonationProxyInfo: &conciergeconfigv1alpha1.ImpersonationProxyInfo{
 											Endpoint:                 "https://impersonation-proxy-endpoint.test",
 											CertificateAuthorityData: "dGVzdC1jb25jaWVyZ2UtY2E=",
 										},
@@ -1818,13 +1819,13 @@ func TestGetKubeconfig(t *testing.T) {
 								},
 								{
 									Type:           "SomeOtherType",
-									Status:         configv1alpha1.SuccessStrategyStatus,
+									Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 									Reason:         "SomeOtherReason",
 									Message:        "Some other message",
 									LastUpdateTime: metav1.Now(),
-									Frontend: &configv1alpha1.CredentialIssuerFrontend{
-										Type: configv1alpha1.ImpersonationProxyFrontendType,
-										ImpersonationProxyInfo: &configv1alpha1.ImpersonationProxyInfo{
+									Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+										Type: conciergeconfigv1alpha1.ImpersonationProxyFrontendType,
+										ImpersonationProxyInfo: &conciergeconfigv1alpha1.ImpersonationProxyInfo{
 											Endpoint:                 "https://some-other-impersonation-endpoint",
 											CertificateAuthorityData: "dGVzdC1jb25jaWVyZ2UtY2E=",
 										},
@@ -3146,7 +3147,7 @@ func TestGetKubeconfig(t *testing.T) {
 			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
 				return []runtime.Object{
 					credentialIssuer(),
-					&conciergev1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
+					&authenticationv1alpha1.WebhookAuthenticator{ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"}},
 				}
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
@@ -3248,12 +3249,12 @@ func TestGetKubeconfig(t *testing.T) {
 					if tt.getClientsetErr != nil {
 						return nil, tt.getClientsetErr
 					}
-					fake := fakeconciergeclientset.NewSimpleClientset()
+					fake := conciergefake.NewSimpleClientset()
 					if tt.conciergeObjects != nil {
-						fake = fakeconciergeclientset.NewSimpleClientset(tt.conciergeObjects(string(testServerCA), testServer.URL)...)
+						fake = conciergefake.NewSimpleClientset(tt.conciergeObjects(string(testServerCA), testServer.URL)...)
 					}
 					if len(tt.conciergeReactions) > 0 {
-						fake.ReactionChain = append(tt.conciergeReactions, fake.ReactionChain...)
+						fake.ReactionChain = slices.Concat(tt.conciergeReactions, fake.ReactionChain)
 					}
 					return fake, nil
 				},

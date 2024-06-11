@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -13,7 +13,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 )
 
 // conciergeModeFlag represents the method by which we should connect to the Concierge on a cluster during login.
@@ -62,12 +62,12 @@ func (f *conciergeModeFlag) Type() string {
 }
 
 // MatchesFrontend returns true iff the flag matches the type of the provided frontend.
-func (f *conciergeModeFlag) MatchesFrontend(frontend *configv1alpha1.CredentialIssuerFrontend) bool {
+func (f *conciergeModeFlag) MatchesFrontend(frontend *conciergeconfigv1alpha1.CredentialIssuerFrontend) bool {
 	switch *f {
 	case modeImpersonationProxy:
-		return frontend.Type == configv1alpha1.ImpersonationProxyFrontendType
+		return frontend.Type == conciergeconfigv1alpha1.ImpersonationProxyFrontendType
 	case modeTokenCredentialRequestAPI:
-		return frontend.Type == configv1alpha1.TokenCredentialRequestAPIFrontendType
+		return frontend.Type == conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType
 	case modeUnknown:
 		fallthrough
 	default:

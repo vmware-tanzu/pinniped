@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/cert"
 
-	authv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/controllerlib"
 )
@@ -103,7 +103,7 @@ type WithInitialEventOptionFunc func(key controllerlib.Key) controllerlib.Option
 // BuildCertPoolAuth returns a PEM-encoded CA bundle from the provided spec. If the provided spec is nil, a
 // nil CA bundle will be returned. If the provided spec contains a CA bundle that is not properly
 // encoded, an error will be returned.
-func BuildCertPoolAuth(spec *authv1alpha1.TLSSpec) (*x509.CertPool, []byte, error) {
+func BuildCertPoolAuth(spec *authenticationv1alpha1.TLSSpec) (*x509.CertPool, []byte, error) {
 	if spec == nil {
 		return nil, nil, nil
 	}

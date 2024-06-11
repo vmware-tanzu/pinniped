@@ -13,7 +13,7 @@ import (
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/types"
 
-	supervisoridpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/downstreamsubject"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/githubclient"
@@ -31,8 +31,8 @@ type ProviderConfig struct {
 	// or https://HOSTNAME/api/v3/ for Enterprise Server.
 	APIBaseURL string
 
-	UsernameAttribute  supervisoridpv1alpha1.GitHubUsernameAttribute
-	GroupNameAttribute supervisoridpv1alpha1.GitHubGroupNameAttribute
+	UsernameAttribute  idpv1alpha1.GitHubUsernameAttribute
+	GroupNameAttribute idpv1alpha1.GitHubGroupNameAttribute
 
 	// AllowedOrganizations, when empty, means to allow users from all orgs.
 	AllowedOrganizations *setutil.CaseInsensitiveSet
@@ -82,11 +82,11 @@ func (p *Provider) GetScopes() []string {
 	return p.c.OAuth2Config.Scopes
 }
 
-func (p *Provider) GetUsernameAttribute() supervisoridpv1alpha1.GitHubUsernameAttribute {
+func (p *Provider) GetUsernameAttribute() idpv1alpha1.GitHubUsernameAttribute {
 	return p.c.UsernameAttribute
 }
 
-func (p *Provider) GetGroupNameAttribute() supervisoridpv1alpha1.GitHubGroupNameAttribute {
+func (p *Provider) GetGroupNameAttribute() idpv1alpha1.GitHubGroupNameAttribute {
 	return p.c.GroupNameAttribute
 }
 
@@ -131,11 +131,11 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string, idpDisplayNa
 	githubUser.DownstreamSubject = downstreamsubject.GitHub(p.c.APIBaseURL, idpDisplayName, userInfo.Login, userInfo.ID)
 
 	switch p.c.UsernameAttribute {
-	case supervisoridpv1alpha1.GitHubUsernameLoginAndID:
+	case idpv1alpha1.GitHubUsernameLoginAndID:
 		githubUser.Username = fmt.Sprintf("%s:%s", userInfo.Login, userInfo.ID)
-	case supervisoridpv1alpha1.GitHubUsernameLogin:
+	case idpv1alpha1.GitHubUsernameLogin:
 		githubUser.Username = userInfo.Login
-	case supervisoridpv1alpha1.GitHubUsernameID:
+	case idpv1alpha1.GitHubUsernameID:
 		githubUser.Username = userInfo.ID
 	default:
 		return nil, fmt.Errorf("bad configuration: unknown GitHub username attribute: %s", p.c.UsernameAttribute)
@@ -172,9 +172,9 @@ func (p *Provider) GetUser(ctx context.Context, accessToken string, idpDisplayNa
 		downstreamGroup := ""
 
 		switch p.c.GroupNameAttribute {
-		case supervisoridpv1alpha1.GitHubUseTeamNameForGroupName:
+		case idpv1alpha1.GitHubUseTeamNameForGroupName:
 			downstreamGroup = fmt.Sprintf("%s/%s", team.Org, team.Name)
-		case supervisoridpv1alpha1.GitHubUseTeamSlugForGroupName:
+		case idpv1alpha1.GitHubUseTeamSlugForGroupName:
 			downstreamGroup = fmt.Sprintf("%s/%s", team.Org, team.Slug)
 		default:
 			return nil, fmt.Errorf("bad configuration: unknown GitHub group name attribute: %s", p.c.GroupNameAttribute)

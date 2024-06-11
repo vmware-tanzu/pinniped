@@ -633,13 +633,13 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, gitHubIdentityProvider.ObjectMeta),
 				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, gitHubIdentityProvider.ObjectMeta),
 			},
-			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
 				expectedFederationDomainStatusUpdate(federationDomain1,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, gitHubIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 				expectedFederationDomainStatusUpdate(federationDomain2,
-					configv1alpha1.FederationDomainPhaseReady,
+					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, gitHubIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},

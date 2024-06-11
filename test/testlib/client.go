@@ -620,7 +620,7 @@ func CreateTestGitHubIdentityProviderWithObjectMeta(t *testing.T, spec idpv1alph
 	t.Cleanup(func() {
 		t.Logf("cleaning up test GitHubIdentityProvider %s/%s", created.Namespace, created.Name)
 		err := upstreams.Delete(context.Background(), created.Name, metav1.DeleteOptions{})
-		notFound := k8serrors.IsNotFound(err)
+		notFound := apierrors.IsNotFound(err)
 		// It's okay if it is not found, because it might have been deleted by another part of this test.
 		if !notFound {
 			require.NoErrorf(t, err, "could not cleanup test GitHubIdentityProvider %s/%s", created.Namespace, created.Name)

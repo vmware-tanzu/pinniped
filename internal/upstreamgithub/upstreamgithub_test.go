@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/util/cert"
 
-	supervisoridpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/githubclient"
 	"go.pinniped.dev/internal/mocks/mockgithubclient"
@@ -78,8 +78,8 @@ func TestGitHubProvider(t *testing.T) {
 	require.Equal(t, types.UID("resource-uid-12345"), subject.GetResourceUID())
 	require.Equal(t, "fake-client-id", subject.GetClientID())
 	require.Equal(t, "fake-client-id", subject.GetClientID())
-	require.Equal(t, supervisoridpv1alpha1.GitHubUsernameAttribute("fake-username-attribute"), subject.GetUsernameAttribute())
-	require.Equal(t, supervisoridpv1alpha1.GitHubGroupNameAttribute("fake-group-name-attribute"), subject.GetGroupNameAttribute())
+	require.Equal(t, idpv1alpha1.GitHubUsernameAttribute("fake-username-attribute"), subject.GetUsernameAttribute())
+	require.Equal(t, idpv1alpha1.GitHubGroupNameAttribute("fake-group-name-attribute"), subject.GetGroupNameAttribute())
 	require.Equal(t, setutil.NewCaseInsensitiveSet("fake-org", "fake-org2"), subject.GetAllowedOrganizations())
 	require.Equal(t, "https://fake-authorization-url", subject.GetAuthorizationURL())
 	require.Equal(t, &http.Client{
@@ -213,7 +213,7 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:        "https://some-url",
 				HttpClient:        someHttpClient,
-				UsernameAttribute: supervisoridpv1alpha1.GitHubUsernameLoginAndID,
+				UsernameAttribute: idpv1alpha1.GitHubUsernameLoginAndID,
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{
@@ -233,7 +233,7 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:        "https://some-url",
 				HttpClient:        someHttpClient,
-				UsernameAttribute: supervisoridpv1alpha1.GitHubUsernameLogin,
+				UsernameAttribute: idpv1alpha1.GitHubUsernameLogin,
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{
@@ -253,7 +253,7 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:        "https://some-url",
 				HttpClient:        someHttpClient,
-				UsernameAttribute: supervisoridpv1alpha1.GitHubUsernameID,
+				UsernameAttribute: idpv1alpha1.GitHubUsernameID,
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{
@@ -273,7 +273,7 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:           "https://some-url",
 				HttpClient:           someHttpClient,
-				UsernameAttribute:    supervisoridpv1alpha1.GitHubUsernameLoginAndID,
+				UsernameAttribute:    idpv1alpha1.GitHubUsernameLoginAndID,
 				AllowedOrganizations: setutil.NewCaseInsensitiveSet("ALLOWED-ORG1", "ALLOWED-ORG2"),
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
@@ -294,7 +294,7 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:           "https://some-url",
 				HttpClient:           someHttpClient,
-				UsernameAttribute:    supervisoridpv1alpha1.GitHubUsernameID,
+				UsernameAttribute:    idpv1alpha1.GitHubUsernameID,
 				AllowedOrganizations: setutil.NewCaseInsensitiveSet("allowed-org"),
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
@@ -311,9 +311,9 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:           "https://some-url",
 				HttpClient:           someHttpClient,
-				UsernameAttribute:    supervisoridpv1alpha1.GitHubUsernameLoginAndID,
+				UsernameAttribute:    idpv1alpha1.GitHubUsernameLoginAndID,
 				AllowedOrganizations: setutil.NewCaseInsensitiveSet("allowed-org1", "allowed-org2"),
-				GroupNameAttribute:   supervisoridpv1alpha1.GitHubUseTeamNameForGroupName,
+				GroupNameAttribute:   idpv1alpha1.GitHubUseTeamNameForGroupName,
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{
@@ -350,9 +350,9 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:           "https://some-url",
 				HttpClient:           someHttpClient,
-				UsernameAttribute:    supervisoridpv1alpha1.GitHubUsernameLoginAndID,
+				UsernameAttribute:    idpv1alpha1.GitHubUsernameLoginAndID,
 				AllowedOrganizations: setutil.NewCaseInsensitiveSet("allowed-org1", "allowed-org2"),
-				GroupNameAttribute:   supervisoridpv1alpha1.GitHubUseTeamSlugForGroupName,
+				GroupNameAttribute:   idpv1alpha1.GitHubUseTeamSlugForGroupName,
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{
@@ -409,7 +409,7 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:        "https://some-url",
 				HttpClient:        someHttpClient,
-				UsernameAttribute: supervisoridpv1alpha1.GitHubUsernameLoginAndID,
+				UsernameAttribute: idpv1alpha1.GitHubUsernameLoginAndID,
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{}, nil)
@@ -422,7 +422,7 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:        "https://some-url",
 				HttpClient:        someHttpClient,
-				UsernameAttribute: supervisoridpv1alpha1.GitHubUsernameLoginAndID,
+				UsernameAttribute: idpv1alpha1.GitHubUsernameLoginAndID,
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {
 				mockGitHubInterface.EXPECT().GetUserInfo(someContext).Return(&githubclient.UserInfo{}, nil)
@@ -451,7 +451,7 @@ func TestGetUser(t *testing.T) {
 			providerConfig: ProviderConfig{
 				APIBaseURL:         "https://some-url",
 				HttpClient:         someHttpClient,
-				UsernameAttribute:  supervisoridpv1alpha1.GitHubUsernameLoginAndID,
+				UsernameAttribute:  idpv1alpha1.GitHubUsernameLoginAndID,
 				GroupNameAttribute: "this-is-not-legal-value-from-the-enum",
 			},
 			buildMockResponses: func(mockGitHubInterface *mockgithubclient.MockGitHubInterface) {

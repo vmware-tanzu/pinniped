@@ -10,7 +10,7 @@ import (
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/types"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/setutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -162,12 +162,12 @@ type UpstreamGithubIdentityProviderI interface {
 	// GetUsernameAttribute returns the attribute from the GitHub API user response to use for the downstream username.
 	// See https://docs.github.com/en/rest/users/users?apiVersion=2022-11-28#get-the-authenticated-user.
 	// Note that this is a constructed value - do not expect that the result will exactly match one of the JSON fields.
-	GetUsernameAttribute() v1alpha1.GitHubUsernameAttribute
+	GetUsernameAttribute() idpv1alpha1.GitHubUsernameAttribute
 
 	// GetGroupNameAttribute returns the attribute from the GitHub API team response to use for the downstream group names.
 	// See https://docs.github.com/en/rest/teams/teams?apiVersion=2022-11-28#list-teams-for-the-authenticated-user.
 	// Note that this is a constructed value - do not expect that the result will exactly match one of the JSON fields.
-	GetGroupNameAttribute() v1alpha1.GitHubGroupNameAttribute
+	GetGroupNameAttribute() idpv1alpha1.GitHubGroupNameAttribute
 
 	// GetAllowedOrganizations returns a list of organizations configured to allow authentication.
 	// If this list has contents, a user must have membership in at least one of these organizations to log in,

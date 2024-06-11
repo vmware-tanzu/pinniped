@@ -305,7 +305,7 @@ type tokenEndpointResponseExpectedValues struct {
 	wantUpstreamOIDCValidateTokenCall      *expectedOIDCUpstreamValidateTokens
 	wantCustomSessionDataStored            *psession.CustomSessionData
 	wantWarnings                           []RecordedWarning
-	wantAdditionalClaims                   map[string]interface{}
+	wantAdditionalClaims                   map[string]any
 	// The expected lifetime of the ID tokens issued by authcode exchange and refresh, but not token exchange.
 	// When zero, will assume that the test wants the default value for ID token lifetime.
 	wantIDTokenLifetimeSeconds int

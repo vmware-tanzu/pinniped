@@ -76,7 +76,7 @@ type supervisorLoginTestcase struct {
 	// Optionally specify the identityProviders part of the FederationDomain's spec by returning it from this function.
 	// Also return the displayName of the IDP that should be used during authentication (or empty string for no IDP name in the auth request).
 	// This function takes the name of the IDP CR which was returned by createIDP() as as argument.
-	federationDomainIDPs func(t *testing.T, idpName string) (idps []configv1alpha1.FederationDomainIdentityProvider, useIDPDisplayName string)
+	federationDomainIDPs func(t *testing.T, idpName string) (idps []supervisorconfigv1alpha1.FederationDomainIdentityProvider, useIDPDisplayName string)
 
 	// Optionally create an OIDCClient CR for the test to use. Return the client ID and client secret for the
 	// test to use. When not set, the test will default to using the "pinniped-cli" static client with no secret.
@@ -119,7 +119,7 @@ type supervisorLoginTestcase struct {
 	wantDownstreamIDTokenGroups []string
 	// The expected ID token additional claims, which will be nested under claim "additionalClaims",
 	// for the original ID token and the refreshed ID token.
-	wantDownstreamIDTokenAdditionalClaims map[string]interface{}
+	wantDownstreamIDTokenAdditionalClaims map[string]any
 	// The expected ID token lifetime, as calculated by token claim 'exp' subtracting token claim 'iat'.
 	// ID tokens issued through authcode exchange or token refresh should have the configured lifetime (or default if not configured).
 	// ID tokens issued through a token exchange should have the default lifetime.
@@ -814,7 +814,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				requestAuthorizationUsingCLIPasswordFlow(t,
 					downstreamAuthorizeURL,
 					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
-					"incorrect",                                           // password to present to server during login
+					"incorrect", // password to present to server during login
 					httpClient,
 					true,
 				)
@@ -2358,9 +2358,9 @@ func supervisorLoginGithubTestcases(
 				}
 				return testlib.CreateTestGitHubIdentityProvider(t, spec, idpv1alpha1.GitHubPhaseReady).Name
 			},
-			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]supervisorconfigv1alpha1.FederationDomainIdentityProvider, string) {
 				displayName := "some-github-identity-provider-name"
-				return []configv1alpha1.FederationDomainIdentityProvider{
+				return []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
 						{
 							DisplayName: displayName,
 							ObjectRef: corev1.TypedLocalObjectReference{
@@ -2392,7 +2392,7 @@ func supervisorLoginGithubTestcases(
 	}
 }
 
-func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]interface{}, wantGroupsAdditionalClaimName string, wantGroups []string) map[string]interface{} {
+func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]any, wantGroupsAdditionalClaimName string, wantGroups []string) map[string]any {
 	if len(wantGroups) > 0 {
 		var wantGroupsAnyType []any
 		for _, group := range wantGroups {

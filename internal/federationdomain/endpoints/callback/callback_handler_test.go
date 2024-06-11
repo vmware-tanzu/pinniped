@@ -242,7 +242,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamPKCEChallenge       string
 		wantDownstreamPKCEChallengeMethod string
 		wantDownstreamCustomSessionData   *psession.CustomSessionData
-		wantDownstreamAdditionalClaims    map[string]interface{}
+		wantDownstreamAdditionalClaims    map[string]any
 		wantOIDCAuthcodeExchangeCall      *expectedOIDCAuthcodeExchange
 		wantGitHubAuthcodeExchangeCall    *expectedGitHubAuthcodeExchange
 	}{
@@ -795,7 +795,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		{
 			name: "upstream IDP's configured groups claim in the ID token is a slice of interfaces",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
-				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"group1", "group2"}).Build(),
+				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []any{"group1", "group2"}).Build(),
 			),
 			method:                            http.MethodGet,
 			path:                              newRequestPath().WithState(happyOIDCState).String(),
@@ -1675,7 +1675,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		{
 			name: "upstream ID token contains groups claim where one element is invalid",
 			idps: testidplister.NewUpstreamIDPListerBuilder().WithOIDC(
-				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []interface{}{"foo", 7}).Build(),
+				happyOIDCUpstream().WithIDTokenClaim(oidcUpstreamGroupsClaim, []any{"foo", 7}).Build(),
 			),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyOIDCState).String(),

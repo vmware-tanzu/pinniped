@@ -399,7 +399,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		_, err = ptyFile.WriteString(authCode + "\n")
 		require.NoError(t, err)
 
-		// Read all of the remaining output from the subprocess until EOF.
+		// Read all the remaining output from the subprocess until EOF.
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
@@ -487,7 +487,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 		var kubectlStdoutPipe io.ReadCloser
 		if runtime.GOOS != "darwin" {
-			// For some unknown reason this breaks the pty library on some MacOS machines.
+			// For some unknown reason this breaks the pty library on some macOS machines.
 			// The problem doesn't reproduce for everyone, so this is just a workaround.
 			kubectlStdoutPipe, err = kubectlCmd.StdoutPipe()
 			require.NoError(t, err)
@@ -529,7 +529,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		_, err = ptyFile.WriteString(authCode + "\n")
 		require.NoError(t, err)
 
-		// Read all of the remaining output from the subprocess until EOF.
+		// Read all the remaining output from the subprocess until EOF.
 		t.Logf("waiting for kubectl to output namespace list")
 		// Read all output from the subprocess until EOF.
 		// Ignore any errors returned because there is always an error on linux.
@@ -539,10 +539,10 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			kubectlStdOutOutputBytes, _ := io.ReadAll(kubectlStdoutPipe)
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlStdOutOutputBytes))
 		} else {
-			// On MacOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
+			// On macOS check that the pty (stdout+stderr+stdin) of the CLI contains the expected output.
 			requireKubectlGetNamespaceOutput(t, env, string(kubectlPtyOutputBytes))
 		}
-		// Due to the GOOS check in the code above, on MacOS the pty will include stdout, and other platforms it will not.
+		// Due to the GOOS check in the code above, on macOS the pty will include stdout, and other platforms it will not.
 		// This warning message is supposed to be printed by the CLI on stderr.
 		require.Contains(t, string(kubectlPtyOutputBytes),
 			"Access token from identity provider has lifetime of less than 3 hours. Expect frequent prompts to log in.")
@@ -1253,8 +1253,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				).Name,
 			},
 		}, idpv1alpha1.GitHubPhaseReady)
-		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, configv1alpha1.FederationDomainPhaseReady)
-		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authv1alpha.JWTAuthenticatorPhaseReady)
+		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
+		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Use a specific session cache for this test.
 		sessionCachePath := tempDir + "/test-sessions.yaml"
@@ -1582,7 +1582,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Wait for the status conditions to have observed the current spec generation so we can be sure that the
+		// Wait for the status conditions to have observed the current spec generation, so we can be sure that the
 		// controller has observed our latest update.
 		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 			fd, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})

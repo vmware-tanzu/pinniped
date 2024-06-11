@@ -297,7 +297,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -321,7 +321,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -345,7 +345,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -367,7 +367,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			conciergeReactions: []kubetesting.Reactor{
@@ -407,7 +407,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -429,7 +429,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -455,11 +455,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupAuthenticator","message":"found JWTAuthenticator","name":"test-authenticator-1"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupAuthenticator","message":"found JWTAuthenticator","name":"test-authenticator-2"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupAuthenticator","message":"found WebhookAuthenticator","name":"test-authenticator-3"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupAuthenticator","message":"found WebhookAuthenticator","name":"test-authenticator-4"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found JWTAuthenticator  {"name": "test-authenticator-1"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found JWTAuthenticator  {"name": "test-authenticator-2"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found WebhookAuthenticator  {"name": "test-authenticator-3"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found WebhookAuthenticator  {"name": "test-authenticator-4"}`,
 				}
 			},
 			wantError: true,
@@ -492,8 +492,8 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.logStrategies","message":"found CredentialIssuer strategy","type":"SomeType","status":"Error","reason":"SomeReason","message":"Some message"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found CredentialIssuer strategy  {"type": "SomeType", "status": "Error", "reason": "SomeReason", "message": "Some message"}`,
 				}
 			},
 			wantError: true,
@@ -553,9 +553,9 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in impersonation proxy mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://impersonation-endpoint"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in impersonation proxy mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://impersonation-endpoint"}`,
 				}
 			},
 			wantError: true,
@@ -578,11 +578,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered WebhookAuthenticator","name":"test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantError: true,
@@ -631,13 +631,13 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"some-test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "some-test-audience"}`,
 				}
 			},
 			wantError: true,
@@ -670,14 +670,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"some-test-audience.pinniped.dev-invalid-substring"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "some-test-audience.pinniped.dev-invalid-substring"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -702,13 +702,13 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -733,14 +733,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -765,11 +765,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered WebhookAuthenticator","name":"test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantError: true,
@@ -806,14 +806,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryStatusCode: http.StatusBadRequest,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -842,14 +842,14 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -877,14 +877,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryStatusCode: http.StatusBadRequest,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -916,14 +916,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -952,14 +952,14 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -985,14 +985,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryResponse: "this is not valid JSON",
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -1022,13 +1022,13 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
 				}
 			},
 			wantError: true,
@@ -1061,12 +1061,12 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
 				}
 			},
 			wantError: true,
@@ -1099,14 +1099,14 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -1384,7 +1384,9 @@ func TestGetKubeconfig(t *testing.T) {
 					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
 			},
 			wantLogs: func(_ string, _ string) []string {
-				return []string{`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.selectUpstreamIDPFlow","message":"multiple client flows found, selecting first value as default","idpName":"some-ldap-idp","idpType":"ldap","selectedFlow":"cli_password","availableFlows":["cli_password","flow2"]}`}
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  multiple client flows found, selecting first value as default  {"idpName": "some-ldap-idp", "idpType": "ldap", "selectedFlow": "cli_password", "availableFlows": ["cli_password","flow2"]}`,
+				}
 			},
 		},
 		{
@@ -1404,11 +1406,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered WebhookAuthenticator","name":"test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1468,11 +1470,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered WebhookAuthenticator","name":"test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1532,14 +1534,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1732,13 +1734,13 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://impersonation-proxy-endpoint.test"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":1}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://impersonation-proxy-endpoint.test"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1840,14 +1842,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in impersonation proxy mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://impersonation-proxy-endpoint.test"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in impersonation proxy mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://impersonation-proxy-endpoint.test"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1917,14 +1919,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1996,14 +1998,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2073,14 +2075,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2146,14 +2148,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryStatusCode: http.StatusBadRequest, // IDPs endpoint shouldn't be called by this test
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2226,14 +2228,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryStatusCode: http.StatusBadRequest, // IDP discovery endpoint shouldn't be called by this test
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2311,16 +2313,16 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.pinnipedSupervisorDiscovery.func1","message":"removed scope from --oidc-scopes list because it is not supported by this Supervisor","scope":"username"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.pinnipedSupervisorDiscovery.func1","message":"removed scope from --oidc-scopes list because it is not supported by this Supervisor","scope":"groups"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  removed scope from --oidc-scopes list because it is not supported by this Supervisor  {"scope": "username"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  removed scope from --oidc-scopes list because it is not supported by this Supervisor  {"scope": "groups"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2399,16 +2401,16 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.pinnipedSupervisorDiscovery.func1","message":"removed scope from --oidc-scopes list because it is not supported by this Supervisor","scope":"username"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.pinnipedSupervisorDiscovery.func1","message":"removed scope from --oidc-scopes list because it is not supported by this Supervisor","scope":"groups"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  removed scope from --oidc-scopes list because it is not supported by this Supervisor  {"scope": "username"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  removed scope from --oidc-scopes list because it is not supported by this Supervisor  {"scope": "groups"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2489,14 +2491,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2567,14 +2569,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryStatusCode: http.StatusNotFound,        // should not get called by the client in this case
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2650,14 +2652,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered JWTAuthenticator","name":"test-authenticator"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC issuer","issuer":"` + issuerURL + `"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC audience","audience":"test-audience"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered OIDC CA bundle","roots":1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -3152,11 +3154,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.lookupCredentialIssuer","message":"discovered CredentialIssuer","name":"test-credential-issuer"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge operating in TokenCredentialRequest API mode"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge endpoint","endpoint":"https://fake-server-url-value"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverConciergeParams","message":"discovered Concierge certificate authority bundle","roots":0}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"cmd/kubeconfig.go:<line>$cmd.discoverAuthenticatorParams","message":"discovered WebhookAuthenticator","name":"test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -3259,7 +3261,7 @@ func TestGetKubeconfig(t *testing.T) {
 					}
 					return fake, nil
 				},
-				log: plog.TestLogger(t, &log),
+				log: plog.TestConsoleLogger(t, &log),
 			})
 			require.NotNil(t, cmd)
 

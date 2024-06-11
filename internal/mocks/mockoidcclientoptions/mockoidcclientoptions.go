@@ -18,7 +18,6 @@ import (
 	http "net/http"
 	reflect "reflect"
 
-	logr "github.com/go-logr/logr"
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	oidcclient "go.pinniped.dev/pkg/oidcclient"
 	gomock "go.uber.org/mock/gomock"
@@ -87,20 +86,6 @@ func (m *MockOIDCClientOptions) WithListenPort(arg0 uint16) oidcclient.Option {
 func (mr *MockOIDCClientOptionsMockRecorder) WithListenPort(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithListenPort", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithListenPort), arg0)
-}
-
-// WithLogger mocks base method.
-func (m *MockOIDCClientOptions) WithLogger(arg0 logr.Logger) oidcclient.Option {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithLogger", arg0)
-	ret0, _ := ret[0].(oidcclient.Option)
-	return ret0
-}
-
-// WithLogger indicates an expected call of WithLogger.
-func (mr *MockOIDCClientOptionsMockRecorder) WithLogger(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithLogger", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithLogger), arg0)
 }
 
 // WithLoginFlow mocks base method.

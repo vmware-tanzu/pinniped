@@ -123,6 +123,7 @@ func TestManager(t *testing.T) {
 				"pinniped_identity_providers": [%s],
 				"pinniped_supported_identity_provider_types": [
 					{"type":"activedirectory"},
+					{"type":"github"},
 					{"type":"ldap"},
 					{"type":"oidc"}
 				]

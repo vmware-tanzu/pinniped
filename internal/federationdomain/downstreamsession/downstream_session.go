@@ -56,7 +56,7 @@ func NewPinnipedSession(
 		UpstreamUsername: c.UpstreamIdentity.UpstreamUsername,
 		UpstreamGroups:   c.UpstreamIdentity.UpstreamGroups,
 		ProviderUID:      idp.GetProvider().GetResourceUID(),
-		ProviderName:     idp.GetProvider().GetName(),
+		ProviderName:     idp.GetProvider().GetResourceName(),
 		ProviderType:     idp.GetSessionProviderType(),
 		Warnings:         c.UpstreamLoginExtras.Warnings,
 	}

@@ -42,6 +42,7 @@ func TestFederationDomainWatcherControllerInformerFilters(t *testing.T) {
 	oidcIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().OIDCIdentityProviders()
 	ldapIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().LDAPIdentityProviders()
 	adIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().ActiveDirectoryIdentityProviders()
+	githubIdentityProviderInformer := supervisorinformers.NewSharedInformerFactoryWithOptions(nil, 0).IDP().V1alpha1().GitHubIdentityProviders()
 
 	tests := []struct {
 		name       string
@@ -82,6 +83,13 @@ func TestFederationDomainWatcherControllerInformerFilters(t *testing.T) {
 			wantAdd:    true,
 			wantUpdate: false,
 			wantDelete: true,
+		}, {
+			name:       "any GitHubIdentityProvider adds or deletes, but updates are ignored",
+			obj:        &idpv1alpha1.GitHubIdentityProvider{},
+			informer:   githubIdentityProviderInformer,
+			wantAdd:    true,
+			wantUpdate: false,
+			wantDelete: true,
 		},
 	}
 	for _, test := range tests {
@@ -99,6 +107,7 @@ func TestFederationDomainWatcherControllerInformerFilters(t *testing.T) {
 				oidcIdentityProviderInformer,
 				ldapIdentityProviderInformer,
 				adIdentityProviderInformer,
+				githubIdentityProviderInformer,
 				withInformer.WithInformer, // make it possible to observe the behavior of the Filters
 			)
 
@@ -159,6 +168,14 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			Name:      "some-ad-idp",
 			Namespace: namespace,
 			UID:       "some-ad-uid",
+		},
+	}
+
+	gitHubIdentityProvider := &idpv1alpha1.GitHubIdentityProvider{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "some-github-idp",
+			Namespace: namespace,
+			UID:       "some-github-idp",
 		},
 	}
 
@@ -486,7 +503,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 			LastTransitionTime: time,
 			Reason:             "KindUnrecognized",
 			Message: fmt.Sprintf(`some kinds specified by .spec.identityProviders[].objectRef.kind are `+
-				`not recognized (should be one of "ActiveDirectoryIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): %s`, badKinds),
+				`not recognized (should be one of "ActiveDirectoryIdentityProvider", "GitHubIdentityProvider", "LDAPIdentityProvider", "OIDCIdentityProvider"): %s`, badKinds),
 		}
 	}
 
@@ -600,6 +617,30 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				expectedFederationDomainStatusUpdate(federationDomain2,
 					supervisorconfigv1alpha1.FederationDomainPhaseReady,
 					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, adIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+			},
+		},
+		{
+			name: "legacy config: when no identity provider is specified on federation domains, but exactly one GitHub identity " +
+				"provider resource exists on cluster, the controller will set a default IDP on each federation domain " +
+				"matching the only identity provider found",
+			inputObjects: []runtime.Object{
+				federationDomain1,
+				federationDomain2,
+				gitHubIdentityProvider,
+			},
+			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{
+				federationDomainIssuerWithDefaultIDP(t, federationDomain1.Spec.Issuer, gitHubIdentityProvider.ObjectMeta),
+				federationDomainIssuerWithDefaultIDP(t, federationDomain2.Spec.Issuer, gitHubIdentityProvider.ObjectMeta),
+			},
+			wantStatusUpdates: []*configv1alpha1.FederationDomain{
+				expectedFederationDomainStatusUpdate(federationDomain1,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, gitHubIdentityProvider.Name, frozenMetav1Now, 123),
+				),
+				expectedFederationDomainStatusUpdate(federationDomain2,
+					configv1alpha1.FederationDomainPhaseReady,
+					allHappyConditionsLegacyConfigurationSuccess(federationDomain2.Spec.Issuer, gitHubIdentityProvider.Name, frozenMetav1Now, 123),
 				),
 			},
 		},
@@ -947,6 +988,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				oidcIdentityProvider,
 				ldapIdentityProvider,
 				adIdentityProvider,
+				gitHubIdentityProvider,
 			},
 			wantFDIssuers: []*federationdomainproviders.FederationDomainIssuer{},
 			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
@@ -955,7 +997,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 					conditionstestutil.Replace(
 						allHappyConditionsLegacyConfigurationSuccess(federationDomain1.Spec.Issuer, "", frozenMetav1Now, 123),
 						[]metav1.Condition{
-							sadIdentityProvidersFoundConditionIdentityProviderNotSpecified(3, frozenMetav1Now, 123),
+							sadIdentityProvidersFoundConditionIdentityProviderNotSpecified(4, frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
 				),
@@ -993,6 +1035,14 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Name:     "cant-find-me-still-name",
 								},
 							},
+							{
+								DisplayName: "cant-find-me-again",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "GitHubIdentityProvider",
+									Name:     "cant-find-me-again-name",
+								},
+							},
 						},
 					},
 				},
@@ -1012,7 +1062,9 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 
 								 cannot find resource specified by .spec.identityProviders[1].objectRef (with name "cant-find-me-either-name")
 
-								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "cant-find-me-still-name")`,
+								 cannot find resource specified by .spec.identityProviders[2].objectRef (with name "cant-find-me-still-name")
+
+								 cannot find resource specified by .spec.identityProviders[3].objectRef (with name "cant-find-me-again-name")`,
 							), frozenMetav1Now, 123),
 							sadReadyCondition(frozenMetav1Now, 123),
 						}),
@@ -1025,6 +1077,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				oidcIdentityProvider,
 				ldapIdentityProvider,
 				adIdentityProvider,
+				gitHubIdentityProvider,
 				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
@@ -1054,6 +1107,14 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Name:     adIdentityProvider.Name,
 								},
 							},
+							{
+								DisplayName: "can-find-me-four",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "GitHubIdentityProvider",
+									Name:     gitHubIdentityProvider.Name,
+								},
+							},
 						},
 					},
 				},
@@ -1076,6 +1137,11 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 							UID:         adIdentityProvider.UID,
 							Transforms:  idtransform.NewTransformationPipeline(),
 						},
+						{
+							DisplayName: "can-find-me-four",
+							UID:         gitHubIdentityProvider.UID,
+							Transforms:  idtransform.NewTransformationPipeline(),
+						},
 					}),
 			},
 			wantStatusUpdates: []*supervisorconfigv1alpha1.FederationDomain{
@@ -1094,6 +1160,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				oidcIdentityProvider,
 				ldapIdentityProvider,
 				adIdentityProvider,
+				gitHubIdentityProvider,
 				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
@@ -1147,6 +1214,14 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Name:     adIdentityProvider.Name,
 								},
 							},
+							{
+								DisplayName: "duplicate2",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor),
+									Kind:     "GitHubIdentityProvider",
+									Name:     gitHubIdentityProvider.Name,
+								},
+							},
 						},
 					},
 				},
@@ -1173,6 +1248,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				oidcIdentityProvider,
 				ldapIdentityProvider,
 				adIdentityProvider,
+				gitHubIdentityProvider,
 				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
@@ -1210,6 +1286,14 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 									Name:     adIdentityProvider.Name,
 								},
 							},
+							{
+								DisplayName: "name5",
+								ObjectRef: corev1.TypedLocalObjectReference{
+									APIGroup: ptr.To(apiGroupSupervisor), // correct
+									Kind:     "GitHubIdentityProvider",
+									Name:     gitHubIdentityProvider.Name,
+								},
+							},
 						},
 					},
 				},
@@ -1243,6 +1327,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				oidcIdentityProvider,
 				ldapIdentityProvider,
 				adIdentityProvider,
+				gitHubIdentityProvider,
 				&supervisorconfigv1alpha1.FederationDomain{
 					ObjectMeta: metav1.ObjectMeta{Name: "config1", Namespace: namespace, Generation: 123},
 					Spec: supervisorconfigv1alpha1.FederationDomainSpec{
@@ -2022,6 +2107,7 @@ func TestTestFederationDomainWatcherControllerSync(t *testing.T) {
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
+				pinnipedInformers.IDP().V1alpha1().GitHubIdentityProviders(),
 				controllerlib.WithInformer,
 			)
 

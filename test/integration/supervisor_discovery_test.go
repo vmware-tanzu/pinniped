@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
@@ -92,7 +94,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			// Test that there is no default discovery endpoint available when there are no FederationDomains.
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, fmt.Sprintf("%s://%s", scheme, addr))
 
-			// Define several unique issuer strings. Always use https in the issuer name even when we are accessing the http port.
+			// Define several unique issuer URLs. Always use https in the issuer URL even when we are accessing the http port.
 			issuer1 := fmt.Sprintf("https://%s/nested/issuer1", addr)
 			issuer2 := fmt.Sprintf("https://%s/nested/issuer2", addr)
 			issuer3 := fmt.Sprintf("https://%s/issuer3", addr)
@@ -101,7 +103,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			issuer6 := fmt.Sprintf("https://%s/issuer6", addr)
 			badIssuer := fmt.Sprintf("https://%s/badIssuer?cannot-use=queries", addr)
 
-			// When FederationDomain are created in sequence they each cause a discovery endpoint to appear only for as long as the FederationDomain exists.
+			// When FederationDomains are created in sequence they each cause a discovery endpoint to appear only for as long as the FederationDomain exists.
 			config1, jwks1 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer1, client)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, scheme, addr, caBundle, issuer1)
 			config2, jwks2 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer2, client)
@@ -113,15 +115,15 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			// When multiple FederationDomains exist at the same time they each serve a unique discovery endpoint.
 			config3, jwks3 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer3, client)
 			config4, jwks4 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer4, client)
-			requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer3, nil) // discovery for issuer3 is still working after issuer4 started working
+			requireStandardDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer3, nil) // discovery for issuer3 is still working after issuer4 started working
 			// The auto-created JWK's were different from each other.
 			require.NotEqual(t, jwks3.Keys[0]["x"], jwks4.Keys[0]["x"])
 			require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
 
-			// Editing a provider to change the issuer name updates the endpoints that are being served.
+			// Editing a FederationDomain to change the issuer URL updates the endpoints that are being served.
 			updatedConfig4 := editFederationDomainIssuerName(t, config4, client, ns, issuer5)
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer4)
-			jwks5 := requireDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5, nil)
+			jwks5 := requireStandardDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5, nil)
 			// The JWK did not change when the issuer name was updated.
 			require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
 
@@ -129,31 +131,37 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, scheme, addr, caBundle, issuer3)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, scheme, addr, caBundle, issuer5)
 
-			// When the same issuer is added twice, both issuers are marked as duplicates, and neither provider is serving.
+			// When the same issuer URL is added to two FederationDomains, both FederationDomains are marked as duplicates, and neither is serving.
 			config6Duplicate1, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
 			config6Duplicate2 := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{Issuer: issuer6}, supervisorconfigv1alpha1.FederationDomainPhaseError)
 			requireStatus(t, client, ns, config6Duplicate1.Name, supervisorconfigv1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
 			requireStatus(t, client, ns, config6Duplicate2.Name, supervisorconfigv1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
 
-			// If we delete the first duplicate issuer, the second duplicate issuer starts serving.
+			// If we delete the first duplicate FederationDomain, the second duplicate FederationDomain starts serving.
 			requireDelete(t, client, ns, config6Duplicate1.Name)
 			requireWellKnownEndpointIsWorking(t, scheme, addr, caBundle, issuer6, nil)
 			requireStatus(t, client, ns, config6Duplicate2.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
-			// When we finally delete all issuers, the endpoint should be down.
+			// When we finally delete all FederationDomains, the discovery endpoints should be down.
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
 
-			// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer name.
+			// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer URL.
 			issuer7 := "https://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7"
 			config7, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
 
-			// When we create a provider with an invalid issuer, the status is set to invalid.
+			// When we create a FederationDomain with an invalid issuer url, the status is set to invalid.
 			badConfig := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{Issuer: badIssuer}, supervisorconfigv1alpha1.FederationDomainPhaseError)
 			requireStatus(t, client, ns, badConfig.Name, supervisorconfigv1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerURLValid"}))
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
 			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
+
+			issuer8 := fmt.Sprintf("https://%s/issuer8multipleIDP", addr)
+			config8 := requireIDPsListedByIDPDiscoveryEndpoint(t, env, ctx, kubeClient, ns, scheme, addr, caBundle, issuer8)
+
+			// requireJWKSEndpointIsWorking() will give us a bit of an idea what to do...
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config8, client, ns, scheme, addr, caBundle, issuer8)
 		})
 	}
 }
@@ -198,7 +206,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	ca1 := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
 
 	// Update the config to with a new .spec.tls.secretName.
 	certSecretName1update := "integration-test-cert-1-update"
@@ -219,7 +227,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	ca1update := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1update, kubeClient)
 
 	// Now that the Secret exists at the new name, we should be able to access the endpoints by hostname using the CA.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
 
 	// To test SNI virtual hosting, send requests to discovery endpoints when the public address is different from the issuer name.
 	hostname2 := "some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com"
@@ -239,7 +247,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, certSecretName2, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
 		hostname2 + ":" + hostnamePort2: address,
 	})
 }
@@ -292,7 +300,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ips[0]}, defaultTLSCertSecretName(env), kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
 
 	// Create an FederationDomain with a spec.tls.secretName.
 	certSecretName := "integration-test-cert-1"
@@ -309,10 +317,10 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA from the SNI cert.
 	// Hostnames are case-insensitive, so the request should still work even if the case of the hostname is different
 	// from the case of the issuer URL's hostname.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, string(certCA.Bundle()), issuerUsingHostname, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, string(certCA.Bundle()), issuerUsingHostname, nil)
 
 	// And we can still access the other issuer using the default cert.
-	_ = requireDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
 }
 
 func defaultTLSCertSecretName(env *testlib.TestEnv) string {
@@ -488,12 +496,12 @@ func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
 ) (*supervisorconfigv1alpha1.FederationDomain, *ExpectedJWKSResponseFormat) {
 	t.Helper()
 	newFederationDomain := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{Issuer: issuerName}, supervisorconfigv1alpha1.FederationDomainPhaseReady)
-	jwksResult := requireDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
+	jwksResult := requireStandardDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
 	requireStatus(t, client, newFederationDomain.Namespace, newFederationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 	return newFederationDomain, jwksResult
 }
 
-func requireDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
+func requireStandardDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
 	requireWellKnownEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, dnsOverrides)
 	jwksResult := requireJWKSEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, dnsOverrides)
 	return jwksResult
@@ -736,4 +744,193 @@ func newHTTPClient(t *testing.T, caBundle string, dnsOverrides map[string]string
 	}
 
 	return c
+}
+
+func requireIDPsListedByIDPDiscoveryEndpoint(
+	t *testing.T,
+	env *testlib.TestEnv,
+	ctx context.Context,
+	kubeClient kubernetes.Interface,
+	ns, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string) *supervisorconfigv1alpha1.FederationDomain {
+	// github
+	gitHubIDPSecretName := "github-idp-secret" //nolint:gosec // this is not a credential
+	_, err := kubeClient.CoreV1().Secrets(ns).Create(ctx, &corev1.Secret{
+		Type:     "secrets.pinniped.dev/github-client",
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gitHubIDPSecretName,
+			Namespace: ns,
+		},
+		StringData: map[string]string{
+			"clientID":     "foo",
+			"clientSecret": "bar",
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = kubeClient.CoreV1().Secrets(ns).Delete(ctx, gitHubIDPSecretName, metav1.DeleteOptions{})
+	})
+
+	ghIDP := testlib.CreateGitHubIdentityProvider(t, idpv1alpha1.GitHubIdentityProviderSpec{
+		Client: idpv1alpha1.GitHubClientSpec{
+			SecretName: gitHubIDPSecretName,
+		},
+		AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+			Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+				Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
+			},
+		},
+	}, idpv1alpha1.GitHubPhaseReady)
+
+	ldapBindSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
+		map[string]string{
+			corev1.BasicAuthUsernameKey: env.SupervisorUpstreamLDAP.BindUsername,
+			corev1.BasicAuthPasswordKey: env.SupervisorUpstreamLDAP.BindPassword,
+		},
+	)
+	ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, idpv1alpha1.LDAPIdentityProviderSpec{
+		Host: env.SupervisorUpstreamLDAP.Host,
+		TLS: &idpv1alpha1.TLSSpec{
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.CABundle)),
+		},
+		Bind: idpv1alpha1.LDAPIdentityProviderBind{
+			SecretName: ldapBindSecret.Name,
+		},
+		UserSearch: idpv1alpha1.LDAPIdentityProviderUserSearch{
+			Base:   env.SupervisorUpstreamLDAP.UserSearchBase,
+			Filter: "",
+			Attributes: idpv1alpha1.LDAPIdentityProviderUserSearchAttributes{
+				Username: env.SupervisorUpstreamLDAP.TestUserMailAttributeName,
+				UID:      env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeName,
+			},
+		},
+		GroupSearch: idpv1alpha1.LDAPIdentityProviderGroupSearch{
+			Base:   env.SupervisorUpstreamLDAP.GroupSearchBase,
+			Filter: "", // use the default value of "member={}"
+			Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
+				GroupName: "", // use the default value of "dn"
+			},
+		},
+	}, idpv1alpha1.LDAPPhaseReady)
+
+	oidcIDP := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
+		Issuer: env.SupervisorUpstreamOIDC.Issuer,
+		TLS: &idpv1alpha1.TLSSpec{
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+		},
+		AuthorizationConfig: idpv1alpha1.OIDCAuthorizationConfig{
+			AdditionalScopes: env.SupervisorUpstreamOIDC.AdditionalScopes,
+		},
+		Claims: idpv1alpha1.OIDCClaims{
+			Username: env.SupervisorUpstreamOIDC.UsernameClaim,
+			Groups:   env.SupervisorUpstreamOIDC.GroupsClaim,
+		},
+		Client: idpv1alpha1.OIDCClient{
+			SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+		},
+	}, idpv1alpha1.PhaseReady)
+
+	var adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider
+	if activeDirectoryAvailable(t, env) {
+		activeDirectoryBindSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ldap-service-account", corev1.SecretTypeBasicAuth,
+			map[string]string{
+				corev1.BasicAuthUsernameKey: env.SupervisorUpstreamActiveDirectory.BindUsername,
+				corev1.BasicAuthPasswordKey: env.SupervisorUpstreamActiveDirectory.BindPassword,
+			},
+		)
+		adIDP = testlib.CreateTestActiveDirectoryIdentityProvider(t, idpv1alpha1.ActiveDirectoryIdentityProviderSpec{
+			Host: env.SupervisorUpstreamActiveDirectory.Host,
+			TLS: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamActiveDirectory.CABundle)),
+			},
+			Bind: idpv1alpha1.ActiveDirectoryIdentityProviderBind{
+				SecretName: activeDirectoryBindSecret.Name,
+			},
+		}, idpv1alpha1.ActiveDirectoryPhaseReady)
+	}
+
+	idpsForFD := []supervisorconfigv1alpha1.FederationDomainIdentityProvider{{
+		DisplayName: ghIDP.Name,
+		ObjectRef: corev1.TypedLocalObjectReference{
+			APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+			Kind:     "GitHubIdentityProvider",
+			Name:     ghIDP.Name,
+		},
+	}, {
+		DisplayName: ldapIDP.Name,
+		ObjectRef: corev1.TypedLocalObjectReference{
+			APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+			Kind:     "LDAPIdentityProvider",
+			Name:     ldapIDP.Name,
+		},
+	}, {
+		DisplayName: oidcIDP.Name,
+		ObjectRef: corev1.TypedLocalObjectReference{
+			APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+			Kind:     "OIDCIdentityProvider",
+			Name:     oidcIDP.Name,
+		},
+	}}
+	if activeDirectoryAvailable(t, env) {
+		idpsForFD = append(idpsForFD, supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+			DisplayName: adIDP.Name,
+			ObjectRef: corev1.TypedLocalObjectReference{
+				APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+				Kind:     "ActiveDirectoryIdentityProvider",
+				Name:     adIDP.Name,
+			},
+		})
+	}
+	federationDomainConfig := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{
+		Issuer:            issuerName,
+		IdentityProviders: idpsForFD,
+	}, supervisorconfigv1alpha1.FederationDomainPhaseReady)
+
+	requireStandardDiscoveryEndpointsAreWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, nil)
+	issuer8URL, err := url.Parse(issuerName)
+	require.NoError(t, err)
+	wellKnownURL := wellKnownURLForIssuer(supervisorScheme, supervisorAddress, issuer8URL.Path)
+	_, wellKnownResponseBody := requireSuccessEndpointResponse(t, wellKnownURL, issuerName, supervisorCABundle, nil) //nolint:bodyclose
+
+	type WellKnownResponse struct {
+		Issuer                string `json:"issuer"`
+		AuthorizationEndpoint string `json:"authorization_endpoint"`
+		TokenEndpoint         string `json:"token_endpoint"`
+		JWKSUri               string `json:"jwks_uri"`
+		DiscoverySupervisor   struct {
+			IdentityProvidersEndpoint string `json:"pinniped_identity_providers_endpoint"`
+		} `json:"discovery.supervisor.pinniped.dev/v1alpha1"`
+	}
+	var wellKnownResponse WellKnownResponse
+	err = json.Unmarshal([]byte(wellKnownResponseBody), &wellKnownResponse)
+	require.NoError(t, err)
+	discoveryIDPEndpoint := wellKnownResponse.DiscoverySupervisor.IdentityProvidersEndpoint
+	_, discoveryIDPResponseBody := requireSuccessEndpointResponse(t, discoveryIDPEndpoint, issuerName, supervisorCABundle, nil) //nolint:bodyclose
+	type IdentityProviderListResponse struct {
+		IdentityProviders []struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+		} `json:"pinniped_identity_providers"`
+	}
+	var identityProviderListResponse IdentityProviderListResponse
+	err = json.Unmarshal([]byte(discoveryIDPResponseBody), &identityProviderListResponse)
+	require.NoError(t, err)
+
+	allIDPs := []string{ghIDP.Name, ldapIDP.Name, oidcIDP.Name}
+	if activeDirectoryAvailable(t, env) {
+		allIDPs = append(allIDPs, adIDP.Name)
+	}
+	require.Equal(t, len(identityProviderListResponse.IdentityProviders), len(allIDPs), "all IDPs should be listed by idp discovery endpoint")
+	for _, provider := range identityProviderListResponse.IdentityProviders {
+		require.Contains(t, allIDPs, provider.Name, fmt.Sprintf("provider name should be listed in IDP discovery: %s", provider.Name))
+	}
+
+	return federationDomainConfig
+}
+
+func activeDirectoryAvailable(t *testing.T, env *testlib.TestEnv) bool {
+	t.Helper()
+	hasLDAPPorts := env.HasCapability(testlib.CanReachInternetLDAPPorts)
+	hasADHost := testlib.IntegrationEnv(t).SupervisorUpstreamActiveDirectory.Host != ""
+	return hasLDAPPorts && hasADHost
 }

@@ -10,7 +10,9 @@ import (
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/types"
 
+	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/authenticators"
+	"go.pinniped.dev/internal/setutil"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
 	"go.pinniped.dev/pkg/oidcclient/oidctypes"
 	"go.pinniped.dev/pkg/oidcclient/pkce"
@@ -24,9 +26,9 @@ const (
 	AccessTokenType  RevocableTokenType = "access_token"
 )
 
-// RefreshAttributes contains information about the user from the original login request
+// LDAPRefreshAttributes contains information about the user from the original login request
 // and previous refreshes to be used during an LDAP session refresh.
-type RefreshAttributes struct {
+type LDAPRefreshAttributes struct {
 	Username             string
 	Subject              string
 	DN                   string
@@ -37,11 +39,11 @@ type RefreshAttributes struct {
 // UpstreamIdentityProviderI includes the interface functions that are common to all upstream identity provider types.
 // These represent the identity provider resources, i.e. OIDCIdentityProvider, etc.
 type UpstreamIdentityProviderI interface {
-	// GetName returns a name for this upstream provider. The controller watching the identity provider resources will
+	// GetResourceName returns a name for this upstream provider. The controller watching the identity provider resources will
 	// set this to be the Name of the CR from its metadata. Note that this is different from the DisplayName configured
 	// in each FederationDomain that uses this provider, so this name is for internal use only, not for interacting
 	// with clients. Clients should not expect to see this name or send this name.
-	GetName() string
+	GetResourceName() string
 
 	// GetResourceUID returns the Kubernetes resource ID
 	GetResourceUID() types.UID
@@ -123,5 +125,69 @@ type UpstreamLDAPIdentityProviderI interface {
 	authenticators.UserAuthenticator
 
 	// PerformRefresh performs a refresh against the upstream LDAP identity provider
-	PerformRefresh(ctx context.Context, storedRefreshAttributes RefreshAttributes, idpDisplayName string) (groups []string, err error)
+	PerformRefresh(ctx context.Context, storedRefreshAttributes LDAPRefreshAttributes, idpDisplayName string) (groups []string, err error)
+}
+
+type GitHubUser struct {
+	Username          string   // could be login name, id, or login:id
+	Groups            []string // could be names or slugs
+	DownstreamSubject string   // the whole downstream subject URI
+}
+
+// GitHubLoginDeniedError can be returned by UpstreamGithubIdentityProviderI GetUser() when a policy
+// configured on GitHubIdentityProvider should prevent this user from completing authentication.
+type GitHubLoginDeniedError struct {
+	message string
+}
+
+func NewGitHubLoginDeniedError(message string) GitHubLoginDeniedError {
+	return GitHubLoginDeniedError{message: message}
+}
+
+func (g GitHubLoginDeniedError) Error() string {
+	return g.message
+}
+
+var _ error = &GitHubLoginDeniedError{}
+
+type UpstreamGithubIdentityProviderI interface {
+	UpstreamIdentityProviderI
+
+	// GetClientID returns the OAuth client ID registered with the upstream provider to be used in the authorization code flow.
+	GetClientID() string
+
+	// GetScopes returns the scopes to request in authorization (authcode or password grant) flow.
+	GetScopes() []string
+
+	// GetUsernameAttribute returns the attribute from the GitHub API user response to use for the downstream username.
+	// See https://docs.github.com/en/rest/users/users?apiVersion=2022-11-28#get-the-authenticated-user.
+	// Note that this is a constructed value - do not expect that the result will exactly match one of the JSON fields.
+	GetUsernameAttribute() v1alpha1.GitHubUsernameAttribute
+
+	// GetGroupNameAttribute returns the attribute from the GitHub API team response to use for the downstream group names.
+	// See https://docs.github.com/en/rest/teams/teams?apiVersion=2022-11-28#list-teams-for-the-authenticated-user.
+	// Note that this is a constructed value - do not expect that the result will exactly match one of the JSON fields.
+	GetGroupNameAttribute() v1alpha1.GitHubGroupNameAttribute
+
+	// GetAllowedOrganizations returns a list of organizations configured to allow authentication.
+	// If this list has contents, a user must have membership in at least one of these organizations to log in,
+	// and only teams from the listed organizations should be represented as groups for the downstream token.
+	// If this list is empty, then any user can log in regardless of org membership, and any observable
+	// teams memberships should be represented as groups for the downstream token.
+	GetAllowedOrganizations() *setutil.CaseInsensitiveSet
+
+	// GetAuthorizationURL returns the authorization URL for the configured GitHub. This will look like:
+	// https://<spec.githubAPI.host>/login/oauth/authorize
+	// It will not include any query parameters or fragment. Any subdomains or port will come from <spec.githubAPI.host>.
+	// It will never include a username or password in the authority section.
+	GetAuthorizationURL() string
+
+	// ExchangeAuthcode performs an upstream GitHub authorization code exchange.
+	// Returns the raw access token. The access token expiry is not known.
+	ExchangeAuthcode(ctx context.Context, authcode string, redirectURI string) (string, error)
+
+	// GetUser calls the user, orgs, and teams APIs of GitHub using the accessToken.
+	// It validates any required org memberships. It returns a User or an error.
+	// The IDP display name is passed to aid in building a suitable downstream subject string.
+	GetUser(ctx context.Context, accessToken string, idpDisplayName string) (*GitHubUser, error)
 }

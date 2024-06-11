@@ -103,7 +103,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 				      --skip-browser                             Skip opening the browser (just print the URL)
 					  --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'browser_authcode', 'cli_password')
 					  --upstream-identity-provider-name string   The name of the upstream identity provider used during login with a Supervisor
-					  --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory') (default "oidc")
+					  --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory', 'github') (default "oidc")
 			`),
 		},
 		{
@@ -274,8 +274,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  pinniped-login  cmd/login_oidc.go:259  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:279  No concierge configured, skipping token credential exchange`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:268  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:288  No concierge configured, skipping token credential exchange`,
 			},
 		},
 		{
@@ -319,10 +319,10 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 12,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"token":"exchanged-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  pinniped-login  cmd/login_oidc.go:259  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:269  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:277  Successfully exchanged token for cluster credential.`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:284  caching cluster credential for future use.`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:268  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:278  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:286  Successfully exchanged token for cluster credential.`,
+				nowStr + `  pinniped-login  cmd/login_oidc.go:293  caching cluster credential for future use.`,
 			},
 		},
 	}

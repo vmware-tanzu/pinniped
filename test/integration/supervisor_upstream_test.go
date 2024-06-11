@@ -28,7 +28,7 @@ func TestSupervisorUpstreamOIDCDiscovery(t *testing.T) {
 		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseError)
 		expectUpstreamConditions(t, upstream, []metav1.Condition{
 			{
-				Type:    "ClientCredentialsValid",
+				Type:    "ClientCredentialsSecretValid",
 				Status:  metav1.ConditionFalse,
 				Reason:  "SecretNotFound",
 				Message: `secret "does-not-exist" not found`,
@@ -60,13 +60,13 @@ Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nananananan
 				AdditionalScopes: []string{"email", "profile"},
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, "test-client-id", "test-client-secret").Name,
 			},
 		}
 		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseError)
 		expectUpstreamConditions(t, upstream, []metav1.Condition{
 			{
-				Type:    "ClientCredentialsValid",
+				Type:    "ClientCredentialsSecretValid",
 				Status:  metav1.ConditionTrue,
 				Reason:  "Success",
 				Message: "loaded client credentials",
@@ -98,13 +98,13 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				AdditionalScopes: []string{"email", "profile"},
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, "test-client-id", "test-client-secret").Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, "test-client-id", "test-client-secret").Name,
 			},
 		}
 		upstream := testlib.CreateTestOIDCIdentityProvider(t, spec, idpv1alpha1.PhaseReady)
 		expectUpstreamConditions(t, upstream, []metav1.Condition{
 			{
-				Type:    "ClientCredentialsValid",
+				Type:    "ClientCredentialsSecretValid",
 				Status:  metav1.ConditionTrue,
 				Reason:  "Success",
 				Message: "loaded client credentials",

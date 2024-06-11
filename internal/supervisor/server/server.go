@@ -51,6 +51,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig"
 	"go.pinniped.dev/internal/controller/supervisorconfig/activedirectoryupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/generator"
+	"go.pinniped.dev/internal/controller/supervisorconfig/githubupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/ldapupstreamwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/oidcclientwatcher"
 	"go.pinniped.dev/internal/controller/supervisorconfig/oidcupstreamwatcher"
@@ -177,6 +178,7 @@ func prepareControllers(
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
+				pinnipedInformers.IDP().V1alpha1().GitHubIdentityProviders(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker,
@@ -321,6 +323,19 @@ func prepareControllers(
 				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
 				secretInformer,
 				controllerlib.WithInformer,
+			),
+			singletonWorker).
+		WithController(
+			githubupstreamwatcher.New(
+				podInfo.Namespace,
+				dynamicUpstreamIDPProvider,
+				pinnipedClient,
+				pinnipedInformers.IDP().V1alpha1().GitHubIdentityProviders(),
+				secretInformer,
+				plog.New(),
+				controllerlib.WithInformer,
+				clock.RealClock{},
+				tls.Dial,
 			),
 			singletonWorker).
 		WithController(

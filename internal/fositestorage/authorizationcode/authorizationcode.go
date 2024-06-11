@@ -36,7 +36,8 @@ const (
 	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
 	// Version 6 is when we upgraded fosite in Dec 2023.
 	// Version 7 is when OIDCClients were given configurable ID token lifetimes.
-	authorizeCodeStorageVersion = "7"
+	// Version 8 is when GitHubIdentityProvider was added.
+	authorizeCodeStorageVersion = "8"
 )
 
 var _ fositeoauth2.AuthorizeCodeStorage = &authorizeCodeStorage{}
@@ -265,7 +266,7 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 			],
 			"request_object_signing_alg": "廜+v,淬Ʋ4Dʧ呩锏緍场脋",
 			"token_endpoint_auth_signing_alg": "ưƓǴ罷ǹ~]ea胠Ĺĩv絹b垇I",
-			"IDTokenLifetimeConfiguration":2.593156354696909e+18
+			"IDTokenLifetimeConfiguration": 2593156354696908951
 		},
 		"scopes": [
 			"ǀŻQ'k頂箨J-",
@@ -382,17 +383,20 @@ const ExpectedAuthorizeCodeSessionJSONFromFuzzing = `{
 						"IȽ齤士bEǎ": "跞@)¿,ɭS隑ip偶宾儮猷V麹",
 						"ȝƋ鬯犦獢9c5¤.岵": "浛a齙\\蹼偦歛"
 					}
+				},
+				"github": {
+					"upstreamAccessToken": " 皦pSǬŝ社Vƅȭǝ*擦28ǅ"
 				}
 			}
 		},
 		"requestedAudience": [
-			" 皦pSǬŝ社Vƅȭǝ*擦28ǅ",
-			"vư"
+			"甍 ć\u003cʘ筫",
+			"蛖a³2ʫ承dʬ)ġ,TÀqy_"
 		],
 		"grantedAudience": [
-			"置b",
-			"筫MN\u0026錝D肁Ŷɽ蔒PR}Ųʓl{"
+			"$+溪ŸȢŒų崓ļ憽",
+			"姧骦:駝重EȫʆɵʮGɃ"
 		]
 	},
-	"version": "7"
+	"version": "8"
 }`

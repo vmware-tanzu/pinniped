@@ -260,7 +260,7 @@ func (c *ldapWatcherController) updateStatus(ctx context.Context, upstream *idpv
 	log := plog.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
-	hadErrorCondition := conditionsutil.MergeIDPConditions(conditions, upstream.Generation, &updated.Status.Conditions, log)
+	hadErrorCondition := conditionsutil.MergeConditions(conditions, upstream.Generation, &updated.Status.Conditions, log, metav1.Now())
 
 	updated.Status.Phase = idpv1alpha1.LDAPPhaseReady
 	if hadErrorCondition {

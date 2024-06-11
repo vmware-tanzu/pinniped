@@ -44,6 +44,113 @@ import (
 	"go.pinniped.dev/test/testlib/browsertest"
 )
 
+// These tests attempt to exercise the entire login and refresh flow of the Supervisor for various cases.
+// They do not use the Pinniped CLI as the client, which allows them to exercise the Supervisor as an
+// OIDC provider in ways that the CLI might not use. Similar tests exist using the CLI in e2e_test.go.
+//
+// Each of these tests perform the following flow:
+//  1. Configure an IDP CR.
+//  2. Create a FederationDomain with TLS configured and wait for its JWKS endpoint to be available.
+//  3. Call the authorization endpoint and log in as a specific user.
+//     Note that these tests do not use form_post response type (which is tested by e2e_test.go).
+//  4. Listen on a local callback server for the authorization redirect, and assert that it was success or failure.
+//  5. Call the token endpoint to exchange the authcode.
+//  6. Call the token endpoint to perform the RFC8693 token exchange for the cluster-scoped ID token.
+//  7. Potentially edit the refresh session data or IDP settings before the refresh.
+//  8. Call the token endpoint to perform a refresh, and expect it to succeed.
+//  9. Call the token endpoint again to perform another RFC8693 token exchange for the cluster-scoped ID token,
+//     this time using the recently refreshed tokens when submitting the request.
+//  10. Potentially edit the refresh session data or IDP settings again, this time in such a way that the next
+//     refresh should fail. If done, then perform one more refresh and expect failure.
+type supervisorLoginTestcase struct {
+	name string
+
+	// This required function might choose to skip the test case, for example if the LDAP server is not
+	// available for an LDAP test.
+	maybeSkip func(t *testing.T)
+
+	// This required function should configure an IDP CR. It should also wait for it to be ready and schedule
+	// its cleanup. Return the name of the IDP CR.
+	createIDP func(t *testing.T) string
+
+	// Optionally specify the identityProviders part of the FederationDomain's spec by returning it from this function.
+	// Also return the displayName of the IDP that should be used during authentication (or empty string for no IDP name in the auth request).
+	// This function takes the name of the IDP CR which was returned by createIDP() as as argument.
+	federationDomainIDPs func(t *testing.T, idpName string) (idps []configv1alpha1.FederationDomainIdentityProvider, useIDPDisplayName string)
+
+	// Optionally create an OIDCClient CR for the test to use. Return the client ID and client secret for the
+	// test to use. When not set, the test will default to using the "pinniped-cli" static client with no secret.
+	// When a client secret is returned, it will be used for authcode exchange, refresh requests, and RFC8693
+	// token exchanges for cluster-scoped tokens (client secrets are not needed in authorization requests).
+	createOIDCClient func(t *testing.T, callbackURL string) (string, string)
+
+	// Optionally return the username and password for the test to use when logging in. This username/password
+	// will be passed to requestAuthorization(), or empty strings will be passed to indicate that the defaults
+	// should be used. If there is any cleanup required, then this function should also schedule that cleanup.
+	testUser func(t *testing.T) (string, string)
+
+	// This required function should call the authorization endpoint using the given URL and also perform whatever
+	// interactions are needed to log in as the user.
+	requestAuthorization func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
+
+	// This string will be used as the requested audience in the RFC8693 token exchange for
+	// the cluster-scoped ID token. When it is not specified, a default string will be used.
+	requestTokenExchangeAud string
+
+	// The scopes to request from the authorization endpoint. Defaults will be used when not specified.
+	downstreamScopes []string
+	// The scopes to want granted from the authorization endpoint. Defaults to the downstreamScopes value when not,
+	// specified, i.e. by default it expects that all requested scopes were granted.
+	wantDownstreamScopes []string
+
+	// When we want the localhost callback to have never happened, then the flow will stop there. The login was
+	// unable to finish so there is nothing to assert about what should have happened with the callback, and there
+	// won't be any error sent to the callback either. This would happen, for example, when the user fails to log
+	// in at the LDAP/AD login page, because then they would be redirected back to that page again, instead of
+	// getting a callback success/error redirect.
+	wantLocalhostCallbackToNeverHappen bool
+
+	// The expected ID token subject claim value as a regexp, for the original ID token and the refreshed ID token.
+	wantDownstreamIDTokenSubjectToMatch string
+	// The expected ID token username claim value as a regexp, for the original ID token and the refreshed ID token.
+	// This function should return an empty string when there should be no username claim in the ID tokens.
+	wantDownstreamIDTokenUsernameToMatch func(username string) string
+	// The expected ID token groups claim value, for the original ID token and the refreshed ID token.
+	wantDownstreamIDTokenGroups []string
+	// The expected ID token additional claims, which will be nested under claim "additionalClaims",
+	// for the original ID token and the refreshed ID token.
+	wantDownstreamIDTokenAdditionalClaims map[string]interface{}
+	// The expected ID token lifetime, as calculated by token claim 'exp' subtracting token claim 'iat'.
+	// ID tokens issued through authcode exchange or token refresh should have the configured lifetime (or default if not configured).
+	// ID tokens issued through a token exchange should have the default lifetime.
+	wantDownstreamIDTokenLifetime *time.Duration
+
+	// Want the authorization endpoint to redirect to the callback with this error type.
+	// The rest of the flow will be skipped since the initial authorization failed.
+	wantAuthorizationErrorType string
+	// Want the authorization endpoint to redirect to the callback with this error description.
+	// Should be used with wantAuthorizationErrorType.
+	wantAuthorizationErrorDescription string
+
+	// Optionally want to the authcode exchange at the token endpoint to fail. The rest of the flow will be
+	// skipped since the authcode exchange failed.
+	wantAuthcodeExchangeError string
+
+	// Optionally make all required assertions about the response of the RFC8693 token exchange for
+	// the cluster-scoped ID token, given the http response status and response body from the token endpoint.
+	// When this is not specified then the appropriate default assertions for a successful exchange are made.
+	// Even if this expects failures, the rest of the flow will continue.
+	wantTokenExchangeResponse func(t *testing.T, status int, body string)
+
+	// Optionally edit the refresh session data between the initial login and the first refresh,
+	// which is still expected to succeed after these edits. Returns the group memberships expected after the
+	// refresh is performed.
+	editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string) []string
+	// Optionally either revoke the user's session on the upstream provider, or manipulate the user's session
+	// data in such a way that it should cause the next upstream refresh attempt to fail.
+	breakRefreshSessionData func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string)
+}
+
 func TestSupervisorLogin_Browser(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
@@ -54,6 +161,16 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 	skipLDAPTests := func(t *testing.T) {
 		t.Helper()
 		testlib.SkipTestWhenLDAPIsUnavailable(t, env)
+	}
+
+	skipAnyGitHubTests := func(t *testing.T) {
+		t.Helper()
+		testlib.SkipTestWhenGitHubIsUnavailable(t)
+	}
+
+	skipGitHubOAuthAppTestsButRunOtherGitHubTests := func(t *testing.T) {
+		t.Helper()
+		testlib.SkipTestWhenGitHubOAuthClientCallbackDoesNotMatchFederationDomainIssuerCallback(t)
 	}
 
 	skipActiveDirectoryTests := func(t *testing.T) {
@@ -68,7 +185,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
 			},
 			Client: idpv1alpha1.OIDCClient{
-				SecretName: testlib.CreateClientCredsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
+				SecretName: testlib.CreateOIDCClientCredentialsSecret(t, env.SupervisorUpstreamOIDC.ClientID, env.SupervisorUpstreamOIDC.ClientSecret).Name,
 			},
 		}
 	}
@@ -205,112 +322,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		regexp.QuoteMeta("&sub=") + ".+" +
 		"$"
 
-	// These tests attempt to exercise the entire login and refresh flow of the Supervisor for various cases.
-	// They do not use the Pinniped CLI as the client, which allows them to exercise the Supervisor as an
-	// OIDC provider in ways that the CLI might not use. Similar tests exist using the CLI in e2e_test.go.
-	//
-	// Each of these tests perform the following flow:
-	// 1. Configure an IDP CR.
-	// 2. Create a FederationDomain with TLS configured and wait for its JWKS endpoint to be available.
-	// 3. Call the authorization endpoint and log in as a specific user.
-	//    Note that these tests do not use form_post response type (which is tested by e2e_test.go).
-	// 4. Listen on a local callback server for the authorization redirect, and assert that it was success or failure.
-	// 5. Call the token endpoint to exchange the authcode.
-	// 6. Call the token endpoint to perform the RFC8693 token exchange for the cluster-scoped ID token.
-	// 7. Potentially edit the refresh session data or IDP settings before the refresh.
-	// 8. Call the token endpoint to perform a refresh, and expect it to succeed.
-	// 9. Call the token endpoint again to perform another RFC8693 token exchange for the cluster-scoped ID token,
-	//    this time using the recently refreshed tokens when submitting the request.
-	// 10. Potentially edit the refresh session data or IDP settings again, this time in such a way that the next
-	//     refresh should fail. If done, then perform one more refresh and expect failure.
-	tests := []struct {
-		name string
-
-		// This required function might choose to skip the test case, for example if the LDAP server is not
-		// available for an LDAP test.
-		maybeSkip func(t *testing.T)
-
-		// This required function should configure an IDP CR. It should also wait for it to be ready and schedule
-		// its cleanup. Return the name of the IDP CR.
-		createIDP func(t *testing.T) string
-
-		// Optionally specify the identityProviders part of the FederationDomain's spec by returning it from this function.
-		// Also return the displayName of the IDP that should be used during authentication (or empty string for no IDP name in the auth request).
-		// This function takes the name of the IDP CR which was returned by createIDP() as as argument.
-		federationDomainIDPs func(t *testing.T, idpName string) (idps []supervisorconfigv1alpha1.FederationDomainIdentityProvider, useIDPDisplayName string)
-
-		// Optionally create an OIDCClient CR for the test to use. Return the client ID and client secret for the
-		// test to use. When not set, the test will default to using the "pinniped-cli" static client with no secret.
-		// When a client secret is returned, it will be used for authcode exchange, refresh requests, and RFC8693
-		// token exchanges for cluster-scoped tokens (client secrets are not needed in authorization requests).
-		createOIDCClient func(t *testing.T, callbackURL string) (string, string)
-
-		// Optionally return the username and password for the test to use when logging in. This username/password
-		// will be passed to requestAuthorization(), or empty strings will be passed to indicate that the defaults
-		// should be used. If there is any cleanup required, then this function should also schedule that cleanup.
-		testUser func(t *testing.T) (string, string)
-
-		// This required function should call the authorization endpoint using the given URL and also perform whatever
-		// interactions are needed to log in as the user.
-		requestAuthorization func(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, username, password string, httpClient *http.Client)
-
-		// This string will be used as the requested audience in the RFC8693 token exchange for
-		// the cluster-scoped ID token. When it is not specified, a default string will be used.
-		requestTokenExchangeAud string
-
-		// The scopes to request from the authorization endpoint. Defaults will be used when not specified.
-		downstreamScopes []string
-		// The scopes to want granted from the authorization endpoint. Defaults to the downstreamScopes value when not,
-		// specified, i.e. by default it expects that all requested scopes were granted.
-		wantDownstreamScopes []string
-
-		// When we want the localhost callback to have never happened, then the flow will stop there. The login was
-		// unable to finish so there is nothing to assert about what should have happened with the callback, and there
-		// won't be any error sent to the callback either. This would happen, for example, when the user fails to log
-		// in at the LDAP/AD login page, because then they would be redirected back to that page again, instead of
-		// getting a callback success/error redirect.
-		wantLocalhostCallbackToNeverHappen bool
-
-		// The expected ID token subject claim value as a regexp, for the original ID token and the refreshed ID token.
-		wantDownstreamIDTokenSubjectToMatch string
-		// The expected ID token username claim value as a regexp, for the original ID token and the refreshed ID token.
-		// This function should return an empty string when there should be no username claim in the ID tokens.
-		wantDownstreamIDTokenUsernameToMatch func(username string) string
-		// The expected ID token groups claim value, for the original ID token and the refreshed ID token.
-		wantDownstreamIDTokenGroups []string
-		// The expected ID token additional claims, which will be nested under claim "additionalClaims",
-		// for the original ID token and the refreshed ID token.
-		wantDownstreamIDTokenAdditionalClaims map[string]any
-		// The expected ID token lifetime, as calculated by token claim 'exp' subtracting token claim 'iat'.
-		// ID tokens issued through authcode exchange or token refresh should have the configured lifetime (or default if not configured).
-		// ID tokens issued through a token exchange should have the default lifetime.
-		wantDownstreamIDTokenLifetime *time.Duration
-
-		// Want the authorization endpoint to redirect to the callback with this error type.
-		// The rest of the flow will be skipped since the initial authorization failed.
-		wantAuthorizationErrorType string
-		// Want the authorization endpoint to redirect to the callback with this error description.
-		// Should be used with wantAuthorizationErrorType.
-		wantAuthorizationErrorDescription string
-
-		// Optionally want to the authcode exchange at the token endpoint to fail. The rest of the flow will be
-		// skipped since the authcode exchange failed.
-		wantAuthcodeExchangeError string
-
-		// Optionally make all required assertions about the response of the RFC8693 token exchange for
-		// the cluster-scoped ID token, given the http response status and response body from the token endpoint.
-		// When this is not specified then the appropriate default assertions for a successful exchange are made.
-		// Even if this expects failures, the rest of the flow will continue.
-		wantTokenExchangeResponse func(t *testing.T, status int, body string)
-
-		// Optionally edit the refresh session data between the initial login and the first refresh,
-		// which is still expected to succeed after these edits. Returns the group memberships expected after the
-		// refresh is performed.
-		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string) []string
-		// Optionally either revoke the user's session on the upstream provider, or manipulate the user's session
-		// data in such a way that it should cause the next upstream refresh attempt to fail.
-		breakRefreshSessionData func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string)
-	}{
+	tests := []*supervisorLoginTestcase{
 		{
 			name:      "oidc with default username and groups claim settings",
 			maybeSkip: skipNever,
@@ -2174,6 +2186,24 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 	}
 
+	// Append testcases for GitHub using a GitHub App as the client.
+	tests = append(tests,
+		supervisorLoginGithubTestcases(env,
+			env.SupervisorUpstreamGithub.GithubAppClientID,
+			env.SupervisorUpstreamGithub.GithubAppClientSecret,
+			"using GitHub App as client",
+			skipAnyGitHubTests)...,
+	)
+
+	// Append those same testcases for GitHub again, but this time using one of GitHub's old-style OAuth Apps as the client.
+	tests = append(tests,
+		supervisorLoginGithubTestcases(env,
+			env.SupervisorUpstreamGithub.GithubOAuthAppClientID,
+			env.SupervisorUpstreamGithub.GithubOAuthAppClientSecret,
+			"using old-style GitHub OAuth App as client",
+			skipGitHubOAuthAppTestsButRunOtherGitHubTests)...,
+	)
+
 	for _, test := range tests {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
@@ -2206,7 +2236,163 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 	}
 }
 
-func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]any, wantGroupsAdditionalClaimName string, wantGroups []string) map[string]any {
+func supervisorLoginGithubTestcases(
+	env *testlib.TestEnv,
+	clientID string,
+	clientSecret string,
+	nameNote string,
+	maybeSkip func(t *testing.T),
+) []*supervisorLoginTestcase {
+	basicGitHubIdentityProviderSpec := func(t *testing.T, clientID, clientSecret string) idpv1alpha1.GitHubIdentityProviderSpec {
+		return idpv1alpha1.GitHubIdentityProviderSpec{
+			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
+				Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+					Policy: ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyAllGitHubUsers),
+				},
+			},
+			Client: idpv1alpha1.GitHubClientSpec{
+				SecretName: testlib.CreateGitHubClientCredentialsSecret(t, clientID, clientSecret).Name,
+			},
+		}
+	}
+
+	// The downstream ID token Subject should include the upstream user ID after the upstream issuer name
+	// and IDP display name.
+	expectedIDTokenSubjectRegexForUpstreamGitHub := "^" +
+		regexp.QuoteMeta("https://api.github.com?idpName=test-upstream-github-idp-") + `[\w]+` +
+		regexp.QuoteMeta("&login=") + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserUsername) +
+		regexp.QuoteMeta("&id=") + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserID) +
+		"$"
+
+	return []*supervisorLoginTestcase{
+		{
+			name:      fmt.Sprintf("github with all orgs allowed and default claim settings (%s)", nameNote),
+			maybeSkip: maybeSkip,
+			createIDP: func(t *testing.T) string {
+				return testlib.CreateTestGitHubIdentityProvider(t,
+					basicGitHubIdentityProviderSpec(t, clientID, clientSecret),
+					idpv1alpha1.GitHubPhaseReady).Name
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowGitHub,
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to some names that did not come from the GitHub API,
+				// we expect that it will return to the real groups from the GitHub API after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return env.SupervisorUpstreamGithub.TestUserExpectedTeamSlugs
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				// Pretend that the github access token was revoked or expired by changing it to an
+				// invalid access token in the user's session data. This should cause refresh to fail because
+				// during the refresh the GitHub API will not accept this bad access token.
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeGitHub, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.GitHub.UpstreamAccessToken)
+				customSessionData.GitHub.UpstreamAccessToken = "purposely-using-bad-access-token-during-an-automated-integration-test"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamGitHub,
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserUsername+":"+env.SupervisorUpstreamGithub.TestUserID) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamGithub.TestUserExpectedTeamSlugs,
+		},
+		{
+			name:      fmt.Sprintf("github with list of allowed orgs, username as login, and groups as names (%s)", nameNote),
+			maybeSkip: maybeSkip,
+			createIDP: func(t *testing.T) string {
+				spec := basicGitHubIdentityProviderSpec(t, clientID, clientSecret)
+				spec.AllowAuthentication = idpv1alpha1.GitHubAllowAuthenticationSpec{
+					Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+						Policy:  ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations),
+						Allowed: []string{env.SupervisorUpstreamGithub.TestUserOrganization, "some-unrelated-org"},
+					},
+				}
+				spec.Claims = idpv1alpha1.GitHubClaims{
+					Username: ptr.To(idpv1alpha1.GitHubUsernameLogin),
+					Groups:   ptr.To(idpv1alpha1.GitHubUseTeamNameForGroupName),
+				}
+				return testlib.CreateTestGitHubIdentityProvider(t, spec, idpv1alpha1.GitHubPhaseReady).Name
+			},
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowGitHub,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamGitHub,
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserUsername) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamGithub.TestUserExpectedTeamNames,
+		},
+		{
+			name:      fmt.Sprintf("github with list of allowed orgs differently cased, username as id, and groups as names (%s)", nameNote),
+			maybeSkip: maybeSkip,
+			createIDP: func(t *testing.T) string {
+				spec := basicGitHubIdentityProviderSpec(t, clientID, clientSecret)
+				spec.AllowAuthentication = idpv1alpha1.GitHubAllowAuthenticationSpec{
+					Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+						Policy:  ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations),
+						Allowed: []string{strings.ToUpper(env.SupervisorUpstreamGithub.TestUserOrganization), "some-unrelated-org"},
+					},
+				}
+				spec.Claims = idpv1alpha1.GitHubClaims{
+					Username: ptr.To(idpv1alpha1.GitHubUsernameID),
+					Groups:   ptr.To(idpv1alpha1.GitHubUseTeamNameForGroupName),
+				}
+				return testlib.CreateTestGitHubIdentityProvider(t, spec, idpv1alpha1.GitHubPhaseReady).Name
+			},
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowGitHub,
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamGitHub,
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamGithub.TestUserID) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamGithub.TestUserExpectedTeamNames,
+		},
+		{
+			name:      fmt.Sprintf("github when user does not belong to any of the allowed orgs, should fail at the Supervisor callback endpoint (%s)", nameNote),
+			maybeSkip: maybeSkip,
+			createIDP: func(t *testing.T) string {
+				spec := basicGitHubIdentityProviderSpec(t, clientID, clientSecret)
+				spec.AllowAuthentication = idpv1alpha1.GitHubAllowAuthenticationSpec{
+					Organizations: idpv1alpha1.GitHubOrganizationsSpec{
+						Policy:  ptr.To(idpv1alpha1.GitHubAllowedAuthOrganizationsPolicyOnlyUsersFromAllowedOrganizations),
+						Allowed: []string{"some-unrelated-org"},
+					},
+				}
+				return testlib.CreateTestGitHubIdentityProvider(t, spec, idpv1alpha1.GitHubPhaseReady).Name
+			},
+			federationDomainIDPs: func(t *testing.T, idpName string) ([]configv1alpha1.FederationDomainIdentityProvider, string) {
+				displayName := "some-github-identity-provider-name"
+				return []configv1alpha1.FederationDomainIdentityProvider{
+						{
+							DisplayName: displayName,
+							ObjectRef: corev1.TypedLocalObjectReference{
+								APIGroup: ptr.To("idp.supervisor." + env.APIGroupSuffix),
+								Kind:     "GitHubIdentityProvider",
+								Name:     idpName,
+							},
+						},
+					},
+					displayName
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+				t.Helper()
+				browser := openBrowserAndNavigateToAuthorizeURL(t, downstreamAuthorizeURL, httpClient)
+				// Expect to be redirected to the upstream provider and log in.
+				browsertest.LoginToUpstreamGitHub(t, browser, env.SupervisorUpstreamGithub)
+				// Wait for the login to happen and us be redirected back to the Supervisor callback with an error showing.
+				t.Logf("waiting for redirect to Supervisor callback endpoint, which should be showing an error")
+				callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.CallbackURL) + `\?.+\z`)
+				browser.WaitForURL(t, callbackURLPattern)
+				// Get the text of the preformatted error message showing on the page.
+				textOfPreTag := browser.TextOfFirstMatch(t, "pre")
+				require.Equal(t,
+					`Forbidden: login denied due to configuration on GitHubIdentityProvider with display name "some-github-identity-provider-name": user is not allowed to log in due to organization membership policy`+"\n",
+					textOfPreTag)
+			},
+			wantLocalhostCallbackToNeverHappen: true,
+		},
+	}
+}
+
+func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]interface{}, wantGroupsAdditionalClaimName string, wantGroups []string) map[string]interface{} {
 	if len(wantGroups) > 0 {
 		var wantGroupsAnyType []any
 		for _, group := range wantGroups {
@@ -2360,7 +2546,7 @@ func testSupervisorLogin(
 ) {
 	env := testlib.IntegrationEnv(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 
 	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
@@ -2427,7 +2613,7 @@ func testSupervisorLogin(
 	}
 
 	// Create the downstream FederationDomain and expect it to go into the appropriate status condition.
-	downstream := testlib.CreateTestFederationDomain(ctx, t,
+	federationDomain := testlib.CreateTestFederationDomain(ctx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer:            issuerURL.String(),
 			TLS:               &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
@@ -2476,7 +2662,7 @@ func testSupervisorLogin(
 	var discovery *coreosoidc.Provider
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		var err error
-		discovery, err = coreosoidc.NewProvider(oidcHTTPClientContext, downstream.Spec.Issuer)
+		discovery, err = coreosoidc.NewProvider(oidcHTTPClientContext, federationDomain.Spec.Issuer)
 		requireEventually.NoError(err)
 	}, 30*time.Second, 200*time.Millisecond)
 
@@ -2527,7 +2713,7 @@ func testSupervisorLogin(
 	downstreamAuthorizeURL := downstreamOAuth2Config.AuthCodeURL(stateParam.String(), authorizeRequestParams...)
 
 	// Perform parameterized auth code acquisition.
-	requestAuthorization(t, downstream.Spec.Issuer, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)
+	requestAuthorization(t, federationDomain.Spec.Issuer, downstreamAuthorizeURL, localCallbackServer.URL, username, password, httpClient)
 
 	// Expect that our callback handler was invoked.
 	callback, err := localCallbackServer.waitForCallback(10 * time.Second)
@@ -2718,6 +2904,7 @@ func testSupervisorLogin(
 		// Should have got an error since the upstream refresh should have failed.
 		require.Error(t, err)
 		require.EqualError(t, err, `oauth2: "error" "Error during upstream refresh. Upstream refresh failed."`)
+		t.Log("successfully confirmed that breaking the refresh session data caused the refresh to fail")
 	}
 }
 
@@ -2884,12 +3071,33 @@ func loginToUpstreamOIDCAndWaitForCallback(t *testing.T, b *browsertest.Browser,
 	b.WaitForURL(t, callbackURLPattern)
 }
 
+func loginToUpstreamGitHubAndWaitForCallback(t *testing.T, b *browsertest.Browser, downstreamCallbackURL string) {
+	t.Helper()
+	env := testlib.IntegrationEnv(t)
+
+	// Expect to be redirected to the upstream provider and log in.
+	browsertest.LoginToUpstreamGitHub(t, b, env.SupervisorUpstreamGithub)
+
+	// Wait for the login to happen and us be redirected back to a localhost callback.
+	t.Logf("waiting for redirect to callback")
+	callbackURLPattern := regexp.MustCompile(`\A` + regexp.QuoteMeta(downstreamCallbackURL) + `\?.+\z`)
+	b.WaitForURL(t, callbackURLPattern)
+}
+
 func requestAuthorizationUsingBrowserAuthcodeFlowOIDC(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
 	t.Helper()
 
 	browser := openBrowserAndNavigateToAuthorizeURL(t, downstreamAuthorizeURL, httpClient)
 
 	loginToUpstreamOIDCAndWaitForCallback(t, browser, downstreamCallbackURL)
+}
+
+func requestAuthorizationUsingBrowserAuthcodeFlowGitHub(t *testing.T, _, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {
+	t.Helper()
+
+	browser := openBrowserAndNavigateToAuthorizeURL(t, downstreamAuthorizeURL, httpClient)
+
+	loginToUpstreamGitHubAndWaitForCallback(t, browser, downstreamCallbackURL)
 }
 
 func requestAuthorizationUsingBrowserAuthcodeFlowOIDCWithIDPChooserPage(t *testing.T, downstreamIssuer, downstreamAuthorizeURL, downstreamCallbackURL, _, _ string, httpClient *http.Client) {

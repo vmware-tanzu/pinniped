@@ -205,7 +205,7 @@ pinniped get kubeconfig [flags]
       --timeout duration                         Timeout for autodiscovery and validation (default 10m0s)
       --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'cli_password', 'browser_authcode')
       --upstream-identity-provider-name string   The name of the upstream identity provider used during login with a Supervisor
-      --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory')
+      --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory', 'github')
 ```
 
 ### SEE ALSO
@@ -277,7 +277,7 @@ pinniped login oidc --issuer ISSUER [flags]
       --skip-browser                             Skip opening the browser (just print the URL)
       --upstream-identity-provider-flow string   The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. 'browser_authcode', 'cli_password')
       --upstream-identity-provider-name string   The name of the upstream identity provider used during login with a Supervisor
-      --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory') (default "oidc")
+      --upstream-identity-provider-type string   The type of the upstream identity provider used during login with a Supervisor (e.g. 'oidc', 'ldap', 'activedirectory', 'github') (default "oidc")
 ```
 
 ### SEE ALSO

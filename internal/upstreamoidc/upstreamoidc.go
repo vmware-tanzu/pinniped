@@ -84,7 +84,7 @@ func (p *ProviderConfig) GetAdditionalClaimMappings() map[string]string {
 	return p.AdditionalClaimMappings
 }
 
-func (p *ProviderConfig) GetName() string {
+func (p *ProviderConfig) GetResourceName() string {
 	return p.Name
 }
 

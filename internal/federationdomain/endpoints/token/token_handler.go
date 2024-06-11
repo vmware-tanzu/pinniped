@@ -233,7 +233,7 @@ func findProviderByNameAndType(
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 ) (resolvedprovider.FederationDomainResolvedIdentityProvider, error) {
 	for _, p := range idpLister.GetIdentityProviders() {
-		if p.GetSessionProviderType() == providerType && p.GetProvider().GetName() == providerResourceName {
+		if p.GetSessionProviderType() == providerType && p.GetProvider().GetResourceName() == providerResourceName {
 			if p.GetProvider().GetResourceUID() != mustHaveResourceUID {
 				return nil, errorsx.WithStack(errUpstreamRefreshError().WithHint(
 					"Provider from upstream session data has changed its resource UID since authentication."))

@@ -12,6 +12,7 @@
 //
 // info should be reserved for "nice to know" information.  It should be possible to run a production
 // pinniped server at the info log level with no performance degradation due to high log volume.
+//
 // debug should be used for information targeted at developers and to aid in support cases.  Care must
 // be taken at this level to not leak any secrets into the log stream.  That is, even though debug may
 // cause performance issues in production, it must not cause security issues in production.

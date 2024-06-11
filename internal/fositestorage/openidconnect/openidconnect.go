@@ -36,7 +36,8 @@ const (
 	// Version 5 is when we added the UpstreamUsername and UpstreamGroups fields to psession.CustomSessionData.
 	// Version 6 is when we upgraded fosite in Dec 2023.
 	// Version 7 is when OIDCClients were given configurable ID token lifetimes.
-	oidcStorageVersion = "7"
+	// Version 8 is when GitHubIdentityProvider was added.
+	oidcStorageVersion = "8"
 )
 
 var _ openid.OpenIDConnectRequestStorage = &openIDConnectRequestStorage{}

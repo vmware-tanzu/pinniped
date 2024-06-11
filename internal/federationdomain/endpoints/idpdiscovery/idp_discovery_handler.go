@@ -40,6 +40,7 @@ func responseAsJSON(upstreamIDPs federationdomainproviders.FederationDomainIdent
 	r := v1alpha1.IDPDiscoveryResponse{
 		PinnipedSupportedIDPTypes: []v1alpha1.PinnipedSupportedIDPType{
 			{Type: v1alpha1.IDPTypeActiveDirectory},
+			{Type: v1alpha1.IDPTypeGitHub},
 			{Type: v1alpha1.IDPTypeLDAP},
 			{Type: v1alpha1.IDPTypeOIDC},
 		},

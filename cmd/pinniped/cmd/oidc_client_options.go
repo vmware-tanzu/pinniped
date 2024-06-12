@@ -7,8 +7,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/go-logr/logr"
-
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/pkg/oidcclient"
 )
@@ -16,9 +14,10 @@ import (
 // OIDCClientOptions is an interface that wraps the creation of Options for the purpose of making them
 // more friendly to unit tests. Because the Option type refers to a private struct type, it is hard
 // to create mocks for them in tests of other packages. This provides a seam that can be mocked.
+// No need for this interface to include deprecated options (such as WithLogger), since those should never be invoked.
 type OIDCClientOptions interface {
 	WithContext(ctx context.Context) oidcclient.Option
-	WithLogger(logger logr.Logger) oidcclient.Option
+	WithLoginLogger(logger oidcclient.Logger) oidcclient.Option
 	WithListenPort(port uint16) oidcclient.Option
 	WithSkipBrowserOpen() oidcclient.Option
 	WithSkipListen() oidcclient.Option
@@ -40,8 +39,8 @@ func (o *clientOptions) WithContext(ctx context.Context) oidcclient.Option {
 	return oidcclient.WithContext(ctx)
 }
 
-func (o *clientOptions) WithLogger(logger logr.Logger) oidcclient.Option {
-	return oidcclient.WithLogger(logger)
+func (o *clientOptions) WithLoginLogger(logger oidcclient.Logger) oidcclient.Option {
+	return oidcclient.WithLoginLogger(logger)
 }
 
 func (o *clientOptions) WithListenPort(port uint16) oidcclient.Option {

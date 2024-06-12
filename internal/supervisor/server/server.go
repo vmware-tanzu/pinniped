@@ -303,7 +303,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
-				plog.Logr(), //nolint:staticcheck // old controller with lots of log statements
+				plog.New(),
 				controllerlib.WithInformer,
 			),
 			singletonWorker).

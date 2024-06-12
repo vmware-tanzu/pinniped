@@ -22,6 +22,7 @@ import (
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -3370,7 +3371,7 @@ func TestHandleAuthCodeCallback(t *testing.T) {
 				state:     state.State("test-state"),
 				pkce:      pkce.Code("test-pkce"),
 				nonce:     nonce.Nonce("test-nonce"),
-				logger:    plog.Logr(), //nolint:staticcheck // old test with no log assertions
+				logger:    plog.New(),
 				issuer:    "https://valid-issuer.com/with/some/path",
 			}
 			if tt.opt != nil {
@@ -3863,4 +3864,50 @@ func TestMaybePerformPinnipedSupervisorValidations(t *testing.T) {
 			require.Equal(t, test.wantLoginFlow, actualLoginFlow)
 		})
 	}
+}
+
+func TestLoggers(t *testing.T) {
+	t.Run("with deprecated logger and new logger, returns an error", func(t *testing.T) {
+		token, err := Login("https://127.0.0.1", "clientID",
+			WithLogger(logr.Discard()),
+			WithLoginLogger(plog.New()),
+		)
+		require.EqualError(t, err, "please use only one mechanism to specify the logger")
+		require.Nil(t, token)
+	})
+
+	issuer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "some discovery error", http.StatusInternalServerError)
+	}), nil)
+
+	t.Run("with new logger, outputs logs", func(t *testing.T) {
+		var log bytes.Buffer
+
+		token, err := Login(issuer.URL, "clientID",
+			WithLoginLogger(plog.TestLogger(t, &log)),
+		)
+		// This error is expected, we're testing logs not discovery
+		require.EqualError(t, err, `could not perform OIDC discovery for "`+issuer.URL+`": Get "`+issuer.URL+`/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`)
+		require.Nil(t, token)
+
+		wantLog := `{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"oidcclient/login.go:<line>$oidcclient.(*handlerState).initOIDCDiscovery","message":"Pinniped: Performing OIDC discovery","issuer":"` + issuer.URL + `"}`
+		require.Equal(t, wantLog+"\n", log.String())
+	})
+
+	t.Run("with deprecated logger, outputs logs", func(t *testing.T) {
+		testLog := testlogger.NewLegacy(t) //nolint:staticcheck // This is specifically meant to test deprecated code
+		token, err := Login(issuer.URL, "clientID",
+			WithLogger(testLog.Logger),
+		)
+		// This error is expected, we're testing logs not discovery
+		require.EqualError(t, err, `could not perform OIDC discovery for "`+issuer.URL+`": Get "`+issuer.URL+`/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`)
+		require.Nil(t, token)
+
+		wantLogs := []string{
+			`"level"=4 "msg"="Pinniped: Performing OIDC discovery"  "issuer"="` + issuer.URL + `"`,
+		}
+		require.Equal(t, wantLogs, testLog.Lines())
+	})
+
+	// NOTE: We can't really test logs with the default (e.g. no logger option specified)
 }

@@ -48,7 +48,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 
 	defaultWantedOptions := func(f *mockoidcclientoptions.MockOIDCClientOptions) {
 		f.EXPECT().WithContext(gomock.Any())
-		f.EXPECT().WithLogger(gomock.Any())
+		f.EXPECT().WithLoginLogger(gomock.Any())
 		f.EXPECT().WithScopes([]string{oidcapi.ScopeOfflineAccess, oidcapi.ScopeOpenID, oidcapi.ScopeRequestAudience, oidcapi.ScopeUsername, oidcapi.ScopeGroups})
 		f.EXPECT().WithSessionCache(gomock.Any())
 	}
@@ -274,8 +274,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  pinniped-login  cmd/login_oidc.go:268  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:288  No concierge configured, skipping token credential exchange`,
+				nowStr + `  cmd/login_oidc.go:267  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  cmd/login_oidc.go:287  No concierge configured, skipping token credential exchange`,
 			},
 		},
 		{
@@ -304,7 +304,7 @@ func TestLoginOIDCCommand(t *testing.T) {
 			env: map[string]string{"PINNIPED_DEBUG": "true", "PINNIPED_SKIP_PRINT_LOGIN_URL": "true"},
 			wantOptions: func(f *mockoidcclientoptions.MockOIDCClientOptions) {
 				f.EXPECT().WithContext(gomock.Any())
-				f.EXPECT().WithLogger(gomock.Any())
+				f.EXPECT().WithLoginLogger(gomock.Any())
 				f.EXPECT().WithScopes([]string{oidcapi.ScopeOfflineAccess, oidcapi.ScopeOpenID, oidcapi.ScopeRequestAudience, oidcapi.ScopeUsername, oidcapi.ScopeGroups})
 				f.EXPECT().WithSessionCache(gomock.Any())
 				f.EXPECT().WithListenPort(uint16(1234))
@@ -319,10 +319,10 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 12,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"token":"exchanged-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  pinniped-login  cmd/login_oidc.go:268  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:278  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:286  Successfully exchanged token for cluster credential.`,
-				nowStr + `  pinniped-login  cmd/login_oidc.go:293  caching cluster credential for future use.`,
+				nowStr + `  cmd/login_oidc.go:267  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  cmd/login_oidc.go:277  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
+				nowStr + `  cmd/login_oidc.go:285  Successfully exchanged token for cluster credential.`,
+				nowStr + `  cmd/login_oidc.go:292  caching cluster credential for future use.`,
 			},
 		},
 	}

@@ -4,10 +4,8 @@
 package clientsecretrequest
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +31,6 @@ import (
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
-	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -111,17 +109,17 @@ func TestCreate(t *testing.T) {
 	fakeTimeNowFunc := func() metav1.Time { return fakeNow }
 
 	tests := []struct {
-		name              string
-		args              args
-		seedOIDCClients   []*supervisorconfigv1alpha1.OIDCClient
-		seedHashes        func(storage *oidcclientsecretstorage.OIDCClientSecretStorage)
-		addReactors       func(*kubefake.Clientset, *supervisorfake.Clientset)
-		fakeByteGenerator io.Reader
-		fakeHasher        byteHasher
-		want              runtime.Object
-		wantErrStatus     *metav1.Status
-		wantHashes        *wantHashes
-		wantLogLines      []string
+		name                  string
+		args                  args
+		seedOIDCClients       []*supervisorconfigv1alpha1.OIDCClient
+		seedHashes            func(storage *oidcclientsecretstorage.OIDCClientSecretStorage)
+		addReactors           func(*kubefake.Clientset, *supervisorfake.Clientset)
+		fakeByteGenerator     io.Reader
+		fakeHasher            byteHasher
+		want                  runtime.Object
+		wantErrStatus         *metav1.Status
+		wantHashes            *wantHashes
+		wantLogStepSubstrings []string
 	}{
 		{
 			name: "wrong type of request object provided",
@@ -138,7 +136,7 @@ func TestCreate(t *testing.T) {
 				Reason: metav1.StatusReasonBadRequest,
 				Code:   http.StatusBadRequest,
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:not an OIDCClientSecretRequest`,
 				`END`,
@@ -173,7 +171,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:dryRun not supported`,
 				`END`,
@@ -196,7 +194,7 @@ func TestCreate(t *testing.T) {
 				Reason:  metav1.StatusReasonBadRequest,
 				Code:    http.StatusBadRequest,
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:namespace must be some-namespace on OIDCClientSecretRequest, was wrong-namespace`,
 				`END`,
@@ -227,7 +225,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:validation webhook,msg:Internal error occurred: some-error-here`,
 				`END`,
@@ -255,7 +253,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:no namespace information found in request context`,
 				`END`,
@@ -279,7 +277,7 @@ func TestCreate(t *testing.T) {
 				Reason:  metav1.StatusReasonBadRequest,
 				Code:    http.StatusBadRequest,
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:the namespace of the provided object does not match the namespace sent on the request`,
 				`END`,
@@ -317,7 +315,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:[metadata.generateName: Invalid value: "foo": generateName is not supported, metadata.name: Required value: name or generateName is required]`,
 				`END`,
@@ -351,7 +349,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:metadata.name: Invalid value: "client.oauth.pinniped.dev-": must not equal 'client.oauth.pinniped.dev-'`,
 				`END`,
@@ -385,7 +383,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:metadata.name: Invalid value: "does-not-contain-the-prefix": must start with 'client.oauth.pinniped.dev-'`,
 				`END`,
@@ -419,7 +417,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:metadata.name: Invalid value: "client.oauth.pinniped.dev-contains/invalid/characters": may not contain '/'`,
 				`END`,
@@ -464,7 +462,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`failureType:request validation,msg:[metadata.generateName: Invalid value: "no-generate-allowed": generateName is not supported, metadata.name: Invalid value: "multiple/errors/aggregated": must start with 'client.oauth.pinniped.dev-', metadata.name: Invalid value: "multiple/errors/aggregated": may not contain '/']`,
 				`END`,
@@ -498,7 +496,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`failureType:oidcClientsClient.Get,msg:oidcclients.config.supervisor.pinniped.dev "client.oauth.pinniped.dev-oidc-client-does-not-exist-404" not found`,
@@ -531,7 +529,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`failureType:oidcClientsClient.Get,msg:unexpected error darn`,
@@ -570,7 +568,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -610,7 +608,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -653,7 +651,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -706,7 +704,7 @@ func TestCreate(t *testing.T) {
 					fakeBcryptRandomBytes,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -775,7 +773,7 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 3,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -841,7 +839,7 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 1,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -907,7 +905,7 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 1,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -969,7 +967,7 @@ func TestCreate(t *testing.T) {
 				Reason:  metav1.StatusReasonBadRequest,
 				Code:    http.StatusBadRequest,
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1036,7 +1034,7 @@ func TestCreate(t *testing.T) {
 				Reason:  metav1.StatusReasonBadRequest,
 				Code:    http.StatusBadRequest,
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1086,7 +1084,7 @@ func TestCreate(t *testing.T) {
 					Name:  "client.oauth.pinniped.dev-some-client",
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1140,7 +1138,7 @@ func TestCreate(t *testing.T) {
 					Name:  "client.oauth.pinniped.dev-some-client",
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1188,7 +1186,7 @@ func TestCreate(t *testing.T) {
 					}},
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1235,7 +1233,7 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 0,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1279,7 +1277,7 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 0,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1343,7 +1341,7 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 2,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1405,7 +1403,7 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 1,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1474,7 +1472,7 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 1,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1544,7 +1542,7 @@ func TestCreate(t *testing.T) {
 					TotalClientSecrets: 1,
 				},
 			},
-			wantLogLines: []string{
+			wantLogStepSubstrings: []string{
 				`"create"`,
 				`"validateRequest"`,
 				`oidcClientsClient.Get`,
@@ -1559,9 +1557,8 @@ func TestCreate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// t.Parallel() should not be used because we are mutating the global logger.
-			var log bytes.Buffer
-			logger := plog.TestZapr(t, &log)
-			klog.SetLogger(logger)
+			logger := testutil.NewTranscriptLogger(t) //nolint:staticcheck  // old test with lots of log statements
+			klog.SetLogger(logr.New(logger))
 			originalKLogLevel := testutil.GetGlobalKlogLevel()
 			// trace.Log() utility will only log at level 2 or above, so set that for this test.
 			testutil.SetGlobalKlogLevel(t, 2) //nolint:staticcheck // old test of code using trace.Log()
@@ -1648,7 +1645,7 @@ func TestCreate(t *testing.T) {
 				require.Empty(t, secrets.Items)
 			}
 
-			requireLogLinesContain(t, log.String(), tt.wantLogLines)
+			requireExactlyOneLogLineWithMultipleSteps(t, logger, tt.wantLogStepSubstrings)
 		})
 	}
 }
@@ -1659,18 +1656,10 @@ func (r readerAlwaysErrors) Read(_ []byte) (n int, err error) {
 	return 0, errors.New("always errors")
 }
 
-func requireLogLinesContain(t *testing.T, fullLog string, wantLines []string) {
-	if len(wantLines) == 0 {
-		require.Empty(t, fullLog)
-		return
-	}
-	var jsonLog map[string]any
-	err := json.Unmarshal([]byte(fullLog), &jsonLog)
-	require.NoError(t, err)
-	require.Contains(t, jsonLog, "message")
-	message := jsonLog["message"]
-	require.IsType(t, "type of string", message)
-	lines := strings.Split(strings.TrimSpace(message.(string)), "\n")
+func requireExactlyOneLogLineWithMultipleSteps(t *testing.T, logger *testutil.TranscriptLogger, wantLines []string) {
+	transcript := logger.Transcript()
+	require.Len(t, transcript, 1)
+	lines := strings.Split(strings.TrimSpace(transcript[0].Message), "\n")
 
 	require.Lenf(t, lines, len(wantLines), "actual log lines length should match expected length, actual lines:\n\n%s", strings.Join(lines, "\n"))
 	for i := range wantLines {

@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -63,11 +63,19 @@ func TestLogger(t *testing.T, w io.Writer) Logger {
 	t.Helper()
 
 	return New().withLogrMod(func(l logr.Logger) logr.Logger {
-		return l.WithSink(TestZapr(t, w).GetSink())
+		return l.WithSink(testZapr(t, w, "json").GetSink())
 	})
 }
 
-func TestZapr(t *testing.T, w io.Writer) logr.Logger {
+func TestConsoleLogger(t *testing.T, w io.Writer) Logger {
+	t.Helper()
+
+	return New().withLogrMod(func(l logr.Logger) logr.Logger {
+		return l.WithSink(testZapr(t, w, "console").GetSink())
+	})
+}
+
+func testZapr(t *testing.T, w io.Writer, encoding string) logr.Logger {
 	t.Helper()
 
 	now, err := time.Parse(time.RFC3339Nano, "2099-08-08T13:57:36.123456789Z")
@@ -86,7 +94,10 @@ func TestZapr(t *testing.T, w io.Writer) logr.Logger {
 				if idx := strings.LastIndexByte(trimmed, ':'); idx != -1 {
 					trimmed = trimmed[:idx+1] + "<line>"
 				}
-				enc.AppendString(trimmed + funcEncoder(caller))
+				if encoding != "console" {
+					trimmed += funcEncoder(caller)
+				}
+				enc.AppendString(trimmed)
 			}
 		},
 		clocktesting.NewFakeClock(now),       // have the clock be static during tests
@@ -94,7 +105,7 @@ func TestZapr(t *testing.T, w io.Writer) logr.Logger {
 	)
 
 	// there is no buffering so we can ignore flush
-	zl, _, err := newLogr(ctx, "json", 0)
+	zl, _, err := newLogr(ctx, encoding, 0)
 	require.NoError(t, err)
 
 	return zl

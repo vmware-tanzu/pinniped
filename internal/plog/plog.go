@@ -190,7 +190,7 @@ func (p pLogger) withLogrMod(mod func(logr.Logger) logr.Logger) Logger {
 }
 
 func (p pLogger) logr() logr.Logger {
-	l := Logr() // grab the current global logger and its current config
+	l := globalLogger // grab the current global logger and its current config
 	for _, mod := range p.mods {
 		l = mod(l) // and then update it with all modifications
 	}

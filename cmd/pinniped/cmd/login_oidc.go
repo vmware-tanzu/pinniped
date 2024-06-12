@@ -176,9 +176,8 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 
 	// If the hidden --debug-session-cache option is passed, log all the errors from the session cache.
 	if flags.debugSessionCache {
-		logger := plog.WithName("session")
 		sessionOptions = append(sessionOptions, filesession.WithErrorReporter(func(err error) {
-			logger.Error("error during session cache operation", err)
+			pLogger.Error("error during session cache operation", err)
 		}))
 	}
 	sessionCache := filesession.New(flags.sessionCachePath, sessionOptions...)
@@ -186,7 +185,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 	// Initialize the login handler.
 	opts := []oidcclient.Option{
 		deps.optionsFactory.WithContext(cmd.Context()),
-		deps.optionsFactory.WithLogger(plog.Logr()), //nolint:staticcheck // old code with lots of log statements
+		deps.optionsFactory.WithLoginLogger(pLogger),
 		deps.optionsFactory.WithScopes(flags.scopes),
 		deps.optionsFactory.WithSessionCache(sessionCache),
 	}
@@ -339,8 +338,7 @@ func SetLogLevel(ctx context.Context, lookupEnv func(string) (string, bool)) (pl
 			return nil, err
 		}
 	}
-	logger := plog.New().WithName("pinniped-login")
-	return logger, nil
+	return plog.New(), nil
 }
 
 /*

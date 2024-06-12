@@ -15,7 +15,6 @@ import (
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
-	"github.com/go-logr/logr"
 	"golang.org/x/oauth2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -125,7 +124,7 @@ func (c *lruValidatorCache) cacheKey(spec *idpv1alpha1.OIDCIdentityProviderSpec)
 
 type oidcWatcherController struct {
 	cache                        UpstreamOIDCIdentityProviderICache
-	log                          logr.Logger
+	log                          plog.Logger
 	client                       supervisorclientset.Interface
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
@@ -141,7 +140,7 @@ func New(
 	client supervisorclientset.Interface,
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
-	log logr.Logger,
+	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	c := oidcWatcherController{
@@ -251,7 +250,7 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 				"type", condition.Type,
 				"reason", condition.Reason,
 				"message", condition.Message,
-			).Error(errOIDCFailureStatus, "found failing condition")
+			).Error("found failing condition", errOIDCFailureStatus)
 		}
 	}
 	if valid {
@@ -333,11 +332,11 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 
 		discoveredProvider, err = coreosoidc.NewProvider(coreosoidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
 		if err != nil {
-			c.log.V(plog.KlogLevelTrace).WithValues(
+			c.log.WithValues(
 				"namespace", upstream.Namespace,
 				"name", upstream.Name,
 				"issuer", upstream.Spec.Issuer,
-			).Error(err, "failed to perform OIDC discovery")
+			).Error("failed to perform OIDC discovery", err)
 			return &metav1.Condition{
 				Type:    typeOIDCDiscoverySucceeded,
 				Status:  metav1.ConditionFalse,
@@ -428,7 +427,7 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *idpv
 		OIDCIdentityProviders(upstream.Namespace).
 		UpdateStatus(ctx, updated, metav1.UpdateOptions{})
 	if err != nil {
-		log.Error(err, "failed to update status")
+		log.Error("failed to update status", err)
 	}
 }
 

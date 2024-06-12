@@ -4,6 +4,7 @@
 package kubecertagent
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -19,8 +20,8 @@ import (
 	coretesting "k8s.io/client-go/testing"
 
 	"go.pinniped.dev/internal/kubeclient"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/testlogger"
 )
 
 func TestLegacyPodCleanerController(t *testing.T) {
@@ -72,7 +73,7 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			},
 			wantDistinctErrors: []string{""},
 			wantDistinctLogs: []string{
-				`legacy-pod-cleaner-controller "level"=0 "msg"="deleted legacy kube-cert-agent pod"  "pod"={"name":"pinniped-concierge-kube-cert-agent-with-extra-label","namespace":"concierge"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"legacy-pod-cleaner-controller","caller":"kubecertagent/legacypodcleaner.go:<line>$kubecertagent.NewLegacyPodCleanerController.func1","message":"deleted legacy kube-cert-agent pod","pod":{"name":"pinniped-concierge-kube-cert-agent-with-extra-label","namespace":"concierge"}}`,
 			},
 			wantActions: []coretesting.Action{ // the first delete triggers the informer again, but the second invocation triggers a Not Found
 				coretesting.NewGetAction(corev1.Resource("pods").WithVersion("v1"), "concierge", legacyAgentPodWithExtraLabel.Name),
@@ -148,7 +149,8 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			}
 
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
-			log := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
 			controller := NewLegacyPodCleanerController(
 				AgentConfig{
 					Namespace: "concierge",
@@ -156,7 +158,7 @@ func TestLegacyPodCleanerController(t *testing.T) {
 				},
 				&kubeclient.Client{Kubernetes: kubeClientset},
 				kubeInformers.Core().V1().Pods(),
-				log.Logger,
+				logger,
 			)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -164,7 +166,7 @@ func TestLegacyPodCleanerController(t *testing.T) {
 
 			errorMessages := runControllerUntilQuiet(ctx, t, controller, func(_ context.Context, _ *testing.T) {}, kubeInformers)
 			assert.Equal(t, tt.wantDistinctErrors, deduplicate(errorMessages), "unexpected errors")
-			assert.Equal(t, tt.wantDistinctLogs, deduplicate(log.Lines()), "unexpected logs")
+			assert.Equal(t, tt.wantDistinctLogs, deduplicate(testutil.SplitByNewline(log.String())), "unexpected logs")
 			assert.Equal(t, tt.wantActions, kubeClientset.Actions()[2:], "unexpected actions")
 		})
 	}

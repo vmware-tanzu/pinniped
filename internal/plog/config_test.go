@@ -55,7 +55,7 @@ func TestFormat(t *testing.T) {
   "duration": "1h1m0s"
 }`, wd, getLineNumberOfCaller()-11), scanner.Text())
 
-	Logr().WithName("burrito").Error(errInvalidLogLevel, "wee", "a", "b")
+	New().WithName("burrito").Error("wee", errInvalidLogLevel, "a", "b")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.JSONEq(t, fmt.Sprintf(`
@@ -69,7 +69,7 @@ func TestFormat(t *testing.T) {
   "logger": "burrito"
 }`, wd, getLineNumberOfCaller()-12), scanner.Text())
 
-	Logr().V(klogLevelWarning).Info("hey") // note that this fails to set the custom warning key because it is not via plog
+	New().Info("hey")
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.JSONEq(t, fmt.Sprintf(`
@@ -108,7 +108,7 @@ func TestFormat(t *testing.T) {
 	Trace("should not be logged", "for", "sure")
 	require.Empty(t, buf.String())
 
-	Logr().V(klogLevelAll).Info("also should not be logged", "open", "close")
+	New().All("also should not be logged", "open", "close")
 	require.Empty(t, buf.String())
 
 	ctx = AddZapOverridesToContext(ctx, t, &buf, nil, fakeClock, zap.AddStacktrace(LevelInfo))
@@ -151,7 +151,7 @@ testing.tRunner
 	require.Equal(t, fmt.Sprintf(nowStr+`  plog/config_test.go:%d  something happened  {"error": "invalid log format, valid choices are the empty string or 'json'", "an": "item"}`,
 		getLineNumberOfCaller()-4), scanner.Text())
 
-	Logr().WithName("burrito").Error(errInvalidLogLevel, "wee", "a", "b", "slightly less than a year", 363*24*time.Hour, "slightly more than 2 years", 2*367*24*time.Hour)
+	New().WithName("burrito").Error("wee", errInvalidLogLevel, "a", "b", "slightly less than a year", 363*24*time.Hour, "slightly more than 2 years", 2*367*24*time.Hour)
 	require.True(t, scanner.Scan())
 	require.NoError(t, scanner.Err())
 	require.Equal(t, fmt.Sprintf(nowStr+`  burrito  plog/config_test.go:%d  wee  {"a": "b", "slightly less than a year": "363d", "slightly more than 2 years": "2y4d", "error": "invalid log level, valid choices are the empty string, info, debug, trace and all"}`,

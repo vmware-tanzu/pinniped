@@ -4,6 +4,7 @@
 package cachecleaner
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -18,7 +19,8 @@ import (
 	controllerAuthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/testutil/testlogger"
+	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestController(t *testing.T) {
@@ -126,8 +128,8 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []string{
-				`cachecleaner-controller "level"=0 "msg"="deleting authenticator from cache" "authenticator"={"name":"test-jwt-authenticator-name-two"} "kind"="JWTAuthenticator"`,
-				`cachecleaner-controller "level"=0 "msg"="deleting authenticator from cache" "authenticator"={"name":"test-webhook-name-two"} "kind"="WebhookAuthenticator"`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"cachecleaner-controller","caller":"cachecleaner/cachecleaner.go:<line>$cachecleaner.(*controller).Sync","message":"deleting authenticator from cache","authenticator":{"name":"test-jwt-authenticator-name-two"},"kind":"JWTAuthenticator"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"cachecleaner-controller","caller":"cachecleaner/cachecleaner.go:<line>$cachecleaner.(*controller).Sync","message":"deleting authenticator from cache","authenticator":{"name":"test-webhook-name-two"},"kind":"WebhookAuthenticator"}`,
 			},
 			wantCacheKeys: []authncache.Key{testWebhookKey1, testJWTAuthenticatorKey1, testKeyUnknownType},
 		},
@@ -142,11 +144,12 @@ func TestController(t *testing.T) {
 			if tt.initialCache != nil {
 				tt.initialCache(t, cache)
 			}
-			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
-
 			webhooks := informers.Authentication().V1alpha1().WebhookAuthenticators()
 			jwtAuthenticators := informers.Authentication().V1alpha1().JWTAuthenticators()
-			controller := New(cache, webhooks, jwtAuthenticators, testLog.Logger)
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			controller := New(cache, webhooks, jwtAuthenticators, logger)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -167,7 +170,7 @@ func TestController(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.ElementsMatch(t, tt.wantLogs, testLog.Lines())
+			require.ElementsMatch(t, tt.wantLogs, testutil.SplitByNewline(log.String()))
 			require.ElementsMatch(t, tt.wantCacheKeys, cache.Keys())
 		})
 	}

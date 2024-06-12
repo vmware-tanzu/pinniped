@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,8 +28,8 @@ import (
 	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/testlogger"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -296,7 +297,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -320,7 +321,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -344,7 +345,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -366,7 +367,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			conciergeReactions: []kubetesting.Reactor{
@@ -406,7 +407,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -428,7 +429,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
 				}
 			},
 			wantError: true,
@@ -454,11 +455,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="found JWTAuthenticator"  "name"="test-authenticator-1"`,
-					`"level"=0 "msg"="found JWTAuthenticator"  "name"="test-authenticator-2"`,
-					`"level"=0 "msg"="found WebhookAuthenticator"  "name"="test-authenticator-3"`,
-					`"level"=0 "msg"="found WebhookAuthenticator"  "name"="test-authenticator-4"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found JWTAuthenticator  {"name": "test-authenticator-1"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found JWTAuthenticator  {"name": "test-authenticator-2"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found WebhookAuthenticator  {"name": "test-authenticator-3"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found WebhookAuthenticator  {"name": "test-authenticator-4"}`,
 				}
 			},
 			wantError: true,
@@ -491,8 +492,8 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="found CredentialIssuer strategy"  "message"="Some message" "reason"="SomeReason" "status"="Error" "type"="SomeType"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  found CredentialIssuer strategy  {"type": "SomeType", "status": "Error", "reason": "SomeReason", "message": "Some message"}`,
 				}
 			},
 			wantError: true,
@@ -552,9 +553,9 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in impersonation proxy mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://impersonation-endpoint"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in impersonation proxy mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://impersonation-endpoint"}`,
 				}
 			},
 			wantError: true,
@@ -577,11 +578,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantError: true,
@@ -630,13 +631,13 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="some-test-audience"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "some-test-audience"}`,
 				}
 			},
 			wantError: true,
@@ -669,14 +670,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="some-test-audience.pinniped.dev-invalid-substring"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "some-test-audience.pinniped.dev-invalid-substring"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -701,13 +702,13 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: happyOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -732,14 +733,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -764,11 +765,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantError: true,
@@ -805,14 +806,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryStatusCode: http.StatusBadRequest,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -841,14 +842,14 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -876,14 +877,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryStatusCode: http.StatusBadRequest,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -915,14 +916,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -951,14 +952,14 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -984,14 +985,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryResponse: "this is not valid JSON",
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -1021,13 +1022,13 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
 				}
 			},
 			wantError: true,
@@ -1060,12 +1061,12 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
 				}
 			},
 			wantError: true,
@@ -1098,14 +1099,14 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantError: true,
@@ -1383,8 +1384,9 @@ func TestGetKubeconfig(t *testing.T) {
 					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
 			},
 			wantLogs: func(_ string, _ string) []string {
-				return []string{`"level"=0 "msg"="multiple client flows found, selecting first value as default"  ` +
-					`"availableFlows"=["cli_password","flow2"] "idpName"="some-ldap-idp" "idpType"="ldap" "selectedFlow"="cli_password"`}
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  multiple client flows found, selecting first value as default  {"idpName": "some-ldap-idp", "idpType": "ldap", "selectedFlow": "cli_password", "availableFlows": ["cli_password","flow2"]}`,
+				}
 			},
 		},
 		{
@@ -1404,11 +1406,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1468,11 +1470,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1532,14 +1534,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1732,13 +1734,13 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=1`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://impersonation-proxy-endpoint.test"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1840,14 +1842,14 @@ func TestGetKubeconfig(t *testing.T) {
 			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in impersonation proxy mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://impersonation-proxy-endpoint.test"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in impersonation proxy mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://impersonation-proxy-endpoint.test"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1917,14 +1919,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -1996,14 +1998,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2073,14 +2075,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2146,14 +2148,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryStatusCode: http.StatusBadRequest, // IDPs endpoint shouldn't be called by this test
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2226,14 +2228,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryStatusCode: http.StatusBadRequest, // IDP discovery endpoint shouldn't be called by this test
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2311,16 +2313,16 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
-					`"level"=0 "msg"="removed scope from --oidc-scopes list because it is not supported by this Supervisor"  "scope"="username"`,
-					`"level"=0 "msg"="removed scope from --oidc-scopes list because it is not supported by this Supervisor"  "scope"="groups"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  removed scope from --oidc-scopes list because it is not supported by this Supervisor  {"scope": "username"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  removed scope from --oidc-scopes list because it is not supported by this Supervisor  {"scope": "groups"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2399,16 +2401,16 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
-					`"level"=0 "msg"="removed scope from --oidc-scopes list because it is not supported by this Supervisor"  "scope"="username"`,
-					`"level"=0 "msg"="removed scope from --oidc-scopes list because it is not supported by this Supervisor"  "scope"="groups"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  removed scope from --oidc-scopes list because it is not supported by this Supervisor  {"scope": "username"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  removed scope from --oidc-scopes list because it is not supported by this Supervisor  {"scope": "groups"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2489,14 +2491,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2567,14 +2569,14 @@ func TestGetKubeconfig(t *testing.T) {
 			idpsDiscoveryStatusCode: http.StatusNotFound,        // should not get called by the client in this case
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -2650,14 +2652,14 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered JWTAuthenticator"  "name"="test-authenticator"`,
-					fmt.Sprintf(`"level"=0 "msg"="discovered OIDC issuer"  "issuer"="%s"`, issuerURL),
-					`"level"=0 "msg"="discovered OIDC audience"  "audience"="test-audience"`,
-					`"level"=0 "msg"="discovered OIDC CA bundle"  "roots"=1`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle  {"roots": 1}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -3152,11 +3154,11 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 			wantLogs: func(issuerCABundle string, issuerURL string) []string {
 				return []string{
-					`"level"=0 "msg"="discovered CredentialIssuer"  "name"="test-credential-issuer"`,
-					`"level"=0 "msg"="discovered Concierge operating in TokenCredentialRequest API mode"`,
-					`"level"=0 "msg"="discovered Concierge endpoint"  "endpoint"="https://fake-server-url-value"`,
-					`"level"=0 "msg"="discovered Concierge certificate authority bundle"  "roots"=0`,
-					`"level"=0 "msg"="discovered WebhookAuthenticator"  "name"="test-authenticator"`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered WebhookAuthenticator  {"name": "test-authenticator"}`,
 				}
 			},
 			wantStdout: func(issuerCABundle string, issuerURL string) string {
@@ -3232,7 +3234,8 @@ func TestGetKubeconfig(t *testing.T) {
 			}), nil)
 			issuerEndpointPtr = ptr.To(testServer.URL)
 
-			testLog := testlogger.NewLegacy(t) //nolint:staticcheck  // old test with lots of log statements
+			var log bytes.Buffer
+
 			cmd := kubeconfigCommand(kubeconfigDeps{
 				getPathToSelf: func() (string, error) {
 					if tt.getPathToSelfErr != nil {
@@ -3258,7 +3261,7 @@ func TestGetKubeconfig(t *testing.T) {
 					}
 					return fake, nil
 				},
-				log: testLog.Logger,
+				log: plog.TestConsoleLogger(t, &log),
 			})
 			require.NotNil(t, cmd)
 
@@ -3275,11 +3278,14 @@ func TestGetKubeconfig(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			var expectedLogs []string
+			var expectedLogs string
 			if tt.wantLogs != nil {
-				expectedLogs = tt.wantLogs(string(testServerCA), testServer.URL)
+				temp := tt.wantLogs(string(testServerCA), testServer.URL)
+				if len(temp) > 0 {
+					expectedLogs = strings.Join(tt.wantLogs(string(testServerCA), testServer.URL), "\n") + "\n"
+				}
 			}
-			testLog.Expect(expectedLogs)
+			require.Equal(t, expectedLogs, log.String())
 
 			expectedStdout := ""
 			if tt.wantStdout != nil {

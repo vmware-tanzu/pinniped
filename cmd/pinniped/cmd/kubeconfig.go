@@ -193,7 +193,7 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	ctx, cancel := context.WithTimeout(ctx, flags.timeout)
 	defer cancel()
 
-	// the log statements in this file assume that Info logs are unconditionally printed so we set the global level to info
+	// the log statements in this file assume that Info logs are unconditionally printed, so we set the global level to info
 	if err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, plog.LogSpec{Level: plog.LevelInfo, Format: plog.FormatCLI}); err != nil {
 		return err
 	}

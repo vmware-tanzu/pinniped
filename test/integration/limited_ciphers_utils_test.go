@@ -78,7 +78,6 @@ func performLimitedCiphersTest(t *testing.T, allowedCiphers []string, expectedCi
 	}
 
 	require.Contains(t, stdout, testlib.GetExpectedCiphers(expectedCiphersConfig, "server"), "stdout:\n%s", stdout)
-
 }
 
 // restartAllPodsOfApp will immediately scale to 0 and then scale back.

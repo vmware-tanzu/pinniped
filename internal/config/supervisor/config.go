@@ -36,7 +36,7 @@ const (
 // FromPath loads an Config from a provided local file path, inserts any
 // defaults (from the Config documentation), and verifies that the config is
 // valid (Config documentation).
-func FromPath(ctx context.Context, path string, setAllowedCiphers ptls.SetAllowedCiphers) (*Config, error) {
+func FromPath(ctx context.Context, path string, setAllowedCiphers ptls.SetAllowedCiphersFunc) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)

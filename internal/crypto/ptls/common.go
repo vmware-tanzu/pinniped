@@ -16,70 +16,83 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-// allowedCiphersForTLSOneDotTwo will only contain ciphers that meet the following criteria:
-// 1. They are secure
-// 2. They are returned by tls.CipherSuites
-// 3. They are returned by cipherSuitesForDefault or cipherSuitesForDefaultLDAP
-// This is atomic so that it can not be set and read at the same time.
+// validatedUserConfiguredAllowedCipherSuitesForTLSOneDotTwo is the validated configuration of allowed cipher suites
+// provided by the user, as set by SetUserConfiguredAllowedCipherSuitesForTLSOneDotTwo().
+// This global variable is atomic so that it can not be set and read at the same time.
 //
-//nolint:gochecknoglobals // This needs to be global because it will be set at application startup from configuration values
-var allowedCiphersForTLSOneDotTwo atomic.Value
+//nolint:gochecknoglobals // this needs to be global because it will be set at application startup from configuration values
+var validatedUserConfiguredAllowedCipherSuitesForTLSOneDotTwo atomic.Value
 
-type SetAllowedCiphers func([]string) error
+type SetAllowedCiphersFunc func([]string) error
 
-// SetUserConfiguredCiphersForTLSOneDotTwo allows configuration/setup components to constrain the allowed TLS ciphers
-// for TLS1.2.
-func SetUserConfiguredCiphersForTLSOneDotTwo(userConfiguredCiphersForTLSOneDotTwo []string) error {
-	plog.Info("setting user-configured allowed ciphers for TLS 1.2", "userConfiguredAllowedCipherSuites", userConfiguredCiphersForTLSOneDotTwo)
+// SetUserConfiguredAllowedCipherSuitesForTLSOneDotTwo allows configuration/setup components to constrain the
+// allowed TLS ciphers for TLS1.2. It implements SetAllowedCiphersFunc.
+func SetUserConfiguredAllowedCipherSuitesForTLSOneDotTwo(userConfiguredAllowedCipherSuitesForTLSOneDotTwo []string) error {
+	plog.Info("setting user-configured allowed ciphers for TLS 1.2", "userConfiguredAllowedCipherSuites", userConfiguredAllowedCipherSuitesForTLSOneDotTwo)
 
-	validatedUserConfiguredAllowedCipherSuites, err := validateAllowedCiphers(allHardcodedAllowedCipherSuites(), userConfiguredCiphersForTLSOneDotTwo)
+	validatedSuites, err := validateAllowedCiphers(
+		allHardcodedAllowedCipherSuites(),
+		userConfiguredAllowedCipherSuitesForTLSOneDotTwo,
+	)
 	if err != nil {
 		return err
 	}
-	allowedCiphersForTLSOneDotTwo.Store(validatedUserConfiguredAllowedCipherSuites)
+
+	validatedUserConfiguredAllowedCipherSuitesForTLSOneDotTwo.Store(validatedSuites)
 	return nil
 }
 
-// getUserConfiguredCiphersAllowList returns the user-configured list of allowed ciphers for TLS1.2.
+// getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo returns the user-configured list of allowed ciphers for TLS1.2.
 // It is not exported so that it is only available to this package.
-func getUserConfiguredCiphersAllowList() []*tls.CipherSuite {
-	userConfiguredCiphersAllowList, ok := (allowedCiphersForTLSOneDotTwo.Load()).([]*tls.CipherSuite)
+func getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo() []*tls.CipherSuite {
+	userConfiguredAllowedCipherSuites, ok := (validatedUserConfiguredAllowedCipherSuitesForTLSOneDotTwo.Load()).([]*tls.CipherSuite)
 	if ok {
-		return userConfiguredCiphersAllowList
+		return userConfiguredAllowedCipherSuites
 	}
 	return nil
 }
 
 // constrainCipherSuites returns the intersection of its parameters, as a list of cipher suite IDs.
-// If userConfiguredCiphersAllowList is empty, it will return all the hardcodedCipherSuites.
+// If userConfiguredAllowedCipherSuites is empty, it will return the list from cipherSuites as IDs.
 func constrainCipherSuites(
-	hardcodedCipherSuites []*tls.CipherSuite,
+	cipherSuites []*tls.CipherSuite,
 	userConfiguredAllowedCipherSuites []*tls.CipherSuite,
 ) []uint16 {
-	allowedCipherSuiteIDs := sets.New[uint16]()
-	for _, allowedCipherSuite := range userConfiguredAllowedCipherSuites {
-		allowedCipherSuiteIDs.Insert(allowedCipherSuite.ID)
+	// If the user did not configure any allowed ciphers suites, then return the IDs
+	// for the ciphers in cipherSuites in the same sort order as quickly as possible.
+	if len(userConfiguredAllowedCipherSuites) == 0 {
+		cipherSuiteIDs := make([]uint16, len(cipherSuites))
+		for i := range cipherSuites {
+			cipherSuiteIDs[i] = cipherSuites[i].ID
+		}
+		return cipherSuiteIDs
 	}
 
-	configuredCipherSuiteIDs := sets.New[uint16]()
-	for _, configuredCipherSuite := range hardcodedCipherSuites {
-		configuredCipherSuiteIDs.Insert(configuredCipherSuite.ID)
+	// Make two sets so we can intersect them below.
+	cipherSuiteIDsSet := sets.New[uint16]()
+	for _, s := range cipherSuites {
+		cipherSuiteIDsSet.Insert(s.ID)
+	}
+	userConfiguredAllowedCipherSuiteIDsSet := sets.New[uint16]()
+	for _, s := range userConfiguredAllowedCipherSuites {
+		userConfiguredAllowedCipherSuiteIDsSet.Insert(s.ID)
 	}
 
-	intersection := configuredCipherSuiteIDs.Intersection(allowedCipherSuiteIDs)
+	// Calculate the intersection of sets.
+	intersection := cipherSuiteIDsSet.Intersection(userConfiguredAllowedCipherSuiteIDsSet)
 
-	// If the user did not provide any valid allowed cipher suites, use configuredCipherSuiteIDs.
-	// Note that the user-configured allowed cipher suites are validated elsewhere, so this should only happen when the
-	// user chose not to specify any allowed cipher suites.
+	// If the user did not provide any valid allowed cipher suites, use cipherSuiteIDsSet.
+	// Note that the user-configured allowed cipher suites are validated elsewhere, so
+	// this should only happen when the user chose not to specify any allowed cipher suites.
 	if len(intersection) == 0 {
-		intersection = configuredCipherSuiteIDs
+		intersection = cipherSuiteIDsSet
 	}
 
 	result := intersection.UnsortedList()
-	// Preserve the order as shown in configuredCipherSuites
+	// Preserve the original order as shown in the cipherSuites parameter.
 	slices.SortFunc(result, func(a, b uint16) int {
-		return slices.IndexFunc(hardcodedCipherSuites, func(cipher *tls.CipherSuite) bool { return cipher.ID == a }) -
-			slices.IndexFunc(hardcodedCipherSuites, func(cipher *tls.CipherSuite) bool { return cipher.ID == b })
+		return slices.IndexFunc(cipherSuites, func(cipher *tls.CipherSuite) bool { return cipher.ID == a }) -
+			slices.IndexFunc(cipherSuites, func(cipher *tls.CipherSuite) bool { return cipher.ID == b })
 	})
 
 	return result
@@ -90,7 +103,7 @@ func translateIDIntoSecureCipherSuites(ids []uint16) []*tls.CipherSuite {
 	result := make([]*tls.CipherSuite, 0)
 
 	for _, golangSecureCipherSuite := range golangSecureCipherSuites {
-		// As of golang 1.22.2, all cipher suites from tls.CipherSuites are secure, so this is just future-proofing.
+		// As of golang 1.22, all cipher suites from tls.CipherSuites are secure, so this is just future-proofing.
 		if golangSecureCipherSuite.Insecure { // untested
 			continue
 		}
@@ -112,11 +125,11 @@ func translateIDIntoSecureCipherSuites(ids []uint16) []*tls.CipherSuite {
 	return result
 }
 
-// buildTLSConfig will return a tls.Config with CipherSuites from the intersection of configuredCipherSuites and allowedCipherSuites.
+// buildTLSConfig will return a tls.Config with CipherSuites from the intersection of cipherSuites and userConfiguredAllowedCipherSuites.
 func buildTLSConfig(
 	rootCAs *x509.CertPool,
-	hardcodedCipherSuites []*tls.CipherSuite,
-	userConfiguredCiphersAllowList []*tls.CipherSuite,
+	cipherSuites []*tls.CipherSuite,
+	userConfiguredAllowedCipherSuites []*tls.CipherSuite,
 ) *tls.Config {
 	return &tls.Config{
 		// Can't use SSLv3 because of POODLE and BEAST
@@ -128,7 +141,7 @@ func buildTLSConfig(
 		// https://stigviewer.com/stig/kubernetes/2021-06-17/finding/V-242378
 		MinVersion: tls.VersionTLS12,
 
-		CipherSuites: constrainCipherSuites(hardcodedCipherSuites, userConfiguredCiphersAllowList),
+		CipherSuites: constrainCipherSuites(cipherSuites, userConfiguredAllowedCipherSuites),
 
 		// enable HTTP2 for go's 1.7 HTTP Server
 		// setting this explicitly is only required in very specific circumstances
@@ -140,37 +153,37 @@ func buildTLSConfig(
 	}
 }
 
-// validateAllowedCiphers will take in the user-configured allowed cipher names and validate them against Pinniped's configured list of ciphers.
-// If any allowed cipher names are not configured, return a descriptive error.
-// An empty list of allowed cipher names is perfectly valid.
-// Returns the tls.CipherSuite representation when all allowedCipherNames are accepted.
+// validateAllowedCiphers will take in the user-configured allowed cipher names and validate them against a list of
+// ciphers. If any userConfiguredAllowedCipherSuites names are not in the cipherSuites, return a descriptive error.
+// An empty list of userConfiguredAllowedCipherSuites means that the user wants the all default ciphers from cipherSuites.
+// Returns the tls.CipherSuite representation when all userConfiguredAllowedCipherSuites are valid.
 func validateAllowedCiphers(
-	hardcodedCipherSuites []*tls.CipherSuite,
-	userConfiguredCiphersAllowList []string,
+	cipherSuites []*tls.CipherSuite,
+	userConfiguredAllowedCipherSuites []string,
 ) ([]*tls.CipherSuite, error) {
-	if len(userConfiguredCiphersAllowList) < 1 {
+	if len(userConfiguredAllowedCipherSuites) < 1 {
 		return nil, nil
 	}
 
-	hardcodedCipherSuiteNames := make([]string, len(hardcodedCipherSuites))
-	for i, cipher := range hardcodedCipherSuites {
-		hardcodedCipherSuiteNames[i] = cipher.Name
+	cipherSuiteNames := make([]string, len(cipherSuites))
+	for i, cipher := range cipherSuites {
+		cipherSuiteNames[i] = cipher.Name
 	}
 
 	// Allow some loosening of the names for legacy reasons.
-	for i := range userConfiguredCiphersAllowList {
-		switch userConfiguredCiphersAllowList[i] {
+	for i := range userConfiguredAllowedCipherSuites {
+		switch userConfiguredAllowedCipherSuites[i] {
 		case "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305":
-			userConfiguredCiphersAllowList[i] = "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
+			userConfiguredAllowedCipherSuites[i] = "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
 		case "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305":
-			userConfiguredCiphersAllowList[i] = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+			userConfiguredAllowedCipherSuites[i] = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
 		}
 	}
 
-	// Make sure that all allowedCipherNames are actually configured within Pinniped
+	// Make sure that all allowedCipherNames are actually configured within Pinniped.
 	var invalidCipherNames []string
-	for _, allowedCipherName := range userConfiguredCiphersAllowList {
-		if !slices.Contains(hardcodedCipherSuiteNames, allowedCipherName) {
+	for _, allowedCipherName := range userConfiguredAllowedCipherSuites {
+		if !slices.Contains(cipherSuiteNames, allowedCipherName) {
 			invalidCipherNames = append(invalidCipherNames, allowedCipherName)
 		}
 	}
@@ -178,13 +191,13 @@ func validateAllowedCiphers(
 	if len(invalidCipherNames) > 0 {
 		return nil, fmt.Errorf("unrecognized ciphers [%s], ciphers must be from list [%s]",
 			strings.Join(invalidCipherNames, ", "),
-			strings.Join(hardcodedCipherSuiteNames, ", "))
+			strings.Join(cipherSuiteNames, ", "))
 	}
 
-	// Now translate the allowedCipherNames into their *tls.CipherSuite representation
+	// Now translate the allowedCipherNames into their *tls.CipherSuite representation.
 	var validCiphers []*tls.CipherSuite
-	for _, cipher := range hardcodedCipherSuites {
-		if slices.Contains(userConfiguredCiphersAllowList, cipher.Name) {
+	for _, cipher := range cipherSuites {
+		if slices.Contains(userConfiguredAllowedCipherSuites, cipher.Name) {
 			validCiphers = append(validCiphers, cipher)
 		}
 	}

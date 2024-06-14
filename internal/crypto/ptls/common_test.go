@@ -14,7 +14,7 @@ import (
 
 func TestSetAllowedCiphersForTLSOneDotTwo(t *testing.T) {
 	t.Run("with valid ciphers, mutates the global state", func(t *testing.T) {
-		require.Empty(t, getUserConfiguredCiphersAllowList())
+		require.Empty(t, getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo())
 		// With no user-configured allowed ciphers, expect all the hardcoded ciphers
 		require.Equal(t, []uint16{
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -39,9 +39,9 @@ func TestSetAllowedCiphersForTLSOneDotTwo(t *testing.T) {
 		require.Empty(t, Secure(nil).CipherSuites)
 
 		t.Cleanup(func() {
-			err := SetUserConfiguredCiphersForTLSOneDotTwo(nil)
+			err := SetUserConfiguredAllowedCipherSuitesForTLSOneDotTwo(nil)
 			require.NoError(t, err)
-			require.Nil(t, getUserConfiguredCiphersAllowList())
+			require.Nil(t, getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo())
 
 			require.Equal(t, []uint16{
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -71,9 +71,9 @@ func TestSetAllowedCiphersForTLSOneDotTwo(t *testing.T) {
 			"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 			"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA", // this is an LDAP-only cipher
 		}
-		err := SetUserConfiguredCiphersForTLSOneDotTwo(userConfiguredAllowedCipherSuites)
+		err := SetUserConfiguredAllowedCipherSuitesForTLSOneDotTwo(userConfiguredAllowedCipherSuites)
 		require.NoError(t, err)
-		stored := getUserConfiguredCiphersAllowList()
+		stored := getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo()
 		var storedNames []string
 		for _, suite := range stored {
 			storedNames = append(storedNames, suite.Name)
@@ -92,8 +92,8 @@ func TestSetAllowedCiphersForTLSOneDotTwo(t *testing.T) {
 		require.Empty(t, Secure(nil).CipherSuites)
 	})
 
-	t.Run("SetUserConfiguredCiphersForTLSOneDotTwo calls validateAllowedCiphers and returns error", func(t *testing.T) {
-		err := SetUserConfiguredCiphersForTLSOneDotTwo([]string{"foo"})
+	t.Run("SetUserConfiguredAllowedCipherSuitesForTLSOneDotTwo calls validateAllowedCiphers and returns error", func(t *testing.T) {
+		err := SetUserConfiguredAllowedCipherSuitesForTLSOneDotTwo([]string{"foo"})
 		require.Regexp(t, regexp.QuoteMeta("unrecognized ciphers [foo], ciphers must be from list [TLS")+".*"+regexp.QuoteMeta("]"), err.Error())
 	})
 }
@@ -101,7 +101,7 @@ func TestSetAllowedCiphersForTLSOneDotTwo(t *testing.T) {
 func TestConstrainCipherSuites(t *testing.T) {
 	tests := []struct {
 		name                              string
-		hardcodedCipherSuites             []*tls.CipherSuite
+		cipherSuites                      []*tls.CipherSuite
 		userConfiguredAllowedCipherSuites []*tls.CipherSuite
 		wantCipherSuites                  []uint16
 	}{
@@ -110,8 +110,8 @@ func TestConstrainCipherSuites(t *testing.T) {
 			wantCipherSuites: make([]uint16, 0),
 		},
 		{
-			name: "with empty userConfiguredAllowedCipherSuites, returns hardcodedCipherSuites",
-			hardcodedCipherSuites: []*tls.CipherSuite{
+			name: "with empty userConfiguredAllowedCipherSuites, returns cipherSuites",
+			cipherSuites: []*tls.CipherSuite{
 				{ID: 0},
 				{ID: 1},
 				{ID: 2},
@@ -120,7 +120,7 @@ func TestConstrainCipherSuites(t *testing.T) {
 		},
 		{
 			name: "with userConfiguredAllowedCipherSuites, returns only ciphers found in both inputs",
-			hardcodedCipherSuites: []*tls.CipherSuite{
+			cipherSuites: []*tls.CipherSuite{
 				{ID: 0},
 				{ID: 1},
 				{ID: 2},
@@ -135,8 +135,8 @@ func TestConstrainCipherSuites(t *testing.T) {
 			wantCipherSuites: []uint16{1, 3},
 		},
 		{
-			name: "with all invalid userConfiguredAllowedCipherSuites, returns hardcodedCipherSuites",
-			hardcodedCipherSuites: []*tls.CipherSuite{
+			name: "with all invalid userConfiguredAllowedCipherSuites, returns cipherSuites",
+			cipherSuites: []*tls.CipherSuite{
 				{ID: 0},
 				{ID: 1},
 				{ID: 2},
@@ -151,8 +151,8 @@ func TestConstrainCipherSuites(t *testing.T) {
 			wantCipherSuites: []uint16{0, 1, 2, 3, 4},
 		},
 		{
-			name: "preserves order from hardcodedCipherSuites",
-			hardcodedCipherSuites: []*tls.CipherSuite{
+			name: "preserves order from cipherSuites",
+			cipherSuites: []*tls.CipherSuite{
 				{ID: 0},
 				{ID: 1},
 				{ID: 2},
@@ -173,7 +173,7 @@ func TestConstrainCipherSuites(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual := constrainCipherSuites(test.hardcodedCipherSuites, test.userConfiguredAllowedCipherSuites)
+			actual := constrainCipherSuites(test.cipherSuites, test.userConfiguredAllowedCipherSuites)
 			require.Equal(t, test.wantCipherSuites, actual)
 		})
 	}
@@ -219,16 +219,16 @@ func TestBuildTLSConfig(t *testing.T) {
 	aCertPool := x509.NewCertPool()
 
 	tests := []struct {
-		name                   string
-		rootCAs                *x509.CertPool
-		configuredCipherSuites []*tls.CipherSuite
-		allowedCipherIDs       []uint16
-		wantConfig             *tls.Config
+		name                                string
+		rootCAs                             *x509.CertPool
+		cipherSuites                        []*tls.CipherSuite
+		userConfiguredAllowedCipherSuiteIDs []uint16
+		wantConfig                          *tls.Config
 	}{
 		{
-			name:                   "happy path",
-			rootCAs:                aCertPool,
-			configuredCipherSuites: tls.CipherSuites(),
+			name:         "happy path",
+			rootCAs:      aCertPool,
+			cipherSuites: tls.CipherSuites(),
 			wantConfig: &tls.Config{
 				MinVersion: tls.VersionTLS12,
 				CipherSuites: []uint16{
@@ -251,8 +251,8 @@ func TestBuildTLSConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "with no allowedCipherSuites, returns configuredCipherSuites",
-			configuredCipherSuites: func() []*tls.CipherSuite {
+			name: "with no userConfiguredAllowedCipherSuites, returns cipherSuites",
+			cipherSuites: func() []*tls.CipherSuite {
 				result := tls.CipherSuites()
 				return result[:2]
 			}(),
@@ -266,10 +266,10 @@ func TestBuildTLSConfig(t *testing.T) {
 			},
 		},
 		{
-			name:                   "with allowed Ciphers, restricts CipherSuites to just those ciphers",
-			rootCAs:                aCertPool,
-			configuredCipherSuites: tls.CipherSuites(),
-			allowedCipherIDs: []uint16{
+			name:         "with allowed Ciphers, restricts CipherSuites to just those ciphers",
+			rootCAs:      aCertPool,
+			cipherSuites: tls.CipherSuites(),
+			userConfiguredAllowedCipherSuiteIDs: []uint16{
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 			},
@@ -284,9 +284,9 @@ func TestBuildTLSConfig(t *testing.T) {
 			},
 		},
 		{
-			name:                   "with allowed ciphers in random order, returns ciphers in the order from configuredCipherSuites",
-			configuredCipherSuites: tls.CipherSuites(),
-			allowedCipherIDs: []uint16{
+			name:         "with allowed ciphers in random order, returns ciphers in the order from cipherSuites",
+			cipherSuites: tls.CipherSuites(),
+			userConfiguredAllowedCipherSuiteIDs: []uint16{
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
 				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
 				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
@@ -309,16 +309,16 @@ func TestBuildTLSConfig(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			allowedCipherSuites := make([]*tls.CipherSuite, 0)
-			for _, allowedCipher := range test.allowedCipherIDs {
+			userConfiguredAllowedCipherSuites := make([]*tls.CipherSuite, 0)
+			for _, allowedCipher := range test.userConfiguredAllowedCipherSuiteIDs {
 				for _, cipherSuite := range tls.CipherSuites() {
 					if allowedCipher == cipherSuite.ID {
-						allowedCipherSuites = append(allowedCipherSuites, cipherSuite)
+						userConfiguredAllowedCipherSuites = append(userConfiguredAllowedCipherSuites, cipherSuite)
 					}
 				}
 			}
 
-			actualConfig := buildTLSConfig(test.rootCAs, test.configuredCipherSuites, allowedCipherSuites)
+			actualConfig := buildTLSConfig(test.rootCAs, test.cipherSuites, userConfiguredAllowedCipherSuites)
 			require.Equal(t, test.wantConfig, actualConfig)
 		})
 	}
@@ -328,19 +328,19 @@ func TestValidateAllowedCiphers(t *testing.T) {
 	cipherSuites := tls.CipherSuites()
 
 	tests := []struct {
-		name                           string
-		hardCodedCipherSuites          []*tls.CipherSuite
-		userConfiguredCiphersAllowList []string
-		wantCipherSuites               []*tls.CipherSuite
-		wantErr                        string
+		name                              string
+		cipherSuites                      []*tls.CipherSuite
+		userConfiguredAllowedCipherSuites []string
+		wantCipherSuites                  []*tls.CipherSuite
+		wantErr                           string
 	}{
 		{
 			name: "empty inputs result in empty outputs",
 		},
 		{
-			name:                  "with all valid inputs, returns the ciphers",
-			hardCodedCipherSuites: cipherSuites,
-			userConfiguredCiphersAllowList: []string{
+			name:         "with all valid inputs, returns the ciphers",
+			cipherSuites: cipherSuites,
+			userConfiguredAllowedCipherSuites: []string{
 				"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 				"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
 				"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
@@ -360,9 +360,9 @@ func TestValidateAllowedCiphers(t *testing.T) {
 			}(),
 		},
 		{
-			name:                  "with all valid inputs, allows some legacy cipher names and returns the ciphers",
-			hardCodedCipherSuites: cipherSuites,
-			userConfiguredCiphersAllowList: []string{
+			name:         "with all valid inputs, allows some legacy cipher names and returns the ciphers",
+			cipherSuites: cipherSuites,
+			userConfiguredAllowedCipherSuites: []string{
 				"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
 				"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
 			},
@@ -380,15 +380,15 @@ func TestValidateAllowedCiphers(t *testing.T) {
 			}(),
 		},
 		{
-			name:                           "with invalid input, return an error with all known ciphers",
-			hardCodedCipherSuites:          cipherSuites[:2],
-			userConfiguredCiphersAllowList: []string{"foo"},
-			wantErr:                        "unrecognized ciphers [foo], ciphers must be from list [TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384]",
+			name:                              "with invalid input, return an error with all known ciphers",
+			cipherSuites:                      cipherSuites[:2],
+			userConfiguredAllowedCipherSuites: []string{"foo"},
+			wantErr:                           "unrecognized ciphers [foo], ciphers must be from list [TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384]",
 		},
 		{
-			name:                  "with some valid and some invalid input, return an error with all known ciphers",
-			hardCodedCipherSuites: cipherSuites[6:9],
-			userConfiguredCiphersAllowList: []string{
+			name:         "with some valid and some invalid input, return an error with all known ciphers",
+			cipherSuites: cipherSuites[6:9],
+			userConfiguredAllowedCipherSuites: []string{
 				"foo",
 				"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 				"bar",
@@ -401,7 +401,7 @@ func TestValidateAllowedCiphers(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, err := validateAllowedCiphers(test.hardCodedCipherSuites, test.userConfiguredCiphersAllowList)
+			actual, err := validateAllowedCiphers(test.cipherSuites, test.userConfiguredAllowedCipherSuites)
 			if len(test.wantErr) > 0 {
 				require.ErrorContains(t, err, test.wantErr)
 			} else {

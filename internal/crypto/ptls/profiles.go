@@ -99,7 +99,7 @@ const SecureTLSConfigMinTLSVersion = tls.VersionTLS13
 // Default returns a tls.Config with a minimum of TLS1.2+ and a few ciphers that can be further constrained by configuration.
 func Default(rootCAs *x509.CertPool) *tls.Config {
 	ciphers := translateIDIntoSecureCipherSuites(secureCipherSuiteIDs)
-	return buildTLSConfig(rootCAs, ciphers, getUserConfiguredCiphersAllowList())
+	return buildTLSConfig(rootCAs, ciphers, getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo())
 }
 
 // DefaultLDAP TLS profile should be used by clients who need to interact with potentially old LDAP servers
@@ -108,7 +108,7 @@ func Default(rootCAs *x509.CertPool) *tls.Config {
 func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
 	ciphers := translateIDIntoSecureCipherSuites(secureCipherSuiteIDs)
 	ciphers = append(ciphers, translateIDIntoSecureCipherSuites(additionalSecureCipherSuiteIDsOnlyForLDAPClients)...)
-	return buildTLSConfig(rootCAs, ciphers, getUserConfiguredCiphersAllowList())
+	return buildTLSConfig(rootCAs, ciphers, getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo())
 }
 
 // Secure TLS profile should be used by:

@@ -9,7 +9,7 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-func cipherSuiteNames(ciphers []uint16) []string {
+func cipherSuiteNamesForCipherSuites(ciphers []uint16) []string {
 	names := make([]string, len(ciphers))
 	for i, suite := range ciphers {
 		names[i] = tls.CipherSuiteName(suite)
@@ -17,7 +17,7 @@ func cipherSuiteNames(ciphers []uint16) []string {
 	return names
 }
 
-func versionName(tlsVersion uint16) string {
+func tlsVersionName(tlsVersion uint16) string {
 	if tlsVersion == 0 {
 		return "NONE"
 	}
@@ -27,9 +27,9 @@ func versionName(tlsVersion uint16) string {
 func logProfile(name string, log plog.Logger, profile *tls.Config) {
 	log.Info("tls configuration",
 		"profile name", name,
-		"MinVersion", versionName(profile.MinVersion),
-		"MaxVersion", versionName(profile.MaxVersion),
-		"CipherSuites", cipherSuiteNames(profile.CipherSuites),
+		"MinVersion", tlsVersionName(profile.MinVersion),
+		"MaxVersion", tlsVersionName(profile.MaxVersion),
+		"CipherSuites", cipherSuiteNamesForCipherSuites(profile.CipherSuites),
 		"NextProtos", profile.NextProtos,
 	)
 }

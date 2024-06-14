@@ -43,7 +43,7 @@ const (
 // Note! The Config file should contain base64-encoded WebhookCABundle data.
 // This function will decode that base64-encoded data to PEM bytes to be stored
 // in the Config.
-func FromPath(ctx context.Context, path string, setAllowedCiphers ptls.SetAllowedCiphers) (*Config, error) {
+func FromPath(ctx context.Context, path string, setAllowedCiphers ptls.SetAllowedCiphersFunc) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)

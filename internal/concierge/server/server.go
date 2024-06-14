@@ -112,11 +112,12 @@ func (a *App) runServer(ctx context.Context) error {
 	featuregates.DisableKubeFeatureGate(features.UnauthenticatedHTTP2DOSMitigation)
 
 	// Read the server config file.
-	cfg, err := concierge.FromPath(ctx, a.configPath, ptls.SetUserConfiguredCiphersForTLSOneDotTwo)
+	cfg, err := concierge.FromPath(ctx, a.configPath, ptls.SetUserConfiguredAllowedCipherSuitesForTLSOneDotTwo)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}
 
+	// The above server config should have set the allowed ciphers global, so now log the ciphers for all profiles.
 	ptls.LogAllProfiles(plog.New())
 
 	// Discover in which namespace we are installed.

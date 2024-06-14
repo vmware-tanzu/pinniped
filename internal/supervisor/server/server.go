@@ -742,11 +742,12 @@ func main() error { // return an error instead of plog.Fatal to allow defer stat
 	ctx := signalCtx()
 
 	// Read the server config file.
-	cfg, err := supervisor.FromPath(ctx, os.Args[2], ptls.SetUserConfiguredCiphersForTLSOneDotTwo)
+	cfg, err := supervisor.FromPath(ctx, os.Args[2], ptls.SetUserConfiguredAllowedCipherSuitesForTLSOneDotTwo)
 	if err != nil {
 		return fmt.Errorf("could not load config: %w", err)
 	}
 
+	// The above server config should have set the allowed ciphers global, so now log the ciphers for all profiles.
 	ptls.LogAllProfiles(plog.New())
 
 	return runSupervisor(ctx, podInfo, cfg)

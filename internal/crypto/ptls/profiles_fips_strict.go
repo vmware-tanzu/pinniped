@@ -74,7 +74,7 @@ const SecureTLSConfigMinTLSVersion = tls.VersionTLS12
 // In FIPS mode, this will use the union of the secureCipherSuiteIDs, additionalSecureCipherSuiteIDsOnlyForLDAPClients,
 // and insecureCipherSuiteIDs values defined above.
 func Default(rootCAs *x509.CertPool) *tls.Config {
-	config := buildTLSConfig(rootCAs, allHardcodedAllowedCipherSuites(), getUserConfiguredCiphersAllowList())
+	config := buildTLSConfig(rootCAs, allHardcodedAllowedCipherSuites(), getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo())
 	// Until goboring supports TLS 1.3, make the max version 1.2.
 	config.MaxVersion = tls.VersionTLS12
 	return config

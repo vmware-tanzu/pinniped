@@ -24,21 +24,20 @@ import (
 // before they die.
 // Never run this test in parallel since deleting the pods is disruptive, see main_test.go.
 func TestPodShutdown_Disruptive(t *testing.T) {
-	env := testOnKindWithPodShutdown(t)
+	env := testEnvForPodShutdownTests(t)
 
 	shutdownAllPodsOfApp(t, env, env.ConciergeNamespace, env.ConciergeAppName, true)
 	shutdownAllPodsOfApp(t, env, env.SupervisorNamespace, env.SupervisorAppName, false)
 }
 
-// testOnKindWithPodShutdown builds an env with the following description:
+// testEnvForPodShutdownTests builds an env with the following description:
 // Only run this test in CI on Kind clusters, because something about restarting the pods
 // in this test breaks the "kubectl port-forward" commands that we are using in CI for
 // AKS, EKS, and GKE clusters. The Go code that we wrote for graceful pod shutdown should
 // not be sensitive to which distribution it runs on, so running this test only on Kind
 // should give us sufficient coverage for what we are trying to test here.
-func testOnKindWithPodShutdown(t *testing.T) *testlib.TestEnv {
-	return testlib.IntegrationEnv(t, testlib.SkipPodRestartAssertions()).
-		WithKubeDistribution(testlib.KindDistro)
+func testEnvForPodShutdownTests(t *testing.T) *testlib.TestEnv {
+	return testlib.IntegrationEnv(t, testlib.SkipPodRestartAssertions()).WithKubeDistribution(testlib.KindDistro)
 }
 
 func shutdownAllPodsOfApp(
@@ -94,11 +93,12 @@ func shutdownAllPodsOfApp(
 	t.Cleanup(func() {
 		updateDeploymentScale(t, namespace, appName, originalScale)
 
-		// Wait for all the new pods to be running.
+		// Wait for all the new pods to be running and ready.
 		var newPods []corev1.Pod
 		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 			newPods = getRunningPodsByNamePrefix(t, namespace, appName+"-", ignorePodsWithNameSubstring)
 			requireEventually.Len(newPods, originalScale, "wanted pods to return to original scale")
+			requireEventually.True(allPodsReady(newPods), "wanted all new pods to be ready")
 		}, 2*time.Minute, 200*time.Millisecond)
 
 		// After a short time, leader election should have finished and the lease should contain the name of
@@ -184,6 +184,24 @@ func getRunningPodsByNamePrefix(
 	}
 
 	return foundPods
+}
+
+func allPodsReady(pods []corev1.Pod) bool {
+	for _, pod := range pods {
+		if !isPodReady(pod) {
+			return false
+		}
+	}
+	return true
+}
+
+func isPodReady(pod corev1.Pod) bool {
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady {
+			return cond.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }
 
 func updateDeploymentScale(t *testing.T, namespace string, deploymentName string, newScale int) int {

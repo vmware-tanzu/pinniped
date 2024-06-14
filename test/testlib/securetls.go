@@ -38,13 +38,16 @@ func RunNmapSSLEnum(t *testing.T, host string, port uint16) (string, string) {
 
 	var stdout, stderr bytes.Buffer
 	//nolint:gosec // we are not performing malicious argument injection against ourselves
-	cmd := exec.CommandContext(ctx, "nmap", "--script", "ssl-enum-ciphers",
+	cmd := exec.CommandContext(ctx,
+		"nmap",
+		"-Pn",
+		"--script", "+ssl-enum-ciphers",
 		"-p", strconv.FormatUint(uint64(port), 10),
 		host,
 	)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-
+	t.Log("Running cmd: " + strings.Join(cmd.Args, " "))
 	require.NoErrorf(t, cmd.Run(), "stderr:\n%s\n\nstdout:\n%s\n\n", stderr.String(), stdout.String())
 
 	return stdout.String(), stderr.String()

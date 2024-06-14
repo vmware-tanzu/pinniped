@@ -5,12 +5,8 @@
 
 package testlib
 
-import "crypto/tls"
-
 // Because of a bug in nmap, the cipher suite preference is
 // incorrectly shown as 'client' in some cases.
 // in fips-only mode, it correctly shows the cipher preference
 // as 'server', while in non-fips mode it shows as 'client'.
 const DefaultCipherSuitePreference = "server"
-
-const MaxTLSVersion = tls.VersionTLS12

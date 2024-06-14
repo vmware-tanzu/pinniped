@@ -15,6 +15,18 @@ type Config struct {
 	Log                     plog.LogSpec      `json:"log"`
 	Endpoints               *Endpoints        `json:"endpoints"`
 	AggregatedAPIServerPort *int64            `json:"aggregatedAPIServerPort"`
+	TLS                     TLSSpec           `json:"tls"`
+}
+
+type TLSSpec struct {
+	OneDotTwo TLSProtocolSpec `json:"onedottwo"`
+}
+
+type TLSProtocolSpec struct {
+	// AllowedCiphers will permit Pinniped to use only the listed ciphers.
+	// This affects Pinniped both when it acts as a client and as a server.
+	// If empty, Pinniped will use a built-in list of ciphers.
+	AllowedCiphers []string `json:"allowedCiphers"`
 }
 
 // NamesConfigSpec configures the names of some Kubernetes resources for the Supervisor.

@@ -100,6 +100,9 @@ data:
     log:
       level: (@= getAndValidateLogLevel() @)
     (@ end @)
+    tls:
+      onedottwo:
+        allowedCiphers: (@= str(data.values.allowed_ciphers_for_tls_onedottwo) @)
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1

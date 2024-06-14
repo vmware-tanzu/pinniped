@@ -38,19 +38,22 @@ func RunNmapSSLEnum(t *testing.T, host string, port uint16) (string, string) {
 
 	var stdout, stderr bytes.Buffer
 	//nolint:gosec // we are not performing malicious argument injection against ourselves
-	cmd := exec.CommandContext(ctx, "nmap", "--script", "ssl-enum-ciphers",
+	cmd := exec.CommandContext(ctx,
+		"nmap",
+		"-Pn",
+		"--script", "+ssl-enum-ciphers",
 		"-p", strconv.FormatUint(uint64(port), 10),
 		host,
 	)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-
+	t.Log("Running cmd: " + strings.Join(cmd.Args, " "))
 	require.NoErrorf(t, cmd.Run(), "stderr:\n%s\n\nstdout:\n%s\n\n", stderr.String(), stdout.String())
 
 	return stdout.String(), stderr.String()
 }
 
-func GetExpectedCiphers(config *tls.Config) string {
+func GetExpectedCiphers(config *tls.Config, preference string) string {
 	skip12 := config.MinVersion == tls.VersionTLS13
 	skip13 := config.MaxVersion == tls.VersionTLS12
 
@@ -86,7 +89,7 @@ func GetExpectedCiphers(config *tls.Config) string {
 			}
 			s.WriteString("\n")
 		}
-		tls12Bit = fmt.Sprintf(tls12Base, s.String(), cipherSuitePreference)
+		tls12Bit = fmt.Sprintf(tls12Base, s.String(), preference)
 	}
 
 	if !skip13 {

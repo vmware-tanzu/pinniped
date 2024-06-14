@@ -1,7 +1,7 @@
 // Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// The configurations here override the usual configs when Pinniped is built in fips-only mode.
+// This file overrides profiles.go when Pinniped is built in FIPS-only mode.
 //go:build fips_strict
 
 package ptls
@@ -18,6 +18,37 @@ import (
 	// Cause fipsonly tls mode with this side effect import.
 	_ "go.pinniped.dev/internal/crypto/fips"
 	"go.pinniped.dev/internal/plog"
+)
+
+// The union of these three variables is all the FIPS-approved TLS 1.2 ciphers.
+// If this list does not match the boring crypto compiler's list then the TestFIPSCipherSuites integration
+// test should fail, which indicates that this list needs to be updated.
+var (
+	// secureCipherSuiteIDs is the list of TLS ciphers to use for both clients and servers when using TLS 1.2.
+	//
+	// FIPS allows the use of these ciphers which golang considers secure.
+	secureCipherSuiteIDs = []uint16{
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	}
+
+	// insecureCipherSuiteIDs is a list of additional ciphers that should be allowed for both clients
+	// and servers when using TLS 1.2.
+	//
+	// FIPS allows the use of these specific ciphers that golang considers insecure.
+	insecureCipherSuiteIDs = []uint16{
+		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	}
+
+	// additionalSecureCipherSuiteIDsOnlyForLDAPClients are additional ciphers to use only for LDAP clients
+	// when using TLS 1.2. These can be used when the Pinniped Supervisor is making calls to an LDAP server
+	// configured by an LDAPIdentityProvider or ActiveDirectoryIdentityProvider.
+	//
+	// When compiled in FIPS mode, there are no extras for LDAP clients.
+	additionalSecureCipherSuiteIDsOnlyForLDAPClients []uint16
 )
 
 // init: see comment in profiles.go.
@@ -40,37 +71,18 @@ const SecureTLSConfigMinTLSVersion = tls.VersionTLS12
 
 // Default: see comment in profiles.go.
 // This chooses different cipher suites and/or TLS versions compared to non-FIPS mode.
+// In FIPS mode, this will use the union of the secureCipherSuiteIDs, additionalSecureCipherSuiteIDsOnlyForLDAPClients,
+// and insecureCipherSuiteIDs values defined above.
 func Default(rootCAs *x509.CertPool) *tls.Config {
-	return &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		// Until goboring supports TLS 1.3, make the max version 1.2.
-		MaxVersion: tls.VersionTLS12,
-
-		// This is all the fips-approved TLS 1.2 ciphers.
-		// The list is hard-coded for convenience of testing.
-		// If this list does not match the boring crypto compiler's list then the TestFIPSCipherSuites integration
-		// test should fail, which indicates that this list needs to be updated.
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-		},
-
-		// enable HTTP2 for go's 1.7 HTTP Server
-		// setting this explicitly is only required in very specific circumstances
-		// it is simpler to just set it here than to try and determine if we need to
-		NextProtos: []string{"h2", "http/1.1"},
-
-		// optional root CAs, nil means use the host's root CA set
-		RootCAs: rootCAs,
-	}
+	config := buildTLSConfig(rootCAs, allHardcodedAllowedCipherSuites(), getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo())
+	// Until goboring supports TLS 1.3, make the max version 1.2.
+	config.MaxVersion = tls.VersionTLS12
+	return config
 }
 
 // DefaultLDAP: see comment in profiles.go.
 // This chooses different cipher suites and/or TLS versions compared to non-FIPS mode.
+// In FIPS mode, this is not any different from the Default profile.
 func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
 	return Default(rootCAs)
 }
@@ -78,6 +90,7 @@ func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
 // Secure: see comment in profiles.go.
 // This chooses different cipher suites and/or TLS versions compared to non-FIPS mode.
 // Until goboring supports TLS 1.3, make the Secure profile the same as the Default profile in FIPS mode.
+// Until then, this is not any different from the Default profile in FIPS mode.
 func Secure(rootCAs *x509.CertPool) *tls.Config {
 	return Default(rootCAs)
 }

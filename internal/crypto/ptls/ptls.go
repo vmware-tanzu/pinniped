@@ -19,29 +19,12 @@ import (
 	"k8s.io/client-go/transport"
 )
 
-// TODO decide if we need to expose the four TLS levels (secure, default, default-ldap, legacy) as config.
-
 // defaultServingOptionsMinTLSVersion is the minimum tls version in the format
 // expected by SecureServingOptions.MinTLSVersion from
 // k8s.io/apiserver/pkg/server/options.
 const defaultServingOptionsMinTLSVersion = "VersionTLS12"
 
 type ConfigFunc func(*x509.CertPool) *tls.Config
-
-func Legacy(rootCAs *x509.CertPool) *tls.Config {
-	c := Default(rootCAs)
-	// add all the ciphers (even the crappy ones) except the ones that Go considers to be outright broken like 3DES
-	c.CipherSuites = suitesToIDs(tls.CipherSuites())
-	return c
-}
-
-func suitesToIDs(suites []*tls.CipherSuite) []uint16 {
-	out := make([]uint16, 0, len(suites))
-	for _, suite := range suites {
-		out = append(out, suite.ID)
-	}
-	return out
-}
 
 func Merge(tlsConfigFunc ConfigFunc, tlsConfig *tls.Config) {
 	secureTLSConfig := tlsConfigFunc(nil)

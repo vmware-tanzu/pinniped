@@ -1523,7 +1523,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10445)
 
 			require.Empty(t, stderr)
-			require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Default(nil)), "stdout:\n%s", stdout)
+			require.Contains(t, stdout, testlib.GetExpectedCiphers(ptls.Default(nil), testlib.DefaultCipherSuitePreference), "stdout:\n%s", stdout)
 		})
 	})
 

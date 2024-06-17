@@ -9,12 +9,13 @@
 # (see https://endoflife.date/kubernetes), then remove it from this file
 # and delete the generated/X.XX directory for that Kube version from git.
 #
-# Whenever a new version is added to this file, run hack/update.sh.
+# Whenever a new version is added to this file, or when a version number
+# is edited in this file, please run hack/update.sh.
 #
-1.30.1
-1.29.5
-1.28.10
-1.27.14
+1.30.2
+1.29.6
+1.28.11
+1.27.15
 1.26.15
 1.25.16
 1.24.17

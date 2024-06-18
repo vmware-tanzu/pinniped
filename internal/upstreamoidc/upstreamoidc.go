@@ -329,7 +329,13 @@ func (p *ProviderConfig) validateIDToken(ctx context.Context, tok *oauth2.Token,
 	if !hasIDTok {
 		return time.Time{}, "", httperr.New(http.StatusBadRequest, "received response missing ID token")
 	}
-	validated, err := p.Provider.Verifier(&coreosoidc.Config{ClientID: p.GetClientID()}).Verify(coreosoidc.ClientContext(ctx, p.Client), idTok)
+	verifierConfig := &coreosoidc.Config{ClientID: p.GetClientID()}
+
+	// DIRTY HACK EXPERIMENT FOR DAVID - SKIP CHECKING THAT THE ID TOKEN CONTAINS THE CORRECT ISSUER.
+	// A real implementation would need to include new code to check that the ID token's iss claim contains the expected/configured value.
+	verifierConfig.SkipIssuerCheck = true
+
+	validated, err := p.Provider.Verifier(verifierConfig).Verify(coreosoidc.ClientContext(ctx, p.Client), idTok)
 	if err != nil {
 		return time.Time{}, "", httperr.Wrap(http.StatusBadRequest, "received invalid ID token", err)
 	}

@@ -330,7 +330,15 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 			return issuerURLCondition
 		}
 
-		discoveredProvider, err = coreosoidc.NewProvider(coreosoidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
+		discoveryCtx := coreosoidc.ClientContext(ctx, httpClient)
+
+		// DIRTY HACK EXPERIMENT FOR DAVID - ALLOW THE DISCOVERY RESPONSE TO HAVE A DIFFERENT ISSUER URL INSIDE.
+		// This is not allowed by the spec https://openid.net/specs/openid-connect-discovery-1_0-errata2.html#ProviderConfigurationValidation
+		// but unfortunately UAA does it.
+		// A real implementation would only relax this validation when specifically configured by some "secret" configmap setting.
+		discoveryCtx = coreosoidc.InsecureIssuerURLContext(discoveryCtx, strings.Replace(upstream.Spec.Issuer, "login.", "uaa.", 1))
+
+		discoveredProvider, err = coreosoidc.NewProvider(discoveryCtx, upstream.Spec.Issuer)
 		if err != nil {
 			c.log.WithValues(
 				"namespace", upstream.Namespace,

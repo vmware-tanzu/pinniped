@@ -15,7 +15,7 @@ menu:
 There are many benefits to using the Pinniped Supervisor, Concierge, and CLI components together
 to provide Kubernetes authentication.
 
-- It's easy to **bring your own OIDC, LDAP, or Active Directory identity provider** to act as the source of user identities.
+- It's easy to **bring your own OIDC, LDAP, GitHub, or Active Directory identity provider** to act as the source of user identities.
   A user's identity in the external identity provider becomes their identity in Kubernetes.
   All other aspects of Kubernetes that are sensitive to identity, such as authorization policies and audit logging, are then
   based on the user identities from your identity provider.
@@ -51,6 +51,10 @@ to provide Kubernetes authentication.
 
 ## What this tutorial will show
 
+⚠️ This tutorial will use several Kubernetes clusters running in a cloud provider account in a production-like setup.
+If you prefer to try Pinniped entirely on your own computer in a demo-like setup, please instead see the tutorial
+[Concierge with Supervisor: a complete example of every step, demonstrated using a local Kind cluster]({{< ref "local-concierge-and-supervisor-demo" >}}).
+
 This tutorial will show:
 - A detailed example of how to install and configure a Supervisor with ingress, DNS, TLS, and an external identity provider
 - How to install the Concierge onto multiple workload clusters and configure them all to trust identities from the Supervisor
@@ -78,7 +82,7 @@ There are many ways to install and configure Pinniped. To make the steps of this
 had to make some choices. The choices made for this tutorial were:
 
 - The Pinniped Supervisor can draw user identities from OIDC identity providers, Active Directory providers (via LDAP),
-  and generic LDAP providers. In this tutorial we will use Okta as an OIDC identity provider.
+  generic LDAP providers, and GitHub. In this tutorial we will use Okta as an OIDC identity provider.
   Okta offers a free developer account, so any reader should be able to sign up for an Okta
   account if they would like to try these steps themselves.
 - The Pinniped Supervisor can be installed on any type of Kubernetes cluster. In this tutorial we will

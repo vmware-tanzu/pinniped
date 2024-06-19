@@ -19,7 +19,9 @@ or [join the Pinniped community]({{< ref "/community" >}}).
 
 ## New to Pinniped?
 
-- ⚠️ **Start here:** [Learn to use Pinniped for federated authentication to Kubernetes clusters]({{< ref "tutorials/concierge-and-supervisor-demo" >}})
+- ⚠️ **Start here:**
+  - [Learn to use Pinniped for federated authentication to Kubernetes clusters in a production-like environment]({{< ref "tutorials/concierge-and-supervisor-demo" >}})
+  - Or, [try Pinniped on your local computer in a demo-like environment]({{< ref "tutorials/local-concierge-and-supervisor-demo" >}})
 
 ## Background
 

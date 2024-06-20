@@ -12,7 +12,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	fositejwt "github.com/ory/fosite/token/jwt"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
@@ -360,7 +360,7 @@ func generateUpstreamAuthorizeRequestState(
 	now := time.Now()
 	_, err := oauthHelper.NewAuthorizeResponse(r.Context(), authorizeRequester, &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
-			Claims: &jwt.IDTokenClaims{
+			Claims: &fositejwt.IDTokenClaims{
 				// Temporary claim values to allow `NewAuthorizeResponse` to perform other OIDC validations.
 				Subject:     "none",
 				AuthTime:    now,

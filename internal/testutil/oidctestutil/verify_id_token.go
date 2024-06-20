@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
-	"github.com/go-jose/go-jose/v3"
+	"github.com/go-jose/go-jose/v4"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,7 +24,7 @@ func newStaticKeySet(publicKey crypto.PublicKey) coreosoidc.KeySet {
 }
 
 func (s *staticKeySet) VerifySignature(_ context.Context, jwt string) ([]byte, error) {
-	jws, err := jose.ParseSigned(jwt)
+	jws, err := jose.ParseSigned(jwt, []jose.SignatureAlgorithm{jose.ES256})
 	if err != nil {
 		return nil, fmt.Errorf("oidc: malformed jwt: %w", err)
 	}

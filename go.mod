@@ -26,10 +26,6 @@ replace go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.op
 // This is an indirect dep which has CVE-2023-45142, so replace it with the fixed version.
 replace go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace => go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.44.0
 
-// https://github.com/coreos/go-oidc/releases/tag/v3.10.0 starts to use https://github.com/go-jose/go-jose/releases/tag/v4.0.0.
-// Unfortunately this has breaking changes.
-replace github.com/coreos/go-oidc/v3 => github.com/coreos/go-oidc/v3 v3.9.0
-
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/chromedp/cdproto v0.0.0-20240614221651-cc28c8fb63e7
@@ -40,6 +36,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/go-jose/go-jose/v3 v3.0.3
+	github.com/go-jose/go-jose/v4 v4.0.2
 	github.com/go-ldap/ldap/v3 v3.4.8
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/stdr v1.2.2

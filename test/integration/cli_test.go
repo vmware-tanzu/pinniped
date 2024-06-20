@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
+	"github.com/go-jose/go-jose/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -193,7 +193,7 @@ func TestCLILoginOIDC_Browser(t *testing.T) {
 
 	// Assert some properties about the token, which should be a valid JWT.
 	require.NotEmpty(t, credOutput.Status.Token)
-	jws, err := jose.ParseSigned(credOutput.Status.Token)
+	jws, err := jose.ParseSigned(credOutput.Status.Token, []jose.SignatureAlgorithm{jose.ES256, jose.RS256})
 	require.NoError(t, err)
 	claims := map[string]any{}
 	require.NoError(t, json.Unmarshal(jws.UnsafePayloadWithoutVerification(), &claims))

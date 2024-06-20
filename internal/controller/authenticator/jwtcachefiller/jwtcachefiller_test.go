@@ -10,7 +10,10 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
+	_ "embed"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,10 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	josejwt "github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/go-cmp/cmp"
-	fositejwt "github.com/ory/fosite/token/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,11 +48,42 @@ import (
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
+// This private key was randomly generated and then used to sign a single JWT.
+// That JWT is hardcoded as the constant minimalJWTToTriggerJWKSFetch.
+// TestMinimalJWTToTriggerJWKSFetch below shows how that JWT was created.
+// This JWT will be used for only one purpose: to trick coreos.RemoteKeySet
+// into fetching a remote JWKS immediately. Because we expect that there is no
+// OIDC provider in the world that uses this randomly generated signing key,
+// then we can safely assume that this JWT should never successfully verify
+// using the real JWKS of any OIDC provider. If somehow it did verify, the
+// production code in the controller would consider that to be an error and
+// would refuse to load that JWTAuthenticator. The production code wants to
+// get a signature error, which means that the remote JWKS was successfully
+// loaded.
+//
+// This key was created using:
+//
+//	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+//	t.Log(string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})))
+//
+//go:embed testdata/test.key
+var rsaPrivateKeyToSignMinimalJWTToTriggerJWKSFetch string
+
 func TestMinimalJWTToTriggerJWKSFetch(t *testing.T) {
-	tinyJWT := fositejwt.NewWithClaims(fositejwt.SigningMethodNone, fositejwt.MapClaims{})
-	tinyJWTStr, err := tinyJWT.SignedString(fositejwt.UnsafeAllowNoneSignatureType)
+	hardcodedPEMDecoded, _ := pem.Decode([]byte(rsaPrivateKeyToSignMinimalJWTToTriggerJWKSFetch))
+	require.NotNil(t, hardcodedPEMDecoded, "failed to parse hardcoded PEM")
+	hardcodedPrivateKey, err := x509.ParsePKCS1PrivateKey(hardcodedPEMDecoded.Bytes)
 	require.NoError(t, err)
-	require.Equal(t, tinyJWTStr, minimalJWTToTriggerJWKSFetch)
+
+	signer, err := jose.NewSigner(
+		jose.SigningKey{Algorithm: jose.RS256, Key: hardcodedPrivateKey},
+		(&jose.SignerOptions{}).WithType("JWT"),
+	)
+	require.NoError(t, err)
+
+	jwt, err := josejwt.Signed(signer).Claims(josejwt.Claims{}).Serialize()
+	require.NoError(t, err)
+	require.Equal(t, jwt, minimalJWTToTriggerJWKSFetch)
 }
 
 func TestController(t *testing.T) {
@@ -61,6 +94,11 @@ func TestController(t *testing.T) {
 		goodRSASigningKeyID = "some-rsa-key-id"
 		goodAudience        = "some-audience"
 	)
+
+	hardcodedPEMDecoded, _ := pem.Decode([]byte(rsaPrivateKeyToSignMinimalJWTToTriggerJWKSFetch))
+	require.NotNil(t, hardcodedPEMDecoded, "failed to parse hardcoded PEM")
+	hardcodedPrivateKey, err := x509.ParsePKCS1PrivateKey(hardcodedPEMDecoded.Bytes)
+	require.NoError(t, err)
 
 	goodECSigningKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	goodECSigningAlgo := jose.ES256
@@ -122,12 +160,12 @@ func TestController(t *testing.T) {
 	// A sub (subject) Claim SHOULD NOT be returned from the Claims Provider unless its value
 	// is an identifier for the End-User at the Claims Provider (and not for the OpenID Provider or another party);
 	// this typically means that a sub Claim SHOULD NOT be provided.
-	claimsWithoutSubject := jwt.Claims{
+	claimsWithoutSubject := josejwt.Claims{
 		Issuer:    goodOIDCIssuerServer.URL,
 		Audience:  []string{goodAudience},
-		Expiry:    jwt.NewNumericDate(time.Now().Add(time.Hour)),
-		NotBefore: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
-		IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+		Expiry:    josejwt.NewNumericDate(time.Now().Add(time.Hour)),
+		NotBefore: josejwt.NewNumericDate(time.Now().Add(-time.Hour)),
+		IssuedAt:  josejwt.NewNumericDate(time.Now().Add(-time.Hour)),
 	}
 	goodMux.Handle("/claim_source", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Unfortunately we have to set this up pretty early in the test because we can't redeclare
@@ -139,12 +177,12 @@ func TestController(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		builder := jwt.Signed(sig).Claims(claimsWithoutSubject)
+		builder := josejwt.Signed(sig).Claims(claimsWithoutSubject)
 
 		builder = builder.Claims(map[string]any{customGroupsClaim: distributedGroups})
 		builder = builder.Claims(map[string]any{"groups": distributedGroups})
 
-		distributedClaimsJwt, err := builder.CompactSerialize()
+		distributedClaimsJwt, err := builder.Serialize()
 		require.NoError(t, err)
 
 		_, err = w.Write([]byte(distributedClaimsJwt))
@@ -160,11 +198,11 @@ func TestController(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		builder := jwt.Signed(sig).Claims(claimsWithoutSubject)
+		builder := josejwt.Signed(sig).Claims(claimsWithoutSubject)
 
 		builder = builder.Claims(map[string]any{"some-other-claim": distributedGroups})
 
-		distributedClaimsJwt, err := builder.CompactSerialize()
+		distributedClaimsJwt, err := builder.Serialize()
 		require.NoError(t, err)
 
 		_, err = w.Write([]byte(distributedClaimsJwt))
@@ -172,24 +210,24 @@ func TestController(t *testing.T) {
 	}))
 
 	badMuxInvalidJWKSURI := http.NewServeMux()
-	badOIDCIssuerServerInvalidJWKSURI, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	badOIDCIssuerServerInvalidJWKSURIServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tlsserver.AssertTLS(t, r, ptls.Default)
 		badMuxInvalidJWKSURI.ServeHTTP(w, r)
 	}), tlsserver.RecordTLSHello)
 	badMuxInvalidJWKSURI.Handle("/.well-known/openid-configuration", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, err := fmt.Fprintf(w, `{"issuer": "%s", "jwks_uri": "%s"}`, badOIDCIssuerServerInvalidJWKSURI.URL, "https://.café   .com/café/café/café/coffee/jwks.json")
+		_, err := fmt.Fprintf(w, `{"issuer": "%s", "jwks_uri": "%s"}`, badOIDCIssuerServerInvalidJWKSURIServer.URL, "https://.café   .com/café/café/café/coffee/jwks.json")
 		require.NoError(t, err)
 	}))
 
 	badMuxInvalidJWKSURIScheme := http.NewServeMux()
-	badOIDCIssuerServerInvalidJWKSURIScheme, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	badOIDCIssuerServerInvalidJWKSURISchemeServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tlsserver.AssertTLS(t, r, ptls.Default)
 		badMuxInvalidJWKSURIScheme.ServeHTTP(w, r)
 	}), tlsserver.RecordTLSHello)
 	badMuxInvalidJWKSURIScheme.Handle("/.well-known/openid-configuration", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, err := fmt.Fprintf(w, `{"issuer": "%s", "jwks_uri": "%s"}`, badOIDCIssuerServerInvalidJWKSURIScheme.URL, "http://.café.com/café/café/café/coffee/jwks.json")
+		_, err := fmt.Fprintf(w, `{"issuer": "%s", "jwks_uri": "%s"}`, badOIDCIssuerServerInvalidJWKSURISchemeServer.URL, "http://.café.com/café/café/café/coffee/jwks.json")
 		require.NoError(t, err)
 	}))
 
@@ -204,9 +242,33 @@ func TestController(t *testing.T) {
 		require.NoError(t, err)
 	}))
 
+	// No real OIDC provider should ever be using our hardcoded private key as a signing key, so this should never happen
+	// in real life. Simulating this here just so we can have test coverage for the expected error that the production
+	// code should return in this case.
+	badMuxUsesOurHardcodedPrivateKey := http.NewServeMux()
+	badOIDCIssuerUsesOurHardcodedPrivateKeyServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tlsserver.AssertTLS(t, r, ptls.Default)
+		badMuxUsesOurHardcodedPrivateKey.ServeHTTP(w, r)
+	}), tlsserver.RecordTLSHello)
+	badMuxUsesOurHardcodedPrivateKey.Handle("/.well-known/openid-configuration", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, err := fmt.Fprintf(w, `{"issuer": "%s", "jwks_uri": "%s"}`, badOIDCIssuerUsesOurHardcodedPrivateKeyServer.URL, badOIDCIssuerUsesOurHardcodedPrivateKeyServer.URL+"/jwks.json")
+		require.NoError(t, err)
+	}))
+	badMuxUsesOurHardcodedPrivateKey.Handle("/jwks.json", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ecJWK := jose.JSONWebKey{
+			Key:       hardcodedPrivateKey,
+			KeyID:     goodRSASigningKeyID,
+			Algorithm: string(goodRSASigningAlgo),
+			Use:       "sig",
+		}
+		jwks := jose.JSONWebKeySet{
+			Keys: []jose.JSONWebKey{ecJWK.Public()},
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(jwks))
+	}))
+
 	goodIssuer := goodOIDCIssuerServer.URL
-	badIssuerInvalidJWKSURI := badOIDCIssuerServerInvalidJWKSURI.URL
-	badIssuerInvalidJWKSURIScheme := badOIDCIssuerServerInvalidJWKSURIScheme.URL
 	someOtherIssuer := "https://some-other-issuer.com" // placeholder only for tests that don't get far enough to make requests
 
 	nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
@@ -254,7 +316,6 @@ func TestController(t *testing.T) {
 		Audience: goodAudience,
 		TLS:      &authenticationv1alpha1.TLSSpec{CertificateAuthorityData: "invalid base64-encoded data"},
 	}
-
 	invalidIssuerJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   "https://.café   .com/café/café/café/coffee",
 		Audience: goodAudience,
@@ -265,22 +326,25 @@ func TestController(t *testing.T) {
 		Audience: goodAudience,
 		TLS:      conciergetestutil.TLSSpecFromTLSConfig(goodOIDCIssuerServer.TLS),
 	}
-
 	validIssuerURLButDoesNotExistJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   goodIssuer + "/foo/bar/baz/shizzle",
 		Audience: goodAudience,
 	}
 	badIssuerJWKSURIJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
-		Issuer:   badIssuerInvalidJWKSURI,
+		Issuer:   badOIDCIssuerServerInvalidJWKSURIServer.URL,
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TLSSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURI.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURIServer.TLS),
 	}
 	badIssuerJWKSURISchemeJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
-		Issuer:   badIssuerInvalidJWKSURIScheme,
+		Issuer:   badOIDCIssuerServerInvalidJWKSURISchemeServer.URL,
 		Audience: goodAudience,
-		TLS:      conciergetestutil.TLSSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURIScheme.TLS),
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(badOIDCIssuerServerInvalidJWKSURISchemeServer.TLS),
 	}
-
+	badIssuerUsesOurHardcodedPrivateKeyJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
+		Issuer:   badOIDCIssuerUsesOurHardcodedPrivateKeyServer.URL,
+		Audience: goodAudience,
+		TLS:      conciergetestutil.TLSSpecFromTLSConfig(badOIDCIssuerUsesOurHardcodedPrivateKeyServer.TLS),
+	}
 	jwksFetchShouldFailJWTAuthenticatorSpec := &authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   jwksFetchShouldFailServer.URL,
 		Audience: goodAudience,
@@ -543,14 +607,14 @@ func TestController(t *testing.T) {
 			Message:            "unable to validate; see other conditions for details",
 		}
 	}
-	sadJWKSFetch := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+	sadJWKSFetch := func(msg string, time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
 			Type:               "JWKSFetchValid",
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "InvalidCouldNotFetchJWKS",
-			Message:            "could not fetch keys: fetching keys oidc: get keys failed: 404 Not Found 404 page not found\n",
+			Message:            msg,
 		}
 	}
 
@@ -645,7 +709,8 @@ func TestController(t *testing.T) {
 				}
 			},
 			wantCacheEntries: 1,
-		}, {
+		},
+		{
 			name:    "Sync: changed JWTAuthenticator: loop will update timestamps only on relevant statuses",
 			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
@@ -953,22 +1018,25 @@ func TestController(t *testing.T) {
 					Spec: *someJWTAuthenticatorSpec,
 				},
 			},
-			wantLogs: []map[string]any{{
-				"level":      "info",
-				"timestamp":  "2099-08-08T13:57:36.123456Z",
-				"logger":     "jwtcachefiller-controller",
-				"message":    "wrong JWT authenticator type in cache",
-				"actualType": "struct { authenticator.Token }",
-			}, {
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]any{
-					"name": "test-name",
+			wantLogs: []map[string]any{
+				{
+					"level":      "info",
+					"timestamp":  "2099-08-08T13:57:36.123456Z",
+					"logger":     "jwtcachefiller-controller",
+					"message":    "wrong JWT authenticator type in cache",
+					"actualType": "struct { authenticator.Token }",
 				},
-			}},
+				{
+					"level":     "info",
+					"timestamp": "2099-08-08T13:57:36.123456Z",
+					"logger":    "jwtcachefiller-controller",
+					"message":   "added new jwt authenticator",
+					"issuer":    goodIssuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1074,7 +1142,8 @@ func TestController(t *testing.T) {
 				}
 			},
 			wantCacheEntries: 0,
-		}, {
+		},
+		{
 			name: "validateIssuer: parsing error (spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
@@ -1113,7 +1182,8 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-		}, {
+		},
+		{
 			name: "validateIssuer: parsing error (spec.issuer URL has invalid scheme, requires https): loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
@@ -1152,7 +1222,8 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-		}, {
+		},
+		{
 			name: "validateIssuer: issuer cannot include fragment: loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
@@ -1199,7 +1270,8 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-		}, {
+		},
+		{
 			name: "validateIssuer: issuer cannot include query params: loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
@@ -1246,7 +1318,8 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-		}, {
+		},
+		{
 			name: "validateIssuer: issuer cannot include .well-known in path: loop will fail sync, will write failed and unknown conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
@@ -1293,7 +1366,8 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-		}, {
+		},
+		{
 			name: "validateProviderDiscovery: could not perform oidc discovery on provider issuer: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
@@ -1334,7 +1408,8 @@ func TestController(t *testing.T) {
 				}
 			},
 			wantSyncLoopErr: testutil.WantExactErrorString(`could not perform oidc discovery on provider issuer: Get "` + goodIssuer + `/foo/bar/baz/shizzle/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`),
-		}, {
+		},
+		{
 			name: "validateProviderDiscovery: excessively long errors truncated: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
@@ -1428,7 +1503,8 @@ func TestController(t *testing.T) {
 				}
 			},
 			wantSyncLoopErr: testutil.WantExactErrorString(`could not parse provider jwks_uri: parse "https://.café   .com/café/café/café/coffee/jwks.json": invalid character " " in host name`),
-		}, {
+		},
+		{
 			name: "validateProviderJWKSURL: invalid scheme, requires 'https': loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
@@ -1468,8 +1544,47 @@ func TestController(t *testing.T) {
 			},
 			wantSyncLoopErr: testutil.WantExactErrorString("jwks_uri http://.café.com/café/café/café/coffee/jwks.json has invalid scheme, require 'https'"),
 		},
-		// since this is a hard-coded token we can't do any meaningful testing for this case (and should also never have an error)
-		// {name: "validateJWKSFetch: could not sign tokens"},
+		{
+			name: "validateProviderJWKSURL: remote jwks should not have been able to verify hardcoded test jwt token: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
+			jwtAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *badIssuerUsesOurHardcodedPrivateKeyJWTAuthenticatorSpec,
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *badIssuerUsesOurHardcodedPrivateKeyJWTAuthenticatorSpec,
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyIssuerURLValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								happyDiscoveryURLValid(frozenMetav1Now, 0),
+								sadJWKSFetch("remote jwks should not have been able to verify hardcoded test jwt token",
+									frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantSyncLoopErr: testutil.WantExactErrorString("remote jwks should not have been able to verify hardcoded test jwt token"),
+		},
 		{
 			name: "validateJWKSFetch: could not fetch keys: loop will fail sync, will write failed and unknown status conditions, and will enqueue a resync",
 			jwtAuthenticators: []runtime.Object{
@@ -1494,7 +1609,8 @@ func TestController(t *testing.T) {
 								happyIssuerURLValid(frozenMetav1Now, 0),
 								sadReadyCondition(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
-								sadJWKSFetch(frozenMetav1Now, 0),
+								sadJWKSFetch("could not fetch keys: fetching keys oidc: get keys failed: 404 Not Found 404 page not found\n",
+									frozenMetav1Now, 0),
 							},
 						),
 						Phase: "Error",
@@ -1783,13 +1899,13 @@ func TestController(t *testing.T) {
 				t.Run(test.name, func(t *testing.T) {
 					t.Parallel()
 
-					wellKnownClaims := jwt.Claims{
+					wellKnownClaims := josejwt.Claims{
 						Issuer:    goodIssuer,
 						Subject:   goodSubject,
 						Audience:  []string{goodAudience},
-						Expiry:    jwt.NewNumericDate(time.Now().Add(time.Hour)),
-						NotBefore: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
-						IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+						Expiry:    josejwt.NewNumericDate(time.Now().Add(time.Hour)),
+						NotBefore: josejwt.NewNumericDate(time.Now().Add(-time.Hour)),
+						IssuedAt:  josejwt.NewNumericDate(time.Now().Add(-time.Hour)),
 					}
 					var groups any
 					username := goodUsername
@@ -1860,7 +1976,7 @@ func testTableForAuthenticateTokenTests(
 	issuer string,
 ) []struct {
 	name                      string
-	jwtClaims                 func(wellKnownClaims *jwt.Claims, groups *any, username *string)
+	jwtClaims                 func(wellKnownClaims *josejwt.Claims, groups *any, username *string)
 	jwtSignature              func(key *any, algo *jose.SignatureAlgorithm, kid *string)
 	wantResponse              *authenticator.Response
 	wantAuthenticated         bool
@@ -1869,7 +1985,7 @@ func testTableForAuthenticateTokenTests(
 } {
 	tests := []struct {
 		name                      string
-		jwtClaims                 func(wellKnownClaims *jwt.Claims, groups *any, username *string)
+		jwtClaims                 func(wellKnownClaims *josejwt.Claims, groups *any, username *string)
 		jwtSignature              func(key *any, algo *jose.SignatureAlgorithm, kid *string)
 		wantResponse              *authenticator.Response
 		wantAuthenticated         bool
@@ -1901,7 +2017,7 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "good token with groups as array",
-			jwtClaims: func(_ *jwt.Claims, groups *any, username *string) {
+			jwtClaims: func(_ *josejwt.Claims, groups *any, username *string) {
 				*groups = []string{group0, group1}
 			},
 			wantResponse: &authenticator.Response{
@@ -1914,7 +2030,7 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "good token with good distributed groups",
-			jwtClaims: func(claims *jwt.Claims, groups *any, username *string) {
+			jwtClaims: func(claims *josejwt.Claims, groups *any, username *string) {
 			},
 			distributedGroupsClaimURL: issuer + "/claim_source",
 			wantResponse: &authenticator.Response{
@@ -1927,21 +2043,21 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "distributed groups returns a 404",
-			jwtClaims: func(claims *jwt.Claims, groups *any, username *string) {
+			jwtClaims: func(claims *josejwt.Claims, groups *any, username *string) {
 			},
 			distributedGroupsClaimURL: issuer + "/not_found_claim_source",
 			wantErr:                   testutil.WantMatchingErrorString(`oidc: could not expand distributed claims: while getting distributed claim "` + expectedGroupsClaim + `": error while getting distributed claim JWT: 404 Not Found`),
 		},
 		{
 			name: "distributed groups doesn't return the right claim",
-			jwtClaims: func(claims *jwt.Claims, groups *any, username *string) {
+			jwtClaims: func(claims *josejwt.Claims, groups *any, username *string) {
 			},
 			distributedGroupsClaimURL: issuer + "/wrong_claim_source",
 			wantErr:                   testutil.WantMatchingErrorString(`oidc: could not expand distributed claims: jwt returned by distributed claim endpoint "` + issuer + `/wrong_claim_source" did not contain claim: `),
 		},
 		{
 			name: "good token with groups as string",
-			jwtClaims: func(_ *jwt.Claims, groups *any, username *string) {
+			jwtClaims: func(_ *josejwt.Claims, groups *any, username *string) {
 				*groups = group0
 			},
 			wantResponse: &authenticator.Response{
@@ -1954,7 +2070,7 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "good token with nbf unset",
-			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
+			jwtClaims: func(claims *josejwt.Claims, _ *any, username *string) {
 				claims.NotBefore = nil
 			},
 			wantResponse: &authenticator.Response{
@@ -1966,14 +2082,14 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "bad token with groups as map",
-			jwtClaims: func(_ *jwt.Claims, groups *any, username *string) {
+			jwtClaims: func(_ *josejwt.Claims, groups *any, username *string) {
 				*groups = map[string]string{"not an array": "or a string"}
 			},
 			wantErr: testutil.WantMatchingErrorString("oidc: parse groups claim \"" + expectedGroupsClaim + "\": json: cannot unmarshal object into Go value of type string"),
 		},
 		{
 			name: "bad token with wrong issuer",
-			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
+			jwtClaims: func(claims *josejwt.Claims, _ *any, username *string) {
 				claims.Issuer = "wrong-issuer"
 			},
 			wantResponse:      nil,
@@ -1981,42 +2097,42 @@ func testTableForAuthenticateTokenTests(
 		},
 		{
 			name: "bad token with no audience",
-			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
+			jwtClaims: func(claims *josejwt.Claims, _ *any, username *string) {
 				claims.Audience = nil
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: expected audience "some-audience" got \[\]`),
 		},
 		{
 			name: "bad token with wrong audience",
-			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
+			jwtClaims: func(claims *josejwt.Claims, _ *any, username *string) {
 				claims.Audience = []string{"wrong-audience"}
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: expected audience "some-audience" got \["wrong-audience"\]`),
 		},
 		{
 			name: "bad token with nbf in the future",
-			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
-				claims.NotBefore = jwt.NewNumericDate(time.Date(3020, 2, 3, 4, 5, 6, 7, time.UTC))
+			jwtClaims: func(claims *josejwt.Claims, _ *any, username *string) {
+				claims.NotBefore = josejwt.NewNumericDate(time.Date(3020, 2, 3, 4, 5, 6, 7, time.UTC))
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: current time .* before the nbf \(not before\) time: 3020-.*`),
 		},
 		{
 			name: "bad token with exp in past",
-			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
-				claims.Expiry = jwt.NewNumericDate(time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC))
+			jwtClaims: func(claims *josejwt.Claims, _ *any, username *string) {
+				claims.Expiry = josejwt.NewNumericDate(time.Date(1, 2, 3, 4, 5, 6, 7, time.UTC))
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: token is expired \(Token Expiry: .+`),
 		},
 		{
 			name: "bad token without exp",
-			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
+			jwtClaims: func(claims *josejwt.Claims, _ *any, username *string) {
 				claims.Expiry = nil
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: verify token: oidc: token is expired \(Token Expiry: .+`),
 		},
 		{
 			name: "token does not have username claim",
-			jwtClaims: func(claims *jwt.Claims, _ *any, username *string) {
+			jwtClaims: func(claims *josejwt.Claims, _ *any, username *string) {
 				*username = ""
 			},
 			wantErr: testutil.WantMatchingErrorString(`oidc: parse username claims "` + expectedUsernameClaim + `": claim not present`),
@@ -2051,7 +2167,7 @@ func createJWT(
 	signingKey any,
 	signingAlgo jose.SignatureAlgorithm,
 	kid string,
-	claims *jwt.Claims,
+	claims *josejwt.Claims,
 	groupsClaim string,
 	groupsValue any,
 	distributedGroupsClaimURL string,
@@ -2066,7 +2182,7 @@ func createJWT(
 	)
 	require.NoError(t, err)
 
-	builder := jwt.Signed(sig).Claims(claims)
+	builder := josejwt.Signed(sig).Claims(claims)
 	if groupsValue != nil {
 		builder = builder.Claims(map[string]any{groupsClaim: groupsValue})
 	}
@@ -2077,7 +2193,7 @@ func createJWT(
 	if usernameValue != "" {
 		builder = builder.Claims(map[string]any{usernameClaim: usernameValue})
 	}
-	jwt, err := builder.CompactSerialize()
+	jwt, err := builder.Serialize()
 	require.NoError(t, err)
 
 	return jwt

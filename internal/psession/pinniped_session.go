@@ -10,7 +10,7 @@ import (
 	"github.com/mohae/deepcopy"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	fositejwt "github.com/ory/fosite/token/jwt"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -157,8 +157,8 @@ func (s *GitHubSessionData) Clone() *GitHubSessionData {
 func NewPinnipedSession() *PinnipedSession {
 	return &PinnipedSession{
 		Fosite: &openid.DefaultSession{
-			Claims:  &jwt.IDTokenClaims{},
-			Headers: &jwt.Headers{},
+			Claims:  &fositejwt.IDTokenClaims{},
+			Headers: &fositejwt.Headers{},
 		},
 		Custom: &CustomSessionData{},
 	}
@@ -192,10 +192,10 @@ func (s *PinnipedSession) GetSubject() string {
 	return s.Fosite.GetSubject()
 }
 
-func (s *PinnipedSession) IDTokenHeaders() *jwt.Headers {
+func (s *PinnipedSession) IDTokenHeaders() *fositejwt.Headers {
 	return s.Fosite.IDTokenHeaders()
 }
 
-func (s *PinnipedSession) IDTokenClaims() *jwt.IDTokenClaims {
+func (s *PinnipedSession) IDTokenClaims() *fositejwt.IDTokenClaims {
 	return s.Fosite.IDTokenClaims()
 }

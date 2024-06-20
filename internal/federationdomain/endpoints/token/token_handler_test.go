@@ -22,13 +22,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	josejwt "github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	josejwt "github.com/go-jose/go-jose/v4/jwt"
 	"github.com/ory/fosite"
 	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
 	fositepkce "github.com/ory/fosite/handler/pkce"
-	"github.com/ory/fosite/token/jwt"
+	fositejwt "github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -1716,7 +1716,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			claimsOfFirstIDToken := map[string]any{}
 			originalIDToken := parsedAuthcodeExchangeResponseBody["id_token"].(string)
-			firstIDTokenDecoded, _ := josejwt.ParseSigned(originalIDToken)
+			firstIDTokenDecoded, _ := josejwt.ParseSigned(originalIDToken, []jose.SignatureAlgorithm{jose.ES256})
 			err = firstIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfFirstIDToken)
 			require.NoError(t, err)
 
@@ -1725,7 +1725,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.Equal(t, "urn:ietf:params:oauth:token-type:jwt", parsedResponseBody["issued_token_type"])
 
 			// Parse the returned token.
-			parsedJWT, err := jose.ParseSigned(parsedResponseBody["access_token"].(string))
+			parsedJWT, err := jose.ParseSigned(parsedResponseBody["access_token"].(string), []jose.SignatureAlgorithm{jose.ES256})
 			require.NoError(t, err)
 			var tokenClaims map[string]any
 			require.NoError(t, json.Unmarshal(parsedJWT.UnsafePayloadWithoutVerification(), &tokenClaims))
@@ -4831,12 +4831,12 @@ func TestRefreshGrant(t *testing.T) {
 
 				if wantIDToken {
 					var claimsOfFirstIDToken map[string]any
-					firstIDTokenDecoded, _ := josejwt.ParseSigned(parsedAuthcodeExchangeResponseBody["id_token"].(string))
+					firstIDTokenDecoded, _ := josejwt.ParseSigned(parsedAuthcodeExchangeResponseBody["id_token"].(string), []jose.SignatureAlgorithm{jose.ES256})
 					err := firstIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfFirstIDToken)
 					require.NoError(t, err)
 
 					var claimsOfSecondIDToken map[string]any
-					secondIDTokenDecoded, _ := josejwt.ParseSigned(parsedRefreshResponseBody["id_token"].(string))
+					secondIDTokenDecoded, _ := josejwt.ParseSigned(parsedRefreshResponseBody["id_token"].(string), []jose.SignatureAlgorithm{jose.ES256})
 					err = secondIDTokenDecoded.UnsafeClaimsWithoutVerification(&claimsOfSecondIDToken)
 					require.NoError(t, err)
 
@@ -5145,7 +5145,7 @@ func simulateAuthEndpointHavingAlreadyRun(
 	ctx := context.Background()
 	session := &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
-			Claims: &jwt.IDTokenClaims{
+			Claims: &fositejwt.IDTokenClaims{
 				Subject:     goodSubject,
 				RequestedAt: goodRequestedAtTime,
 				AuthTime:    goodAuthTime,

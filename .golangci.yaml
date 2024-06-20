@@ -109,11 +109,17 @@ linters-settings:
     # k8s.io
     - pkg: k8s.io/api/core/v1
       alias: corev1
-    # OAuth2/OIDC/Fosite
+    # OAuth2/OIDC/Fosite/JOSE
     - pkg: github.com/coreos/go-oidc/v3/oidc
       alias: coreosoidc
     - pkg: github.com/ory/fosite/handler/oauth2
       alias: fositeoauth2
+    - pkg: github.com/ory/fosite/token/jwt
+      alias: fositejwt
+    - pkg: github.com/go-jose/go-jose/v4/jwt
+      alias: josejwt
+    - pkg: github.com/go-jose/go-jose/v3
+      alias: oldjosev3
     # Generated Pinniped
     - pkg: go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1
       alias: authenticationv1alpha1

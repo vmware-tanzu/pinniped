@@ -63,6 +63,33 @@ spec:
                     description: X.509 Certificate Authority (base64-encoded PEM bundle).
                       If omitted, a default set of system roots will be trusted.
                     type: string
+                  certificateAuthorityDataSource:
+                    description: Reference to a CA bundle in a secret or a configmap.
+                    properties:
+                      key:
+                        description: Key within the secret or configmap from which
+                          to read the CA bundle.
+                        minLength: 1
+                        type: string
+                      kind:
+                        description: |-
+                          Whether the CA bundle is being sourced from a kubernetes secret or a configmap.
+                          Secrets must be of type kubernetes.io/tls or Opaque.
+                          For configmaps, the value associated with the key is not expected to be base64 encoded.
+                        enum:
+                        - Secret
+                        - ConfigMap
+                        type: string
+                      name:
+                        description: Name of the secret or configmap from which to
+                          read the CA bundle.
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - kind
+                    - name
+                    type: object
                 type: object
             required:
             - endpoint

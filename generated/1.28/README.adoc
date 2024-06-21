@@ -23,6 +23,27 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authenticatio
 
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-cabundlesource"]
+==== CABundleSource 
+
+CABundleSource provides a source for CA bundle used for client-side TLS verification.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`kind`* __string__ | Whether the CA bundle is being sourced from a kubernetes secret or a configmap. +
+Secrets must be of type kubernetes.io/tls or Opaque. +
+For configmaps, the value associated with the key is not expected to be base64 encoded. +
+| *`name`* __string__ | Name of the secret or configmap from which to read the CA bundle. +
+| *`key`* __string__ | Key within the secret or configmap from which to read the CA bundle. +
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-jwtauthenticator"]
 ==== JWTAuthenticator 
 
@@ -137,6 +158,7 @@ Configuration for configuring TLS on various authenticators.
 |===
 | Field | Description
 | *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted. +
+| *`certificateAuthorityDataSource`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-cabundlesource[$$CABundleSource$$]__ | Reference to a CA bundle in a secret or a configmap. +
 |===
 
 
@@ -1645,6 +1667,27 @@ Optional, when empty this defaults to "objectGUID". +
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-cabundlesource"]
+==== CABundleSource 
+
+CABundleSource provides a source for CA bundle used for client-side TLS verification.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`kind`* __string__ | Whether the CA bundle is being sourced from a kubernetes secret or a configmap. +
+Secrets must be of type kubernetes.io/tls or Opaque. +
+For configmaps, the value associated with the key is not expected to be base64 encoded. +
+| *`name`* __string__ | Name of the secret or configmap from which to read the CA bundle. +
+| *`key`* __string__ | Key within the secret or configmap from which to read the CA bundle. +
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-githubapiconfig"]
 ==== GitHubAPIConfig 
 
@@ -2401,6 +2444,7 @@ TLSSpec provides TLS configuration for identity provider integration.
 |===
 | Field | Description
 | *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted. +
+| *`certificateAuthorityDataSource`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-cabundlesource[$$CABundleSource$$]__ | Reference to a CA bundle in a secret or a configmap. +
 |===
 
 

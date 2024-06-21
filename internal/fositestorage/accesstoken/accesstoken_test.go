@@ -11,7 +11,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	fositejwt "github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -334,8 +334,8 @@ func TestReadFromSecret(t *testing.T) {
 						Fosite: &openid.DefaultSession{
 							Username: "snorlax",
 							Subject:  "panda",
-							Claims:   &jwt.IDTokenClaims{JTI: "xyz"},
-							Headers:  &jwt.Headers{Extra: map[string]any{"myheader": "foo"}},
+							Claims:   &fositejwt.IDTokenClaims{JTI: "xyz"},
+							Headers:  &fositejwt.Headers{Extra: map[string]any{"myheader": "foo"}},
 						},
 						Custom: &psession.CustomSessionData{
 							Username:         "fake-username",

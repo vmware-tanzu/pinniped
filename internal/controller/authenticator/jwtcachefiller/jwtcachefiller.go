@@ -17,7 +17,7 @@ import (
 	"time"
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
-	"github.com/go-jose/go-jose/v3"
+	"github.com/go-jose/go-jose/v4"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,7 +75,18 @@ const (
 	defaultUsernameClaim = oidcapi.IDTokenClaimUsername
 	defaultGroupsClaim   = oidcapi.IDTokenClaimGroups
 
-	minimalJWTToTriggerJWKSFetch = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.e30."
+	// This hardcoded JWT will be used below to trick coreosoidc.RemoteKeySet into immediately fetching the remote JWKS.
+	// Unfortunately, coreosoidc.RemoteKeySet has no public API to ask it to perform this fetch. However, calling
+	// VerifySignature() and passing in any valid JWT will cause it to immediately fetch the remote JWKS, and return
+	// any errors that might have occurred during the fetch. This controller wants to be able to tell the user
+	// about those fetch errors to aid in user debugging of configuration. It is also a benefit for the in-memory
+	// cached authenticator to have already preloaded the JWKS, so it is immediately ready to perform authentications.
+	// Because we are passing a hardcoded JWT that was signed by a randomly generated signing key, the code below
+	// expects that VerifySignature() should always return a signature error for this JWT (with the side effect of
+	// fetching the remote JWKS) because no OIDC provider in the world should be using this signing key in its JWKS.
+	// If somehow this JWT is considered verified by a remote JWKS, then the code below will treat it as an error.
+	// This JWT and its signing key will not be used for any other purpose.
+	minimalJWTToTriggerJWKSFetch = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.bqGS21VimxEQES46lfR6-AKt_IQjZKykJGD7uyfer2QAp9d63lzcKZJq8qLj-hnLDJFnvy8F2IU1w26n4RX8s5IWxtkaeS2IZctruZzxg-TngPv4yslOznTPROIx_YOk8TMoz6-qTXWUjVTsu4RcVFnbFtdhRF0V-rfdL7Fah_DGxQM2lteb1nPB0hcN81Q8ony5Kw-NxKIpXXGr977u_SYqnafhlYIyL8W4iMN39xO3F7U3JuiySOUmJjBQPd7jL2XnWQwVcxpiZkjzWpnfEX-jqORMzDMRhbD3EfCBJsc-8NQvC4E9VoIgw2KEsfRHhyPyHITGzYOU7XUA5MnBKg"
 )
 
 type providerJSON struct {
@@ -452,15 +463,14 @@ func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksUR
 	// fetch the keys at all.
 	_, verifyWithKeySetErr := keySet.VerifySignature(ctx, minimalJWTToTriggerJWKSFetch)
 	if verifyWithKeySetErr == nil {
-		// No unit test.
 		// Since we hard-coded this token we expect there to always be a verification error.
 		// The purpose of this function is really to test if we can get the JWKS, not to actually validate a token.
 		// Therefore, we should never hit this path, nevertheless, lets handle just in case something unexpected happens.
-		errText := "jwks should not have verified unsigned jwt token"
+		errText := "remote jwks should not have been able to verify hardcoded test jwt token"
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeJWKSFetchValid,
-			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidCouldNotFetchJWKS,
 			Message: errText,
 		})
 		return nil, conditions, errors.New(errText)

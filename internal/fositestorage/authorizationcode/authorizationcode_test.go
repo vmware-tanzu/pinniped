@@ -15,12 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
+	oldjosev3 "github.com/go-jose/go-jose/v3" // we need to use the same version of jose that fosite uses when fuzzing fosite objects
 	fuzz "github.com/google/gofuzz"
 	"github.com/ory/fosite"
 	fositeoauth2 "github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	fositejwt "github.com/ory/fosite/token/jwt"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -343,7 +343,7 @@ func TestFuzzAndJSONNewValidEmptyAuthorizeCodeSession(t *testing.T) {
 		},
 		// JWK contains an any Key that we need to handle
 		// this is safe because JWK explicitly implements JSON marshalling and unmarshalling
-		func(jwk *jose.JSONWebKey, c fuzz.Continue) {
+		func(jwk *oldjosev3.JSONWebKey, c fuzz.Continue) {
 			key, _, err := ed25519.GenerateKey(c)
 			require.NoError(t, err)
 			jwk.Key = key
@@ -470,8 +470,8 @@ func TestReadFromSecret(t *testing.T) {
 						Fosite: &openid.DefaultSession{
 							Username: "snorlax",
 							Subject:  "panda",
-							Claims:   &jwt.IDTokenClaims{JTI: "xyz"},
-							Headers:  &jwt.Headers{Extra: map[string]any{"myheader": "foo"}},
+							Claims:   &fositejwt.IDTokenClaims{JTI: "xyz"},
+							Headers:  &fositejwt.Headers{Extra: map[string]any{"myheader": "foo"}},
 						},
 						Custom: &psession.CustomSessionData{
 							Username:         "fake-username",

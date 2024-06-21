@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
+	"github.com/go-jose/go-jose/v4"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	fositejwt "github.com/ory/fosite/token/jwt"
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
@@ -103,7 +103,7 @@ func TestDynamicOpenIDConnectECDSAStrategy(t *testing.T) {
 					ID: clientID,
 				},
 				Session: &openid.DefaultSession{
-					Claims: &jwt.IDTokenClaims{
+					Claims: &fositejwt.IDTokenClaims{
 						Subject: goodSubject,
 					},
 					Subject:  goodSubject,

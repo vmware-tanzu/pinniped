@@ -12,7 +12,7 @@ import (
 
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
-	"github.com/ory/fosite/token/jwt"
+	fositejwt "github.com/ory/fosite/token/jwt"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/constable"
@@ -64,7 +64,7 @@ func NewPinnipedSession(
 
 	pinnipedSession := &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
-			Claims: &jwt.IDTokenClaims{
+			Claims: &fositejwt.IDTokenClaims{
 				Subject:     c.UpstreamIdentity.DownstreamSubject,
 				RequestedAt: now,
 				AuthTime:    now,

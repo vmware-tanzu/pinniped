@@ -5,7 +5,6 @@ package tlsconfigutil
 
 import (
 	"encoding/base64"
-	"fmt"
 	"testing"
 	"time"
 
@@ -17,8 +16,10 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	supervisorv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/controller/conditionsutil"
 )
 
 func TestValidateTLSConfig(t *testing.T) {
@@ -28,67 +29,90 @@ func TestValidateTLSConfig(t *testing.T) {
 	base64EncodedBundle := base64.StdEncoding.EncodeToString(bundle)
 	tests := []struct {
 		name              string
-		tlsSpec           *idpv1alpha1.TLSSpec
+		tlsSpec           *TLSSpec
 		namespace         string
 		k8sObjects        []runtime.Object
 		expectedCondition *metav1.Condition
-		expectError       bool
 	}{
 		{
-			name:              "nil TLSSpec should generate a noTLSConfigurationMessage condition",
-			tlsSpec:           nil,
-			expectedCondition: validTLSCondition(noTLSConfigurationMessage),
-			expectError:       false,
+			name:    "nil TLSSpec should generate a noTLSConfigurationMessage condition",
+			tlsSpec: nil,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionTrue,
+				Reason:  conditionsutil.ReasonSuccess,
+				Message: "tls is valid: " + noTLSConfigurationMessage,
+			},
 		},
 		{
-			name:              "empty inline ca data should generate a loadedTLSConfigurationMessage condition",
-			tlsSpec:           &idpv1alpha1.TLSSpec{},
-			expectedCondition: validTLSCondition(loadedTLSConfigurationMessage),
-			expectError:       false,
+			name:    "empty inline ca data should generate a loadedTLSConfigurationMessage condition",
+			tlsSpec: &TLSSpec{},
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionTrue,
+				Reason:  conditionsutil.ReasonSuccess,
+				Message: "tls is valid: " + noTLSConfigurationMessage,
+			},
 		},
 		{
 			name: "valid base64 encode ca data should generate a loadedTLSConfigurationMessage condition",
-			tlsSpec: &idpv1alpha1.TLSSpec{
+			tlsSpec: &TLSSpec{
 				CertificateAuthorityData: base64EncodedBundle,
 			},
-			expectedCondition: validTLSCondition(loadedTLSConfigurationMessage),
-			expectError:       false,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionTrue,
+				Reason:  conditionsutil.ReasonSuccess,
+				Message: "tls is valid: " + loadedTLSConfigurationMessage,
+			},
 		},
 		{
 			name: "valid base64 encoded non cert data should generate a invalidTLSCondition condition",
-			tlsSpec: &idpv1alpha1.TLSSpec{
+			tlsSpec: &TLSSpec{
 				CertificateAuthorityData: "dGhpcyBpcyBzb21lIHRlc3QgZGF0YSB0aGF0IGlzIGJhc2U2NCBlbmNvZGVkIHRoYXQgaXMgbm90IGEgY2VydAo=",
 			},
-			expectedCondition: invalidTLSCondition(fmt.Sprintf("certificateAuthorityData is invalid: %s", ErrNoCertificates)),
-			expectError:       true,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: "tls.certificateAuthorityData is invalid: " + ErrNoCertificates.Error(),
+			},
 		},
 		{
 			name: "non-base64 encoded string as ca data should generate an invalidTLSCondition condition",
-			tlsSpec: &idpv1alpha1.TLSSpec{
+			tlsSpec: &TLSSpec{
 				CertificateAuthorityData: "non base64 encoded string",
 			},
-			expectedCondition: invalidTLSCondition("certificateAuthorityData is invalid: illegal base64 data"),
-			expectError:       true,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: "tls.certificateAuthorityData is invalid: illegal base64 data at input byte 3",
+			},
 		},
 		{
 			name: "supplying certificateAuthorityDataSource and certificateAuthorityData should generate an invalid condition",
-			tlsSpec: &idpv1alpha1.TLSSpec{
+			tlsSpec: &TLSSpec{
 				CertificateAuthorityData: base64EncodedBundle,
-				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+				CertificateAuthorityDataSource: &caBundleSource{
 					Kind: "Secret",
 					Name: "super-secret",
 					Key:  "ca-base64EncodedBundle",
 				},
 			},
-			expectedCondition: invalidTLSCondition("tls spec config error: both tls.certificateAuthorityDataSource and tls.certificateAuthorityData provided."),
-			expectError:       true,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: "tls is invalid: both tls.certificateAuthorityDataSource and tls.certificateAuthorityData provided",
+			},
 		},
 		{
-			name: "should return ca bundle from kubernetes secret",
-			tlsSpec: &idpv1alpha1.TLSSpec{
-				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+			name: "should return ca bundle from kubernetes secret of type tls",
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
 					Kind: "Secret",
-					Name: "awesome-secret",
+					Name: "awesome-secret-tls",
 					Key:  "ca-bundle",
 				},
 			},
@@ -96,21 +120,86 @@ func TestValidateTLSConfig(t *testing.T) {
 			k8sObjects: []runtime.Object{
 				&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-secret",
+						Name:      "awesome-secret-tls",
 						Namespace: "awesome-namespace",
 					},
+					Type: corev1.SecretTypeTLS,
 					Data: map[string][]byte{
-						"ca-bundle": []byte(bundle),
+						"ca-bundle": bundle,
 					},
 				},
 			},
-			expectedCondition: validTLSCondition(fmt.Sprintf("tls is valid: %s", loadedTLSConfigurationMessage)),
-			expectError:       false,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionTrue,
+				Reason:  conditionsutil.ReasonSuccess,
+				Message: "tls is valid: loaded TLS configuration",
+			},
 		},
 		{
+			name: "should return ca bundle from kubernetes secret of type opaque",
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret-opaque",
+					Key:  "ca-bundle",
+				},
+			},
+			namespace: "awesome-namespace",
+			k8sObjects: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "awesome-secret-opaque",
+						Namespace: "awesome-namespace",
+					},
+					Type: corev1.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"ca-bundle": bundle,
+					},
+				},
+			},
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionTrue,
+				Reason:  conditionsutil.ReasonSuccess,
+				Message: "tls is valid: loaded TLS configuration",
+			},
+		},
+
+		{
+			name: "should return invalid condition when a secrets not of type tls or opaque are used as ca data source",
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret-ba",
+					Key:  "ca-bundle",
+				},
+			},
+			namespace: "awesome-namespace",
+			k8sObjects: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "awesome-secret-ba",
+						Namespace: "awesome-namespace",
+					},
+					Type: corev1.SecretTypeBasicAuth,
+					Data: map[string][]byte{
+						"ca-bundle": bundle,
+					},
+				},
+			},
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: "tls.certificateAuthorityDataSource is invalid: secret awesome-namespace/awesome-secret-ba of type kubernetes.io/basic-auth cannot be used as a certificate authority data source",
+			},
+		},
+
+		{
 			name: "should return ca bundle from kubernetes configMap",
-			tlsSpec: &idpv1alpha1.TLSSpec{
-				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
 					Kind: "ConfigMap",
 					Name: "awesome-cm",
 					Key:  "ca-bundle",
@@ -128,13 +217,17 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCondition: validTLSCondition(fmt.Sprintf("tls is valid: %s", loadedTLSConfigurationMessage)),
-			expectError:       false,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionTrue,
+				Reason:  conditionsutil.ReasonSuccess,
+				Message: "tls is valid: loaded TLS configuration",
+			},
 		},
 		{
 			name: "should return invalid condition when failing to read ca bundle from kubernetes secret that does not exist",
-			tlsSpec: &idpv1alpha1.TLSSpec{
-				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
 					Kind: "Secret",
 					Name: "does-not-exist",
 					Key:  "does-not-matter",
@@ -152,13 +245,17 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCondition: invalidTLSCondition("tls.certificateAuthorityDataSource is invalid: failed to read from source"),
-			expectError:       true,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: "tls.certificateAuthorityDataSource is invalid: failed to get secret awesome-namespace/does-not-exist: secret \"does-not-exist\" not found",
+			},
 		},
 		{
 			name: "should return invalid condition when failing to read ca bundle from kubernetes configMap that does not exist",
-			tlsSpec: &idpv1alpha1.TLSSpec{
-				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
 					Kind: "ConfigMap",
 					Name: "does-not-exist",
 					Key:  "does-not-matter",
@@ -176,13 +273,17 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCondition: invalidTLSCondition("tls.certificateAuthorityDataSource is invalid: failed to read from source"),
-			expectError:       true,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: "tls.certificateAuthorityDataSource is invalid: failed to get configmap awesome-namespace/does-not-exist: configmap \"does-not-exist\" not found",
+			},
 		},
 		{
 			name: "should return invalid condition when using an invalid certificate authority data source",
-			tlsSpec: &idpv1alpha1.TLSSpec{
-				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
 					Kind: "SomethingElse",
 					Name: "does-not-exist",
 					Key:  "does-not-matter",
@@ -200,8 +301,12 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCondition: invalidTLSCondition("tls.certificateAuthorityDataSource is invalid: unsupported CA bundle source"),
-			expectError:       true,
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: "tls.certificateAuthorityDataSource is invalid: unsupported CA bundle source kind: SomethingElse",
+			},
 		},
 	}
 
@@ -231,15 +336,8 @@ func TestValidateTLSConfig(t *testing.T) {
 				close(stopConfigMapInformer)
 				// now the objects from kubernetes should be sync'd into the informer cache.
 			}
-			actualCondition, _, _, err := ValidateTLSConfig(tt.tlsSpec, "tls", tt.namespace, secretsInformer, configMapInformer)
-			if tt.expectError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedCondition.Type, actualCondition.Type)
-				require.Equal(t, tt.expectedCondition.Status, actualCondition.Status)
-				require.Equal(t, tt.expectedCondition.Reason, actualCondition.Reason)
-			}
+			actualCondition, _, _, _ := ValidateTLSConfig(tt.tlsSpec, "tls", tt.namespace, secretsInformer, configMapInformer)
+			require.Equal(t, tt.expectedCondition, actualCondition)
 		})
 	}
 }
@@ -427,6 +525,114 @@ func TestReadCABundleFromK8sConfigMap(t *testing.T) {
 				require.NoError(t, actualError)
 			}
 			require.Equal(t, tt.expectedData, actualData)
+		})
+	}
+}
+
+func TestNewCommonTLSSpecForSupervisor(t *testing.T) {
+	testCA, err := certauthority.New("Test CA", 1*time.Hour)
+	require.NoError(t, err)
+	bundle := testCA.Bundle()
+	base64EncodedBundle := base64.StdEncoding.EncodeToString(bundle)
+	tests := []struct {
+		name              string
+		supervisorTLSSpec *supervisorv1alpha1.TLSSpec
+		expected          *TLSSpec
+	}{
+		{
+			name:              "should return nil spec when supervisorTLSSpec is nil",
+			supervisorTLSSpec: nil,
+			expected:          nil,
+		},
+		{
+			name: "should return tls spec with non-empty certificateAuthorityData",
+			supervisorTLSSpec: &supervisorv1alpha1.TLSSpec{
+				CertificateAuthorityData:       base64EncodedBundle,
+				CertificateAuthorityDataSource: nil,
+			},
+			expected: &TLSSpec{
+				CertificateAuthorityData:       base64EncodedBundle,
+				CertificateAuthorityDataSource: nil,
+			},
+		},
+		{
+			name: "should return tls spec with certificateAuthorityDataSource",
+			supervisorTLSSpec: &supervisorv1alpha1.TLSSpec{
+				CertificateAuthorityDataSource: &supervisorv1alpha1.CABundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+			expected: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			actual := TLSSpecForSupervisor(tt.supervisorTLSSpec)
+			require.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestNewCommonTlsSpecForConcierge(t *testing.T) {
+	testCA, err := certauthority.New("Test CA", 1*time.Hour)
+	require.NoError(t, err)
+	bundle := testCA.Bundle()
+	base64EncodedBundle := base64.StdEncoding.EncodeToString(bundle)
+	tests := []struct {
+		name             string
+		conciergeTLSSpec *conciergev1alpha1.TLSSpec
+		expected         *TLSSpec
+	}{
+		{
+			name:             "should return nil spec when supervisorTLSSpec is nil",
+			conciergeTLSSpec: nil,
+			expected:         nil,
+		},
+		{
+			name: "should return tls spec with non-empty certificateAuthorityData",
+			conciergeTLSSpec: &conciergev1alpha1.TLSSpec{
+				CertificateAuthorityData:       base64EncodedBundle,
+				CertificateAuthorityDataSource: nil,
+			},
+			expected: &TLSSpec{
+				CertificateAuthorityData:       base64EncodedBundle,
+				CertificateAuthorityDataSource: nil,
+			},
+		},
+		{
+			name: "should return tls spec with certificateAuthorityDataSource",
+			conciergeTLSSpec: &conciergev1alpha1.TLSSpec{
+				CertificateAuthorityDataSource: &conciergev1alpha1.CABundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+			expected: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			actual := TlsSpecForConcierge(tt.conciergeTLSSpec)
+			require.Equal(t, tt.expected, actual)
 		})
 	}
 }

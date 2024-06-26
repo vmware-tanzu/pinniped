@@ -9,10 +9,12 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers/core/v1"
 
-	"go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	supervisorv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 )
@@ -27,14 +29,66 @@ const (
 	ErrNoCertificates = constable.Error("no certificates found")
 )
 
-// BuildCertPoolIDP reads the tlsSpec of the IDP and returns an X509 cert pool with the CA data that is read either from
+type caBundleSource struct {
+	Kind string
+	Name string
+	Key  string
+}
+
+// TLSSpec unifies the TLSSpec type that Supervisor and Concierge both individually define.
+// unifying these two definitions to allow sharing code that will read the spec and translate it into a CA bundle
+type TLSSpec struct {
+	// X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.
+	CertificateAuthorityData string
+	// Reference to a CA bundle in a secret or a configmap.
+	CertificateAuthorityDataSource *caBundleSource
+}
+
+// TLSSpecForSupervisor is a helper function to convert the Supervisor's TLSSpec to the unified TLSSpec
+func TLSSpecForSupervisor(source *supervisorv1alpha1.TLSSpec) *TLSSpec {
+	if source == nil {
+		return nil
+	}
+	dest := &TLSSpec{
+		CertificateAuthorityData: source.CertificateAuthorityData,
+	}
+
+	if source.CertificateAuthorityDataSource != nil {
+		dest.CertificateAuthorityDataSource = &caBundleSource{
+			Kind: source.CertificateAuthorityDataSource.Kind,
+			Name: source.CertificateAuthorityDataSource.Name,
+			Key:  source.CertificateAuthorityDataSource.Key,
+		}
+	}
+
+	return dest
+}
+
+// TlsSpecForConcierge is a helper function to convert the Concierge's TLSSpec to the unified TLSSpec
+func TlsSpecForConcierge(source *conciergev1alpha1.TLSSpec) *TLSSpec {
+	if source == nil {
+		return nil
+	}
+	dest := &TLSSpec{
+		CertificateAuthorityData: source.CertificateAuthorityData,
+	}
+	if source.CertificateAuthorityDataSource != nil {
+		dest.CertificateAuthorityDataSource = &caBundleSource{
+			Kind: source.CertificateAuthorityDataSource.Kind,
+			Name: source.CertificateAuthorityDataSource.Name,
+			Key:  source.CertificateAuthorityDataSource.Key,
+		}
+	}
+	return dest
+}
+
+// getCertPool reads the unified tlsSpec and returns an X509 cert pool with the CA data that is read either from
 // the inline tls.certificateAuthorityData or from a kubernetes secret or a config map as specified in the
 // tls.certificateAuthorityDataSource.
 // If the provided tlsSpec is nil, a nil CA bundle will be returned.
 // If the provided spec contains a CA bundle that is not properly encoded, an error will be returned.
-// TODO: should this function be exposed outside this package?
-func BuildCertPoolIDP(
-	tlsSpec *v1alpha1.TLSSpec,
+func getCertPool(
+	tlsSpec *TLSSpec,
 	conditionPrefix string,
 	namespace string,
 	secretInformer v1.SecretInformer,
@@ -55,7 +109,7 @@ func BuildCertPoolIDP(
 	var err error
 	caBundle := tlsSpec.CertificateAuthorityData
 	field := fmt.Sprintf("%s.%s", conditionPrefix, "certificateAuthorityData")
-	// currently, the ca data supplied inline in the CRDs is expected to be base64 encoded.
+	// the ca data supplied inline in the CRDs is expected to be base64 encoded.
 	// However, the ca data read from kubernetes secrets or config map will not be base64 encoded.
 	// For kubernetes secrets, secret data read using the  client-go code automatically decodes base64 encoded values.
 	// So a base64 decode is required only when fetching ca bundle from the tls.certificateAuthorityData field.
@@ -67,9 +121,7 @@ func BuildCertPoolIDP(
 		field = fmt.Sprintf("%s.%s", conditionPrefix, "certificateAuthorityDataSource")
 		caBundle, err = readCABundleFromSource(tlsSpec.CertificateAuthorityDataSource, namespace, secretInformer, configMapInformer)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%s is invalid: failed to read CA bundle from source %s/%s/%s: %s",
-				field, tlsSpec.CertificateAuthorityDataSource.Kind, tlsSpec.CertificateAuthorityDataSource.Name,
-				tlsSpec.CertificateAuthorityDataSource.Key, err.Error())
+			return nil, nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
 		}
 	}
 
@@ -81,7 +133,7 @@ func BuildCertPoolIDP(
 	if decodeRequired {
 		bundleBytes, err = base64.StdEncoding.DecodeString(caBundle)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%s is invalid: %s", conditionPrefix, err.Error())
+			return nil, nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
 		}
 	}
 
@@ -104,14 +156,14 @@ func BuildCertPoolIDP(
 // TODO: it should suffice that this function returns a TLSConfigurationValid condition, and perhaps we could skip
 // returning the error. This can be done once all controllers are able to use this function.
 func ValidateTLSConfig(
-	tlsSpec *v1alpha1.TLSSpec,
+	tlsSpec *TLSSpec,
 	conditionPrefix string,
 	namespace string,
 	secretInformer v1.SecretInformer,
 	configMapInformer v1.ConfigMapInformer,
-) (*v12.Condition, []byte, *x509.CertPool, error) {
+) (*metav1.Condition, []byte, *x509.CertPool, error) {
 	// try to build a x509 cert pool using the ca data specified in the tlsSpec.
-	certPool, bundle, err := BuildCertPoolIDP(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
+	certPool, bundle, err := getCertPool(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
 	if err != nil {
 		// an error encountered during building a certpool using the ca data from the tlsSpec results in an invalid
 		// TLS condition.
@@ -126,14 +178,14 @@ func ValidateTLSConfig(
 	return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, loadedTLSConfigurationMessage)), bundle, certPool, err
 }
 
-func readCABundleFromSource(source *v1alpha1.CABundleSource, namespace string, secretInformer v1.SecretInformer, configMapInformer v1.ConfigMapInformer) (string, error) {
+func readCABundleFromSource(source *caBundleSource, namespace string, secretInformer v1.SecretInformer, configMapInformer v1.ConfigMapInformer) (string, error) {
 	switch source.Kind {
 	case "Secret":
 		return readCABundleFromK8sSecret(namespace, source.Name, source.Key, secretInformer)
 	case "ConfigMap":
 		return readCABundleFromK8sConfigMap(namespace, source.Name, source.Key, configMapInformer)
 	default:
-		return "", fmt.Errorf("unsupported CA bundle source: %s", source.Kind)
+		return "", fmt.Errorf("unsupported CA bundle source kind: %s", source.Kind)
 	}
 }
 
@@ -141,6 +193,11 @@ func readCABundleFromK8sSecret(namespace string, name string, key string, secret
 	s, err := secretInformer.Lister().Secrets(namespace).Get(name)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get secret %s/%s", namespace, name)
+	}
+	// for kubernetes secrets to be used as a certificate authority data source, the secret should be of type
+	// kubernetes.io/tls or Opaque. It is an error to use a secret that is of any other type.
+	if s.Type != corev1.SecretTypeTLS && s.Type != corev1.SecretTypeOpaque {
+		return "", fmt.Errorf("secret %s/%s of type %s cannot be used as a certificate authority data source", namespace, name, s.Type)
 	}
 	// ca bundle in the secret is expected to exist in a specific key, if that key does not exist, then it is an error
 	if val, exists := s.Data[key]; exists {
@@ -162,19 +219,19 @@ func readCABundleFromK8sConfigMap(namespace string, name string, key string, con
 	return "", fmt.Errorf("key %s not found in configmap %s/%s", key, namespace, name)
 }
 
-func validTLSCondition(message string) *v12.Condition {
-	return &v12.Condition{
+func validTLSCondition(message string) *metav1.Condition {
+	return &metav1.Condition{
 		Type:    typeTLSConfigurationValid,
-		Status:  v12.ConditionTrue,
+		Status:  metav1.ConditionTrue,
 		Reason:  conditionsutil.ReasonSuccess,
 		Message: message,
 	}
 }
 
-func invalidTLSCondition(message string) *v12.Condition {
-	return &v12.Condition{
+func invalidTLSCondition(message string) *metav1.Condition {
+	return &metav1.Condition{
 		Type:    typeTLSConfigurationValid,
-		Status:  v12.ConditionFalse,
+		Status:  metav1.ConditionFalse,
 		Reason:  ReasonInvalidTLSConfig,
 		Message: message,
 	}

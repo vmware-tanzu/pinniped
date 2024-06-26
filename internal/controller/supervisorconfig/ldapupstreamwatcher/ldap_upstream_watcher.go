@@ -143,6 +143,7 @@ type ldapWatcherController struct {
 	client                       supervisorclientset.Interface
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
+	configMapInformer            corev1informers.ConfigMapInformer
 }
 
 // New instantiates a new controllerlib.Controller which will populate the provided UpstreamLDAPIdentityProviderICache.
@@ -249,7 +250,7 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 		Dialer: c.ldapDialer,
 	}
 
-	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &ldapUpstreamGenericLDAPImpl{*upstream}, c.secretInformer, c.validatedSettingsCache, config)
+	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &ldapUpstreamGenericLDAPImpl{*upstream}, c.secretInformer, c.configMapInformer, c.validatedSettingsCache, config)
 
 	c.updateStatus(ctx, upstream, conditions.Conditions())
 

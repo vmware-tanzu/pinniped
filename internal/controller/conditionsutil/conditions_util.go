@@ -12,6 +12,10 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+const (
+	ReasonSuccess = "Success"
+)
+
 // MergeConditions merges conditions into conditionsToUpdate.
 // Note that LastTransitionTime refers to the time when the status changed,
 // but ObservedGeneration should be the current generation for all conditions, since Pinniped should always check every condition.

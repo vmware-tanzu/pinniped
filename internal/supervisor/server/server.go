@@ -154,6 +154,7 @@ func prepareControllers(
 	federationDomainInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
 	oidcClientInformer := pinnipedInformers.Config().V1alpha1().OIDCClients()
 	secretInformer := kubeInformers.Core().V1().Secrets()
+	configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 
 	// Create controller manager.
 	controllerManager := controllerlib.
@@ -322,6 +323,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker).

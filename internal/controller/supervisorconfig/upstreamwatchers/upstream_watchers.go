@@ -5,8 +5,6 @@ package upstreamwatchers
 
 import (
 	"context"
-	"crypto/x509"
-	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -15,32 +13,27 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"go.pinniped.dev/internal/constable"
+	"go.pinniped.dev/internal/controller/conditionsutil"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/upstreamldap"
 )
 
 const (
-	ReasonNotFound         = "SecretNotFound"
-	ReasonWrongType        = "SecretWrongType"
-	ReasonMissingKeys      = "SecretMissingKeys"
-	ReasonSuccess          = "Success"
-	ReasonInvalidTLSConfig = "InvalidTLSConfig"
-
-	ErrNoCertificates = constable.Error("no certificates found")
+	ReasonNotFound    = "SecretNotFound"
+	ReasonWrongType   = "SecretWrongType"
+	ReasonMissingKeys = "SecretMissingKeys"
 
 	LDAPBindAccountSecretType = corev1.SecretTypeBasicAuth
 	probeLDAPTimeout          = 90 * time.Second
 
 	// Constants related to conditions.
-	typeBindSecretValid              = "BindSecretValid"
-	typeTLSConfigurationValid        = "TLSConfigurationValid"
-	typeLDAPConnectionValid          = "LDAPConnectionValid"
-	TypeSearchBaseFound              = "SearchBaseFound"
-	reasonLDAPConnectionError        = "LDAPConnectionError"
-	noTLSConfigurationMessage        = "no TLS configuration provided"
-	loadedTLSConfigurationMessage    = "loaded TLS configuration"
+	typeBindSecretValid       = "BindSecretValid"
+	typeLDAPConnectionValid   = "LDAPConnectionValid"
+	TypeSearchBaseFound       = "SearchBaseFound"
+	reasonLDAPConnectionError = "LDAPConnectionError"
+
 	ReasonUsingConfigurationFromSpec = "UsingConfigurationFromSpec"
 	ReasonErrorFetchingSearchBase    = "ErrorFetchingSearchBase"
 )
@@ -135,29 +128,6 @@ type UpstreamGenericLDAPStatus interface {
 	Conditions() []metav1.Condition
 }
 
-func ValidateTLSConfig(tlsSpec *idpv1alpha1.TLSSpec, config *upstreamldap.ProviderConfig) *metav1.Condition {
-	if tlsSpec == nil {
-		return validTLSCondition(noTLSConfigurationMessage)
-	}
-	if len(tlsSpec.CertificateAuthorityData) == 0 {
-		return validTLSCondition(loadedTLSConfigurationMessage)
-	}
-
-	bundle, err := base64.StdEncoding.DecodeString(tlsSpec.CertificateAuthorityData)
-	if err != nil {
-		return invalidTLSCondition(fmt.Sprintf("certificateAuthorityData is invalid: %s", err.Error()))
-	}
-
-	ca := x509.NewCertPool()
-	ok := ca.AppendCertsFromPEM(bundle)
-	if !ok {
-		return invalidTLSCondition(fmt.Sprintf("certificateAuthorityData is invalid: %s", ErrNoCertificates))
-	}
-
-	config.CABundle = bundle
-	return validTLSCondition(loadedTLSConfigurationMessage)
-}
-
 func TestConnection(
 	ctx context.Context,
 	bindSecretName string,
@@ -200,27 +170,9 @@ func TestConnection(
 	return &metav1.Condition{
 		Type:   typeLDAPConnectionValid,
 		Status: metav1.ConditionTrue,
-		Reason: ReasonSuccess,
+		Reason: conditionsutil.ReasonSuccess,
 		Message: fmt.Sprintf(`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 			config.Host, config.BindUsername, bindSecretName, currentSecretVersion),
-	}
-}
-
-func validTLSCondition(message string) *metav1.Condition {
-	return &metav1.Condition{
-		Type:    typeTLSConfigurationValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  ReasonSuccess,
-		Message: message,
-	}
-}
-
-func invalidTLSCondition(message string) *metav1.Condition {
-	return &metav1.Condition{
-		Type:    typeTLSConfigurationValid,
-		Status:  metav1.ConditionFalse,
-		Reason:  ReasonInvalidTLSConfig,
-		Message: message,
 	}
 }
 
@@ -260,7 +212,7 @@ func ValidateSecret(secretInformer corev1informers.SecretInformer, secretName st
 	return &metav1.Condition{
 		Type:    typeBindSecretValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  ReasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: "loaded bind secret",
 	}, secret.ResourceVersion
 }
@@ -292,6 +244,7 @@ func ValidateGenericLDAP(
 	ctx context.Context,
 	upstream UpstreamGenericLDAPIDP,
 	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 	validatedSettingsCache ValidatedSettingsCacheI,
 	config *upstreamldap.ProviderConfig,
 ) GradatedConditions {
@@ -300,8 +253,9 @@ func ValidateGenericLDAP(
 	secretValidCondition, currentSecretVersion := ValidateSecret(secretInformer, upstream.Spec().BindSecretName(), upstream.Namespace(), config)
 	conditions.Append(secretValidCondition, true)
 
-	tlsValidCondition := ValidateTLSConfig(upstream.Spec().TLSSpec(), config)
+	tlsValidCondition, caBundle, _, _ := tlsconfigutil.ValidateTLSConfig(upstream.Spec().TLSSpec(), "", upstream.Namespace(), secretInformer, configMapInformer)
 	conditions.Append(tlsValidCondition, true)
+	config.CABundle = caBundle
 
 	var ldapConnectionValidCondition, searchBaseFoundCondition *metav1.Condition
 	// No point in trying to connect to the server if the config was already determined to be invalid.

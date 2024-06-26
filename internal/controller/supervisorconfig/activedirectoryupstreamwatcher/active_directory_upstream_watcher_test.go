@@ -80,9 +80,10 @@ func TestActiveDirectoryUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			New(nil, nil, activeDirectoryIDPInformer, secretInformer, withInformer.WithInformer)
+			New(nil, nil, activeDirectoryIDPInformer, secretInformer, configMapInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(secretInformer)
@@ -124,9 +125,10 @@ func TestActiveDirectoryUpstreamWatcherControllerFilterActiveDirectoryIdentityPr
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			New(nil, nil, activeDirectoryIDPInformer, secretInformer, withInformer.WithInformer)
+			New(nil, nil, activeDirectoryIDPInformer, secretInformer, configMapInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(activeDirectoryIDPInformer)
@@ -2048,6 +2050,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				controllerlib.WithInformer,
 			)
 

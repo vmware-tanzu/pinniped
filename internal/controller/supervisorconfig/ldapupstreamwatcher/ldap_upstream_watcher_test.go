@@ -46,7 +46,7 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name: "a secret of the right type",
+			name: "should return true for a secret of type BasicAuth",
 			secret: &corev1.Secret{
 				Type:       corev1.SecretTypeBasicAuth,
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
@@ -56,14 +56,34 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "a secret of the wrong type",
+			name: "should return true for a secret of type Opaque",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeOpaque,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return true for a secret of type TLS",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeTLS,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return false for a secret of the wrong type",
 			secret: &corev1.Secret{
 				Type:       "this-is-the-wrong-type",
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
 		},
 		{
-			name: "resource of a data type which is not watched by this controller",
+			name: "should return false for a resource of a data type which is not watched by this controller",
 			secret: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
@@ -79,9 +99,10 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			New(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
+			New(nil, nil, ldapIDPInformer, secretInformer, configMapInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(secretInformer)
@@ -89,6 +110,51 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.secret))
 			require.Equal(t, test.wantUpdate, filter.Update(test.secret, &unrelated))
 			require.Equal(t, test.wantDelete, filter.Delete(test.secret))
+		})
+	}
+}
+
+func TestLDAPUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		cm         metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name: "any configmap",
+			cm: &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fakePinnipedClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			ldapIDPInformer := pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders()
+			fakeKubeClient := fake.NewSimpleClientset()
+			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
+			withInformer := testutil.NewObservableWithInformerOption()
+
+			New(nil, nil, ldapIDPInformer, secretInformer, configMapInformer, withInformer.WithInformer)
+
+			unrelated := corev1.ConfigMap{}
+			filter := withInformer.GetFilterForInformer(configMapInformer)
+			require.Equal(t, test.wantAdd, filter.Add(test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(test.cm, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.cm))
 		})
 	}
 }
@@ -123,9 +189,10 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			New(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
+			New(nil, nil, ldapIDPInformer, secretInformer, configMapInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(ldapIDPInformer)
@@ -1177,6 +1244,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				controllerlib.WithInformer,
 			)
 

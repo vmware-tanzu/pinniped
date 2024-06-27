@@ -31,6 +31,7 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
@@ -73,6 +74,7 @@ type gitHubWatcherController struct {
 	client                         supervisorclientset.Interface
 	gitHubIdentityProviderInformer idpinformers.GitHubIdentityProviderInformer
 	secretInformer                 corev1informers.SecretInformer
+	configMapInformer              corev1informers.ConfigMapInformer
 	clock                          clock.Clock
 	dialFunc                       func(network, addr string, config *tls.Config) (*tls.Conn, error)
 }
@@ -84,6 +86,7 @@ func New(
 	client supervisorclientset.Interface,
 	gitHubIdentityProviderInformer idpinformers.GitHubIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
@@ -96,6 +99,7 @@ func New(
 		log:                            log.WithName(controllerName),
 		gitHubIdentityProviderInformer: gitHubIdentityProviderInformer,
 		secretInformer:                 secretInformer,
+		configMapInformer:              configMapInformer,
 		clock:                          clock,
 		dialFunc:                       dialFunc,
 	}
@@ -104,15 +108,24 @@ func New(
 		controllerlib.Config{Name: controllerName, Syncer: &c},
 		withInformer(
 			gitHubIdentityProviderInformer,
-			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				gitHubIDP, ok := obj.(*idpv1alpha1.GitHubIdentityProvider)
-				return ok && gitHubIDP.Namespace == namespace
-			}, pinnipedcontroller.SingletonQueue()),
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnySecretOfTypeFilter(gitHubClientSecretType, pinnipedcontroller.SingletonQueue(), namespace),
+			pinnipedcontroller.MatchAnySecretOfTypesFilter(
+				[]corev1.SecretType{
+					gitHubClientSecretType,
+					corev1.SecretTypeOpaque,
+					corev1.SecretTypeTLS,
+				},
+				pinnipedcontroller.SingletonQueue(),
+			),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			configMapInformer,
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -201,7 +214,7 @@ func (c *gitHubWatcherController) validateClientSecret(secretName string) (*meta
 	return &metav1.Condition{
 		Type:    ClientCredentialsSecretValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: fmt.Sprintf("clientID and clientSecret have been read from spec.client.SecretName (%q)", secretName),
 	}, clientID, clientSecret, nil
 }
@@ -219,7 +232,7 @@ func validateOrganizationsPolicy(organizationsSpec *idpv1alpha1.GitHubOrganizati
 		return &metav1.Condition{
 			Type:    OrganizationsPolicyValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  upstreamwatchers.ReasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: fmt.Sprintf("spec.allowAuthentication.organizations.policy (%q) is valid", policy),
 		}
 	}
@@ -354,30 +367,20 @@ func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Conditio
 	return &metav1.Condition{
 		Type:    HostValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: fmt.Sprintf("spec.githubAPI.host (%q) is valid", host),
 	}, &hostPort
 }
 
 func (c *gitHubWatcherController) validateTLSConfiguration(tlsSpec *idpv1alpha1.TLSSpec) (*metav1.Condition, *x509.CertPool) {
-	certPool, _, buildCertPoolErr := pinnipedcontroller.BuildCertPoolIDP(tlsSpec)
-	if buildCertPoolErr != nil {
-		// buildCertPoolErr is not recoverable with a resync.
-		// It requires user interaction, so do not return the error.
-		return &metav1.Condition{
-			Type:    TLSConfigurationValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  "InvalidTLSConfig",
-			Message: fmt.Sprintf("spec.githubAPI.tls.certificateAuthorityData is not valid: %s", buildCertPoolErr),
-		}, nil
-	}
+	tlsCondition, _, certPool, _ := tlsconfigutil.ValidateTLSConfig(
+		tlsconfigutil.TLSSpecForSupervisor(tlsSpec),
+		"spec.githubAPI.tls",
+		c.namespace,
+		c.secretInformer,
+		c.configMapInformer)
 
-	return &metav1.Condition{
-		Type:    TLSConfigurationValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
-		Message: "spec.githubAPI.tls.certificateAuthorityData is valid",
-	}, certPool
+	return tlsCondition, certPool
 }
 
 func (c *gitHubWatcherController) validateGitHubConnection(
@@ -407,7 +410,7 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 	return &metav1.Condition{
 		Type:    GitHubConnectionValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", hostPort.Endpoint()),
 	}, fmt.Sprintf("https://%s", hostPort.Endpoint()), phttp.Default(certPool), conn.Close()
 }
@@ -471,7 +474,7 @@ func validateUserAndGroupAttributes(upstream *idpv1alpha1.GitHubIdentityProvider
 	return &metav1.Condition{
 		Type:    ClaimsValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: "spec.claims are valid",
 	}, groupNameAttribute, usernameAttribute
 }

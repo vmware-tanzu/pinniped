@@ -304,6 +304,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				plog.New(),
 				controllerlib.WithInformer,
 			),
@@ -314,6 +315,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker).
@@ -334,6 +336,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().GitHubIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				plog.New(),
 				controllerlib.WithInformer,
 				clock.RealClock{},

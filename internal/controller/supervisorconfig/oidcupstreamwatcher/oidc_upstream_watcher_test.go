@@ -49,7 +49,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name: "a secret of the right type",
+			name: "should return true for a secret of the type secrets.pinniped.dev/oidc-client",
 			secret: &corev1.Secret{
 				Type:       "secrets.pinniped.dev/oidc-client",
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
@@ -59,14 +59,34 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "a secret of the wrong type",
+			name: "should return true for a secret of the type Opaque",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeOpaque,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return true for a secret of the type TLS",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeTLS,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return false for a secret of the wrong type",
 			secret: &corev1.Secret{
 				Type:       "secrets.pinniped.dev/not-the-oidc-client-type",
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
 		},
 		{
-			name: "resource of wrong data type",
+			name: "should return false for resource of wrong data type",
 			secret: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
@@ -85,6 +105,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
 			var log bytes.Buffer
@@ -95,6 +116,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				nil,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				logger,
 				withInformer.WithInformer,
 			)
@@ -105,6 +127,65 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.secret))
 			require.Equal(t, test.wantUpdate, filter.Update(test.secret, &unrelated))
 			require.Equal(t, test.wantDelete, filter.Delete(test.secret))
+		})
+	}
+}
+
+func TestOIDCUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		cm         metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name: "any configmap",
+			cm: &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fakePinnipedClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakeKubeClient := fake.NewSimpleClientset()
+			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
+			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
+			cache.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{
+				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
+			})
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
+			withInformer := testutil.NewObservableWithInformerOption()
+
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			New(
+				cache,
+				nil,
+				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
+				secretInformer,
+				configMapInformer,
+				logger,
+				withInformer.WithInformer,
+			)
+
+			unrelated := corev1.ConfigMap{}
+			filter := withInformer.GetFilterForInformer(configMapInformer)
+			require.Equal(t, test.wantAdd, filter.Add(test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(test.cm, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.cm))
 		})
 	}
 }
@@ -1429,6 +1510,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				logger,
 				controllerlib.WithInformer,
 			)

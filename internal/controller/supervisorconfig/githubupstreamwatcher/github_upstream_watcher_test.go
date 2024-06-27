@@ -35,6 +35,7 @@ import (
 	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
@@ -167,7 +168,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", host),
 		}
 	}
@@ -193,7 +194,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
 		}
 	}
@@ -219,7 +220,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.allowAuthentication.organizations.policy (%q) is valid", policy),
 		}
 	}
@@ -245,7 +246,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            fmt.Sprintf("clientID and clientSecret have been read from spec.client.SecretName (%q)", secretName),
 		}
 	}
@@ -276,7 +277,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            "spec.claims are valid",
 		}
 	}
@@ -302,7 +303,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", host),
 		}
 	}
@@ -1853,6 +1854,7 @@ func TestController(t *testing.T) {
 				fakeSupervisorClient,
 				gitHubIdentityProviderInformer,
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				logger,
 				controllerlib.WithInformer,
 				frozenClockForLastTransitionTime,
@@ -2058,7 +2060,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: 333,
 					LastTransitionTime: oneHourAgo,
-					Reason:             upstreamwatchers.ReasonSuccess,
+					Reason:             conditionsutil.ReasonSuccess,
 					Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", goodServerDomain),
 				},
 				{
@@ -2066,7 +2068,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: 333,
 					LastTransitionTime: oneHourAgo,
-					Reason:             upstreamwatchers.ReasonSuccess,
+					Reason:             conditionsutil.ReasonSuccess,
 					Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", goodServerDomain),
 				},
 				{
@@ -2074,7 +2076,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: 333,
 					LastTransitionTime: oneHourAgo,
-					Reason:             upstreamwatchers.ReasonSuccess,
+					Reason:             conditionsutil.ReasonSuccess,
 					Message:            `spec.allowAuthentication.organizations.policy ("AllGitHubUsers") is valid`,
 				},
 				{
@@ -2082,7 +2084,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: 333,
 					LastTransitionTime: oneHourAgo,
-					Reason:             upstreamwatchers.ReasonSuccess,
+					Reason:             conditionsutil.ReasonSuccess,
 					Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
 				},
 			},
@@ -2154,7 +2156,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            "spec.claims are valid",
 							},
 							{
@@ -2162,7 +2164,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            `clientID and clientSecret have been read from spec.client.SecretName ("some-secret-name")`,
 							},
 							{
@@ -2170,7 +2172,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", goodServerDomain),
 							},
 							{
@@ -2178,7 +2180,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", goodServerDomain),
 							},
 							{
@@ -2186,7 +2188,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            `spec.allowAuthentication.organizations.policy ("AllGitHubUsers") is valid`,
 							},
 							{
@@ -2194,7 +2196,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
 							},
 						},
@@ -2227,6 +2229,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 				fakeSupervisorClient,
 				supervisorInformers.IDP().V1alpha1().GitHubIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				logger,
 				controllerlib.WithInformer,
 				frozenClockForLastTransitionTime,
@@ -2273,12 +2276,10 @@ func compareTLSClientConfigWithinHttpClients(t *testing.T, expected *http.Client
 }
 
 func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
-	namespace := "some-namespace"
 	goodSecret := &corev1.Secret{
 		Type: "secrets.pinniped.dev/github-client",
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "some-name",
-			Namespace: namespace,
+			Name: "some-name",
 		},
 	}
 
@@ -2290,22 +2291,36 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name:       "a secret of the right type",
+			name:       "should return true for a secret of the type secrets.pinniped.dev/github-client",
 			secret:     goodSecret,
 			wantAdd:    true,
 			wantUpdate: true,
 			wantDelete: true,
 		},
 		{
-			name: "a secret of the right type, but in the wrong namespace",
+			name: "should return false for a secret of the type Opaque",
 			secret: func() *corev1.Secret {
 				otherSecret := goodSecret.DeepCopy()
-				otherSecret.Namespace = "other-namespace"
+				otherSecret.Type = corev1.SecretTypeOpaque
 				return otherSecret
 			}(),
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
 		},
 		{
-			name: "a secret of the wrong type",
+			name: "should return false for a secret of the type TLS",
+			secret: func() *corev1.Secret {
+				otherSecret := goodSecret.DeepCopy()
+				otherSecret.Type = corev1.SecretTypeTLS
+				return otherSecret
+			}(),
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return false for a secret of the wrong type",
 			secret: func() *corev1.Secret {
 				otherSecret := goodSecret.DeepCopy()
 				otherSecret.Type = "other-type"
@@ -2313,7 +2328,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			}(),
 		},
 		{
-			name: "resource of wrong data type",
+			name: "should return false for a resource of wrong data type",
 			secret: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
@@ -2329,14 +2344,16 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			logger := plog.TestLogger(t, &log)
 
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			observableInformers := testutil.NewObservableWithInformerOption()
 
 			_ = New(
-				namespace,
+				"some-namespace",
 				dynamicupstreamprovider.NewDynamicUpstreamIDPProvider(),
 				supervisorfake.NewSimpleClientset(),
 				supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},
@@ -2349,6 +2366,65 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			require.Equal(t, tt.wantUpdate, filter.Update(unrelated, tt.secret))
 			require.Equal(t, tt.wantUpdate, filter.Update(tt.secret, unrelated))
 			require.Equal(t, tt.wantDelete, filter.Delete(tt.secret))
+		})
+	}
+}
+
+// TODO: make this test pass
+func TestGitHubUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
+	namespace := "some-namespace"
+	goodCM := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+		},
+	}
+
+	tests := []struct {
+		name       string
+		cm         metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name:       "a configMap in the right namespace",
+			cm:         goodCM,
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			gitHubIdentityProviderInformer := supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders()
+			observableInformers := testutil.NewObservableWithInformerOption()
+
+			configMapInformer := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().ConfigMaps()
+
+			_ = New(
+				namespace,
+				dynamicupstreamprovider.NewDynamicUpstreamIDPProvider(),
+				supervisorfake.NewSimpleClientset(),
+				gitHubIdentityProviderInformer,
+				k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().Secrets(),
+				configMapInformer,
+				logger,
+				observableInformers.WithInformer,
+				clock.RealClock{},
+				tls.Dial,
+			)
+
+			unrelated := &corev1.ConfigMap{}
+			filter := observableInformers.GetFilterForInformer(configMapInformer)
+			require.Equal(t, tt.wantAdd, filter.Add(tt.cm))
+			require.Equal(t, tt.wantUpdate, filter.Update(unrelated, tt.cm))
+			require.Equal(t, tt.wantUpdate, filter.Update(tt.cm, unrelated))
+			require.Equal(t, tt.wantDelete, filter.Delete(tt.cm))
 		})
 	}
 }
@@ -2375,20 +2451,6 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 			wantUpdate: true,
 			wantDelete: true,
 		},
-		{
-			name: "IDP in the wrong namespace",
-			idp: func() metav1.Object {
-				badIDP := goodIDP.DeepCopy()
-				badIDP.Namespace = "other-namespace"
-				return badIDP
-			}(),
-		},
-		{
-			name: "resource of wrong data type",
-			idp: &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{Name: "some-name"},
-			},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2406,6 +2468,7 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 				supervisorfake.NewSimpleClientset(),
 				gitHubIdentityProviderInformer,
 				k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().Secrets(),
+				k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().ConfigMaps(),
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},

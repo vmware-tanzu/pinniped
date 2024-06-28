@@ -254,7 +254,7 @@ func ValidateGenericLDAP(
 	conditions.Append(secretValidCondition, true)
 
 	tlsSpec := tlsconfigutil.TLSSpecForSupervisor(upstream.Spec().TLSSpec())
-	tlsValidCondition, caBundle, _, _ := tlsconfigutil.ValidateTLSConfig(tlsSpec, "", upstream.Namespace(), secretInformer, configMapInformer)
+	tlsValidCondition, caBundle, _, _ := tlsconfigutil.ValidateTLSConfig(tlsSpec, "spec.tls", upstream.Namespace(), secretInformer, configMapInformer)
 	conditions.Append(tlsValidCondition, true)
 	config.CABundle = caBundle
 

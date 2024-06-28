@@ -4,6 +4,7 @@
 package tlsconfigutil
 
 import (
+	"context"
 	"encoding/base64"
 	"testing"
 	"time"
@@ -16,8 +17,8 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
-	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	supervisorv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 )
@@ -317,24 +318,20 @@ func TestValidateTLSConfig(t *testing.T) {
 			var configMapInformer corev1informers.ConfigMapInformer
 
 			if len(tt.k8sObjects) > 0 {
-				stopSecretInformer := make(chan struct{})
-				stopConfigMapInformer := make(chan struct{})
 				fakeClient := fake.NewSimpleClientset(tt.k8sObjects...)
-				sharedInformers := informers.NewSharedInformerFactory(fakeClient, time.Second)
+				sharedInformers := informers.NewSharedInformerFactory(fakeClient, 0)
 				configMapInformer = sharedInformers.Core().V1().ConfigMaps()
 				secretsInformer = sharedInformers.Core().V1().Secrets()
 
-				// Run the informer so that it can sync the objects from kubernetes into its cache.
-				// run as a go routine so that we can stop the informer and continue with our tests.
-				go secretsInformer.Informer().Run(stopSecretInformer)
-				// wait 1s before stopping the informer. 1s because, that's the resync duration of the informer.
-				time.Sleep(time.Second)
-				close(stopSecretInformer)
-				// TODO: can we avoid calling Run on both informers?
-				go configMapInformer.Informer().Run(stopConfigMapInformer)
-				time.Sleep(time.Second)
-				close(stopConfigMapInformer)
-				// now the objects from kubernetes should be sync'd into the informer cache.
+				// calling the .Informer function registers this informer in the sharedinformer.
+				// doing this will ensure that this informer will be sync'd when Start is called next.
+				configMapInformer.Informer()
+				secretsInformer.Informer()
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				sharedInformers.Start(ctx.Done())
+				sharedInformers.WaitForCacheSync(ctx.Done())
 			}
 			actualCondition, _, _, _ := ValidateTLSConfig(tt.tlsSpec, "tls", tt.namespace, secretsInformer, configMapInformer)
 			require.Equal(t, tt.expectedCondition, actualCondition)
@@ -391,7 +388,7 @@ func TestReadCABundleFromK8sSecret(t *testing.T) {
 			expectError:  true,
 		},
 		{
-			name:            "should return data from existing secret and existing key",
+			name:            "should return data from existing tls secret and existing key",
 			secretNamespace: "awesome-namespace",
 			secretName:      "awesome-secret",
 			secretKey:       "awesome",
@@ -401,6 +398,27 @@ func TestReadCABundleFromK8sSecret(t *testing.T) {
 						Name:      "awesome-secret",
 						Namespace: "awesome-namespace",
 					},
+					Type: corev1.SecretTypeTLS,
+					Data: map[string][]byte{
+						"awesome": []byte("pinniped-is-awesome"),
+					},
+				},
+			},
+			expectedData: "pinniped-is-awesome",
+			expectError:  false,
+		},
+		{
+			name:            "should return data from existing opaque secret and existing key",
+			secretNamespace: "awesome-namespace",
+			secretName:      "awesome-secret",
+			secretKey:       "awesome",
+			k8sObjects: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "awesome-secret",
+						Namespace: "awesome-namespace",
+					},
+					Type: corev1.SecretTypeOpaque,
 					Data: map[string][]byte{
 						"awesome": []byte("pinniped-is-awesome"),
 					},
@@ -414,15 +432,18 @@ func TestReadCABundleFromK8sSecret(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			stop := make(chan struct{})
 			fakeClient := fake.NewSimpleClientset(tt.k8sObjects...)
-			secretsInformer := informers.NewSharedInformerFactory(fakeClient, time.Second).Core().V1().Secrets()
-			// Run the informer so that it can sync the objects from kubernetes into its cache.
-			// run as a go routine so that we can stop the informer and continue with our tests.
-			go secretsInformer.Informer().Run(stop)
-			// wait 1s before stopping the informer. 1s because, that's the resync duration of the informer.
-			time.Sleep(time.Second)
-			close(stop)
+			sharedInformers := informers.NewSharedInformerFactory(fakeClient, 0)
+			secretsInformer := sharedInformers.Core().V1().Secrets()
+
+			// calling the .Informer function registers this informer in the sharedinformer.
+			// doing this will ensure that this informer will be sync'd when Start is called next.
+			secretsInformer.Informer()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			sharedInformers.Start(ctx.Done())
+			sharedInformers.WaitForCacheSync(ctx.Done())
 			// now the objects from kubernetes should be sync'd into the informer cache.
 			actualData, actualError := readCABundleFromK8sSecret(tt.secretNamespace, tt.secretName, tt.secretKey, secretsInformer)
 			if tt.expectError {
@@ -507,17 +528,19 @@ func TestReadCABundleFromK8sConfigMap(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			stop := make(chan struct{})
 			fakeClient := fake.NewSimpleClientset(tt.k8sObjects...)
-			configMapInformer := informers.NewSharedInformerFactory(fakeClient, time.Second).Core().V1().ConfigMaps()
 
-			// Run the informer so that it can sync the objects from kubernetes into its cache.
-			// run as a go routine so that we can stop the informer and continue with our tests.
-			go configMapInformer.Informer().Run(stop)
-			// wait 1s before stopping the informer. 1s because, that's the resync duration of the informer.
-			time.Sleep(time.Second)
-			close(stop)
-			// now the objects from kubernetes should be sync'd into the informer cache.
+			sharedInformers := informers.NewSharedInformerFactory(fakeClient, 0)
+			configMapInformer := sharedInformers.Core().V1().ConfigMaps()
+
+			// calling the .Informer function registers this informer in the sharedinformer.
+			// doing this will ensure that this informer will be sync'd when Start is called next.
+			configMapInformer.Informer()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			sharedInformers.Start(ctx.Done())
+			sharedInformers.WaitForCacheSync(ctx.Done())
 			actualData, actualError := readCABundleFromK8sConfigMap(tt.configMapNamespace, tt.configMapName, tt.configMapKey, configMapInformer)
 			if tt.expectError {
 				require.Error(t, actualError)
@@ -536,7 +559,7 @@ func TestNewCommonTLSSpecForSupervisor(t *testing.T) {
 	base64EncodedBundle := base64.StdEncoding.EncodeToString(bundle)
 	tests := []struct {
 		name              string
-		supervisorTLSSpec *supervisorv1alpha1.TLSSpec
+		supervisorTLSSpec *idpv1alpha1.TLSSpec
 		expected          *TLSSpec
 	}{
 		{
@@ -546,7 +569,7 @@ func TestNewCommonTLSSpecForSupervisor(t *testing.T) {
 		},
 		{
 			name: "should return tls spec with non-empty certificateAuthorityData",
-			supervisorTLSSpec: &supervisorv1alpha1.TLSSpec{
+			supervisorTLSSpec: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData:       base64EncodedBundle,
 				CertificateAuthorityDataSource: nil,
 			},
@@ -557,8 +580,8 @@ func TestNewCommonTLSSpecForSupervisor(t *testing.T) {
 		},
 		{
 			name: "should return tls spec with certificateAuthorityDataSource",
-			supervisorTLSSpec: &supervisorv1alpha1.TLSSpec{
-				CertificateAuthorityDataSource: &supervisorv1alpha1.CABundleSource{
+			supervisorTLSSpec: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
 					Kind: "Secret",
 					Name: "awesome-secret",
 					Key:  "ca-bundle",
@@ -590,7 +613,7 @@ func TestNewCommonTlsSpecForConcierge(t *testing.T) {
 	base64EncodedBundle := base64.StdEncoding.EncodeToString(bundle)
 	tests := []struct {
 		name             string
-		conciergeTLSSpec *conciergev1alpha1.TLSSpec
+		conciergeTLSSpec *authenticationv1alpha1.TLSSpec
 		expected         *TLSSpec
 	}{
 		{
@@ -600,7 +623,7 @@ func TestNewCommonTlsSpecForConcierge(t *testing.T) {
 		},
 		{
 			name: "should return tls spec with non-empty certificateAuthorityData",
-			conciergeTLSSpec: &conciergev1alpha1.TLSSpec{
+			conciergeTLSSpec: &authenticationv1alpha1.TLSSpec{
 				CertificateAuthorityData:       base64EncodedBundle,
 				CertificateAuthorityDataSource: nil,
 			},
@@ -611,8 +634,8 @@ func TestNewCommonTlsSpecForConcierge(t *testing.T) {
 		},
 		{
 			name: "should return tls spec with certificateAuthorityDataSource",
-			conciergeTLSSpec: &conciergev1alpha1.TLSSpec{
-				CertificateAuthorityDataSource: &conciergev1alpha1.CABundleSource{
+			conciergeTLSSpec: &authenticationv1alpha1.TLSSpec{
+				CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
 					Kind: "Secret",
 					Name: "awesome-secret",
 					Key:  "ca-bundle",

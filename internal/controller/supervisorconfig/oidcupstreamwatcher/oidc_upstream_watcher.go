@@ -7,7 +7,6 @@ package oidcupstreamwatcher
 import (
 	"context"
 	"crypto/x509"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -329,7 +328,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 	discoveredProvider, httpClient := c.validatorCache.getProvider(&upstream.Spec)
 	tlsCondition, _, certPool, _ := tlsconfigutil.ValidateTLSConfig(
 		tlsconfigutil.TLSSpecForSupervisor(upstream.Spec.TLS),
-		"oidcIdentityProvider.spec.tls",
+		"spec.tls",
 		upstream.Namespace,
 		c.secretInformer,
 		c.configMapInformer)
@@ -464,24 +463,6 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *idpv
 	if err != nil {
 		log.Error("failed to update status", err)
 	}
-}
-
-func getClient(upstream *idpv1alpha1.OIDCIdentityProvider) (*http.Client, error) {
-	if upstream.Spec.TLS == nil || upstream.Spec.TLS.CertificateAuthorityData == "" {
-		return defaultClientShortTimeout(nil), nil
-	}
-
-	bundle, err := base64.StdEncoding.DecodeString(upstream.Spec.TLS.CertificateAuthorityData)
-	if err != nil {
-		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", err)
-	}
-
-	rootCAs := x509.NewCertPool()
-	if !rootCAs.AppendCertsFromPEM(bundle) {
-		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", tlsconfigutil.ErrNoCertificates)
-	}
-
-	return defaultClientShortTimeout(rootCAs), nil
 }
 
 func defaultClientShortTimeout(rootCAs *x509.CertPool) *http.Client {

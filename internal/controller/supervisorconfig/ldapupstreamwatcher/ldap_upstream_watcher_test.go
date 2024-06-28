@@ -335,13 +335,13 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	condPtr := func(c metav1.Condition) *metav1.Condition {
 		return &c
 	}
-	tlsConfigurationValidLoadedTrueCondition := func(gen int64) metav1.Condition {
+	tlsConfigurationValidLoadedTrueCondition := func(gen int64, msg string) metav1.Condition {
 		return metav1.Condition{
 			Type:               "TLSConfigurationValid",
 			Status:             "True",
 			LastTransitionTime: now,
 			Reason:             "Success",
-			Message:            "loaded TLS configuration",
+			Message:            fmt.Sprintf("spec.tls is valid: %s", msg),
 			ObservedGeneration: gen,
 		}
 	}
@@ -349,7 +349,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		return []metav1.Condition{
 			bindSecretValidTrueCondition(gen),
 			ldapConnectionValidTrueCondition(gen, secretVersion),
-			tlsConfigurationValidLoadedTrueCondition(gen),
+			tlsConfigurationValidLoadedTrueCondition(gen, "loaded TLS configuration"),
 		}
 	}
 
@@ -422,7 +422,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`secret "%s" not found`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -450,7 +450,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`referenced Secret "%s" has wrong type "some-other-type" (should be "kubernetes.io/basic-auth")`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -477,7 +477,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`referenced Secret "%s" is missing required keys ["username" "password"]`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -501,7 +501,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "InvalidTLSConfig",
-							Message:            "certificateAuthorityData is invalid: illegal base64 data at input byte 4",
+							Message:            "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 4",
 							ObservedGeneration: 1234,
 						},
 					},
@@ -527,7 +527,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "InvalidTLSConfig",
-							Message:            "certificateAuthorityData is invalid: no certificates found",
+							Message:            "spec.tls.certificateAuthorityData is invalid: no certificates found",
 							ObservedGeneration: 1234,
 						},
 					},
@@ -580,7 +580,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
-							Message:            "no TLS configuration provided",
+							Message:            "spec.tls is valid: no TLS configuration provided",
 							ObservedGeneration: 1234,
 						},
 					},
@@ -649,7 +649,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								"ldap.example.com", testBindUsername, testBindSecretName, "4242"),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -722,7 +722,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								"ldap.example.com:5678", testBindUsername, "ldap.example.com:5678"),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -765,8 +765,12 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
 				Status: idpv1alpha1.LDAPIdentityProviderStatus{
-					Phase:      "Ready",
-					Conditions: allConditionsTrue(1234, "4242"),
+					Phase: "Ready",
+					Conditions: []metav1.Condition{
+						bindSecretValidTrueCondition(1234),
+						ldapConnectionValidTrueCondition(1234, "4242"),
+						tlsConfigurationValidLoadedTrueCondition(1234, "no TLS configuration provided"),
+					},
 				},
 			}},
 			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
@@ -808,7 +812,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								Message:            fmt.Sprintf(`secret "%s" not found`, "non-existent-secret"),
 								ObservedGeneration: 42,
 							},
-							tlsConfigurationValidLoadedTrueCondition(42),
+							tlsConfigurationValidLoadedTrueCondition(42, "loaded TLS configuration"),
 						},
 					},
 				},
@@ -857,7 +861,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								testHost, testBindUsername, testBindUsername),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -1178,7 +1182,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
-							Message:            "loaded TLS configuration",
+							Message:            "spec.tls is valid: loaded TLS configuration",
 							ObservedGeneration: 1234,
 						},
 					},

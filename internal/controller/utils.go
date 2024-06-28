@@ -66,15 +66,6 @@ func MatchAnySecretOfTypeFilter(secretType corev1.SecretType, parentFunc control
 	return SimpleFilter(isSecretOfType, parentFunc)
 }
 
-func containsSecretType(filter []corev1.SecretType, secretType corev1.SecretType) bool {
-	for _, filter := range filter {
-		if filter == secretType {
-			return true
-		}
-	}
-	return false
-}
-
 func MatchAnySecretOfTypesFilter(secretTypes []corev1.SecretType, parentFunc controllerlib.ParentFunc, namespaces ...string) controllerlib.Filter {
 	isSecretOfType := func(obj metav1.Object) bool {
 		secret, ok := obj.(*corev1.Secret)

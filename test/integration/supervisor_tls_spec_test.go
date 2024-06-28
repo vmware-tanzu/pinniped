@@ -271,6 +271,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 			yamlBytes := []byte(fmt.Sprintf(tc.customResourceYaml, env.APIGroupSuffix, resourceName))
 
 			require.NoError(t, os.WriteFile(yamlFilepath, yamlBytes, 0600))
+			//nolint:gosec // this is test code.
 			cmd := exec.CommandContext(context.Background(), "kubectl", []string{"apply", "-f", yamlFilepath}...)
 			var stdOut, stdErr bytes.Buffer
 			cmd.Stdout = &stdOut
@@ -278,6 +279,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 			err := cmd.Run()
 			t.Cleanup(func() {
 				t.Helper()
+				//nolint:gosec // this is test code.
 				require.NoError(t, exec.Command("kubectl", []string{"delete", "--ignore-not-found", "-f", yamlFilepath}...).Run())
 			})
 			if tc.expectedError == "" {

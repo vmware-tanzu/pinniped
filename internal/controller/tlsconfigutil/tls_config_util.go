@@ -11,10 +11,10 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/informers/core/v1"
+	corev1informers "k8s.io/client-go/informers/core/v1"
 
-	conciergev1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	supervisorv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 )
@@ -36,7 +36,7 @@ type caBundleSource struct {
 }
 
 // TLSSpec unifies the TLSSpec type that Supervisor and Concierge both individually define.
-// unifying these two definitions to allow sharing code that will read the spec and translate it into a CA bundle
+// unifying these two definitions to allow sharing code that will read the spec and translate it into a CA bundle.
 type TLSSpec struct {
 	// X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted.
 	CertificateAuthorityData string
@@ -44,8 +44,8 @@ type TLSSpec struct {
 	CertificateAuthorityDataSource *caBundleSource
 }
 
-// TLSSpecForSupervisor is a helper function to convert the Supervisor's TLSSpec to the unified TLSSpec
-func TLSSpecForSupervisor(source *supervisorv1alpha1.TLSSpec) *TLSSpec {
+// TLSSpecForSupervisor is a helper function to convert the Supervisor's TLSSpec to the unified TLSSpec.
+func TLSSpecForSupervisor(source *idpv1alpha1.TLSSpec) *TLSSpec {
 	if source == nil {
 		return nil
 	}
@@ -64,8 +64,8 @@ func TLSSpecForSupervisor(source *supervisorv1alpha1.TLSSpec) *TLSSpec {
 	return dest
 }
 
-// TlsSpecForConcierge is a helper function to convert the Concierge's TLSSpec to the unified TLSSpec
-func TlsSpecForConcierge(source *conciergev1alpha1.TLSSpec) *TLSSpec {
+// TlsSpecForConcierge is a helper function to convert the Concierge's TLSSpec to the unified TLSSpec.
+func TlsSpecForConcierge(source *authenticationv1alpha1.TLSSpec) *TLSSpec {
 	if source == nil {
 		return nil
 	}
@@ -91,8 +91,8 @@ func getCertPool(
 	tlsSpec *TLSSpec,
 	conditionPrefix string,
 	namespace string,
-	secretInformer v1.SecretInformer,
-	configMapInformer v1.ConfigMapInformer,
+	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 ) (*x509.CertPool, []byte, error) {
 	// if tlsSpec is nil, we return a nil cert pool and cert bundle. A nil error is also returned to indicate that
 	// a nil tlsSpec is nevertheless a valid one resulting in a valid TLS condition.
@@ -159,8 +159,8 @@ func ValidateTLSConfig(
 	tlsSpec *TLSSpec,
 	conditionPrefix string,
 	namespace string,
-	secretInformer v1.SecretInformer,
-	configMapInformer v1.ConfigMapInformer,
+	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 ) (*metav1.Condition, []byte, *x509.CertPool, error) {
 	// try to build a x509 cert pool using the ca data specified in the tlsSpec.
 	certPool, bundle, err := getCertPool(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
@@ -178,7 +178,7 @@ func ValidateTLSConfig(
 	return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, loadedTLSConfigurationMessage)), bundle, certPool, err
 }
 
-func readCABundleFromSource(source *caBundleSource, namespace string, secretInformer v1.SecretInformer, configMapInformer v1.ConfigMapInformer) (string, error) {
+func readCABundleFromSource(source *caBundleSource, namespace string, secretInformer corev1informers.SecretInformer, configMapInformer corev1informers.ConfigMapInformer) (string, error) {
 	switch source.Kind {
 	case "Secret":
 		return readCABundleFromK8sSecret(namespace, source.Name, source.Key, secretInformer)
@@ -189,7 +189,7 @@ func readCABundleFromSource(source *caBundleSource, namespace string, secretInfo
 	}
 }
 
-func readCABundleFromK8sSecret(namespace string, name string, key string, secretInformer v1.SecretInformer) (string, error) {
+func readCABundleFromK8sSecret(namespace string, name string, key string, secretInformer corev1informers.SecretInformer) (string, error) {
 	s, err := secretInformer.Lister().Secrets(namespace).Get(name)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get secret %s/%s", namespace, name)
@@ -206,7 +206,7 @@ func readCABundleFromK8sSecret(namespace string, name string, key string, secret
 	return "", fmt.Errorf("key %s not found in secret %s/%s", key, namespace, name)
 }
 
-func readCABundleFromK8sConfigMap(namespace string, name string, key string, configMapInformer v1.ConfigMapInformer) (string, error) {
+func readCABundleFromK8sConfigMap(namespace string, name string, key string, configMapInformer corev1informers.ConfigMapInformer) (string, error) {
 	c, err := configMapInformer.Lister().ConfigMaps(namespace).Get(name)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get configmap %s/%s", namespace, name)

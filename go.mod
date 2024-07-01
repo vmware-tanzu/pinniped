@@ -44,7 +44,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/stdr v1.2.2
 	github.com/go-logr/zapr v1.3.0
-	github.com/gofrs/flock v0.9.0
+	github.com/gofrs/flock v0.11.0
 	github.com/google/cel-go v0.20.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-github/v62 v62.0.0

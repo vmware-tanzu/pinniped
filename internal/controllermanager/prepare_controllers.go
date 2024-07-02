@@ -238,6 +238,8 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				c.AuthenticatorCache,
 				client.PinnipedConcierge,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
+				informers.installationNamespaceK8s.Core().V1().ConfigMaps(),
 				clock.RealClock{},
 				plog.New(),
 			),

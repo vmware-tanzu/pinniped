@@ -7,7 +7,6 @@ package oidcupstreamwatcher
 import (
 	"context"
 	"crypto/x509"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -32,6 +31,7 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/net/phttp"
@@ -128,6 +128,7 @@ type oidcWatcherController struct {
 	client                       supervisorclientset.Interface
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
+	configMapInformer            corev1informers.ConfigMapInformer
 	validatorCache               interface {
 		getProvider(*idpv1alpha1.OIDCIdentityProviderSpec) (*coreosoidc.Provider, *http.Client)
 		putProvider(*idpv1alpha1.OIDCIdentityProviderSpec, *coreosoidc.Provider, *http.Client)
@@ -140,6 +141,7 @@ func New(
 	client supervisorclientset.Interface,
 	oidcIdentityProviderInformer idpinformers.OIDCIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
@@ -149,6 +151,7 @@ func New(
 		client:                       client,
 		oidcIdentityProviderInformer: oidcIdentityProviderInformer,
 		secretInformer:               secretInformer,
+		configMapInformer:            configMapInformer,
 		validatorCache:               &lruValidatorCache{cache: cache.NewExpiring()},
 	}
 	return controllerlib.New(
@@ -160,7 +163,18 @@ func New(
 		),
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnySecretOfTypeFilter(oidcClientSecretType, pinnipedcontroller.SingletonQueue()),
+			pinnipedcontroller.MatchAnySecretOfTypesFilter(
+				[]corev1.SecretType{
+					oidcClientSecretType,
+					corev1.SecretTypeOpaque,
+					corev1.SecretTypeTLS,
+				},
+				pinnipedcontroller.SingletonQueue()),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			configMapInformer,
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -220,8 +234,9 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 
 	conditions := []*metav1.Condition{
 		c.validateSecret(upstream, &result),
-		c.validateIssuer(ctx.Context, upstream, &result),
 	}
+	conditions = append(conditions, c.validateIssuer(ctx.Context, upstream, &result)...)
+
 	if len(rejectedAuthcodeAuthorizeParameters) > 0 {
 		conditions = append(conditions, &metav1.Condition{
 			Type:   typeAdditionalAuthorizeParametersValid,
@@ -234,7 +249,7 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeAdditionalAuthorizeParametersValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  upstreamwatchers.ReasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: allParamNamesAllowedMsg,
 		})
 	}
@@ -302,32 +317,42 @@ func (c *oidcWatcherController) validateSecret(upstream *idpv1alpha1.OIDCIdentit
 	return &metav1.Condition{
 		Type:    typeClientCredentialsSecretValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: "loaded client credentials",
 	}
 }
 
 // validateIssuer validates the .spec.issuer field, performs OIDC discovery, and returns the appropriate OIDCDiscoverySucceeded condition.
-func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *idpv1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) *metav1.Condition {
+func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *idpv1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) []*metav1.Condition {
 	// Get the provider and HTTP Client from cache if possible.
 	discoveredProvider, httpClient := c.validatorCache.getProvider(&upstream.Spec)
+	tlsCondition, _, certPool, _ := tlsconfigutil.ValidateTLSConfig(
+		tlsconfigutil.TLSSpecForSupervisor(upstream.Spec.TLS),
+		"spec.tls",
+		upstream.Namespace,
+		c.secretInformer,
+		c.configMapInformer)
 
 	// If the provider does not exist in the cache, do a fresh discovery lookup and save to the cache.
 	if discoveredProvider == nil {
 		var err error
-		httpClient, err = getClient(upstream)
-		if err != nil {
-			return &metav1.Condition{
-				Type:    typeOIDCDiscoverySucceeded,
-				Status:  metav1.ConditionFalse,
-				Reason:  upstreamwatchers.ReasonInvalidTLSConfig,
-				Message: err.Error(),
+		if tlsCondition.Reason != conditionsutil.ReasonSuccess {
+			return []*metav1.Condition{
+				{
+					Type:    typeOIDCDiscoverySucceeded,
+					Status:  metav1.ConditionFalse,
+					Reason:  tlsconfigutil.ReasonInvalidTLSConfig,
+					Message: tlsCondition.Message,
+				},
+				tlsCondition,
 			}
 		}
 
+		httpClient = defaultClientShortTimeout(certPool)
+
 		_, issuerURLCondition := validateHTTPSURL(upstream.Spec.Issuer, "issuer", reasonUnreachable)
 		if issuerURLCondition != nil {
-			return issuerURLCondition
+			return []*metav1.Condition{issuerURLCondition, tlsCondition}
 		}
 
 		discoveredProvider, err = coreosoidc.NewProvider(coreosoidc.ClientContext(ctx, httpClient), upstream.Spec.Issuer)
@@ -337,11 +362,14 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 				"name", upstream.Name,
 				"issuer", upstream.Spec.Issuer,
 			).Error("failed to perform OIDC discovery", err)
-			return &metav1.Condition{
-				Type:    typeOIDCDiscoverySucceeded,
-				Status:  metav1.ConditionFalse,
-				Reason:  reasonUnreachable,
-				Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, pinnipedcontroller.TruncateMostLongErr(err)),
+			return []*metav1.Condition{
+				{
+					Type:    typeOIDCDiscoverySucceeded,
+					Status:  metav1.ConditionFalse,
+					Reason:  reasonUnreachable,
+					Message: fmt.Sprintf("failed to perform OIDC discovery against %q:\n%s", upstream.Spec.Issuer, pinnipedcontroller.TruncateMostLongErr(err)),
+				},
+				tlsCondition,
 			}
 		}
 
@@ -356,11 +384,14 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 	}
 	if err := discoveredProvider.Claims(&additionalDiscoveryClaims); err != nil {
 		// This shouldn't actually happen because the above call to NewProvider() would have already returned this error.
-		return &metav1.Condition{
-			Type:    typeOIDCDiscoverySucceeded,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidResponse,
-			Message: fmt.Sprintf("failed to unmarshal OIDC discovery response from %q:\n%s", upstream.Spec.Issuer, pinnipedcontroller.TruncateMostLongErr(err)),
+		return []*metav1.Condition{
+			{
+				Type:    typeOIDCDiscoverySucceeded,
+				Status:  metav1.ConditionFalse,
+				Reason:  reasonInvalidResponse,
+				Message: fmt.Sprintf("failed to unmarshal OIDC discovery response from %q:\n%s", upstream.Spec.Issuer, pinnipedcontroller.TruncateMostLongErr(err)),
+			},
+			tlsCondition,
 		}
 	}
 	if additionalDiscoveryClaims.RevocationEndpoint != "" {
@@ -371,7 +402,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 			reasonInvalidResponse,
 		)
 		if revocationURLCondition != nil {
-			return revocationURLCondition
+			return []*metav1.Condition{revocationURLCondition, tlsCondition}
 		}
 		// Remember the URL for later use.
 		result.RevocationURL = revocationURL
@@ -383,7 +414,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 		reasonInvalidResponse,
 	)
 	if authorizeURLCondition != nil {
-		return authorizeURLCondition
+		return []*metav1.Condition{authorizeURLCondition, tlsCondition}
 	}
 
 	_, tokenURLCondition := validateHTTPSURL(
@@ -392,18 +423,21 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 		reasonInvalidResponse,
 	)
 	if tokenURLCondition != nil {
-		return tokenURLCondition
+		return []*metav1.Condition{tokenURLCondition, tlsCondition}
 	}
 
 	// If everything is valid, update the result and set the condition to true.
 	result.Config.Endpoint = discoveredProvider.Endpoint()
 	result.Provider = discoveredProvider
 	result.Client = httpClient
-	return &metav1.Condition{
-		Type:    typeOIDCDiscoverySucceeded,
-		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
-		Message: "discovered issuer configuration",
+	return []*metav1.Condition{
+		{
+			Type:    typeOIDCDiscoverySucceeded,
+			Status:  metav1.ConditionTrue,
+			Reason:  conditionsutil.ReasonSuccess,
+			Message: "discovered issuer configuration",
+		},
+		tlsCondition,
 	}
 }
 
@@ -429,24 +463,6 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *idpv
 	if err != nil {
 		log.Error("failed to update status", err)
 	}
-}
-
-func getClient(upstream *idpv1alpha1.OIDCIdentityProvider) (*http.Client, error) {
-	if upstream.Spec.TLS == nil || upstream.Spec.TLS.CertificateAuthorityData == "" {
-		return defaultClientShortTimeout(nil), nil
-	}
-
-	bundle, err := base64.StdEncoding.DecodeString(upstream.Spec.TLS.CertificateAuthorityData)
-	if err != nil {
-		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", err)
-	}
-
-	rootCAs := x509.NewCertPool()
-	if !rootCAs.AppendCertsFromPEM(bundle) {
-		return nil, fmt.Errorf("spec.certificateAuthorityData is invalid: %w", upstreamwatchers.ErrNoCertificates)
-	}
-
-	return defaultClientShortTimeout(rootCAs), nil
 }
 
 func defaultClientShortTimeout(rootCAs *x509.CertPool) *http.Client {

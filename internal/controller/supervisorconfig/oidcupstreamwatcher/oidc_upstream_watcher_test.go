@@ -49,7 +49,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name: "a secret of the right type",
+			name: "should return true for a secret of the type secrets.pinniped.dev/oidc-client",
 			secret: &corev1.Secret{
 				Type:       "secrets.pinniped.dev/oidc-client",
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
@@ -59,14 +59,34 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "a secret of the wrong type",
+			name: "should return true for a secret of the type Opaque",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeOpaque,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return true for a secret of the type TLS",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeTLS,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return false for a secret of the wrong type",
 			secret: &corev1.Secret{
 				Type:       "secrets.pinniped.dev/not-the-oidc-client-type",
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
 		},
 		{
-			name: "resource of wrong data type",
+			name: "should return false for resource of wrong data type",
 			secret: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
@@ -85,6 +105,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
 			var log bytes.Buffer
@@ -95,6 +116,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				nil,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				logger,
 				withInformer.WithInformer,
 			)
@@ -105,6 +127,65 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.secret))
 			require.Equal(t, test.wantUpdate, filter.Update(test.secret, &unrelated))
 			require.Equal(t, test.wantDelete, filter.Delete(test.secret))
+		})
+	}
+}
+
+func TestOIDCUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		cm         metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name: "any configmap",
+			cm: &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fakePinnipedClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakeKubeClient := fake.NewSimpleClientset()
+			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
+			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
+			cache.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{
+				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
+			})
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
+			withInformer := testutil.NewObservableWithInformerOption()
+
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			New(
+				cache,
+				nil,
+				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
+				secretInformer,
+				configMapInformer,
+				logger,
+				withInformer.WithInformer,
+			)
+
+			unrelated := corev1.ConfigMap{}
+			filter := withInformer.GetFilterForInformer(configMapInformer)
+			require.Equal(t, test.wantAdd, filter.Add(test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(test.cm, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.cm))
 		})
 	}
 }
@@ -179,6 +260,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"False","reason":"SecretNotFound","message":"secret \"test-client-secret\" not found"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","reason":"SecretNotFound","message":"secret \"test-client-secret\" not found","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -203,6 +285,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							Reason:             "Success",
 							Message:            "discovered issuer configuration",
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -226,6 +315,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"False","reason":"SecretWrongType","message":"referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","reason":"SecretWrongType","message":"referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -250,6 +340,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							Reason:             "Success",
 							Message:            "discovered issuer configuration",
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -272,6 +369,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"False","reason":"SecretMissingKeys","message":"referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","reason":"SecretMissingKeys","message":"referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -295,6 +393,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							LastTransitionTime: now,
 							Reason:             "Success",
 							Message:            "discovered issuer configuration",
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
 						},
 					},
 				},
@@ -320,9 +425,11 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
-				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidTLSConfig","message":"spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"False","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
-				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidTLSConfig","message":"spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7","error":"OIDCIdentityProvider has a failing condition"}`,
+				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7","error":"OIDCIdentityProvider has a failing condition"}`,
+				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
@@ -343,7 +450,14 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "InvalidTLSConfig",
-							Message:            `spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7`,
+							Message:            `spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7`,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "InvalidTLSConfig",
+							Message:            "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7",
 						},
 					},
 				},
@@ -369,9 +483,11 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
-				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidTLSConfig","message":"spec.certificateAuthorityData is invalid: no certificates found"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: no certificates found"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"False","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: no certificates found"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
-				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidTLSConfig","message":"spec.certificateAuthorityData is invalid: no certificates found","error":"OIDCIdentityProvider has a failing condition"}`,
+				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: no certificates found","error":"OIDCIdentityProvider has a failing condition"}`,
+				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: no certificates found","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
@@ -392,7 +508,14 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "InvalidTLSConfig",
-							Message:            `spec.certificateAuthorityData is invalid: no certificates found`,
+							Message:            `spec.tls.certificateAuthorityData is invalid: no certificates found`,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "False",
+							LastTransitionTime: now,
+							Reason:             "InvalidTLSConfig",
+							Message:            "spec.tls.certificateAuthorityData is invalid: no certificates found",
 						},
 					},
 				},
@@ -416,6 +539,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"failed to parse issuer URL: parse \"%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\": invalid URL escape \"%in\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: no TLS configuration provided"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"failed to parse issuer URL: parse \"%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\": invalid URL escape \"%in\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -440,6 +564,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							Reason:             "Unreachable",
 							Message:            `failed to parse issuer URL: parse "%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": invalid URL escape "%in"`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: no TLS configuration provided",
+						},
 					},
 				},
 			}},
@@ -462,6 +593,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have \"https\" scheme, not \"http\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: no TLS configuration provided"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have \"https\" scheme, not \"http\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -486,6 +618,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							Reason:             "Unreachable",
 							Message:            `issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have "https" scheme, not "http"`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: no TLS configuration provided",
+						},
 					},
 				},
 			}},
@@ -508,6 +647,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"issuer URL '` + testIssuerURL + `?sub=foo' cannot contain query or fragment component"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: no TLS configuration provided"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"issuer URL '` + testIssuerURL + `?sub=foo' cannot contain query or fragment component","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -532,6 +672,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							Reason:             "Unreachable",
 							Message:            `issuer URL '` + testIssuerURL + "?sub=foo" + `' cannot contain query or fragment component`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: no TLS configuration provided",
+						},
 					},
 				},
 			}},
@@ -554,6 +701,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"issuer URL '` + testIssuerURL + `#fragment' cannot contain query or fragment component"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: no TLS configuration provided"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"issuer URL '` + testIssuerURL + `#fragment' cannot contain query or fragment component","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -577,6 +725,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							LastTransitionTime: now,
 							Reason:             "Unreachable",
 							Message:            `issuer URL '` + testIssuerURL + "#fragment" + `' cannot contain query or fragment component`,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: no TLS configuration provided",
 						},
 					},
 				},
@@ -602,6 +757,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateIssuer","message":"failed to perform OIDC discovery","namespace":"test-namespace","name":"test-name","issuer":"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","error":"Get \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": tls: failed to verify certificate: x509: certificate signed by unknown authority"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\":\nGet \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": tls: failed to verify certificate: x509: certificate signed by unknown authority"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\":\nGet \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": tls: failed to verify certificate: x509: certificate signed by unknown authority","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -627,6 +783,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":
 Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -650,6 +813,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -674,6 +838,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							Reason:             "InvalidResponse",
 							Message:            `failed to parse authorization endpoint URL: parse "%": invalid URL escape "%"`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -697,6 +868,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"failed to parse revocation endpoint URL: parse \"%\": invalid URL escape \"%\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"failed to parse revocation endpoint URL: parse \"%\": invalid URL escape \"%\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -721,6 +893,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							Reason:             "InvalidResponse",
 							Message:            `failed to parse revocation endpoint URL: parse "%": invalid URL escape "%"`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -744,6 +923,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"authorization endpoint URL 'http://example.com/authorize' must have \"https\" scheme, not \"http\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"authorization endpoint URL 'http://example.com/authorize' must have \"https\" scheme, not \"http\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -768,6 +948,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							Reason:             "InvalidResponse",
 							Message:            `authorization endpoint URL 'http://example.com/authorize' must have "https" scheme, not "http"`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -791,6 +978,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"revocation endpoint URL 'http://example.com/revoke' must have \"https\" scheme, not \"http\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"revocation endpoint URL 'http://example.com/revoke' must have \"https\" scheme, not \"http\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -815,6 +1003,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							Reason:             "InvalidResponse",
 							Message:            `revocation endpoint URL 'http://example.com/revoke' must have "https" scheme, not "http"`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -838,6 +1033,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"token endpoint URL 'http://example.com/token' must have \"https\" scheme, not \"http\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"token endpoint URL 'http://example.com/token' must have \"https\" scheme, not \"http\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -862,6 +1058,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							Reason:             "InvalidResponse",
 							Message:            `token endpoint URL 'http://example.com/token' must have "https" scheme, not "http"`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -885,6 +1088,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"token endpoint URL '' must have \"https\" scheme, not \"\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"token endpoint URL '' must have \"https\" scheme, not \"\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -909,6 +1113,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							Reason:             "InvalidResponse",
 							Message:            `token endpoint URL '' must have "https" scheme, not ""`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -932,6 +1143,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"authorization endpoint URL '' must have \"https\" scheme, not \"\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"authorization endpoint URL '' must have \"https\" scheme, not \"\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -955,6 +1167,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							LastTransitionTime: now,
 							Reason:             "InvalidResponse",
 							Message:            `authorization endpoint URL '' must have "https" scheme, not ""`,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
 						},
 					},
 				},
@@ -990,6 +1209,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1015,6 +1235,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 						happyAdditionalAuthorizeParametersValidCondition,
 						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials"},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -1046,6 +1267,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1071,6 +1293,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
 						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1102,6 +1325,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1127,6 +1351,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
 						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1161,6 +1386,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1186,6 +1412,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
 						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1228,6 +1455,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1255,6 +1483,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
 						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1292,6 +1521,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"False","reason":"DisallowedParameterName","message":"the following additionalAuthorizeParameters are not allowed: response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","reason":"DisallowedParameterName","message":"the following additionalAuthorizeParameters are not allowed: response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -1306,6 +1536,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 								"response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd", ObservedGeneration: 1234},
 						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
 						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1330,6 +1561,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateIssuer","message":"failed to perform OIDC discovery","namespace":"test-namespace","name":"test-name","issuer":"` + testIssuerURL + `/ends-with-slash","error":"oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\""}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -1355,6 +1587,13 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/ends-with-slash":
 oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/ends-with-slash" got "` + testIssuerURL + `/ends-with-slash/"`,
 						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
+						},
 					},
 				},
 			}},
@@ -1379,6 +1618,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateIssuer","message":"failed to perform OIDC discovery","namespace":"test-namespace","name":"test-name","issuer":"` + testIssuerURL + `/","error":"oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\""}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -1403,6 +1643,13 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 							Reason:             "Unreachable",
 							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/":
 oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/" got "` + testIssuerURL + `"`,
+						},
+						{
+							Type:               "TLSConfigurationValid",
+							Status:             "True",
+							LastTransitionTime: now,
+							Reason:             "Success",
+							Message:            "spec.tls is valid: loaded TLS configuration",
 						},
 					},
 				},
@@ -1429,6 +1676,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				logger,
 				controllerlib.WithInformer,
 			)

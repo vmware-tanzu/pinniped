@@ -66,6 +66,21 @@ func MatchAnySecretOfTypeFilter(secretType corev1.SecretType, parentFunc control
 	return SimpleFilter(isSecretOfType, parentFunc)
 }
 
+func MatchAnySecretOfTypesFilter(secretTypes []corev1.SecretType, parentFunc controllerlib.ParentFunc, namespaces ...string) controllerlib.Filter {
+	isSecretOfType := func(obj metav1.Object) bool {
+		secret, ok := obj.(*corev1.Secret)
+		if !ok {
+			return false
+		}
+		// Only match on namespace if namespaces are provided
+		if len(namespaces) > 0 && !slices.Contains(namespaces, secret.Namespace) {
+			return false
+		}
+		return slices.Contains(secretTypes, secret.Type)
+	}
+	return SimpleFilter(isSecretOfType, parentFunc)
+}
+
 func SecretIsControlledByParentFunc(matchFunc func(obj metav1.Object) bool) func(obj metav1.Object) controllerlib.Key {
 	return func(obj metav1.Object) controllerlib.Key {
 		if matchFunc(obj) {

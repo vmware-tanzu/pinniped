@@ -35,6 +35,7 @@ import (
 	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
+	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
@@ -167,7 +168,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", host),
 		}
 	}
@@ -184,8 +185,7 @@ func TestController(t *testing.T) {
 			Message:            fmt.Sprintf(`spec.githubAPI.host (%q) is not valid: %s`, host, message),
 		}
 	}
-
-	buildTLSConfigurationValidTrue := func(t *testing.T) metav1.Condition {
+	buildTLSConfigurationValidTrueWithMsg := func(t *testing.T, msg string) metav1.Condition {
 		t.Helper()
 
 		return metav1.Condition{
@@ -193,9 +193,14 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
-			Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
+			Reason:             conditionsutil.ReasonSuccess,
+			Message:            fmt.Sprintf("spec.githubAPI.tls is valid: %s", msg),
 		}
+	}
+
+	buildTLSConfigurationValidTrue := func(t *testing.T) metav1.Condition {
+		t.Helper()
+		return buildTLSConfigurationValidTrueWithMsg(t, "loaded TLS configuration")
 	}
 
 	buildTLSConfigurationValidFalse := func(t *testing.T, message string) metav1.Condition {
@@ -219,7 +224,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.allowAuthentication.organizations.policy (%q) is valid", policy),
 		}
 	}
@@ -245,7 +250,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            fmt.Sprintf("clientID and clientSecret have been read from spec.client.SecretName (%q)", secretName),
 		}
 	}
@@ -276,7 +281,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            "spec.claims are valid",
 		}
 	}
@@ -302,7 +307,7 @@ func TestController(t *testing.T) {
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: wantObservedGeneration,
 			LastTransitionTime: wantLastTransitionTime,
-			Reason:             upstreamwatchers.ReasonSuccess,
+			Reason:             conditionsutil.ReasonSuccess,
 			Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", host),
 		}
 	}
@@ -436,7 +441,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Ready"),
 			},
@@ -492,7 +497,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validMinimalIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validMinimalIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("minimal-idp-name", "Ready"),
 			},
@@ -567,7 +572,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, "github.com"),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, "github.com:443"),
 				buildLogForUpdatingPhase("minimal-idp-name", "Ready"),
 			},
@@ -638,7 +643,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, goodServerIPv6Domain),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, goodServerIPv6Domain),
 				buildLogForUpdatingPhase("minimal-idp-name", "Ready"),
 			},
@@ -792,7 +797,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("invalid-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("invalid-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("invalid-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("invalid-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("invalid-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("invalid-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("invalid-idp-name", "Error"),
 
@@ -800,7 +805,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("other-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("other-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("other-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("other-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("other-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("other-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("other-idp-name", "Ready"),
 
@@ -808,7 +813,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Ready"),
 			},
@@ -849,7 +854,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: must not be empty`, ""),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValidUnknown("some-idp-name"),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -890,7 +895,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: invalid port \"//example.com\"`, "https://example.com"),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValidUnknown("minimal-idp-name"),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -931,7 +936,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: host \"example.com/foo\" is not a valid hostname or IP address`, "example.com/foo"),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValidUnknown("minimal-idp-name"),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -972,7 +977,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: invalid port \"p@example.com\"`, "u:p@example.com"),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValidUnknown("minimal-idp-name"),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1013,7 +1018,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: host \"example.com?a=b\" is not a valid hostname or IP address`, "example.com?a=b"),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValidUnknown("minimal-idp-name"),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1054,7 +1059,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"%s\") is not valid: host \"example.com#a\" is not a valid hostname or IP address`, "example.com#a"),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValidUnknown("minimal-idp-name"),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1089,7 +1094,7 @@ func TestController(t *testing.T) {
 							buildGitHubConnectionValidUnknown(t),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
-							buildTLSConfigurationValidFalse(t, "spec.githubAPI.tls.certificateAuthorityData is not valid: certificateAuthorityData is not valid PEM: data does not contain any valid RSA or ECDSA certificates"),
+							buildTLSConfigurationValidFalse(t, "spec.githubAPI.tls.certificateAuthorityData is invalid: no certificates found"),
 						},
 					},
 				},
@@ -1099,7 +1104,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "False", "InvalidTLSConfig", "spec.githubAPI.tls.certificateAuthorityData is not valid: certificateAuthorityData is not valid PEM: data does not contain any valid RSA or ECDSA certificates"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "False", "InvalidTLSConfig", "spec.githubAPI.tls.certificateAuthorityData is invalid: no certificates found"),
 				buildLogForUpdatingGitHubConnectionValidUnknown("some-idp-name"),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1141,7 +1146,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, "nowhere.bad-tld"),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "False", "UnableToDialServer", `cannot dial server spec.githubAPI.host (\"%s\"): dial tcp: lookup nowhere.bad-tld: no such host`, "nowhere.bad-tld:443"),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1182,7 +1187,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "False", "InvalidHost", `spec.githubAPI.host (\"0:0:0:0:0:0:0:1:9876\") is not valid: host \"%s\" is not a valid hostname or IP address`, "0:0:0:0:0:0:0:1:9876"),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValidUnknown("minimal-idp-name"),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1214,7 +1219,7 @@ func TestController(t *testing.T) {
 							buildGitHubConnectionValidFalse(t, fmt.Sprintf(`cannot dial server spec.githubAPI.host (%q): tls: failed to verify certificate: x509: certificate signed by unknown authority`, *validFilledOutIDP.Spec.GitHubAPI.Host)),
 							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
 							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
-							buildTLSConfigurationValidTrue(t),
+							buildTLSConfigurationValidTrueWithMsg(t, "no TLS configuration provided"),
 						},
 					},
 				},
@@ -1224,7 +1229,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: no TLS configuration provided"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "False", "UnableToDialServer", `cannot dial server spec.githubAPI.host (\"%s\"): tls: failed to verify certificate: x509: certificate signed by unknown authority`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1270,7 +1275,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "False", "UnableToDialServer", `cannot dial server spec.githubAPI.host (\"%s\"): tls: failed to verify certificate: x509: certificate signed by unknown authority`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1311,7 +1316,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "False", "Invalid", "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed"),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1352,7 +1357,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "False", "Invalid", "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed"),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1393,7 +1398,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "False", "Invalid", "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed"),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1434,7 +1439,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "False", "Invalid", "spec.allowAuthentication.organizations.policy must be 'AllGitHubUsers' when spec.allowAuthentication.organizations.allowed is empty"),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1475,7 +1480,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidFalse("some-idp-name", "spec.claims.username is required"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1516,7 +1521,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidFalse("some-idp-name", `spec.claims.username (\"a\") is not valid`),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1557,7 +1562,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidFalse("some-idp-name", "spec.claims.groups is required"),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1598,7 +1603,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidFalse("some-idp-name", `spec.claims.groups (\"b\") is not valid`),
 				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("some-idp-name", "Error"),
 			},
@@ -1641,7 +1646,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1684,7 +1689,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validMinimalIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validMinimalIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1727,7 +1732,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1770,7 +1775,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validMinimalIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validMinimalIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1813,7 +1818,7 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingClaimsValidTrue("minimal-idp-name"),
 				buildLogForUpdatingOrganizationPolicyValid("minimal-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validMinimalIDP.Spec.AllowAuthentication.Organizations.Policy))),
 				buildLogForUpdatingHostValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
-				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls.certificateAuthorityData is valid"),
+				buildLogForUpdatingTLSConfigurationValid("minimal-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("minimal-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("minimal-idp-name", "Error"),
 			},
@@ -1853,6 +1858,7 @@ func TestController(t *testing.T) {
 				fakeSupervisorClient,
 				gitHubIdentityProviderInformer,
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				logger,
 				controllerlib.WithInformer,
 				frozenClockForLastTransitionTime,
@@ -2058,7 +2064,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: 333,
 					LastTransitionTime: oneHourAgo,
-					Reason:             upstreamwatchers.ReasonSuccess,
+					Reason:             conditionsutil.ReasonSuccess,
 					Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", goodServerDomain),
 				},
 				{
@@ -2066,7 +2072,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: 333,
 					LastTransitionTime: oneHourAgo,
-					Reason:             upstreamwatchers.ReasonSuccess,
+					Reason:             conditionsutil.ReasonSuccess,
 					Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", goodServerDomain),
 				},
 				{
@@ -2074,7 +2080,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: 333,
 					LastTransitionTime: oneHourAgo,
-					Reason:             upstreamwatchers.ReasonSuccess,
+					Reason:             conditionsutil.ReasonSuccess,
 					Message:            `spec.allowAuthentication.organizations.policy ("AllGitHubUsers") is valid`,
 				},
 				{
@@ -2082,8 +2088,8 @@ func TestController_OnlyWantActions(t *testing.T) {
 					Status:             metav1.ConditionTrue,
 					ObservedGeneration: 333,
 					LastTransitionTime: oneHourAgo,
-					Reason:             upstreamwatchers.ReasonSuccess,
-					Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
+					Reason:             conditionsutil.ReasonSuccess,
+					Message:            "spec.githubAPI.tls is valid: loaded TLS configuration",
 				},
 			},
 		},
@@ -2154,7 +2160,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            "spec.claims are valid",
 							},
 							{
@@ -2162,7 +2168,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            `clientID and clientSecret have been read from spec.client.SecretName ("some-secret-name")`,
 							},
 							{
@@ -2170,7 +2176,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", goodServerDomain),
 							},
 							{
@@ -2178,7 +2184,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            fmt.Sprintf("spec.githubAPI.host (%q) is valid", goodServerDomain),
 							},
 							{
@@ -2186,7 +2192,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
+								Reason:             conditionsutil.ReasonSuccess,
 								Message:            `spec.allowAuthentication.organizations.policy ("AllGitHubUsers") is valid`,
 							},
 							{
@@ -2194,8 +2200,8 @@ func TestController_OnlyWantActions(t *testing.T) {
 								Status:             metav1.ConditionTrue,
 								ObservedGeneration: 1234,
 								LastTransitionTime: wantLastTransitionTime,
-								Reason:             upstreamwatchers.ReasonSuccess,
-								Message:            "spec.githubAPI.tls.certificateAuthorityData is valid",
+								Reason:             conditionsutil.ReasonSuccess,
+								Message:            "spec.githubAPI.tls is valid: loaded TLS configuration",
 							},
 						},
 					}
@@ -2227,6 +2233,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 				fakeSupervisorClient,
 				supervisorInformers.IDP().V1alpha1().GitHubIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				logger,
 				controllerlib.WithInformer,
 				frozenClockForLastTransitionTime,
@@ -2273,12 +2280,10 @@ func compareTLSClientConfigWithinHttpClients(t *testing.T, expected *http.Client
 }
 
 func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
-	namespace := "some-namespace"
 	goodSecret := &corev1.Secret{
 		Type: "secrets.pinniped.dev/github-client",
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "some-name",
-			Namespace: namespace,
+			Name: "some-name",
 		},
 	}
 
@@ -2290,22 +2295,36 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name:       "a secret of the right type",
+			name:       "should return true for a secret of the type secrets.pinniped.dev/github-client",
 			secret:     goodSecret,
 			wantAdd:    true,
 			wantUpdate: true,
 			wantDelete: true,
 		},
 		{
-			name: "a secret of the right type, but in the wrong namespace",
+			name: "should return false for a secret of the type Opaque",
 			secret: func() *corev1.Secret {
 				otherSecret := goodSecret.DeepCopy()
-				otherSecret.Namespace = "other-namespace"
+				otherSecret.Type = corev1.SecretTypeOpaque
 				return otherSecret
 			}(),
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
 		},
 		{
-			name: "a secret of the wrong type",
+			name: "should return false for a secret of the type TLS",
+			secret: func() *corev1.Secret {
+				otherSecret := goodSecret.DeepCopy()
+				otherSecret.Type = corev1.SecretTypeTLS
+				return otherSecret
+			}(),
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return false for a secret of the wrong type",
 			secret: func() *corev1.Secret {
 				otherSecret := goodSecret.DeepCopy()
 				otherSecret.Type = "other-type"
@@ -2313,7 +2332,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			}(),
 		},
 		{
-			name: "resource of wrong data type",
+			name: "should return false for a resource of wrong data type",
 			secret: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
@@ -2329,14 +2348,16 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			logger := plog.TestLogger(t, &log)
 
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			observableInformers := testutil.NewObservableWithInformerOption()
 
 			_ = New(
-				namespace,
+				"some-namespace",
 				dynamicupstreamprovider.NewDynamicUpstreamIDPProvider(),
 				supervisorfake.NewSimpleClientset(),
 				supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},
@@ -2349,6 +2370,64 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			require.Equal(t, tt.wantUpdate, filter.Update(unrelated, tt.secret))
 			require.Equal(t, tt.wantUpdate, filter.Update(tt.secret, unrelated))
 			require.Equal(t, tt.wantDelete, filter.Delete(tt.secret))
+		})
+	}
+}
+
+func TestGitHubUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
+	namespace := "some-namespace"
+	goodCM := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+		},
+	}
+
+	tests := []struct {
+		name       string
+		cm         metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name:       "a configMap in the right namespace",
+			cm:         goodCM,
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			gitHubIdentityProviderInformer := supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders()
+			observableInformers := testutil.NewObservableWithInformerOption()
+
+			configMapInformer := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().ConfigMaps()
+
+			_ = New(
+				namespace,
+				dynamicupstreamprovider.NewDynamicUpstreamIDPProvider(),
+				supervisorfake.NewSimpleClientset(),
+				gitHubIdentityProviderInformer,
+				k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().Secrets(),
+				configMapInformer,
+				logger,
+				observableInformers.WithInformer,
+				clock.RealClock{},
+				tls.Dial,
+			)
+
+			unrelated := &corev1.ConfigMap{}
+			filter := observableInformers.GetFilterForInformer(configMapInformer)
+			require.Equal(t, tt.wantAdd, filter.Add(tt.cm))
+			require.Equal(t, tt.wantUpdate, filter.Update(unrelated, tt.cm))
+			require.Equal(t, tt.wantUpdate, filter.Update(tt.cm, unrelated))
+			require.Equal(t, tt.wantDelete, filter.Delete(tt.cm))
 		})
 	}
 }
@@ -2375,20 +2454,6 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 			wantUpdate: true,
 			wantDelete: true,
 		},
-		{
-			name: "IDP in the wrong namespace",
-			idp: func() metav1.Object {
-				badIDP := goodIDP.DeepCopy()
-				badIDP.Namespace = "other-namespace"
-				return badIDP
-			}(),
-		},
-		{
-			name: "resource of wrong data type",
-			idp: &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{Name: "some-name"},
-			},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2406,6 +2471,7 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 				supervisorfake.NewSimpleClientset(),
 				gitHubIdentityProviderInformer,
 				k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().Secrets(),
+				k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().ConfigMaps(),
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},

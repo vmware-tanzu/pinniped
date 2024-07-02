@@ -46,7 +46,7 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name: "a secret of the right type",
+			name: "should return true for a secret of type BasicAuth",
 			secret: &corev1.Secret{
 				Type:       corev1.SecretTypeBasicAuth,
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
@@ -56,14 +56,34 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "a secret of the wrong type",
+			name: "should return true for a secret of type Opaque",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeOpaque,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return true for a secret of type TLS",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeTLS,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return false for a secret of the wrong type",
 			secret: &corev1.Secret{
 				Type:       "this-is-the-wrong-type",
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
 		},
 		{
-			name: "resource of a data type which is not watched by this controller",
+			name: "should return false for a resource of a data type which is not watched by this controller",
 			secret: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
@@ -79,9 +99,10 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			New(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
+			New(nil, nil, ldapIDPInformer, secretInformer, configMapInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(secretInformer)
@@ -89,6 +110,51 @@ func TestLDAPUpstreamWatcherControllerFilterSecrets(t *testing.T) {
 			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.secret))
 			require.Equal(t, test.wantUpdate, filter.Update(test.secret, &unrelated))
 			require.Equal(t, test.wantDelete, filter.Delete(test.secret))
+		})
+	}
+}
+
+func TestLDAPUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		cm         metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name: "any configmap",
+			cm: &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fakePinnipedClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			ldapIDPInformer := pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders()
+			fakeKubeClient := fake.NewSimpleClientset()
+			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
+			withInformer := testutil.NewObservableWithInformerOption()
+
+			New(nil, nil, ldapIDPInformer, secretInformer, configMapInformer, withInformer.WithInformer)
+
+			unrelated := corev1.ConfigMap{}
+			filter := withInformer.GetFilterForInformer(configMapInformer)
+			require.Equal(t, test.wantAdd, filter.Add(test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(test.cm, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.cm))
 		})
 	}
 }
@@ -123,9 +189,10 @@ func TestLDAPUpstreamWatcherControllerFilterLDAPIdentityProviders(t *testing.T) 
 			fakeKubeClient := fake.NewSimpleClientset()
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			New(nil, nil, ldapIDPInformer, secretInformer, withInformer.WithInformer)
+			New(nil, nil, ldapIDPInformer, secretInformer, configMapInformer, withInformer.WithInformer)
 
 			unrelated := corev1.Secret{}
 			filter := withInformer.GetFilterForInformer(ldapIDPInformer)
@@ -268,13 +335,13 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 	condPtr := func(c metav1.Condition) *metav1.Condition {
 		return &c
 	}
-	tlsConfigurationValidLoadedTrueCondition := func(gen int64) metav1.Condition {
+	tlsConfigurationValidLoadedTrueCondition := func(gen int64, msg string) metav1.Condition {
 		return metav1.Condition{
 			Type:               "TLSConfigurationValid",
 			Status:             "True",
 			LastTransitionTime: now,
 			Reason:             "Success",
-			Message:            "loaded TLS configuration",
+			Message:            fmt.Sprintf("spec.tls is valid: %s", msg),
 			ObservedGeneration: gen,
 		}
 	}
@@ -282,7 +349,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		return []metav1.Condition{
 			bindSecretValidTrueCondition(gen),
 			ldapConnectionValidTrueCondition(gen, secretVersion),
-			tlsConfigurationValidLoadedTrueCondition(gen),
+			tlsConfigurationValidLoadedTrueCondition(gen, "loaded TLS configuration"),
 		}
 	}
 
@@ -355,7 +422,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`secret "%s" not found`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -383,7 +450,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`referenced Secret "%s" has wrong type "some-other-type" (should be "kubernetes.io/basic-auth")`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -410,7 +477,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`referenced Secret "%s" is missing required keys ["username" "password"]`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -434,7 +501,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "InvalidTLSConfig",
-							Message:            "certificateAuthorityData is invalid: illegal base64 data at input byte 4",
+							Message:            "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 4",
 							ObservedGeneration: 1234,
 						},
 					},
@@ -460,7 +527,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "InvalidTLSConfig",
-							Message:            "certificateAuthorityData is invalid: no certificates found",
+							Message:            "spec.tls.certificateAuthorityData is invalid: no certificates found",
 							ObservedGeneration: 1234,
 						},
 					},
@@ -513,7 +580,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
-							Message:            "no TLS configuration provided",
+							Message:            "spec.tls is valid: no TLS configuration provided",
 							ObservedGeneration: 1234,
 						},
 					},
@@ -582,7 +649,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								"ldap.example.com", testBindUsername, testBindSecretName, "4242"),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -655,7 +722,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								"ldap.example.com:5678", testBindUsername, "ldap.example.com:5678"),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -698,8 +765,12 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
 				Status: idpv1alpha1.LDAPIdentityProviderStatus{
-					Phase:      "Ready",
-					Conditions: allConditionsTrue(1234, "4242"),
+					Phase: "Ready",
+					Conditions: []metav1.Condition{
+						bindSecretValidTrueCondition(1234),
+						ldapConnectionValidTrueCondition(1234, "4242"),
+						tlsConfigurationValidLoadedTrueCondition(1234, "no TLS configuration provided"),
+					},
 				},
 			}},
 			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
@@ -741,7 +812,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								Message:            fmt.Sprintf(`secret "%s" not found`, "non-existent-secret"),
 								ObservedGeneration: 42,
 							},
-							tlsConfigurationValidLoadedTrueCondition(42),
+							tlsConfigurationValidLoadedTrueCondition(42, "loaded TLS configuration"),
 						},
 					},
 				},
@@ -790,7 +861,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								testHost, testBindUsername, testBindUsername),
 							ObservedGeneration: 1234,
 						},
-						tlsConfigurationValidLoadedTrueCondition(1234),
+						tlsConfigurationValidLoadedTrueCondition(1234, "loaded TLS configuration"),
 					},
 				},
 			}},
@@ -1111,7 +1182,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "True",
 							LastTransitionTime: now,
 							Reason:             "Success",
-							Message:            "loaded TLS configuration",
+							Message:            "spec.tls is valid: loaded TLS configuration",
 							ObservedGeneration: 1234,
 						},
 					},
@@ -1177,6 +1248,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				controllerlib.WithInformer,
 			)
 

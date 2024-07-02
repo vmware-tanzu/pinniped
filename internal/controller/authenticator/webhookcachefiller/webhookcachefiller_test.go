@@ -25,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
+	kubeinformers "k8s.io/client-go/informers"
+	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
@@ -221,7 +223,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "successfully parsed specified CA bundle",
+			Message:            "spec.tls is valid: loaded TLS configuration",
 		}
 	}
 	happyTLSConfigurationValidNoCA := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -231,7 +233,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "no CA bundle specified",
+			Message:            "spec.tls is valid: no TLS configuration provided",
 		}
 	}
 	sadTLSConfigurationValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -240,8 +242,8 @@ func TestController(t *testing.T) {
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
-			Reason:             "InvalidTLSConfiguration",
-			Message:            "invalid TLS configuration: illegal base64 data at input byte 7",
+			Reason:             "InvalidTLSConfig",
+			Message:            "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7",
 		}
 	}
 
@@ -1488,6 +1490,7 @@ func TestController(t *testing.T) {
 				tt.configClient(pinnipedAPIClient)
 			}
 			informers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
+			kubeInformers := kubeinformers.NewSharedInformerFactory(kubernetesfake.NewSimpleClientset(), 0)
 			cache := authncache.New()
 
 			var log bytes.Buffer
@@ -1501,6 +1504,8 @@ func TestController(t *testing.T) {
 				cache,
 				pinnipedAPIClient,
 				informers.Authentication().V1alpha1().WebhookAuthenticators(),
+				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				frozenClock,
 				logger)
 

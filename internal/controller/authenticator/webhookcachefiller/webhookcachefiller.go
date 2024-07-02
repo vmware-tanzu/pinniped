@@ -21,6 +21,7 @@ import (
 	k8snetutil "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
+	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
@@ -31,6 +32,7 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controller/conditionsutil"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
@@ -67,6 +69,8 @@ func New(
 	cache *authncache.Cache,
 	client conciergeclientset.Interface,
 	webhooks authinformers.WebhookAuthenticatorInformer,
+	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 	clock clock.Clock,
 	log plog.Logger,
 ) controllerlib.Controller {
@@ -74,11 +78,13 @@ func New(
 		controllerlib.Config{
 			Name: controllerName,
 			Syncer: &webhookCacheFillerController{
-				cache:    cache,
-				client:   client,
-				webhooks: webhooks,
-				clock:    clock,
-				log:      log.WithName(controllerName),
+				cache:             cache,
+				client:            client,
+				webhooks:          webhooks,
+				secretInformer:    secretInformer,
+				configMapInformer: configMapInformer,
+				clock:             clock,
+				log:               log.WithName(controllerName),
 			},
 		},
 		controllerlib.WithInformer(
@@ -90,11 +96,13 @@ func New(
 }
 
 type webhookCacheFillerController struct {
-	cache    *authncache.Cache
-	webhooks authinformers.WebhookAuthenticatorInformer
-	client   conciergeclientset.Interface
-	clock    clock.Clock
-	log      plog.Logger
+	cache             *authncache.Cache
+	webhooks          authinformers.WebhookAuthenticatorInformer
+	secretInformer    corev1informers.SecretInformer
+	configMapInformer corev1informers.ConfigMapInformer
+	client            conciergeclientset.Interface
+	clock             clock.Clock
+	log               plog.Logger
 }
 
 // Sync implements controllerlib.Syncer.
@@ -136,7 +144,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	conditions := make([]*metav1.Condition, 0)
 	var errs []error
 
-	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
+	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(obj.Spec.TLS, obj.Namespace, conditions)
 	endpointHostPort, conditions, endpointOk := c.validateEndpoint(obj.Spec.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
 
@@ -312,29 +320,16 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 	return conditions, nil
 }
 
-func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
-	rootCAs, pemBytes, err := pinnipedcontroller.BuildCertPoolAuth(tlsSpec)
-	if err != nil {
-		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeTLSConfigurationValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidTLSConfiguration,
-			Message: msg,
-		})
-		return rootCAs, pemBytes, conditions, false
-	}
-	msg := "successfully parsed specified CA bundle"
-	if rootCAs == nil {
-		msg = "no CA bundle specified"
-	}
-	conditions = append(conditions, &metav1.Condition{
-		Type:    typeTLSConfigurationValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
-		Message: msg,
-	})
-	return rootCAs, pemBytes, conditions, true
+func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, namespace string, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
+	condition, pemBytes, rootCAs, _ := tlsconfigutil.ValidateTLSConfig(
+		tlsconfigutil.TlsSpecForConcierge(tlsSpec),
+		"spec.tls",
+		namespace,
+		c.secretInformer,
+		c.configMapInformer)
+
+	conditions = append(conditions, condition)
+	return rootCAs, pemBytes, conditions, condition.Status == metav1.ConditionTrue
 }
 
 func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditions []*metav1.Condition) (*endpointaddr.HostPort, []*metav1.Condition, bool) {

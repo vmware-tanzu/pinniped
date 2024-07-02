@@ -25,6 +25,7 @@ import (
 	"k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
+	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
@@ -37,6 +38,7 @@ import (
 	pinnipedauthenticator "go.pinniped.dev/internal/controller/authenticator"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controller/conditionsutil"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
@@ -132,6 +134,8 @@ func New(
 	cache *authncache.Cache,
 	client conciergeclientset.Interface,
 	jwtAuthenticators authinformers.JWTAuthenticatorInformer,
+	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 	clock clock.Clock,
 	log plog.Logger,
 ) controllerlib.Controller {
@@ -142,6 +146,8 @@ func New(
 				cache:             cache,
 				client:            client,
 				jwtAuthenticators: jwtAuthenticators,
+				secretInformer:    secretInformer,
+				configMapInformer: configMapInformer,
 				clock:             clock,
 				log:               log.WithName(controllerName),
 			},
@@ -157,6 +163,8 @@ func New(
 type jwtCacheFillerController struct {
 	cache             *authncache.Cache
 	jwtAuthenticators authinformers.JWTAuthenticatorInformer
+	secretInformer    corev1informers.SecretInformer
+	configMapInformer corev1informers.ConfigMapInformer
 	client            conciergeclientset.Interface
 	clock             clock.Clock
 	log               plog.Logger
@@ -202,7 +210,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	conditions := make([]*metav1.Condition, 0)
 	var errs []error
 
-	rootCAs, conditions, tlsOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
+	rootCAs, conditions, tlsOk := c.validateTLSBundle(obj.Spec.TLS, obj.Namespace, conditions)
 	_, conditions, issuerOk := c.validateIssuer(obj.Spec.Issuer, conditions)
 	okSoFar := tlsOk && issuerOk
 
@@ -270,30 +278,16 @@ func (c *jwtCacheFillerController) cacheValueAsJWTAuthenticator(value authncache
 	return jwtAuthenticator
 }
 
-func (c *jwtCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
-	rootCAs, _, err := pinnipedcontroller.BuildCertPoolAuth(tlsSpec)
-	if err != nil {
-		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeTLSConfigurationValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidTLSConfiguration,
-			Message: msg,
-		})
-		return rootCAs, conditions, false
-	}
+func (c *jwtCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, namespace string, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
+	condition, _, rootCAs, _ := tlsconfigutil.ValidateTLSConfig(
+		tlsconfigutil.TlsSpecForConcierge(tlsSpec),
+		"spec.tls",
+		namespace,
+		c.secretInformer,
+		c.configMapInformer)
 
-	msg := "successfully parsed specified CA bundle"
-	if rootCAs == nil {
-		msg = "no CA bundle specified"
-	}
-	conditions = append(conditions, &metav1.Condition{
-		Type:    typeTLSConfigurationValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
-		Message: msg,
-	})
-	return rootCAs, conditions, true
+	conditions = append(conditions, condition)
+	return rootCAs, conditions, condition.Status == metav1.ConditionTrue
 }
 
 func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*metav1.Condition) (*url.URL, []*metav1.Condition, bool) {

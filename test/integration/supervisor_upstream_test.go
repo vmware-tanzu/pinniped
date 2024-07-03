@@ -46,6 +46,12 @@ Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nananananan
 				Reason:  "Success",
 				Message: "additionalAuthorizeParameters parameter names are allowed",
 			},
+			{
+				Type:    "TLSConfigurationValid",
+				Status:  "True",
+				Reason:  "Success",
+				Message: `spec.tls is valid: no TLS configuration provided`,
+			},
 		})
 	})
 
@@ -84,6 +90,12 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				Reason:  "Success",
 				Message: "additionalAuthorizeParameters parameter names are allowed",
 			},
+			{
+				Type:    "TLSConfigurationValid",
+				Status:  "True",
+				Reason:  "Success",
+				Message: `spec.tls is valid: loaded TLS configuration`,
+			},
 		})
 	})
 
@@ -120,6 +132,12 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				Status:  "True",
 				Reason:  "Success",
 				Message: "additionalAuthorizeParameters parameter names are allowed",
+			},
+			{
+				Type:    "TLSConfigurationValid",
+				Status:  "True",
+				Reason:  "Success",
+				Message: `spec.tls is valid: loaded TLS configuration`,
 			},
 		})
 	})

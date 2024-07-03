@@ -410,7 +410,7 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 					Type:    "TLSConfigurationValid",
 					Status:  metav1.ConditionTrue,
 					Reason:  "Success",
-					Message: "spec.githubAPI.tls.certificateAuthorityData is valid",
+					Message: "spec.githubAPI.tls is valid: no TLS configuration provided",
 				},
 			},
 		},
@@ -479,7 +479,7 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 					Type:    "TLSConfigurationValid",
 					Status:  metav1.ConditionTrue,
 					Reason:  "Success",
-					Message: `spec.githubAPI.tls.certificateAuthorityData is valid`,
+					Message: `spec.githubAPI.tls is valid: no TLS configuration provided`,
 				},
 			},
 		},
@@ -686,7 +686,7 @@ func TestGitHubIDPSecretInOtherNamespace_Parallel(t *testing.T) {
 			Type:    "TLSConfigurationValid",
 			Status:  metav1.ConditionTrue,
 			Reason:  "Success",
-			Message: "spec.githubAPI.tls.certificateAuthorityData is valid",
+			Message: "spec.githubAPI.tls is valid: no TLS configuration provided",
 		},
 	})
 }

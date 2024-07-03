@@ -91,8 +91,8 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 							}, {
 								Type:    "TLSConfigurationValid",
 								Status:  "False",
-								Reason:  "InvalidTLSConfiguration",
-								Message: "invalid TLS configuration: illegal base64 data at input byte 7",
+								Reason:  "InvalidTLSConfig",
+								Message: "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7",
 							},
 						},
 					))
@@ -148,7 +148,7 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 								Type:    "TLSConfigurationValid",
 								Status:  "True",
 								Reason:  "Success",
-								Message: "successfully parsed specified CA bundle",
+								Message: "spec.tls is valid: loaded TLS configuration",
 							},
 						},
 					))
@@ -357,7 +357,7 @@ func TestConciergeJWTAuthenticatorCRDValidations_Parallel(t *testing.T) {
 func allSuccessfulJWTAuthenticatorConditions(caBundleExists bool) []metav1.Condition {
 	tlsConfigValidMsg := "no CA bundle specified"
 	if caBundleExists {
-		tlsConfigValidMsg = "successfully parsed specified CA bundle"
+		tlsConfigValidMsg = "spec.tls is valid: loaded TLS configuration"
 	}
 	return []metav1.Condition{{
 		Type:    "AuthenticatorValid",

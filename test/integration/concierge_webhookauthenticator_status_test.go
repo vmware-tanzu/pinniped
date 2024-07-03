@@ -65,8 +65,8 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 					}, {
 						Type:    "TLSConfigurationValid",
 						Status:  "False",
-						Reason:  "InvalidTLSConfiguration",
-						Message: "invalid TLS configuration: illegal base64 data at input byte 7",
+						Reason:  "InvalidTLSConfig",
+						Message: "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7",
 					}, {
 						Type:    "WebhookConnectionValid",
 						Status:  "Unknown",

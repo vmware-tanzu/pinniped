@@ -2415,7 +2415,7 @@ func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv
 		case "BindSecretValid":
 			require.Equal(t, "loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
-			require.Equal(t, "loaded TLS configuration", condition.Message)
+			require.Equal(t, "spec.tls is valid: loaded TLS configuration", condition.Message)
 		case "LDAPConnectionValid":
 			require.Equal(t, expectedLDAPConnectionValidMessage, condition.Message)
 		}
@@ -2440,7 +2440,7 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 		case "BindSecretValid":
 			require.Equal(t, "loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
-			require.Equal(t, "loaded TLS configuration", condition.Message)
+			require.Equal(t, "spec.tls is valid: loaded TLS configuration", condition.Message)
 		case "LDAPConnectionValid":
 			require.Equal(t, expectedActiveDirectoryConnectionValidMessage, condition.Message)
 		}
@@ -2474,7 +2474,7 @@ func requireEventuallySuccessfulLDAPIdentityProviderConditions(t *testing.T, req
 		case "BindSecretValid":
 			requireEventually.Equal("loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
-			requireEventually.Equal("loaded TLS configuration", condition.Message)
+			requireEventually.Equal("spec.tls is valid: loaded TLS configuration", condition.Message)
 		case "LDAPConnectionValid":
 			requireEventually.Equal(expectedLDAPConnectionValidMessage, condition.Message)
 		}
@@ -2500,7 +2500,7 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *tes
 		case "BindSecretValid":
 			requireEventually.Equal("loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
-			requireEventually.Equal("loaded TLS configuration", condition.Message)
+			requireEventually.Equal("spec.tls is valid: loaded TLS configuration", condition.Message)
 		case "LDAPConnectionValid":
 			requireEventually.Equal(expectedActiveDirectoryConnectionValidMessage, condition.Message)
 		}

@@ -25,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -1146,7 +1147,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 			rsp := httptest.NewRecorder()
 
-			subject := NewPostHandler(downstreamIssuer, tt.idps.BuildFederationDomainIdentityProvidersListerFinder(), oauthHelper)
+			subject := NewPostHandler(downstreamIssuer, tt.idps.BuildFederationDomainIdentityProvidersListerFinder(), oauthHelper, plog.New())
 
 			err := subject(rsp, req, happyEncodedUpstreamState, tt.decodedState)
 			if tt.wantErr != "" {

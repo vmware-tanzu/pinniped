@@ -25,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/idplister"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/requestlogger"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/httputil/requestutil"
 	"go.pinniped.dev/internal/plog"
@@ -40,12 +41,13 @@ type Manager struct {
 	mu                  sync.RWMutex
 	providers           []*federationdomainproviders.FederationDomainIssuer
 	providerHandlers    map[string]http.Handler                   // map of all routes for all providers
-	nextHandler         http.Handler                              // the next handler in a chain, called when this manager didn't know how to handle a request
+	handlerChain        http.Handler                              // http handlers
 	dynamicJWKSProvider jwks.DynamicJWKSProvider                  // in-memory cache of per-issuer JWKS data
 	upstreamIDPs        idplister.UpstreamIdentityProvidersLister // in-memory cache of upstream IDPs
 	secretCache         *secret.Cache                             // in-memory cache of cryptographic material
 	secretsClient       corev1client.SecretInterface
 	oidcClientsClient   v1alpha1.OIDCClientInterface
+	auditLogger         plog.AuditLogger
 }
 
 // NewManager returns an empty Manager.
@@ -59,16 +61,24 @@ func NewManager(
 	secretCache *secret.Cache,
 	secretsClient corev1client.SecretInterface,
 	oidcClientsClient v1alpha1.OIDCClientInterface,
+	auditLogger plog.AuditLogger,
 ) *Manager {
-	return &Manager{
+	m := &Manager{
 		providerHandlers:    make(map[string]http.Handler),
-		nextHandler:         nextHandler,
 		dynamicJWKSProvider: dynamicJWKSProvider,
 		upstreamIDPs:        upstreamIDPs,
 		secretCache:         secretCache,
 		secretsClient:       secretsClient,
 		oidcClientsClient:   oidcClientsClient,
+		auditLogger:         auditLogger,
 	}
+	// nextHandler is the next handler in the chain, called when this manager didn't know how to handle a request
+	m.buildHandlerChain(nextHandler)
+	return m
+}
+
+func (m *Manager) HandlerChain() http.Handler {
+	return m.handlerChain
 }
 
 // SetFederationDomains adds or updates all the given providerHandlers using each provider's issuer string
@@ -77,7 +87,7 @@ func NewManager(
 // It also removes any providerHandlers that were previously added but were not passed in to
 // the current invocation.
 //
-// This method assumes that all of the FederationDomainIssuer arguments have already been validated
+// This method assumes that all the FederationDomainIssuer arguments have already been validated
 // by someone else before they are passed to this method.
 func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainproviders.FederationDomainIssuer) {
 	m.mu.Lock()
@@ -143,6 +153,7 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 			nonce.Generate,
 			upstreamStateEncoder,
 			csrfCookieEncoder,
+			m.auditLogger,
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.CallbackEndpointPath)] = callback.NewHandler(
@@ -151,6 +162,7 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 			upstreamStateEncoder,
 			csrfCookieEncoder,
 			issuerURL+oidc.CallbackEndpointPath,
+			m.auditLogger,
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.ChooseIDPEndpointPath)] = chooseidp.NewHandler(
@@ -163,38 +175,49 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 			oauthHelperWithKubeStorage,
 			timeoutsConfiguration.OverrideDefaultAccessTokenLifespan,
 			timeoutsConfiguration.OverrideDefaultIDTokenLifespan,
+			m.auditLogger,
 		)
 
 		m.providerHandlers[(issuerHostWithPath + oidc.PinnipedLoginPath)] = login.NewHandler(
 			upstreamStateEncoder,
 			csrfCookieEncoder,
 			login.NewGetHandler(incomingFederationDomain.IssuerPath()+oidc.PinnipedLoginPath),
-			login.NewPostHandler(issuerURL, idpLister, oauthHelperWithKubeStorage),
+			login.NewPostHandler(issuerURL, idpLister, oauthHelperWithKubeStorage, m.auditLogger),
 		)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuerURL)
 	}
 }
 
-// ServeHTTP implements the http.Handler interface.
-func (m *Manager) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	requestHandler := m.findHandler(req)
+func (m *Manager) buildHandlerChain(nextHandler http.Handler) {
+	handler := m.buildManagerHandler(nextHandler)                               // build the basic handler for FederationDomain endpoints
+	handler = requestlogger.WithHTTPRequestAuditLogging(handler, m.auditLogger) // log all requests, including audit ID
+	handler = requestlogger.WithAuditID(handler)                                // add random audit ID to request context and response headers
+	m.handlerChain = handler
+}
 
-	// Using Info level so the user can safely configure a production Supervisor to show this message if they choose.
-	plog.Info("received incoming request",
-		"proto", req.Proto,
-		"method", req.Method,
-		"host", req.Host,
-		"requestSNIServerName", requestutil.SNIServerName(req),
-		"path", req.URL.Path,
-		"remoteAddr", req.RemoteAddr,
-		"foundFederationDomainRequestHandler", requestHandler != nil,
-	)
+func (m *Manager) buildManagerHandler(nextHandler http.Handler) http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		requestHandler := m.findHandler(req)
 
-	if requestHandler == nil {
-		requestHandler = m.nextHandler // couldn't find an issuer to handle the request
-	}
-	requestHandler.ServeHTTP(resp, req)
+		// TODO: Should this old log message change in light of the new audit logs? Or do we not want to force people to enable audit logs to debug this SNI stuff?
+		// Using Info level so the user can safely configure a production Supervisor to show this message if they choose.
+		plog.Info("received incoming request",
+			"proto", req.Proto,
+			"method", req.Method,
+			"host", req.Host,
+			"requestSNIServerName", requestutil.SNIServerName(req),
+			"path", req.URL.Path,
+			"remoteAddr", req.RemoteAddr,
+			"userAgent", req.UserAgent(),
+			"foundFederationDomainRequestHandler", requestHandler != nil,
+		)
+
+		if requestHandler == nil {
+			requestHandler = nextHandler // couldn't find an issuer to handle the request
+		}
+		requestHandler.ServeHTTP(resp, req)
+	})
 }
 
 func (m *Manager) findHandler(req *http.Request) http.Handler {

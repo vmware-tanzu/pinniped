@@ -34,20 +34,30 @@ type SessionConfig struct {
 	ClientID string
 	// The scopes that were granted for the new downstream session.
 	GrantedScopes []string
+	// The identity provider used to authenticate the user.
+	IdentityProvider resolvedprovider.FederationDomainResolvedIdentityProvider
+	// The fosite Requester that is starting this session.
+	SessionIDGetter plog.SessionIDGetter
 }
 
 // NewPinnipedSession applies the configured FederationDomain identity transformations
 // and creates a downstream Pinniped session.
 func NewPinnipedSession(
 	ctx context.Context,
-	idp resolvedprovider.FederationDomainResolvedIdentityProvider,
+	auditLogger plog.AuditLogger,
 	c *SessionConfig,
 ) (*psession.PinnipedSession, error) {
 	now := time.Now().UTC()
 
+	auditLogger.Audit(plog.AuditEventIdentityFromUpstreamIDP, ctx, c.SessionIDGetter,
+		"upstreamUsername", c.UpstreamIdentity.UpstreamUsername,
+		"upstreamGroups", c.UpstreamIdentity.UpstreamGroups)
+
 	downstreamUsername, downstreamGroups, err := applyIdentityTransformations(ctx,
-		idp.GetTransforms(), c.UpstreamIdentity.UpstreamUsername, c.UpstreamIdentity.UpstreamGroups)
+		c.IdentityProvider.GetTransforms(), c.UpstreamIdentity.UpstreamUsername, c.UpstreamIdentity.UpstreamGroups)
 	if err != nil {
+		auditLogger.Audit(plog.AuditEventAuthenticationRejectedByTransforms, ctx, c.SessionIDGetter,
+			"err", err)
 		return nil, err
 	}
 
@@ -55,12 +65,12 @@ func NewPinnipedSession(
 		Username:         downstreamUsername,
 		UpstreamUsername: c.UpstreamIdentity.UpstreamUsername,
 		UpstreamGroups:   c.UpstreamIdentity.UpstreamGroups,
-		ProviderUID:      idp.GetProvider().GetResourceUID(),
-		ProviderName:     idp.GetProvider().GetResourceName(),
-		ProviderType:     idp.GetSessionProviderType(),
+		ProviderUID:      c.IdentityProvider.GetProvider().GetResourceUID(),
+		ProviderName:     c.IdentityProvider.GetProvider().GetResourceName(),
+		ProviderType:     c.IdentityProvider.GetSessionProviderType(),
 		Warnings:         c.UpstreamLoginExtras.Warnings,
 	}
-	idp.ApplyIDPSpecificSessionDataToSession(customSessionData, c.UpstreamIdentity.IDPSpecificSessionData)
+	c.IdentityProvider.ApplyIDPSpecificSessionDataToSession(customSessionData, c.UpstreamIdentity.IDPSpecificSessionData)
 
 	pinnipedSession := &psession.PinnipedSession{
 		Fosite: &openid.DefaultSession{
@@ -93,6 +103,13 @@ func NewPinnipedSession(
 	}
 
 	pinnipedSession.IDTokenClaims().Extra = extras
+
+	auditLogger.Audit(plog.AuditEventSessionStarted, ctx, c.SessionIDGetter,
+		"username", downstreamUsername,
+		"groups", downstreamGroups,
+		"subject", c.UpstreamIdentity.DownstreamSubject,
+		"additionalClaims", c.UpstreamLoginExtras.DownstreamAdditionalClaims,
+		"warnings", c.UpstreamLoginExtras.Warnings)
 
 	return pinnipedSession, nil
 }

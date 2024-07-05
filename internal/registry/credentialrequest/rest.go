@@ -22,6 +22,7 @@ import (
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/clientcertissuer"
+	"go.pinniped.dev/internal/plog"
 )
 
 // clientCertificateTTL is the TTL for short-lived client certificates returned by this API.
@@ -31,11 +32,17 @@ type TokenCredentialRequestAuthenticator interface {
 	AuthenticateTokenCredentialRequest(ctx context.Context, req *loginapi.TokenCredentialRequest) (user.Info, error)
 }
 
-func NewREST(authenticator TokenCredentialRequestAuthenticator, issuer clientcertissuer.ClientCertIssuer, resource schema.GroupResource) *REST {
+func NewREST(
+	authenticator TokenCredentialRequestAuthenticator,
+	issuer clientcertissuer.ClientCertIssuer,
+	resource schema.GroupResource,
+	auditLogger plog.AuditLogger,
+) *REST {
 	return &REST{
 		authenticator:  authenticator,
 		issuer:         issuer,
 		tableConvertor: rest.NewDefaultTableConvertor(resource),
+		auditLogger:    auditLogger,
 	}
 }
 
@@ -43,6 +50,7 @@ type REST struct {
 	authenticator  TokenCredentialRequestAuthenticator
 	issuer         clientcertissuer.ClientCertIssuer
 	tableConvertor rest.TableConvertor
+	auditLogger    plog.AuditLogger
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -122,6 +130,12 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}
 
 	traceSuccess(t, userInfo, true)
+
+	r.auditLogger.Audit(plog.AuditEventTokenCredentialRequest, ctx, nil,
+		"username", userInfo.GetName(),
+		"groups", userInfo.GetGroups(),
+		"authenticated", true,
+		"expires", expires.Format(time.RFC3339))
 
 	return &loginapi.TokenCredentialRequest{
 		Status: loginapi.TokenCredentialRequestStatus{

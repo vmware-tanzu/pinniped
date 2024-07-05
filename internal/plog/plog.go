@@ -28,19 +28,37 @@
 package plog
 
 import (
+	"context"
 	"os"
 	"slices"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apiserver/pkg/audit"
 )
 
 const errorKey = "error" // this matches zapr's default for .Error calls (which is asserted via tests)
+
+type SessionIDGetter interface {
+	GetID() string
+}
+
+// AuditLogger is only the audit logging part of Logger. There is no global function for Audit because
+// that would make unit testing of audit logs harder.
+type AuditLogger interface {
+	// Audit writes an audit event to the log.
+	// reqCtx and session may be null.
+	// When possible, pass the http request's context as reqCtx, so we may read the audit ID from the context.
+	// When possible, pass the fosite.Requester or fosite.Request as the session, so we can log the session ID.
+	Audit(msg AuditEventMessage, reqCtx context.Context, session SessionIDGetter, keysAndValues ...any)
+}
 
 // Logger implements the plog logging convention described above.  The global functions in this package
 // such as Info should be used when one does not intend to write tests assertions for specific log messages.
 // If test assertions are desired, Logger should be passed in as an input.  New should be used as the
 // production implementation and TestLogger should be used to write test assertions.
 type Logger interface {
+	AuditLogger
+
 	Error(msg string, err error, keysAndValues ...any)
 	Warning(msg string, keysAndValues ...any)
 	WarningErr(msg string, err error, keysAndValues ...any)
@@ -79,8 +97,45 @@ func New() Logger {
 	return pLogger{}
 }
 
+// Error logs show in the pod log output as `"level":"error","message":"some error msg"`
+// where the message text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Error logs cannot be suppressed by the global log level configuration.
 func (p pLogger) Error(msg string, err error, keysAndValues ...any) {
 	p.logr().WithCallDepth(p.depth+1).Error(err, msg, keysAndValues...)
+}
+
+// Audit logs show in the pod log output as `"level":"info","message":"some msg","auditEvent":true`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Audit logs cannot be suppressed by the global log level configuration, but rather can be disabled
+// by their own separate configuration. This is because Audit logs should always be printed when they are desired
+// by the admin, regardless of global log level, yet the admin should also have a way to entirely disable them
+// when they want to avoid potential PII (e.g. usernames) in their pod logs.
+// TODO: Add a way to disable output of audit logs, separate from the log level config.
+func (p pLogger) Audit(msg AuditEventMessage, reqCtx context.Context, session SessionIDGetter, keysAndValues ...any) {
+	// Always add a key/value auditEvent=true.
+	keysAndValues = slices.Concat([]any{"auditEvent", true}, keysAndValues)
+
+	var auditID string
+	if reqCtx != nil {
+		auditID = audit.GetAuditIDTruncated(reqCtx)
+	}
+	if len(auditID) > 0 {
+		keysAndValues = slices.Concat([]any{"auditID", auditID}, keysAndValues)
+	}
+
+	var sessionID string
+	if session != nil {
+		sessionID = session.GetID()
+	}
+	if len(sessionID) > 0 {
+		keysAndValues = slices.Concat([]any{"sessionID", sessionID}, keysAndValues)
+	}
+
+	p.logr().V(klogLevelWarning).WithCallDepth(p.depth+1).Info(string(msg), keysAndValues...)
 }
 
 func (p pLogger) warningDepth(msg string, depth int, keysAndValues ...any) {
@@ -94,10 +149,20 @@ func (p pLogger) warningDepth(msg string, depth int, keysAndValues ...any) {
 	}
 }
 
+// Warning logs show in the pod log output as `"level":"info","message":"some msg","warning":true`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Warning logs cannot be suppressed by the global log level configuration.
 func (p pLogger) Warning(msg string, keysAndValues ...any) {
 	p.warningDepth(msg, p.depth+1, keysAndValues...)
 }
 
+// WarningErr logs show in the pod log output as `"level":"info","message":"some msg","warning":true,"error":"some error msg"`
+// where the message text comes from the msg parameter and the error text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// WarningErr logs cannot be suppressed by the global log level configuration.
 func (p pLogger) WarningErr(msg string, err error, keysAndValues ...any) {
 	p.warningDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
@@ -108,10 +173,20 @@ func (p pLogger) infoDepth(msg string, depth int, keysAndValues ...any) {
 	}
 }
 
+// Info logs show in the pod log output as `"level":"info","message":"some msg"`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Info logs are suppressed by the global log level configuration, unless it is set to "info" or above.
 func (p pLogger) Info(msg string, keysAndValues ...any) {
 	p.infoDepth(msg, p.depth+1, keysAndValues...)
 }
 
+// InfoErr logs show in the pod log output as `"level":"info","message":"some msg","error":"some error msg"`
+// where the message text comes from the msg parameter and the error text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// InfoErr logs are suppressed by the global log level configuration, unless it is set to "info" or above.
 func (p pLogger) InfoErr(msg string, err error, keysAndValues ...any) {
 	p.infoDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
@@ -122,10 +197,20 @@ func (p pLogger) debugDepth(msg string, depth int, keysAndValues ...any) {
 	}
 }
 
+// Debug logs show in the pod log output as `"level":"debug","message":"some msg"`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Debug logs are suppressed by the global log level configuration, unless it is set to "debug" or above.
 func (p pLogger) Debug(msg string, keysAndValues ...any) {
 	p.debugDepth(msg, p.depth+1, keysAndValues...)
 }
 
+// DebugErr logs show in the pod log output as `"level":"debug","message":"some msg","error":"some error msg"`
+// where the message text comes from the msg parameter and the error text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// DebugErr logs are suppressed by the global log level configuration, unless it is set to "debug" or above.
 func (p pLogger) DebugErr(msg string, err error, keysAndValues ...any) {
 	p.debugDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
@@ -136,20 +221,39 @@ func (p pLogger) traceDepth(msg string, depth int, keysAndValues ...any) {
 	}
 }
 
+// Trace logs show in the pod log output as `"level":"trace","message":"some msg"`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Trace logs are suppressed by the global log level configuration, unless it is set to "trace" or above.
 func (p pLogger) Trace(msg string, keysAndValues ...any) {
 	p.traceDepth(msg, p.depth+1, keysAndValues...)
 }
 
+// TraceErr logs show in the pod log output as `"level":"trace","message":"some msg","error":"some error msg"`
+// where the message text comes from the msg parameter and the error text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// TraceErr logs are suppressed by the global log level configuration, unless it is set to "trace" or above.
 func (p pLogger) TraceErr(msg string, err error, keysAndValues ...any) {
 	p.traceDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
+// All logs show in the pod log output as `"level":"all","message":"some msg"`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// All logs are suppressed by the global log level configuration, unless it is set to "all" or above.
 func (p pLogger) All(msg string, keysAndValues ...any) {
 	if p.logr().V(klogLevelAll).Enabled() {
 		p.logr().V(klogLevelAll).WithCallDepth(p.depth+1).Info(msg, keysAndValues...)
 	}
 }
 
+// Always logs show in the pod log output exactly the same as an Info() message,
+// except Always logs are always logged regardless of log level configuration.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Always logs cannot be suppressed by the global log level configuration.
 func (p pLogger) Always(msg string, keysAndValues ...any) {
 	p.logr().WithCallDepth(p.depth+1).Info(msg, keysAndValues...)
 }

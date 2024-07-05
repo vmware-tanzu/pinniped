@@ -61,6 +61,7 @@ import (
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -4916,6 +4917,7 @@ func exchangeAuthcodeForTokens(
 		oauthHelper,
 		timeoutsConfiguration.OverrideDefaultAccessTokenLifespan,
 		timeoutsConfiguration.OverrideDefaultIDTokenLifespan,
+		plog.New(),
 	)
 
 	authorizeEndpointGrantedOpenIDScope := strings.Contains(authRequest.Form.Get("scope"), "openid")

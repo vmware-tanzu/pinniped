@@ -31,6 +31,7 @@ import (
 	"go.pinniped.dev/internal/fositestorage/accesstoken"
 	"go.pinniped.dev/internal/fositestorage/authorizationcode"
 	"go.pinniped.dev/internal/fositestorage/refreshtoken"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -55,6 +56,7 @@ func TestGarbageCollectorControllerInformerFilters(t *testing.T) {
 				nil,
 				secretsInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
+				plog.New(),
 			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
 		})
@@ -148,6 +150,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 				kubeClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
+				plog.New(),
 			)
 
 			// Set this at the last second to support calling subject.Name().

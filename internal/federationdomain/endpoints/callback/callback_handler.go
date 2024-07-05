@@ -24,6 +24,7 @@ func NewHandler(
 	oauthHelper fosite.OAuth2Provider,
 	stateDecoder, cookieDecoder oidc.Decoder,
 	redirectURI string,
+	auditLogger plog.AuditLogger,
 ) http.Handler {
 	handler := httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		state, err := validateRequest(r, stateDecoder, cookieDecoder)
@@ -69,11 +70,13 @@ func NewHandler(
 			return err
 		}
 
-		session, err := downstreamsession.NewPinnipedSession(r.Context(), idp, &downstreamsession.SessionConfig{
+		session, err := downstreamsession.NewPinnipedSession(r.Context(), auditLogger, &downstreamsession.SessionConfig{
 			UpstreamIdentity:    identity,
 			UpstreamLoginExtras: loginExtras,
 			ClientID:            authorizeRequester.GetClient().GetID(),
 			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
+			IdentityProvider:    idp,
+			SessionIDGetter:     authorizeRequester,
 		})
 		if err != nil {
 			plog.WarningErr("unable to create a Pinniped session", err,

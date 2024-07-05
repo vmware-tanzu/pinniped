@@ -19,7 +19,12 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersFinderI, oauthHelper fosite.OAuth2Provider) HandlerFunc {
+func NewPostHandler(
+	issuerURL string,
+	upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersFinderI,
+	oauthHelper fosite.OAuth2Provider,
+	auditLogger plog.AuditLogger,
+) HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
 		// Note that the login handler prevents this handler from being called with OIDC upstreams.
 		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
@@ -84,11 +89,13 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 			}
 		}
 
-		session, err := downstreamsession.NewPinnipedSession(r.Context(), idp, &downstreamsession.SessionConfig{
+		session, err := downstreamsession.NewPinnipedSession(r.Context(), auditLogger, &downstreamsession.SessionConfig{
 			UpstreamIdentity:    identity,
 			UpstreamLoginExtras: loginExtras,
 			ClientID:            authorizeRequester.GetClient().GetID(),
 			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
+			IdentityProvider:    idp,
+			SessionIDGetter:     authorizeRequester,
 		})
 		if err != nil {
 			err = fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())

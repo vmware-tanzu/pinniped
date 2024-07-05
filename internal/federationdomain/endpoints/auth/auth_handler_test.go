@@ -36,6 +36,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/here"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -3624,6 +3625,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 				oauthHelperWithNullStorage, oauthHelperWithRealStorage,
 				test.generateCSRF, test.generatePKCE, test.generateNonce,
 				test.stateEncoder, test.cookieEncoder,
+				plog.New(),
 			)
 			runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient)
 		})
@@ -3647,6 +3649,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			oauthHelperWithNullStorage, oauthHelperWithRealStorage,
 			test.generateCSRF, test.generatePKCE, test.generateNonce,
 			test.stateEncoder, test.cookieEncoder,
+			plog.New(),
 		)
 
 		runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient)

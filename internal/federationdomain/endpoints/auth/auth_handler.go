@@ -13,6 +13,7 @@ import (
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/handler/openid"
 	fositejwt "github.com/ory/fosite/token/jwt"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
@@ -34,6 +35,21 @@ const (
 	promptParamNone = "none"
 )
 
+//nolint:gochecknoglobals // please treat this as a readonly const, do not mutate
+var paramsSafeToLog = sets.New[string](
+	// Standard params from https://openid.net/specs/openid-connect-core-1_0.html, some of which are ignored.
+	// Redacting state and nonce params, in case they contain any info that the client considers sensitive.
+	"scope", "response_type", "client_id", "redirect_uri", "response_mode", "display", "prompt",
+	"max_age", "ui_locales", "id_token_hint", "login_hint", "acr_values", "claims_locales", "claims",
+	"request", "request_uri", "registration",
+	// PKCE params from https://datatracker.ietf.org/doc/html/rfc7636. Let code_challenge be redacted.
+	"code_challenge_method",
+	// Custom Pinniped authorization params.
+	oidcapi.AuthorizeUpstreamIDPNameParamName, oidcapi.AuthorizeUpstreamIDPTypeParamName,
+	// Google-specific param that some client libraries will send anyway. Ignored by Pinniped but safe to log.
+	"access_type",
+)
+
 type authorizeHandler struct {
 	downstreamIssuerURL       string
 	idpFinder                 federationdomainproviders.FederationDomainIdentityProvidersFinderI
@@ -44,6 +60,7 @@ type authorizeHandler struct {
 	generateNonce             func() (nonce.Nonce, error)
 	upstreamStateEncoder      oidc.Encoder
 	cookieCodec               oidc.Codec
+	auditLogger               plog.AuditLogger
 }
 
 func NewHandler(
@@ -56,6 +73,7 @@ func NewHandler(
 	generateNonce func() (nonce.Nonce, error),
 	upstreamStateEncoder oidc.Encoder,
 	cookieCodec oidc.Codec,
+	auditLogger plog.AuditLogger,
 ) http.Handler {
 	h := &authorizeHandler{
 		downstreamIssuerURL:       downstreamIssuerURL,
@@ -67,6 +85,7 @@ func NewHandler(
 		generateNonce:             generateNonce,
 		upstreamStateEncoder:      upstreamStateEncoder,
 		cookieCodec:               cookieCodec,
+		auditLogger:               auditLogger,
 	}
 	// During a response_mode=form_post auth request using the browser flow, the custom form_post html page may
 	// be used to post certain errors back to the CLI from this handler's response, so allow the form_post
@@ -83,9 +102,10 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The client set a username or password header, so they are trying to log in without using a browser.
-	requestedBrowserlessFlow := len(r.Header.Values(oidcapi.AuthorizeUsernameHeaderName)) > 0 ||
-		len(r.Header.Values(oidcapi.AuthorizePasswordHeaderName)) > 0
+	// If the client set a username or password header, they are trying to log in without using a browser.
+	hadUsernameHeader := len(r.Header.Values(oidcapi.AuthorizeUsernameHeaderName)) > 0
+	hadPasswordHeader := len(r.Header.Values(oidcapi.AuthorizePasswordHeaderName)) > 0
+	requestedBrowserlessFlow := hadUsernameHeader || hadPasswordHeader
 
 	// Need to parse the request params, so we can get the IDP name. The style and text of the error is inspired by
 	// fosite's implementation of NewAuthorizeRequest(). Fosite only calls ParseMultipartForm() there. However,
@@ -111,6 +131,15 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			requestedBrowserlessFlow)
 		return
 	}
+
+	// Log if these headers were present, but don't log the actual values. The password is obviously sensitive,
+	// and sometimes users use their password as their username by mistake.
+	h.auditLogger.Audit(plog.AuditEventHTTPRequestCustomHeadersUsed, r.Context(), nil,
+		oidcapi.AuthorizeUsernameHeaderName, hadUsernameHeader,
+		oidcapi.AuthorizePasswordHeaderName, hadPasswordHeader)
+
+	h.auditLogger.Audit(plog.AuditEventHTTPRequestParameters, r.Context(), nil,
+		"params", plog.SanitizeParams(r.Form, paramsSafeToLog))
 
 	// Note that the client might have used oidcapi.AuthorizeUpstreamIDPNameParamName and
 	// oidcapi.AuthorizeUpstreamIDPTypeParamName query (or form) params to request a certain upstream IDP.
@@ -140,6 +169,12 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			requestedBrowserlessFlow)
 		return
 	}
+
+	h.auditLogger.Audit(plog.AuditEventUsingUpstreamIDP, r.Context(), nil,
+		"displayName", idp.GetDisplayName(),
+		"resourceName", idp.GetProvider().GetResourceName(),
+		"resourceUID", idp.GetProvider().GetResourceUID(),
+		"type", idp.GetSessionProviderType())
 
 	h.authorize(w, r, requestedBrowserlessFlow, idp)
 }
@@ -203,11 +238,13 @@ func (h *authorizeHandler) authorizeWithoutBrowser(
 		return err
 	}
 
-	session, err := downstreamsession.NewPinnipedSession(r.Context(), idp, &downstreamsession.SessionConfig{
+	session, err := downstreamsession.NewPinnipedSession(r.Context(), h.auditLogger, &downstreamsession.SessionConfig{
 		UpstreamIdentity:    identity,
 		UpstreamLoginExtras: loginExtras,
 		ClientID:            authorizeRequester.GetClient().GetID(),
 		GrantedScopes:       authorizeRequester.GetGrantedScopes(),
+		IdentityProvider:    idp,
+		SessionIDGetter:     authorizeRequester,
 	})
 	if err != nil {
 		return fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())

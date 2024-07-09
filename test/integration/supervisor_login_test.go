@@ -322,7 +322,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		regexp.QuoteMeta("&sub=") + ".+" +
 		"$"
 
-	// TODO: update this test table to add 2 tests per IDP each to source ca bundle from secret and cm
 	tests := []*supervisorLoginTestcase{
 		{
 			name:      "oidc with default username and groups claim settings",
@@ -344,7 +343,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
 				idpSpec := basicOIDCIdentityProviderSpec()
-				caData, _ := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
 				caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeOpaque,
 					map[string]string{
 						"ca.crt": string(caData),
@@ -372,7 +372,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
 				idpSpec := basicOIDCIdentityProviderSpec()
-				caData, _ := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
 				caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeTLS,
 					map[string]string{
 						"ca.crt":  string(caData),
@@ -402,7 +403,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
 				idpSpec := basicOIDCIdentityProviderSpec()
-				caData, _ := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
 				caConfigMap := testlib.CreateTestConfigMap(t, env.SupervisorNamespace, "ca-cert", map[string]string{
 					"ca.crt": string(caData),
 				})
@@ -430,7 +432,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			maybeSkip: skipNever,
 			createIDP: func(t *testing.T) string {
 				idpSpec := basicOIDCIdentityProviderSpec()
-				caData, _ := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
 				caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeOpaque,
 					map[string]string{
 						"ca.crt": string(caData),
@@ -654,7 +657,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			name:      "ldap IDP using secrets of type opaque to source ca bundle and with email as username and groups names as DNs and using an LDAP provider which supports TLS",
 			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
-
 				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
 					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeOpaque,
 						map[string]string{
@@ -705,7 +707,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			name:      "ldap IDP using secrets of type TLS to source ca bundle and with email as username and groups names as DNs and using an LDAP provider which supports TLS",
 			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
-
 				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
 					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeTLS,
 						map[string]string{
@@ -758,7 +759,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			name:      "ldap IDP using configmaps to source ca bundle and with email as username and groups names as DNs and using an LDAP provider which supports TLS",
 			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
-
 				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
 
 					caConfigMap := testlib.CreateTestConfigMap(t, env.SupervisorNamespace, "ca-cert",

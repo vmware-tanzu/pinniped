@@ -144,12 +144,12 @@ func New(
 		controllerlib.Config{
 			Name: controllerName,
 			Syncer: &jwtCacheFillerController{
+				namespace:         namespace,
 				cache:             cache,
 				client:            client,
 				jwtAuthenticators: jwtAuthenticators,
 				secretInformer:    secretInformer,
 				configMapInformer: configMapInformer,
-				namespace:         namespace,
 				clock:             clock,
 				log:               log.WithName(controllerName),
 			},
@@ -163,12 +163,12 @@ func New(
 }
 
 type jwtCacheFillerController struct {
+	namespace         string
 	cache             *authncache.Cache
 	jwtAuthenticators authinformers.JWTAuthenticatorInformer
 	secretInformer    corev1informers.SecretInformer
 	configMapInformer corev1informers.ConfigMapInformer
 	client            conciergeclientset.Interface
-	namespace         string
 	clock             clock.Clock
 	log               plog.Logger
 }

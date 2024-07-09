@@ -115,11 +115,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Create a JWTAuthenticator that will validate the tokens from the downstream issuer.
 	// If the FederationDomain is not Ready, the JWTAuthenticator cannot be ready, either.
 	clusterAudience := "test-cluster-" + testlib.RandHex(t, 8)
-	authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, authenticationv1alpha1.JWTAuthenticatorSpec{
+	defaultJWTAuthenticatorSpec := authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   federationDomain.Spec.Issuer,
 		Audience: clusterAudience,
 		TLS:      &authenticationv1alpha1.TLSSpec{CertificateAuthorityData: testCABundleBase64},
-	}, authenticationv1alpha1.JWTAuthenticatorPhaseError)
+	}
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
 	t.Run("with Supervisor OIDC upstream IDP and browser flow with with form_post automatic authcode delivery to CLI", func(t *testing.T) {
@@ -146,6 +146,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			Resource: "namespaces",
 		})
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		// Create upstream OIDC provider and wait for it to become ready.
 		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -232,6 +233,21 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			Resource: "namespaces",
 		})
 
+		// in this test, use a secret of type TLS to source ca bundle for the JWT authenticator
+		caSecret := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-cert", corev1.SecretTypeTLS,
+			map[string]string{
+				"ca.crt":  string(testCABundlePEM),
+				"tls.crt": "",
+				"tls.key": "",
+			})
+		jwtAuthnSpec := defaultJWTAuthenticatorSpec.DeepCopy()
+		jwtAuthnSpec.TLS.CertificateAuthorityData = ""
+		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
+			Kind: "Secret",
+			Name: caSecret.Name,
+			Key:  "ca.crt",
+		}
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, *jwtAuthnSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		// Create upstream OIDC provider and wait for it to become ready.
 		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -320,6 +336,22 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			Resource: "namespaces",
 		})
 
+		// in this test, use a secret of type opaque to source ca bundle for the JWT authenticator
+		caSecret := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-cert", corev1.SecretTypeOpaque,
+			map[string]string{
+				"ca.crt": string(testCABundlePEM),
+			})
+		t.Logf("created secret %s/%s", caSecret.Namespace, caSecret.Name)
+		jwtAuthnSpec := defaultJWTAuthenticatorSpec.DeepCopy()
+		jwtAuthnSpec.TLS.CertificateAuthorityData = ""
+		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
+			Kind: "Secret",
+			Name: caSecret.Name,
+			Key:  "ca.crt",
+		}
+
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, *jwtAuthnSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
+		t.Logf("authenticator: %s/%s; concierge ns: %s", authenticator.Namespace, authenticator.Name, env.ConciergeNamespace)
 		// Create upstream OIDC provider and wait for it to become ready.
 		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -444,6 +476,20 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			}
 		}
 
+		// in this test, use a configmap to source ca bundle for the JWT authenticator
+		caConfigMap := testlib.CreateTestConfigMap(t, env.ConciergeNamespace, "ca-cert",
+			map[string]string{
+				"ca.crt": string(testCABundlePEM),
+			})
+		jwtAuthnSpec := defaultJWTAuthenticatorSpec.DeepCopy()
+		jwtAuthnSpec.TLS.CertificateAuthorityData = ""
+		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
+			Kind: "ConfigMap",
+			Name: caConfigMap.Name,
+			Key:  "ca.crt",
+		}
+
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		// Create upstream OIDC provider and wait for it to become ready.
 		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -574,6 +620,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			Resource: "namespaces",
 		})
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		// Create upstream OIDC provider and wait for it to become ready.
 		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -647,6 +694,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		tempDir := t.TempDir() // per-test tmp dir to avoid sharing files between tests
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		// Create upstream OIDC provider and wait for it to become ready.
 		oidcIdentityProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -728,6 +776,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
@@ -787,6 +836,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
@@ -850,6 +900,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
@@ -921,6 +972,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
@@ -980,6 +1032,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
@@ -1053,6 +1106,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
@@ -1108,6 +1162,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue
 		expectedGroups := env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		createdProvider := setupClusterForEndToEndActiveDirectoryTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
@@ -1163,6 +1218,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedUsername := env.SupervisorUpstreamLDAP.TestUserMailAttributeValue
 		expectedGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		createdProvider := setupClusterForEndToEndLDAPTest(t, expectedUsername, env)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
@@ -1253,6 +1309,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 				).Name,
 			},
 		}, idpv1alpha1.GitHubPhaseReady)
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
@@ -1327,6 +1384,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdLDAPProvider := setupClusterForEndToEndLDAPTest(t, expectedDownstreamLDAPUsername, env)
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		// Having one IDP should put the FederationDomain into a ready state.
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
@@ -1647,6 +1705,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 		createdLDAPProvider := setupClusterForEndToEndLDAPTest(t, expectedDownstreamLDAPUsername, env)
 
+		authenticator := testlib.CreateTestJWTAuthenticator(topSetupCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		// Having one IDP should put the FederationDomain into a ready state.
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)

@@ -470,7 +470,7 @@ func CreateTestConfigMap(t *testing.T, namespace string, baseName string, string
 		err := client.CoreV1().ConfigMaps(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
-	t.Logf("created test ConfigMap %s", created.Name)
+	t.Logf("created test ConfigMap %s/%s", created.Namespace, created.Name)
 	return created
 }
 
@@ -492,7 +492,7 @@ func CreateTestSecret(t *testing.T, namespace string, baseName string, secretTyp
 		err := client.CoreV1().Secrets(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
-	t.Logf("created test Secret %s", created.Name)
+	t.Logf("created test Secret %s/%s", created.Namespace, created.Name)
 	return created
 }
 

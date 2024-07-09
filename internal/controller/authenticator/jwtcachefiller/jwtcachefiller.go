@@ -131,6 +131,7 @@ var _ tokenAuthenticatorCloser = (*cachedJWTAuthenticator)(nil)
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
 func New(
+	namespace string,
 	cache *authncache.Cache,
 	client conciergeclientset.Interface,
 	jwtAuthenticators authinformers.JWTAuthenticatorInformer,
@@ -148,6 +149,7 @@ func New(
 				jwtAuthenticators: jwtAuthenticators,
 				secretInformer:    secretInformer,
 				configMapInformer: configMapInformer,
+				namespace:         namespace,
 				clock:             clock,
 				log:               log.WithName(controllerName),
 			},
@@ -166,6 +168,7 @@ type jwtCacheFillerController struct {
 	secretInformer    corev1informers.SecretInformer
 	configMapInformer corev1informers.ConfigMapInformer
 	client            conciergeclientset.Interface
+	namespace         string
 	clock             clock.Clock
 	log               plog.Logger
 }
@@ -210,7 +213,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	conditions := make([]*metav1.Condition, 0)
 	var errs []error
 
-	rootCAs, conditions, tlsOk := c.validateTLSBundle(obj.Spec.TLS, obj.Namespace, conditions)
+	rootCAs, conditions, tlsOk := c.validateTLSBundle(obj.Spec.TLS, c.namespace, conditions)
 	_, conditions, issuerOk := c.validateIssuer(obj.Spec.Issuer, conditions)
 	okSoFar := tlsOk && issuerOk
 

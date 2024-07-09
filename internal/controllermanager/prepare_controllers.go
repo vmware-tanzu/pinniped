@@ -247,6 +247,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 		).
 		WithController(
 			jwtcachefiller.New(
+				c.ServerInstallationInfo.Namespace,
 				c.AuthenticatorCache,
 				client.PinnipedConcierge,
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),

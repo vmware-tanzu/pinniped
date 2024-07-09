@@ -1855,6 +1855,7 @@ func TestController(t *testing.T) {
 			}
 
 			controller := New(
+				"concierge", // namespace for the controller
 				cache,
 				pinnipedAPIClient,
 				pinnipedInformers.Authentication().V1alpha1().JWTAuthenticators(),

@@ -73,6 +73,7 @@ func New(
 	webhooks authinformers.WebhookAuthenticatorInformer,
 	secretInformer corev1informers.SecretInformer,
 	configMapInformer corev1informers.ConfigMapInformer,
+	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
 	log plog.Logger,
 ) controllerlib.Controller {
@@ -90,12 +91,12 @@ func New(
 				log:               log.WithName(controllerName),
 			},
 		},
-		controllerlib.WithInformer(
+		withInformer(
 			webhooks,
 			pinnipedcontroller.MatchAnythingFilter(nil), // nil parent func is fine because each event is distinct
 			controllerlib.InformerOption{},
 		),
-		controllerlib.WithInformer(
+		withInformer(
 			secretInformer,
 			pinnipedcontroller.MatchAnySecretOfTypesFilter(
 				[]corev1.SecretType{
@@ -106,7 +107,7 @@ func New(
 			), // nil parent func is fine because each event is distinct
 			controllerlib.InformerOption{},
 		),
-		controllerlib.WithInformer(
+		withInformer(
 			configMapInformer,
 			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},

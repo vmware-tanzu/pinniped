@@ -760,7 +760,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
-
 					caConfigMap := testlib.CreateTestConfigMap(t, env.SupervisorNamespace, "ca-cert",
 						map[string]string{
 							"ca.crt": env.SupervisorUpstreamLDAP.CABundle,

@@ -18,6 +18,7 @@ import (
 
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-jose/go-jose/v4"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -137,6 +138,7 @@ func New(
 	jwtAuthenticators authinformers.JWTAuthenticatorInformer,
 	secretInformer corev1informers.SecretInformer,
 	configMapInformer corev1informers.ConfigMapInformer,
+	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
 	log plog.Logger,
 ) controllerlib.Controller {
@@ -154,9 +156,25 @@ func New(
 				log:               log.WithName(controllerName),
 			},
 		},
-		controllerlib.WithInformer(
+		withInformer(
 			jwtAuthenticators,
 			pinnipedcontroller.MatchAnythingFilter(nil), // nil parent func is fine because each event is distinct
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			secretInformer,
+			pinnipedcontroller.MatchAnySecretOfTypesFilter(
+				[]corev1.SecretType{
+					corev1.SecretTypeOpaque,
+					corev1.SecretTypeTLS,
+				},
+				pinnipedcontroller.SingletonQueue(),
+			), // nil parent func is fine because each event is distinct
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			configMapInformer,
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 	)

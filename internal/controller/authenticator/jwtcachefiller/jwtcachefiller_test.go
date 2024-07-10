@@ -26,12 +26,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
+	k8sinformers "k8s.io/client-go/informers"
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
@@ -1845,6 +1847,7 @@ func TestController(t *testing.T) {
 			}
 			pinnipedInformers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
 			kubeInformers := kubeinformers.NewSharedInformerFactory(kubernetesfake.NewSimpleClientset(), 0)
+			observableInformers := testutil.NewObservableWithInformerOption()
 			cache := authncache.New()
 
 			var log bytes.Buffer
@@ -1861,6 +1864,7 @@ func TestController(t *testing.T) {
 				pinnipedInformers.Authentication().V1alpha1().JWTAuthenticators(),
 				kubeInformers.Core().V1().Secrets(),
 				kubeInformers.Core().V1().ConfigMaps(),
+				observableInformers.WithInformer,
 				frozenClock,
 				logger)
 
@@ -1868,6 +1872,8 @@ func TestController(t *testing.T) {
 			defer cancel()
 
 			pinnipedInformers.Start(ctx.Done())
+			kubeInformers.Start(ctx.Done())
+
 			controllerlib.TestRunSynchronously(t, controller)
 
 			syncCtx := controllerlib.Context{Context: ctx, Key: tt.syncKey}
@@ -2273,5 +2279,151 @@ func newCacheValue(t *testing.T, spec authenticationv1alpha1.JWTAuthenticatorSpe
 		cancel: func() {
 			wasClosed = true
 		},
+	}
+}
+
+func TestControllerFilterSecret(t *testing.T) {
+	tests := []struct {
+		name       string
+		secret     metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name: "should return true for a secret of the type Opaque",
+			secret: &corev1.Secret{
+				Type: corev1.SecretTypeOpaque,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "some-name",
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return true for a secret of the type TLS",
+			secret: &corev1.Secret{
+				Type: corev1.SecretTypeTLS,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "some-name",
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return false for a secret of the wrong type",
+			secret: &corev1.Secret{
+				Type: "other-type",
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "some-name",
+				},
+			},
+		},
+		{
+			name: "should return false for a resource of wrong data type",
+			secret: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
+			frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
+
+			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0)
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
+			pinnipedAPIClient := conciergefake.NewSimpleClientset()
+			pinnipedInformers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
+			observableInformers := testutil.NewObservableWithInformerOption()
+
+			_ = New(
+				"concierge", // namespace for the controller
+				authncache.New(),
+				pinnipedAPIClient,
+				pinnipedInformers.Authentication().V1alpha1().JWTAuthenticators(),
+				secretInformer,
+				configMapInformer,
+				observableInformers.WithInformer,
+				frozenClock,
+				logger)
+
+			unrelated := &corev1.Secret{}
+			filter := observableInformers.GetFilterForInformer(secretInformer)
+			require.Equal(t, tt.wantAdd, filter.Add(tt.secret))
+			require.Equal(t, tt.wantUpdate, filter.Update(unrelated, tt.secret))
+			require.Equal(t, tt.wantUpdate, filter.Update(tt.secret, unrelated))
+			require.Equal(t, tt.wantDelete, filter.Delete(tt.secret))
+		})
+	}
+}
+
+func TestControllerFilterConfigMap(t *testing.T) {
+	namespace := "some-namespace"
+	goodCM := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+		},
+	}
+
+	tests := []struct {
+		name       string
+		cm         metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name:       "a configMap in the right namespace",
+			cm:         goodCM,
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
+			frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
+
+			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0)
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
+			pinnipedAPIClient := conciergefake.NewSimpleClientset()
+			pinnipedInformers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
+			observableInformers := testutil.NewObservableWithInformerOption()
+
+			_ = New(
+				"concierge", // namespace for the controller
+				authncache.New(),
+				pinnipedAPIClient,
+				pinnipedInformers.Authentication().V1alpha1().JWTAuthenticators(),
+				secretInformer,
+				configMapInformer,
+				observableInformers.WithInformer,
+				frozenClock,
+				logger)
+
+			unrelated := &corev1.ConfigMap{}
+			filter := observableInformers.GetFilterForInformer(configMapInformer)
+			require.Equal(t, tt.wantAdd, filter.Add(tt.cm))
+			require.Equal(t, tt.wantUpdate, filter.Update(unrelated, tt.cm))
+			require.Equal(t, tt.wantUpdate, filter.Update(tt.cm, unrelated))
+			require.Equal(t, tt.wantDelete, filter.Delete(tt.cm))
+		})
 	}
 }

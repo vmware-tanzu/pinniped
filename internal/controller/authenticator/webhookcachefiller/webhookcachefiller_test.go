@@ -1501,6 +1501,7 @@ func TestController(t *testing.T) {
 			}
 
 			controller := New(
+				"concierge", // namespace for controller
 				cache,
 				pinnipedAPIClient,
 				informers.Authentication().V1alpha1().WebhookAuthenticators(),

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	k8sauthv1beta1 "k8s.io/api/authentication/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,6 +67,7 @@ type cachedWebhookAuthenticator struct {
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
 func New(
+	namespace string,
 	cache *authncache.Cache,
 	client conciergeclientset.Interface,
 	webhooks authinformers.WebhookAuthenticatorInformer,
@@ -78,6 +80,7 @@ func New(
 		controllerlib.Config{
 			Name: controllerName,
 			Syncer: &webhookCacheFillerController{
+				namespace:         namespace,
 				cache:             cache,
 				client:            client,
 				webhooks:          webhooks,
@@ -92,11 +95,28 @@ func New(
 			pinnipedcontroller.MatchAnythingFilter(nil), // nil parent func is fine because each event is distinct
 			controllerlib.InformerOption{},
 		),
+		controllerlib.WithInformer(
+			secretInformer,
+			pinnipedcontroller.MatchAnySecretOfTypesFilter(
+				[]corev1.SecretType{
+					corev1.SecretTypeOpaque,
+					corev1.SecretTypeTLS,
+				},
+				pinnipedcontroller.SingletonQueue(),
+			), // nil parent func is fine because each event is distinct
+			controllerlib.InformerOption{},
+		),
+		controllerlib.WithInformer(
+			configMapInformer,
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
+			controllerlib.InformerOption{},
+		),
 	)
 }
 
 type webhookCacheFillerController struct {
 	cache             *authncache.Cache
+	namespace         string
 	webhooks          authinformers.WebhookAuthenticatorInformer
 	secretInformer    corev1informers.SecretInformer
 	configMapInformer corev1informers.ConfigMapInformer
@@ -144,7 +164,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	conditions := make([]*metav1.Condition, 0)
 	var errs []error
 
-	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(obj.Spec.TLS, obj.Namespace, conditions)
+	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
 	endpointHostPort, conditions, endpointOk := c.validateEndpoint(obj.Spec.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
 
@@ -320,11 +340,11 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 	return conditions, nil
 }
 
-func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, namespace string, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
+func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
 	condition, pemBytes, rootCAs, _ := tlsconfigutil.ValidateTLSConfig(
 		tlsconfigutil.TlsSpecForConcierge(tlsSpec),
 		"spec.tls",
-		namespace,
+		c.namespace,
 		c.secretInformer,
 		c.configMapInformer)
 

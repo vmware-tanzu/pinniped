@@ -2302,7 +2302,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "should return false for a secret of the type Opaque",
+			name: "should return true for a secret of the type Opaque",
 			secret: func() *corev1.Secret {
 				otherSecret := goodSecret.DeepCopy()
 				otherSecret.Type = corev1.SecretTypeOpaque
@@ -2313,7 +2313,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "should return false for a secret of the type TLS",
+			name: "should return true for a secret of the type TLS",
 			secret: func() *corev1.Secret {
 				otherSecret := goodSecret.DeepCopy()
 				otherSecret.Type = corev1.SecretTypeTLS

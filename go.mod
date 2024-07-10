@@ -2,7 +2,7 @@ module go.pinniped.dev
 
 go 1.22.0
 
-toolchain go1.22.4
+toolchain go1.22.5
 
 // This version taken from https://github.com/kubernetes/apiserver/blob/v0.30.0/go.mod#L14 to avoid compile failures.
 replace github.com/google/cel-go => github.com/google/cel-go v0.17.8

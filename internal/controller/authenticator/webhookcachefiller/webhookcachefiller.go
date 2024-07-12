@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/url"
+	"reflect"
 	"time"
 
 	k8sauthv1beta1 "k8s.io/api/authentication/v1beta1"
@@ -55,6 +56,11 @@ const (
 	reasonUnableToDialServer         = "UnableToDialServer"
 	msgUnableToValidate              = "unable to validate; see other conditions for details"
 )
+
+type cachedWebhookAuthenticator struct {
+	authenticator.Token
+	spec *authenticationv1alpha1.WebhookAuthenticatorSpec
+}
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
 func New(
@@ -103,19 +109,38 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("failed to get WebhookAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
+	cacheKey := authncache.Key{
+		APIGroup: authenticationv1alpha1.GroupName,
+		Kind:     "WebhookAuthenticator",
+		Name:     ctx.Key.Name,
+	}
+
+	// If this authenticator already exists, then only recreate it if is different from the desired
+	// authenticator. We don't want to be creating a new authenticator for every resync period.
+	if valueFromCache := c.cache.Get(cacheKey); valueFromCache != nil {
+		webhookAuthenticatorFromCache := c.cacheValueAsWebhookAuthenticator(valueFromCache)
+		if webhookAuthenticatorFromCache != nil && reflect.DeepEqual(webhookAuthenticatorFromCache.spec, &obj.Spec) {
+			c.log.WithValues("webhookAuthenticator", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).
+				Info("actual webhook authenticator and desired webhook authenticator are the same")
+			// Stop, no more work to be done. This authenticator is already validated and cached.
+			return nil
+		}
+	}
+
 	conditions := make([]*metav1.Condition, 0)
 	var errs []error
 
 	certPool, pemBytes, conditions, tlsBundleOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
 	endpointHostPort, conditions, endpointOk := c.validateEndpoint(obj.Spec.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
+
 	conditions, tlsNegotiateErr := c.validateConnection(certPool, endpointHostPort, conditions, okSoFar)
 	errs = append(errs, tlsNegotiateErr)
 	okSoFar = okSoFar && tlsNegotiateErr == nil
 
-	webhookAuthenticator, conditions, err := newWebhookAuthenticator(
+	newWebhookAuthenticatorForCache, conditions, err := newWebhookAuthenticator(
 		// Note that we use the whole URL when constructing the webhook client,
-		// not just the host and port that ew validated above. We need the path, etc.
+		// not just the host and port that we validated above. We need the path, etc.
 		obj.Spec.Endpoint,
 		pemBytes,
 		conditions,
@@ -123,13 +148,18 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	)
 	errs = append(errs, err)
 
-	if !conditionsutil.HadErrorCondition(conditions) {
-		c.cache.Store(authncache.Key{
-			APIGroup: authenticationv1alpha1.GroupName,
-			Kind:     "WebhookAuthenticator",
-			Name:     ctx.Key.Name,
-		}, webhookAuthenticator)
-		c.log.WithValues("webhook", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).Info("added new webhook authenticator")
+	if conditionsutil.HadErrorCondition(conditions) {
+		// The authenticator was determined to be invalid. Remove it from the cache, in case it was previously
+		// validated and cached. Do not allow an old, previously validated spec of the authenticator to continue
+		// being used for authentication.
+		c.cache.Delete(cacheKey)
+	} else {
+		c.cache.Store(cacheKey, &cachedWebhookAuthenticator{
+			Token: newWebhookAuthenticatorForCache,
+			spec:  obj.Spec.DeepCopy(), // deep copy to avoid caching original object
+		})
+		c.log.WithValues("webhook", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).
+			Info("added new webhook authenticator")
 	}
 
 	err = c.updateStatus(ctx.Context, obj, conditions)
@@ -141,6 +171,19 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	// - other errors, such as networking errors, etc. are the types of errors that should return here
 	//   and signal the controller to retry the sync loop. These may be corrected by machines.
 	return utilerrors.NewAggregate(errs)
+}
+
+func (c *webhookCacheFillerController) cacheValueAsWebhookAuthenticator(value authncache.Value) *cachedWebhookAuthenticator {
+	webhookAuthenticator, ok := value.(*cachedWebhookAuthenticator)
+	if !ok {
+		actualType := "<nil>"
+		if t := reflect.TypeOf(value); t != nil {
+			actualType = t.String()
+		}
+		c.log.WithValues("actualType", actualType).Info("wrong webhook authenticator type in cache")
+		return nil
+	}
+	return webhookAuthenticator
 }
 
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle

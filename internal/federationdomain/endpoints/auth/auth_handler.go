@@ -141,14 +141,13 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.authorize(w, r, requestedBrowserlessFlow, idpNameQueryParamValue, idp)
+	h.authorize(w, r, requestedBrowserlessFlow, idp)
 }
 
 func (h *authorizeHandler) authorize(
 	w http.ResponseWriter,
 	r *http.Request,
 	requestedBrowserlessFlow bool,
-	idpNameQueryParamValue string,
 	idp resolvedprovider.FederationDomainResolvedIdentityProvider,
 ) {
 	// Browser flows do not need session storage at this step. For browser flows, the request parameters
@@ -164,8 +163,6 @@ func (h *authorizeHandler) authorize(
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, requestedBrowserlessFlow)
 		return
 	}
-
-	maybeLogDeprecationWarningForMissingIDPParam(idpNameQueryParamValue, authorizeRequester)
 
 	// Automatically grant certain scopes, but only if they were requested.
 	// Grant the openid scope (for now) if they asked for it so that `NewAuthorizeResponse` will perform its OIDC validations.
@@ -304,8 +301,7 @@ func readCSRFCookie(r *http.Request, codec oidc.Decoder) csrftoken.CSRFToken {
 	return csrfFromCookie
 }
 
-// chooseUpstreamIDP selects either an OIDC, an LDAP, or an AD IDP, or returns an error.
-// Note that AD and LDAP IDPs both return the same interface type, but different ProviderTypes values.
+// chooseUpstreamIDP selects an upstream IDP, or returns an error.
 func chooseUpstreamIDP(idpDisplayName string, idpLister federationdomainproviders.FederationDomainIdentityProvidersFinderI) (
 	resolvedprovider.FederationDomainResolvedIdentityProvider,
 	error,
@@ -318,22 +314,6 @@ func chooseUpstreamIDP(idpDisplayName string, idpLister federationdomainprovider
 		return idpLister.FindDefaultIDP()
 	}
 	return idpLister.FindUpstreamIDPByDisplayName(idpDisplayName)
-}
-
-func maybeLogDeprecationWarningForMissingIDPParam(idpNameQueryParamValue string, authorizeRequester fosite.AuthorizeRequester) {
-	if len(idpNameQueryParamValue) != 0 {
-		return
-	}
-	plog.Warning("Client attempted to perform an authorization flow (user login) without specifying the "+
-		"query param to choose an identity provider. "+
-		"This will not work when identity providers are configured explicitly on a FederationDomain. "+
-		"Additionally, this behavior is deprecated and support for any authorization requests missing this query param "+
-		"may be removed in a future release. "+
-		"Please ask the author of this client to update the authorization request URL to include this query parameter. "+
-		"The value of the parameter should be equal to the displayName of the identity provider as declared in the FederationDomain.",
-		"missingParameterName", oidcapi.AuthorizeUpstreamIDPNameParamName,
-		"clientID", authorizeRequester.GetClient().GetID(),
-	)
 }
 
 // generateUpstreamAuthorizeRequestState performs the shared validations and setup between browser based

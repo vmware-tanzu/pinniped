@@ -998,7 +998,7 @@ func TestController(t *testing.T) {
 			runTestsOnResultingAuthenticator: false, // skip the tests because the authenticator left in the cache is the mock version that was added above
 		},
 		{
-			name: "Sync: JWTAuthenticator update when cached authenticator is different type: loop will complete successfully and update status conditions.",
+			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions.",
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
@@ -1006,6 +1006,9 @@ func TestController(t *testing.T) {
 						Kind:     "JWTAuthenticator",
 						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
 					},
+					// Only entries of type cachedJWTAuthenticator are ever put into the cache, so this should never really happen.
+					// This test is to provide coverage on the production code which reads from the cache and casts those entries to
+					// the appropriate data type.
 					struct{ authenticator.Token }{},
 				)
 			},

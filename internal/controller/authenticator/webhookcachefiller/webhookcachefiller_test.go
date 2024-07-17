@@ -471,7 +471,7 @@ func TestController(t *testing.T) {
 			wantCacheEntries: 1,
 		},
 		{
-			name: "Sync: authenticator update when cached authenticator is different type: loop will complete successfully and update status conditions.",
+			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions.",
 			cache: func(t *testing.T, cache *authncache.Cache) {
 				cache.Store(
 					authncache.Key{
@@ -479,6 +479,9 @@ func TestController(t *testing.T) {
 						Kind:     "WebhookAuthenticator",
 						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
 					},
+					// Only entries of type cachedWebhookAuthenticator are ever put into the cache, so this should never really happen.
+					// This test is to provide coverage on the production code which reads from the cache and casts those entries to
+					// the appropriate data type.
 					struct{ authenticator.Token }{},
 				)
 			},

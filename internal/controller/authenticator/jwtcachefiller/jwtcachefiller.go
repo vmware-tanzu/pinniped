@@ -180,8 +180,14 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 		Name:     ctx.Key.Name,
 	}
 
-	// If this authenticator already exists, then only recreate it if is different from the desired
-	// authenticator. We don't want to be creating a new authenticator for every resync period.
+	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
+	// There is no need to repeat validations for a spec that was already successfully validated. We are making a
+	// design decision to avoid repeating the validation which dials the server, even though the server's TLS
+	// configuration could have changed, because it is also possible that the network could be flaky. We are choosing
+	// to prefer to keep the authenticator cached (available for end-user auth attempts) during times of network flakes
+	// rather than trying to show the most up-to-date status possible. These validations are for administrator
+	// convenience at the time of a configuration change, to catch typos and blatant misconfigurations, rather
+	// than to constantly monitor for external issues.
 	var jwtAuthenticatorFromCache *cachedJWTAuthenticator
 	if valueFromCache := c.cache.Get(cacheKey); valueFromCache != nil {
 		jwtAuthenticatorFromCache = c.cacheValueAsJWTAuthenticator(valueFromCache)
@@ -236,7 +242,8 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// In case we just overwrote or deleted the authenticator from the cache, clean up the old instance
-	// to avoid leaking goroutines. It's safe to call Close() on nil.
+	// to avoid leaking goroutines. It's safe to call Close() on nil. We avoid calling Close() until it is
+	// removed from the cache, because we do not want any end-user authentications to use a closed authenticator.
 	jwtAuthenticatorFromCache.Close()
 
 	err = c.updateStatus(ctx.Context, obj, conditions)

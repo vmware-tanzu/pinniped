@@ -266,12 +266,13 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 }
 
 func allSuccessfulWebhookAuthenticatorConditions() []metav1.Condition {
-	return []metav1.Condition{{
-		Type:    "AuthenticatorValid",
-		Status:  "True",
-		Reason:  "Success",
-		Message: "authenticator initialized",
-	},
+	return []metav1.Condition{
+		{
+			Type:    "AuthenticatorValid",
+			Status:  "True",
+			Reason:  "Success",
+			Message: "authenticator initialized",
+		},
 		{
 			Type:    "EndpointURLValid",
 			Status:  "True",

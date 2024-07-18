@@ -160,19 +160,14 @@ func ValidateTLSConfig(
 	secretInformer corev1informers.SecretInformer,
 	configMapInformer corev1informers.ConfigMapInformer,
 ) (*metav1.Condition, []byte, *x509.CertPool) {
-	// try to build a x509 cert pool using the ca data specified in the tlsSpec.
 	certPool, bundle, err := getCertPool(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
 	if err != nil {
-		// an error encountered during building a certpool using the ca data from the tlsSpec results in an invalid
-		// TLS condition.
 		return invalidTLSCondition(err.Error()), nil, nil
 	}
-	// for us, an empty or nil ca bundle read is results in a valid TLS condition, but we do want to convey that
-	// no ca data was supplied.
 	if bundle == nil {
-		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), bundle, certPool
+		// An empty or nil CA bundle results in a valid TLS condition which indicates that no CA data was supplied.
+		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), nil, nil
 	}
-
 	return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, loadedTLSConfigurationMessage)), bundle, certPool
 }
 
@@ -201,6 +196,7 @@ func readCABundleFromK8sSecret(namespace string, name string, key string, secret
 	}
 	// ca bundle in the secret is expected to exist in a specific key, if that key does not exist, then it is an error
 	if val, exists := s.Data[key]; exists {
+		// TODO: if val is an empty string, it should be an error
 		return string(val), nil
 	}
 	return "", fmt.Errorf("key %q not found in secret %q", key, namespacedName)
@@ -216,6 +212,7 @@ func readCABundleFromK8sConfigMap(namespace string, name string, key string, con
 
 	// ca bundle in the secret is expected to exist in a specific key, if that key does not exist, then it is an error
 	if val, exists := c.Data[key]; exists {
+		// TODO: if val is an empty string, it should be an error
 		return val, nil
 	}
 	return "", fmt.Errorf("key %q not found in configmap %q", key, namespacedName)

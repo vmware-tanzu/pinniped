@@ -42,7 +42,6 @@ import (
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/conciergetestutil"
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
@@ -122,12 +121,14 @@ func TestController(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = fmt.Fprint(w, "404 nothing here")
 	}))
-	hostGoodDefaultServingCertServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hostGoodDefaultServingCertServer, hostGoodDefaultServingCertServerCAPEM := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	}), func(s *httptest.Server) {
 		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
 	})
-
+	hostGoodDefaultServingCertServerTLSSpec := &authenticationv1alpha1.TLSSpec{
+		CertificateAuthorityData: base64.StdEncoding.EncodeToString(hostGoodDefaultServingCertServerCAPEM),
+	}
 	goodWebhookDefaultServingCertEndpoint := hostGoodDefaultServingCertServer.URL
 	goodWebhookDefaultServingCertEndpointBut404 := goodWebhookDefaultServingCertEndpoint + "/nothing/here"
 
@@ -146,7 +147,7 @@ func TestController(t *testing.T) {
 
 	goodWebhookAuthenticatorSpecWithCA := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodWebhookDefaultServingCertEndpoint,
-		TLS:      conciergetestutil.TLSSpecFromTLSConfig(hostGoodDefaultServingCertServer.TLS),
+		TLS:      hostGoodDefaultServingCertServerTLSSpec,
 	}
 	localWithExampleDotComWeebhookAuthenticatorSpec := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		// CA for example.com, TLS serving cert for example.com, but endpoint is still localhost
@@ -162,7 +163,7 @@ func TestController(t *testing.T) {
 	}
 	goodWebhookAuthenticatorSpecWith404Endpoint := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodWebhookDefaultServingCertEndpointBut404,
-		TLS:      conciergetestutil.TLSSpecFromTLSConfig(hostGoodDefaultServingCertServer.TLS),
+		TLS:      hostGoodDefaultServingCertServerTLSSpec,
 	}
 	badWebhookAuthenticatorSpecInvalidTLS := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodWebhookDefaultServingCertEndpoint,
@@ -475,7 +476,7 @@ func TestController(t *testing.T) {
 			wantCacheEntries: 1,
 		},
 		{
-			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions.",
+			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions",
 			cache: func(t *testing.T, cache *authncache.Cache) {
 				cache.Store(
 					authncache.Key{
@@ -1493,7 +1494,6 @@ func TestController(t *testing.T) {
 			}
 			informers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
 			kubeInformers := kubeinformers.NewSharedInformerFactory(kubernetesfake.NewSimpleClientset(), 0)
-			observableInformers := testutil.NewObservableWithInformerOption()
 			cache := authncache.New()
 
 			var log bytes.Buffer
@@ -1510,7 +1510,7 @@ func TestController(t *testing.T) {
 				informers.Authentication().V1alpha1().WebhookAuthenticators(),
 				kubeInformers.Core().V1().Secrets(),
 				kubeInformers.Core().V1().ConfigMaps(),
-				observableInformers.WithInformer,
+				controllerlib.WithInformer,
 				frozenClock,
 				logger)
 

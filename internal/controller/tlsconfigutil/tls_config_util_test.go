@@ -453,8 +453,7 @@ func TestReadCABundleFromK8sSecret(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			fakeClient := fake.NewSimpleClientset(tt.k8sObjects...)
-			sharedInformers := informers.NewSharedInformerFactory(fakeClient, 0)
+			sharedInformers := informers.NewSharedInformerFactory(fake.NewSimpleClientset(tt.k8sObjects...), 0)
 			secretsInformer := sharedInformers.Core().V1().Secrets()
 
 			// calling the .Informer function registers this informer in the sharedinformer.

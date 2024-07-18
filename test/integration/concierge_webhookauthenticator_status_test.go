@@ -31,7 +31,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		run             func(t *testing.T)
 	}{
 		{
-			name: "Basic test to see if the WebhookAuthenticator wakes up or not.",
+			name: "basic test to see if the WebhookAuthenticator wakes up or not",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				return &testlib.IntegrationEnv(t).TestWebhook
 			},

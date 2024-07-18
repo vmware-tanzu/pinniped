@@ -28,6 +28,8 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 		customResourceName string
 		expectedError      string
 	}{
+		// TODO: these "spec.endpoint" could use the real URL of the local-user-authenticator
+		// TODO: should we repeat these tests using the JWTAuthenticator too?
 		{
 			name: "should disallow certificate authority data source with missing name",
 			customResourceYaml: here.Doc(`

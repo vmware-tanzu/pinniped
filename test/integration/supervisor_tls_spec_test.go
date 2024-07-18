@@ -28,6 +28,8 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 		customResourceName string
 		expectedError      string
 	}{
+		// TODO: use the OIDC provider from env instead of bar.com
+		// TODO: make ths a loop to also run the same tests on LDAP, AD, GitHub??
 		{
 			name: "should disallow certificate authority data source with missing name",
 			customResourceYaml: here.Doc(`

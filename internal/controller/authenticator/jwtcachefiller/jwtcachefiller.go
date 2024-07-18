@@ -48,13 +48,12 @@ import (
 const (
 	controllerName = "jwtcachefiller-controller"
 
-	typeReady                 = "Ready"
-	typeTLSConfigurationValid = "TLSConfigurationValid"
-	typeIssuerURLValid        = "IssuerURLValid"
-	typeDiscoveryValid        = "DiscoveryURLValid"
-	typeJWKSURLValid          = "JWKSURLValid"
-	typeJWKSFetchValid        = "JWKSFetchValid"
-	typeAuthenticatorValid    = "AuthenticatorValid"
+	typeReady              = "Ready"
+	typeIssuerURLValid     = "IssuerURLValid"
+	typeDiscoveryValid     = "DiscoveryURLValid"
+	typeJWKSURLValid       = "JWKSURLValid"
+	typeJWKSFetchValid     = "JWKSFetchValid"
+	typeAuthenticatorValid = "AuthenticatorValid"
 
 	reasonSuccess                                   = "Success"
 	reasonNotReady                                  = "NotReady"
@@ -66,7 +65,6 @@ const (
 	reasonInvalidIssuerURLContainsWellKnownEndpoint = "InvalidIssuerURLContainsWellKnownEndpoint"
 	reasonInvalidProviderJWKSURL                    = "InvalidProviderJWKSURL"
 	reasonInvalidProviderJWKSURLScheme              = "InvalidProviderJWKSURLScheme"
-	reasonInvalidTLSConfiguration                   = "InvalidTLSConfiguration"
 	reasonInvalidDiscoveryProbe                     = "InvalidDiscoveryProbe"
 	reasonInvalidAuthenticator                      = "InvalidAuthenticator"
 	reasonInvalidCouldNotFetchJWKS                  = "InvalidCouldNotFetchJWKS"
@@ -117,7 +115,8 @@ type tokenAuthenticatorCloser interface {
 
 type cachedJWTAuthenticator struct {
 	authenticator.Token
-	spec   *authenticationv1alpha1.JWTAuthenticatorSpec
+	spec *authenticationv1alpha1.JWTAuthenticatorSpec
+	// TODO: maybe also keep track of the bytes of the CA bundle itself (or a hash of those bytes) that were used to validate previously??
 	cancel context.CancelFunc
 }
 
@@ -220,6 +219,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	var jwtAuthenticatorFromCache *cachedJWTAuthenticator
 	if valueFromCache := c.cache.Get(cacheKey); valueFromCache != nil {
 		jwtAuthenticatorFromCache = c.cacheValueAsJWTAuthenticator(valueFromCache)
+		// TODO: this is only comparing the specs of the old/new JWTAuthenticator.... BUT the CA bundle from the ConfigMap or Secret could have also changed, so check that somehow
 		if jwtAuthenticatorFromCache != nil && reflect.DeepEqual(jwtAuthenticatorFromCache.spec, &obj.Spec) {
 			c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).
 				Info("actual jwt authenticator and desired jwt authenticator are the same")
@@ -231,7 +231,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	conditions := make([]*metav1.Condition, 0)
 	var errs []error
 
-	rootCAs, conditions, tlsOk := c.validateTLSBundle(obj.Spec.TLS, c.namespace, conditions)
+	rootCAs, conditions, tlsOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
 	_, conditions, issuerOk := c.validateIssuer(obj.Spec.Issuer, conditions)
 	okSoFar := tlsOk && issuerOk
 
@@ -299,11 +299,11 @@ func (c *jwtCacheFillerController) cacheValueAsJWTAuthenticator(value authncache
 	return jwtAuthenticator
 }
 
-func (c *jwtCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, namespace string, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
-	condition, _, rootCAs, _ := tlsconfigutil.ValidateTLSConfig(
+func (c *jwtCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
+	condition, _, rootCAs := tlsconfigutil.ValidateTLSConfig(
 		tlsconfigutil.TlsSpecForConcierge(tlsSpec),
 		"spec.tls",
-		namespace,
+		c.namespace,
 		c.secretInformer,
 		c.configMapInformer)
 

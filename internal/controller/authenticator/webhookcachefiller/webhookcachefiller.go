@@ -44,7 +44,6 @@ import (
 const (
 	controllerName                   = "webhookcachefiller-controller"
 	typeReady                        = "Ready"
-	typeTLSConfigurationValid        = "TLSConfigurationValid"
 	typeWebhookConnectionValid       = "WebhookConnectionValid"
 	typeEndpointURLValid             = "EndpointURLValid"
 	typeAuthenticatorValid           = "AuthenticatorValid"
@@ -53,7 +52,6 @@ const (
 	reasonUnableToValidate           = "UnableToValidate"
 	reasonUnableToCreateClient       = "UnableToCreateClient"
 	reasonUnableToInstantiateWebhook = "UnableToInstantiateWebhook"
-	reasonInvalidTLSConfiguration    = "InvalidTLSConfiguration"
 	reasonInvalidEndpointURL         = "InvalidEndpointURL"
 	reasonInvalidEndpointURLScheme   = "InvalidEndpointURLScheme"
 	reasonUnableToDialServer         = "UnableToDialServer"
@@ -342,7 +340,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 }
 
 func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
-	condition, pemBytes, rootCAs, _ := tlsconfigutil.ValidateTLSConfig(
+	condition, pemBytes, rootCAs := tlsconfigutil.ValidateTLSConfig(
 		tlsconfigutil.TlsSpecForConcierge(tlsSpec),
 		"spec.tls",
 		c.namespace,

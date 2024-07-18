@@ -2347,9 +2347,8 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			var log bytes.Buffer
 			logger := plog.TestLogger(t, &log)
 
-			secretInformer := kubeInformers.Core().V1().Secrets()
-			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			observableInformers := testutil.NewObservableWithInformerOption()
+			secretInformer := kubeInformers.Core().V1().Secrets()
 
 			_ = New(
 				"some-namespace",
@@ -2357,7 +2356,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				supervisorfake.NewSimpleClientset(),
 				supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders(),
 				secretInformer,
-				configMapInformer,
+				kubeInformers.Core().V1().ConfigMaps(),
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},
@@ -2390,7 +2389,7 @@ func TestGitHubUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name:       "a configMap in the right namespace",
+			name:       "any ConfigMap",
 			cm:         goodCM,
 			wantAdd:    true,
 			wantUpdate: true,
@@ -2404,16 +2403,14 @@ func TestGitHubUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
 			var log bytes.Buffer
 			logger := plog.TestLogger(t, &log)
 
-			gitHubIdentityProviderInformer := supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders()
 			observableInformers := testutil.NewObservableWithInformerOption()
-
 			configMapInformer := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().ConfigMaps()
 
 			_ = New(
 				namespace,
 				dynamicupstreamprovider.NewDynamicUpstreamIDPProvider(),
 				supervisorfake.NewSimpleClientset(),
-				gitHubIdentityProviderInformer,
+				supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders(),
 				k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().Secrets(),
 				configMapInformer,
 				logger,
@@ -2448,7 +2445,7 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name:       "an IDP in the right namespace",
+			name:       "any GitHubIdentityProvider",
 			idp:        goodIDP,
 			wantAdd:    true,
 			wantUpdate: true,
@@ -2462,8 +2459,8 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 			var log bytes.Buffer
 			logger := plog.TestLogger(t, &log)
 
-			gitHubIdentityProviderInformer := supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders()
 			observableInformers := testutil.NewObservableWithInformerOption()
+			gitHubIdentityProviderInformer := supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders()
 
 			_ = New(
 				namespace,

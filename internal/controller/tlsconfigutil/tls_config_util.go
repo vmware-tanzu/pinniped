@@ -149,33 +149,31 @@ func getCertPool(
 
 // ValidateTLSConfig reads ca bundle in the tlsSpec, supplied either inline using the CertificateAuthorityDate
 // or as a reference to a kubernetes secret or configmap using the CertificateAuthorityDataSource, and returns
-// a condition of type TLSConfigurationValid based on the validity of the ca bundle,
-// a pem encoded ca bundle
-// a X509 cert pool with the ca bundle
-// any error encountered.
-// TODO: it should suffice that this function returns a TLSConfigurationValid condition, and perhaps we could skip
-// returning the error. This can be done once all controllers are able to use this function.
+// - a condition of type TLSConfigurationValid based on the validity of the ca bundle,
+// - a pem encoded ca bundle
+// - a X509 cert pool with the ca bundle
+// TODO: should this show the resource version of the Secret/ConfigMap to the user on all conditions?
 func ValidateTLSConfig(
 	tlsSpec *TLSSpec,
 	conditionPrefix string,
 	namespace string,
 	secretInformer corev1informers.SecretInformer,
 	configMapInformer corev1informers.ConfigMapInformer,
-) (*metav1.Condition, []byte, *x509.CertPool, error) {
+) (*metav1.Condition, []byte, *x509.CertPool) {
 	// try to build a x509 cert pool using the ca data specified in the tlsSpec.
 	certPool, bundle, err := getCertPool(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
 	if err != nil {
 		// an error encountered during building a certpool using the ca data from the tlsSpec results in an invalid
 		// TLS condition.
-		return invalidTLSCondition(err.Error()), nil, nil, err
+		return invalidTLSCondition(err.Error()), nil, nil
 	}
 	// for us, an empty or nil ca bundle read is results in a valid TLS condition, but we do want to convey that
 	// no ca data was supplied.
 	if bundle == nil {
-		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), bundle, certPool, err
+		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), bundle, certPool
 	}
 
-	return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, loadedTLSConfigurationMessage)), bundle, certPool, err
+	return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, loadedTLSConfigurationMessage)), bundle, certPool
 }
 
 func readCABundleFromSource(source *caBundleSource, namespace string, secretInformer corev1informers.SecretInformer, configMapInformer corev1informers.ConfigMapInformer) (string, error) {
@@ -190,33 +188,37 @@ func readCABundleFromSource(source *caBundleSource, namespace string, secretInfo
 }
 
 func readCABundleFromK8sSecret(namespace string, name string, key string, secretInformer corev1informers.SecretInformer) (string, error) {
+	namespacedName := fmt.Sprintf("%s/%s", namespace, name)
+
 	s, err := secretInformer.Lister().Secrets(namespace).Get(name)
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to get secret %s/%s", namespace, name)
+		return "", errors.Wrapf(err, "failed to get secret %q", namespacedName)
 	}
 	// for kubernetes secrets to be used as a certificate authority data source, the secret should be of type
 	// kubernetes.io/tls or Opaque. It is an error to use a secret that is of any other type.
 	if s.Type != corev1.SecretTypeTLS && s.Type != corev1.SecretTypeOpaque {
-		return "", fmt.Errorf("secret %s/%s of type %s cannot be used as a certificate authority data source", namespace, name, s.Type)
+		return "", fmt.Errorf("secret %q of type %q cannot be used as a certificate authority data source", namespacedName, s.Type)
 	}
 	// ca bundle in the secret is expected to exist in a specific key, if that key does not exist, then it is an error
 	if val, exists := s.Data[key]; exists {
 		return string(val), nil
 	}
-	return "", fmt.Errorf("key %s not found in secret %s/%s", key, namespace, name)
+	return "", fmt.Errorf("key %q not found in secret %q", key, namespacedName)
 }
 
 func readCABundleFromK8sConfigMap(namespace string, name string, key string, configMapInformer corev1informers.ConfigMapInformer) (string, error) {
+	namespacedName := fmt.Sprintf("%s/%s", namespace, name)
+
 	c, err := configMapInformer.Lister().ConfigMaps(namespace).Get(name)
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to get configmap %s/%s", namespace, name)
+		return "", errors.Wrapf(err, "failed to get configmap %q", namespacedName)
 	}
 
 	// ca bundle in the secret is expected to exist in a specific key, if that key does not exist, then it is an error
 	if val, exists := c.Data[key]; exists {
 		return val, nil
 	}
-	return "", fmt.Errorf("key %s not found in configmap %s/%s", key, namespace, name)
+	return "", fmt.Errorf("key %q not found in configmap %q", key, namespacedName)
 }
 
 func validTLSCondition(message string) *metav1.Condition {

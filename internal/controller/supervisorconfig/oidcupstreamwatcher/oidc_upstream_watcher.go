@@ -324,14 +324,16 @@ func (c *oidcWatcherController) validateSecret(upstream *idpv1alpha1.OIDCIdentit
 
 // validateIssuer validates the .spec.issuer field, performs OIDC discovery, and returns the appropriate OIDCDiscoverySucceeded condition.
 func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *idpv1alpha1.OIDCIdentityProvider, result *upstreamoidc.ProviderConfig) []*metav1.Condition {
-	// Get the provider and HTTP Client from cache if possible.
-	discoveredProvider, httpClient := c.validatorCache.getProvider(&upstream.Spec)
-	tlsCondition, _, certPool, _ := tlsconfigutil.ValidateTLSConfig(
+	tlsCondition, _, certPool := tlsconfigutil.ValidateTLSConfig(
 		tlsconfigutil.TLSSpecForSupervisor(upstream.Spec.TLS),
 		"spec.tls",
 		upstream.Namespace,
 		c.secretInformer,
 		c.configMapInformer)
+
+	// TODO: If either the spec or the CA bundle has changed, then we need to redo the validations below. So maybe the cache key should be the combination of spec and bundle (or hash of bundle)?
+	// Get the provider and HTTP Client from cache if possible.
+	discoveredProvider, httpClient := c.validatorCache.getProvider(&upstream.Spec)
 
 	// If the provider does not exist in the cache, do a fresh discovery lookup and save to the cache.
 	if discoveredProvider == nil {

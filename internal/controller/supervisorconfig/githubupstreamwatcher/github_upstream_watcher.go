@@ -282,6 +282,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	tlsConfigCondition, certPool := c.validateTLSConfiguration(upstream.Spec.GitHubAPI.TLS)
 	conditions = append(conditions, tlsConfigCondition)
 
+	// TODO: skip this if it is already validated for this same spec and CA bundle (or perhaps hash of CA bundle)
 	githubConnectionCondition, hostURL, httpClient, githubConnectionErr := c.validateGitHubConnection(
 		hostPort,
 		certPool,
@@ -373,7 +374,7 @@ func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Conditio
 }
 
 func (c *gitHubWatcherController) validateTLSConfiguration(tlsSpec *idpv1alpha1.TLSSpec) (*metav1.Condition, *x509.CertPool) {
-	tlsCondition, _, certPool, _ := tlsconfigutil.ValidateTLSConfig(
+	tlsCondition, _, certPool := tlsconfigutil.ValidateTLSConfig(
 		tlsconfigutil.TLSSpecForSupervisor(tlsSpec),
 		"spec.githubAPI.tls",
 		c.namespace,

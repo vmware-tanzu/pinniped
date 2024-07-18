@@ -254,7 +254,7 @@ func ValidateGenericLDAP(
 	conditions.Append(secretValidCondition, true)
 
 	tlsSpec := tlsconfigutil.TLSSpecForSupervisor(upstream.Spec().TLSSpec())
-	tlsValidCondition, caBundle, _, _ := tlsconfigutil.ValidateTLSConfig(tlsSpec, "spec.tls", upstream.Namespace(), secretInformer, configMapInformer)
+	tlsValidCondition, caBundle, _ := tlsconfigutil.ValidateTLSConfig(tlsSpec, "spec.tls", upstream.Namespace(), secretInformer, configMapInformer)
 	conditions.Append(tlsValidCondition, true)
 	config.CABundle = caBundle
 
@@ -277,6 +277,7 @@ func validateAndSetLDAPServerConnectivityAndSearchBase(
 	config *upstreamldap.ProviderConfig,
 	currentSecretVersion string,
 ) (*metav1.Condition, *metav1.Condition) {
+	// TODO: if the CA bundle has changed, then we should redo the below connection probes. So maybe this cache should also include the CA bundle (or the hash of the bundle) as part of the lookup?
 	validatedSettings, hasPreviousValidatedSettings := validatedSettingsCache.Get(upstream.Name(), currentSecretVersion, upstream.Generation())
 	var ldapConnectionValidCondition, searchBaseFoundCondition *metav1.Condition
 

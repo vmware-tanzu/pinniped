@@ -341,7 +341,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 
 func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
 	condition, pemBytes, rootCAs := tlsconfigutil.ValidateTLSConfig(
-		tlsconfigutil.TlsSpecForConcierge(tlsSpec),
+		tlsconfigutil.TLSSpecForConcierge(tlsSpec),
 		"spec.tls",
 		c.namespace,
 		c.secretInformer,

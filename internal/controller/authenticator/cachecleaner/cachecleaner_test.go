@@ -155,7 +155,6 @@ func TestController(t *testing.T) {
 			defer cancel()
 
 			informers.Start(ctx.Done())
-			informers.WaitForCacheSync(ctx.Done())
 			controllerlib.TestRunSynchronously(t, controller)
 
 			syncCtx := controllerlib.Context{

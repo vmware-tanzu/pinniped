@@ -5,6 +5,7 @@ package tlsconfigutil
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"testing"
 	"time"
@@ -27,12 +28,17 @@ func TestValidateTLSConfig(t *testing.T) {
 	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
 	bundle := testCA.Bundle()
+	certPool := x509.NewCertPool()
+	require.True(t, certPool.AppendCertsFromPEM(bundle))
 	base64EncodedBundle := base64.StdEncoding.EncodeToString(bundle)
+
 	tests := []struct {
 		name              string
 		tlsSpec           *TLSSpec
 		namespace         string
 		k8sObjects        []runtime.Object
+		expectedBundle    []byte
+		expectedCertPool  *x509.CertPool
 		expectedCondition *metav1.Condition
 	}{
 		{
@@ -60,6 +66,8 @@ func TestValidateTLSConfig(t *testing.T) {
 			tlsSpec: &TLSSpec{
 				CertificateAuthorityData: base64EncodedBundle,
 			},
+			expectedBundle:   bundle,
+			expectedCertPool: certPool,
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -130,6 +138,8 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
+			expectedBundle:   bundle,
+			expectedCertPool: certPool,
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -159,6 +169,8 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
+			expectedBundle:   bundle,
+			expectedCertPool: certPool,
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -166,7 +178,6 @@ func TestValidateTLSConfig(t *testing.T) {
 				Message: "tls is valid: loaded TLS configuration",
 			},
 		},
-
 		{
 			name: "should return invalid condition when a secrets not of type tls or opaque are used as ca data source",
 			tlsSpec: &TLSSpec{
@@ -196,7 +207,120 @@ func TestValidateTLSConfig(t *testing.T) {
 				Message: `tls.certificateAuthorityDataSource is invalid: secret "awesome-namespace/awesome-secret-ba" of type "kubernetes.io/basic-auth" cannot be used as a certificate authority data source`,
 			},
 		},
-
+		{
+			name: "should return invalid condition when a secret does not have the configured key",
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+			namespace: "awesome-namespace",
+			k8sObjects: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "awesome-secret",
+						Namespace: "awesome-namespace",
+					},
+					Type: corev1.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"wrong-key": bundle,
+					},
+				},
+			},
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: `tls.certificateAuthorityDataSource is invalid: key "ca-bundle" not found in secret "awesome-namespace/awesome-secret"`,
+			},
+		},
+		{
+			name: "should return invalid condition when a secret has the configured key but its value is empty",
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+			namespace: "awesome-namespace",
+			k8sObjects: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "awesome-secret",
+						Namespace: "awesome-namespace",
+					},
+					Type: corev1.SecretTypeOpaque,
+					Data: map[string][]byte{
+						"ca-bundle": []byte(""),
+					},
+				},
+			},
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: `tls.certificateAuthorityDataSource is invalid: key "ca-bundle" has empty value in secret "awesome-namespace/awesome-secret"`,
+			},
+		},
+		{
+			name: "should return invalid condition when a configmap does not have the configured key",
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "ConfigMap",
+					Name: "awesome-configmap",
+					Key:  "ca-bundle",
+				},
+			},
+			namespace: "awesome-namespace",
+			k8sObjects: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "awesome-configmap",
+						Namespace: "awesome-namespace",
+					},
+					Data: map[string]string{
+						"wrong-key": string(bundle),
+					},
+				},
+			},
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: `tls.certificateAuthorityDataSource is invalid: key "ca-bundle" not found in configmap "awesome-namespace/awesome-configmap"`,
+			},
+		},
+		{
+			name: "should return invalid condition when a configmap has the configured key but its value is empty",
+			tlsSpec: &TLSSpec{
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "ConfigMap",
+					Name: "awesome-configmap",
+					Key:  "ca-bundle",
+				},
+			},
+			namespace: "awesome-namespace",
+			k8sObjects: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "awesome-configmap",
+						Namespace: "awesome-namespace",
+					},
+					Data: map[string]string{
+						"ca-bundle": "",
+					},
+				},
+			},
+			expectedCondition: &metav1.Condition{
+				Type:    typeTLSConfigurationValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonInvalidTLSConfig,
+				Message: `tls.certificateAuthorityDataSource is invalid: key "ca-bundle" has empty value in configmap "awesome-namespace/awesome-configmap"`,
+			},
+		},
 		{
 			name: "should return ca bundle from kubernetes configMap",
 			tlsSpec: &TLSSpec{
@@ -218,6 +342,8 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
+			expectedBundle:   bundle,
+			expectedCertPool: certPool,
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -234,18 +360,8 @@ func TestValidateTLSConfig(t *testing.T) {
 					Key:  "does-not-matter",
 				},
 			},
-			namespace: "awesome-namespace",
-			k8sObjects: []runtime.Object{
-				&corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-cm",
-						Namespace: "awesome-namespace",
-					},
-					Data: map[string]string{
-						"ca-bundle": string(bundle),
-					},
-				},
-			},
+			namespace:  "awesome-namespace",
+			k8sObjects: []runtime.Object{},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
@@ -262,18 +378,8 @@ func TestValidateTLSConfig(t *testing.T) {
 					Key:  "does-not-matter",
 				},
 			},
-			namespace: "awesome-namespace",
-			k8sObjects: []runtime.Object{
-				&corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-cm",
-						Namespace: "awesome-namespace",
-					},
-					Data: map[string]string{
-						"ca-bundle": string(bundle),
-					},
-				},
-			},
+			namespace:  "awesome-namespace",
+			k8sObjects: []runtime.Object{},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
@@ -317,265 +423,40 @@ func TestValidateTLSConfig(t *testing.T) {
 			var secretsInformer corev1informers.SecretInformer
 			var configMapInformer corev1informers.ConfigMapInformer
 
-			if len(tt.k8sObjects) > 0 {
-				fakeClient := fake.NewSimpleClientset(tt.k8sObjects...)
-				sharedInformers := informers.NewSharedInformerFactory(fakeClient, 0)
-				configMapInformer = sharedInformers.Core().V1().ConfigMaps()
-				secretsInformer = sharedInformers.Core().V1().Secrets()
+			fakeClient := fake.NewSimpleClientset(tt.k8sObjects...)
+			sharedInformers := informers.NewSharedInformerFactory(fakeClient, 0)
+			configMapInformer = sharedInformers.Core().V1().ConfigMaps()
+			secretsInformer = sharedInformers.Core().V1().Secrets()
 
-				// calling the .Informer function registers this informer in the sharedinformer.
-				// doing this will ensure that this informer will be sync'd when Start is called next.
-				configMapInformer.Informer()
-				secretsInformer.Informer()
-
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-				sharedInformers.Start(ctx.Done())
-				sharedInformers.WaitForCacheSync(ctx.Done())
-			}
-			actualCondition, _, _ := ValidateTLSConfig(tt.tlsSpec, "tls", tt.namespace, secretsInformer, configMapInformer)
-			require.Equal(t, tt.expectedCondition, actualCondition)
-		})
-	}
-}
-
-func TestReadCABundleFromK8sSecret(t *testing.T) {
-	tests := []struct {
-		name            string
-		secretNamespace string
-		secretName      string
-		secretKey       string
-		k8sObjects      []runtime.Object
-		expectedData    string
-		expectError     string
-	}{
-		{
-			name:            "should return data from existing tls secret and existing key",
-			secretNamespace: "awesome-namespace",
-			secretName:      "awesome-secret",
-			secretKey:       "awesome",
-			k8sObjects: []runtime.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-secret",
-						Namespace: "awesome-namespace",
-					},
-					Type: corev1.SecretTypeTLS,
-					Data: map[string][]byte{
-						"awesome": []byte("pinniped-is-awesome"),
-					},
-				},
-			},
-			expectedData: "pinniped-is-awesome",
-			expectError:  "",
-		},
-		{
-			name:            "should return data from existing opaque secret and existing key",
-			secretNamespace: "awesome-namespace",
-			secretName:      "awesome-secret",
-			secretKey:       "awesome",
-			k8sObjects: []runtime.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-secret",
-						Namespace: "awesome-namespace",
-					},
-					Type: corev1.SecretTypeOpaque,
-					Data: map[string][]byte{
-						"awesome": []byte("pinniped-is-awesome"),
-					},
-				},
-			},
-			expectedData: "pinniped-is-awesome",
-			expectError:  "",
-		},
-		{
-			name:            "should return error reading a non-existent secret",
-			secretNamespace: "awesome-namespace",
-			secretName:      "does-not-exist",
-			secretKey:       "does-not-matter",
-			k8sObjects: []runtime.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-secret",
-						Namespace: "awesome-namespace",
-					},
-					Data: map[string][]byte{
-						"awesome": []byte("pinniped-is-awesome"),
-					},
-				},
-			},
-			expectedData: "",
-			expectError:  `failed to get secret "awesome-namespace/does-not-exist": secret "does-not-exist" not found`,
-		},
-		{
-			name:            "should return error when secret has wrong type",
-			secretNamespace: "awesome-namespace",
-			secretName:      "awesome-secret",
-			secretKey:       "awesome",
-			k8sObjects: []runtime.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-secret",
-						Namespace: "awesome-namespace",
-					},
-					Type: "other-type",
-					Data: map[string][]byte{
-						"awesome": []byte("pinniped-is-awesome"),
-					},
-				},
-			},
-
-			expectError: `secret "awesome-namespace/awesome-secret" of type "other-type" cannot be used as a certificate authority data source`,
-		},
-		{
-			name:            "should return error reading a non-existing key in an existing secret",
-			secretNamespace: "awesome-namespace",
-			secretName:      "awesome-secret",
-			secretKey:       "something-else",
-			k8sObjects: []runtime.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-secret",
-						Namespace: "awesome-namespace",
-					},
-					Type: corev1.SecretTypeOpaque,
-					Data: map[string][]byte{
-						"awesome": []byte("pinniped-is-awesome"),
-					},
-				},
-			},
-			expectedData: "",
-			expectError:  `key "something-else" not found in secret "awesome-namespace/awesome-secret"`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			sharedInformers := informers.NewSharedInformerFactory(fake.NewSimpleClientset(tt.k8sObjects...), 0)
-			secretsInformer := sharedInformers.Core().V1().Secrets()
-
-			// calling the .Informer function registers this informer in the sharedinformer.
-			// doing this will ensure that this informer will be sync'd when Start is called next.
+			// Calling the Informer() function registers this informer in the sharedinformer.
+			// Doing this will ensure that this informer will be sync'd when Start() is called.
+			// This is needed in this test because we are not using the controller library here,
+			// which would do these same calls for us.
+			configMapInformer.Informer()
 			secretsInformer.Informer()
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			sharedInformers.Start(ctx.Done())
+			// This is needed in this test because we are not using the controller library here,
+			// which would do this same call for us.
 			sharedInformers.WaitForCacheSync(ctx.Done())
-			// now the objects from kubernetes should be sync'd into the informer cache.
-			actualData, actualError := readCABundleFromK8sSecret(tt.secretNamespace, tt.secretName, tt.secretKey, secretsInformer)
-			if tt.expectError != "" {
-				require.ErrorContains(t, actualError, tt.expectError)
-			} else {
-				require.NoError(t, actualError)
-			}
-			require.Equal(t, tt.expectedData, actualData)
+
+			actualCondition, actualBundle, actualCertPool := ValidateTLSConfig(tt.tlsSpec, "tls", tt.namespace, secretsInformer, configMapInformer)
+
+			require.Equal(t, tt.expectedCondition, actualCondition)
+			require.Equal(t, tt.expectedBundle, actualBundle)
+			require.True(t, tt.expectedCertPool.Equal(actualCertPool), "expectedCertPool did not equal actualCertPool")
 		})
 	}
 }
 
-func TestReadCABundleFromK8sConfigMap(t *testing.T) {
-	tests := []struct {
-		name               string
-		configMapNamespace string
-		configMapName      string
-		configMapKey       string
-		k8sObjects         []runtime.Object
-		expectedData       string
-		expectError        string
-	}{
-		{
-			name:               "should return expected data from an existing key in an existing configMap",
-			configMapNamespace: "awesome-namespace",
-			configMapName:      "awesome-configmap",
-			configMapKey:       "awesome",
-			k8sObjects: []runtime.Object{
-				&corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-configmap",
-						Namespace: "awesome-namespace",
-					},
-					Data: map[string]string{
-						"awesome": "pinniped-is-awesome",
-					},
-				},
-			},
-			expectedData: "pinniped-is-awesome",
-		},
-		{
-			name:               "should return error reading a non-existent configMap",
-			configMapNamespace: "awesome-namespace",
-			configMapName:      "does-not-exist",
-			configMapKey:       "does-not-matter",
-			k8sObjects: []runtime.Object{
-				&corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-configmap",
-						Namespace: "awesome-namespace",
-					},
-					Data: map[string]string{
-						"awesome": "pinniped-is-awesome",
-					},
-				},
-			},
-			expectedData: "",
-			expectError:  `failed to get configmap "awesome-namespace/does-not-exist": configmap "does-not-exist" not found`,
-		},
-		{
-			name:               "should return error reading a non-existing key in an existing configMap",
-			configMapNamespace: "awesome-namespace",
-			configMapName:      "awesome-configmap",
-			configMapKey:       "does-not-exist",
-			k8sObjects: []runtime.Object{
-				&corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "awesome-configmap",
-						Namespace: "awesome-namespace",
-					},
-					Data: map[string]string{
-						"awesome": "pinniped-is-awesome",
-					},
-				},
-			},
-			expectedData: "",
-			expectError:  `key "does-not-exist" not found in configmap "awesome-namespace/awesome-configmap"`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			fakeClient := fake.NewSimpleClientset(tt.k8sObjects...)
-
-			sharedInformers := informers.NewSharedInformerFactory(fakeClient, 0)
-			configMapInformer := sharedInformers.Core().V1().ConfigMaps()
-
-			// calling the .Informer function registers this informer in the sharedinformer.
-			// doing this will ensure that this informer will be sync'd when Start is called next.
-			configMapInformer.Informer()
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			sharedInformers.Start(ctx.Done())
-			sharedInformers.WaitForCacheSync(ctx.Done())
-			actualData, actualError := readCABundleFromK8sConfigMap(tt.configMapNamespace, tt.configMapName, tt.configMapKey, configMapInformer)
-			if tt.expectError != "" {
-				require.ErrorContains(t, actualError, tt.expectError)
-			} else {
-				require.NoError(t, actualError)
-			}
-			require.Equal(t, tt.expectedData, actualData)
-		})
-	}
-}
-
-func TestNewCommonTLSSpecForSupervisor(t *testing.T) {
+func TestTLSSpecForSupervisor(t *testing.T) {
 	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
 	bundle := testCA.Bundle()
 	base64EncodedBundle := base64.StdEncoding.EncodeToString(bundle)
+
 	tests := []struct {
 		name              string
 		supervisorTLSSpec *idpv1alpha1.TLSSpec
@@ -614,6 +495,25 @@ func TestNewCommonTLSSpecForSupervisor(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "should return tls spec when source has all fields filled",
+			supervisorTLSSpec: &idpv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64EncodedBundle,
+				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+			expected: &TLSSpec{
+				CertificateAuthorityData: base64EncodedBundle,
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -625,18 +525,19 @@ func TestNewCommonTLSSpecForSupervisor(t *testing.T) {
 	}
 }
 
-func TestNewCommonTlsSpecForConcierge(t *testing.T) {
+func TestTLSSpecForConcierge(t *testing.T) {
 	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
 	bundle := testCA.Bundle()
 	base64EncodedBundle := base64.StdEncoding.EncodeToString(bundle)
+
 	tests := []struct {
 		name             string
 		conciergeTLSSpec *authenticationv1alpha1.TLSSpec
 		expected         *TLSSpec
 	}{
 		{
-			name:             "should return nil spec when supervisorTLSSpec is nil",
+			name:             "should return nil spec when TLSSpec is nil",
 			conciergeTLSSpec: nil,
 			expected:         nil,
 		},
@@ -668,12 +569,31 @@ func TestNewCommonTlsSpecForConcierge(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "should return tls spec when source has all fields filled",
+			conciergeTLSSpec: &authenticationv1alpha1.TLSSpec{
+				CertificateAuthorityData: base64EncodedBundle,
+				CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+			expected: &TLSSpec{
+				CertificateAuthorityData: base64EncodedBundle,
+				CertificateAuthorityDataSource: &caBundleSource{
+					Kind: "Secret",
+					Name: "awesome-secret",
+					Key:  "ca-bundle",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			actual := TlsSpecForConcierge(tt.conciergeTLSSpec)
+			actual := TLSSpecForConcierge(tt.conciergeTLSSpec)
 			require.Equal(t, tt.expected, actual)
 		})
 	}

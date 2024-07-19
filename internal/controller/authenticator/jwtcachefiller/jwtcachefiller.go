@@ -306,7 +306,7 @@ func (c *jwtCacheFillerController) cacheValueAsJWTAuthenticator(value authncache
 
 func (c *jwtCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, []byte, bool) {
 	condition, pemBundle, rootCAs := tlsconfigutil.ValidateTLSConfig(
-		tlsconfigutil.TlsSpecForConcierge(tlsSpec),
+		tlsconfigutil.TLSSpecForConcierge(tlsSpec),
 		"spec.tls",
 		c.namespace,
 		c.secretInformer,

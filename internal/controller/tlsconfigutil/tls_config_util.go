@@ -64,8 +64,8 @@ func TLSSpecForSupervisor(source *idpv1alpha1.TLSSpec) *TLSSpec {
 	return dest
 }
 
-// TlsSpecForConcierge is a helper function to convert the Concierge's TLSSpec to the unified TLSSpec.
-func TlsSpecForConcierge(source *authenticationv1alpha1.TLSSpec) *TLSSpec {
+// TLSSpecForConcierge is a helper function to convert the Concierge's TLSSpec to the unified TLSSpec.
+func TLSSpecForConcierge(source *authenticationv1alpha1.TLSSpec) *TLSSpec {
 	if source == nil {
 		return nil
 	}
@@ -80,6 +80,30 @@ func TlsSpecForConcierge(source *authenticationv1alpha1.TLSSpec) *TLSSpec {
 		}
 	}
 	return dest
+}
+
+// ValidateTLSConfig reads ca bundle in the tlsSpec, supplied either inline using the CertificateAuthorityDate
+// or as a reference to a kubernetes secret or configmap using the CertificateAuthorityDataSource, and returns
+// - a condition of type TLSConfigurationValid based on the validity of the ca bundle,
+// - a pem encoded ca bundle
+// - a X509 cert pool with the ca bundle
+// TODO: should this show the resource version of the Secret/ConfigMap to the user on all conditions?
+func ValidateTLSConfig(
+	tlsSpec *TLSSpec,
+	conditionPrefix string,
+	namespace string,
+	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
+) (*metav1.Condition, []byte, *x509.CertPool) {
+	certPool, bundle, err := getCertPool(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
+	if err != nil {
+		return invalidTLSCondition(err.Error()), nil, nil
+	}
+	if bundle == nil {
+		// An empty or nil CA bundle results in a valid TLS condition which indicates that no CA data was supplied.
+		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), nil, nil
+	}
+	return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, loadedTLSConfigurationMessage)), bundle, certPool
 }
 
 // getCertPool reads the unified tlsSpec and returns an X509 cert pool with the CA data that is read either from
@@ -147,30 +171,6 @@ func getCertPool(
 	return ca, bundleBytes, nil
 }
 
-// ValidateTLSConfig reads ca bundle in the tlsSpec, supplied either inline using the CertificateAuthorityDate
-// or as a reference to a kubernetes secret or configmap using the CertificateAuthorityDataSource, and returns
-// - a condition of type TLSConfigurationValid based on the validity of the ca bundle,
-// - a pem encoded ca bundle
-// - a X509 cert pool with the ca bundle
-// TODO: should this show the resource version of the Secret/ConfigMap to the user on all conditions?
-func ValidateTLSConfig(
-	tlsSpec *TLSSpec,
-	conditionPrefix string,
-	namespace string,
-	secretInformer corev1informers.SecretInformer,
-	configMapInformer corev1informers.ConfigMapInformer,
-) (*metav1.Condition, []byte, *x509.CertPool) {
-	certPool, bundle, err := getCertPool(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
-	if err != nil {
-		return invalidTLSCondition(err.Error()), nil, nil
-	}
-	if bundle == nil {
-		// An empty or nil CA bundle results in a valid TLS condition which indicates that no CA data was supplied.
-		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), nil, nil
-	}
-	return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, loadedTLSConfigurationMessage)), bundle, certPool
-}
-
 func readCABundleFromSource(source *caBundleSource, namespace string, secretInformer corev1informers.SecretInformer, configMapInformer corev1informers.ConfigMapInformer) (string, error) {
 	switch source.Kind {
 	case "Secret":
@@ -189,17 +189,21 @@ func readCABundleFromK8sSecret(namespace string, name string, key string, secret
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to get secret %q", namespacedName)
 	}
-	// for kubernetes secrets to be used as a certificate authority data source, the secret should be of type
+
+	// For Secrets to be used as a certificate authority data source, the secret should be of type
 	// kubernetes.io/tls or Opaque. It is an error to use a secret that is of any other type.
 	if s.Type != corev1.SecretTypeTLS && s.Type != corev1.SecretTypeOpaque {
 		return "", fmt.Errorf("secret %q of type %q cannot be used as a certificate authority data source", namespacedName, s.Type)
 	}
-	// ca bundle in the secret is expected to exist in a specific key, if that key does not exist, then it is an error
-	if val, exists := s.Data[key]; exists {
-		// TODO: if val is an empty string, it should be an error
-		return string(val), nil
+
+	val, exists := s.Data[key]
+	if !exists {
+		return "", fmt.Errorf("key %q not found in secret %q", key, namespacedName)
 	}
-	return "", fmt.Errorf("key %q not found in secret %q", key, namespacedName)
+	if len(val) == 0 {
+		return "", fmt.Errorf("key %q has empty value in secret %q", key, namespacedName)
+	}
+	return string(val), nil
 }
 
 func readCABundleFromK8sConfigMap(namespace string, name string, key string, configMapInformer corev1informers.ConfigMapInformer) (string, error) {
@@ -210,12 +214,14 @@ func readCABundleFromK8sConfigMap(namespace string, name string, key string, con
 		return "", errors.Wrapf(err, "failed to get configmap %q", namespacedName)
 	}
 
-	// ca bundle in the secret is expected to exist in a specific key, if that key does not exist, then it is an error
-	if val, exists := c.Data[key]; exists {
-		// TODO: if val is an empty string, it should be an error
-		return val, nil
+	val, exists := c.Data[key]
+	if !exists {
+		return "", fmt.Errorf("key %q not found in configmap %q", key, namespacedName)
 	}
-	return "", fmt.Errorf("key %q not found in configmap %q", key, namespacedName)
+	if len(val) == 0 {
+		return "", fmt.Errorf("key %q has empty value in configmap %q", key, namespacedName)
+	}
+	return val, nil
 }
 
 func validTLSCondition(message string) *metav1.Condition {

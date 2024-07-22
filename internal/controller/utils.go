@@ -4,17 +4,11 @@
 package controller
 
 import (
-	"crypto/x509"
-	"encoding/base64"
-	"fmt"
 	"slices"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/cert"
 
-	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	"go.pinniped.dev/internal/controllerlib"
 )
 
@@ -114,43 +108,3 @@ type WithInformerOptionFunc func(
 
 // Same signature as controllerlib.WithInitialEvent().
 type WithInitialEventOptionFunc func(key controllerlib.Key) controllerlib.Option
-
-// BuildCertPoolAuth returns a PEM-encoded CA bundle from the provided spec. If the provided spec is nil, a
-// nil CA bundle will be returned. If the provided spec contains a CA bundle that is not properly
-// encoded, an error will be returned.
-func BuildCertPoolAuth(spec *authenticationv1alpha1.TLSSpec) (*x509.CertPool, []byte, error) {
-	if spec == nil {
-		return nil, nil, nil
-	}
-
-	return buildCertPool(spec.CertificateAuthorityData)
-}
-
-// BuildCertPoolIDP returns a PEM-encoded CA bundle from the provided spec. If the provided spec is nil, a
-// nil CA bundle will be returned. If the provided spec contains a CA bundle that is not properly
-// encoded, an error will be returned.
-func BuildCertPoolIDP(spec *idpv1alpha1.TLSSpec) (*x509.CertPool, []byte, error) {
-	if spec == nil {
-		return nil, nil, nil
-	}
-
-	return buildCertPool(spec.CertificateAuthorityData)
-}
-
-func buildCertPool(certificateAuthorityData string) (*x509.CertPool, []byte, error) {
-	if len(certificateAuthorityData) == 0 {
-		return nil, nil, nil
-	}
-
-	pem, err := base64.StdEncoding.DecodeString(certificateAuthorityData)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rootCAs, err := cert.NewPoolFromBytes(pem)
-	if err != nil {
-		return nil, nil, fmt.Errorf("certificateAuthorityData is not valid PEM: %w", err)
-	}
-
-	return rootCAs, pem, nil
-}

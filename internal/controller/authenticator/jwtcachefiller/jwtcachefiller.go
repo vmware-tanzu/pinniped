@@ -209,7 +209,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	conditions := make([]*metav1.Condition, 0)
-	rootCAs, conditions, caBundlePEM, tlsOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
+	certPool, caBundlePEM, conditions, tlsBundleOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
 	caBundlePEMSHA256 := sha256.Sum256(caBundlePEM) // note that this will always return the same hash for nil input
 
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
@@ -225,7 +225,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 		jwtAuthenticatorFromCache = c.cacheValueAsJWTAuthenticator(valueFromCache)
 		if jwtAuthenticatorFromCache != nil &&
 			reflect.DeepEqual(jwtAuthenticatorFromCache.spec, &obj.Spec) &&
-			tlsOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
+			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
 			jwtAuthenticatorFromCache.caBundlePEMSHA256 == caBundlePEMSHA256 {
 			c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).
 				Info("actual jwt authenticator and desired jwt authenticator are the same")
@@ -236,9 +236,9 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 
 	var errs []error
 	_, conditions, issuerOk := c.validateIssuer(obj.Spec.Issuer, conditions)
-	okSoFar := tlsOk && issuerOk
+	okSoFar := tlsBundleOk && issuerOk
 
-	client := phttp.Default(rootCAs)
+	client := phttp.Default(certPool)
 	client.Timeout = 30 * time.Second // copied from Kube OIDC code
 	coreOSCtx := coreosoidc.ClientContext(context.Background(), client)
 
@@ -303,8 +303,8 @@ func (c *jwtCacheFillerController) cacheValueAsJWTAuthenticator(value authncache
 	return jwtAuthenticator
 }
 
-func (c *jwtCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, []byte, bool) {
-	condition, pemBundle, rootCAs := tlsconfigutil.ValidateTLSConfig(
+func (c *jwtCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
+	condition, pemBundle, certPool := tlsconfigutil.ValidateTLSConfig(
 		tlsconfigutil.TLSSpecForConcierge(tlsSpec),
 		"spec.tls",
 		c.namespace,
@@ -312,7 +312,7 @@ func (c *jwtCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1al
 		c.configMapInformer)
 
 	conditions = append(conditions, condition)
-	return rootCAs, conditions, pemBundle, condition.Status == metav1.ConditionTrue
+	return certPool, pemBundle, conditions, condition.Status == metav1.ConditionTrue
 }
 
 func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*metav1.Condition) (*url.URL, []*metav1.Condition, bool) {

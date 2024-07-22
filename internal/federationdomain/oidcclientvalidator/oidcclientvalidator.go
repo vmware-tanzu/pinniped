@@ -13,6 +13,7 @@ import (
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
 )
 
@@ -23,7 +24,6 @@ const (
 	allowedGrantTypesValid = "AllowedGrantTypesValid"
 	allowedScopesValid     = "AllowedScopesValid"
 
-	reasonSuccess                  = "Success"
 	reasonMissingRequiredValue     = "MissingRequiredValue"
 	reasonNoClientSecretFound      = "NoClientSecretFound"
 	reasonInvalidClientSecretFound = "InvalidClientSecretFound"
@@ -79,7 +79,7 @@ func validateAllowedScopes(oidcClient *supervisorconfigv1alpha1.OIDCClient, cond
 		conditions = append(conditions, &metav1.Condition{
 			Type:    allowedScopesValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: fmt.Sprintf("%q is valid", allowedScopesFieldName),
 		})
 	} else {
@@ -115,7 +115,7 @@ func validateAllowedGrantTypes(oidcClient *supervisorconfigv1alpha1.OIDCClient, 
 		conditions = append(conditions, &metav1.Condition{
 			Type:    allowedGrantTypesValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: fmt.Sprintf("%q is valid", allowedGrantTypesFieldName),
 		})
 	} else {
@@ -201,7 +201,7 @@ func validateSecret(secret *corev1.Secret, conditions []*metav1.Condition, minBc
 	conditions = append(conditions, &metav1.Condition{
 		Type:    clientSecretExists,
 		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: fmt.Sprintf("%d client secret(s) found", storedClientSecretsCount),
 	})
 	return conditions, storedClientSecrets

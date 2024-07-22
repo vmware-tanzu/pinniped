@@ -56,7 +56,6 @@ const (
 	typeJWKSFetchValid     = "JWKSFetchValid"
 	typeAuthenticatorValid = "AuthenticatorValid"
 
-	reasonSuccess                                   = "Success"
 	reasonNotReady                                  = "NotReady"
 	reasonUnableToValidate                          = "UnableToValidate"
 	reasonInvalidIssuerURL                          = "InvalidIssuerURL"
@@ -376,7 +375,7 @@ func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*m
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeIssuerURLValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: "issuer is a valid URL",
 	})
 	return issuerURL, conditions, true
@@ -411,7 +410,7 @@ func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeDiscoveryValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: msg,
 	})
 	return pJSON, provider, conditions, nil
@@ -470,7 +469,7 @@ func (c *jwtCacheFillerController) validateProviderJWKSURL(provider *coreosoidc.
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeJWKSURLValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: "jwks_uri is a valid URL",
 	})
 	return pJSON.JWKSURL, conditions, nil
@@ -529,7 +528,7 @@ func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksUR
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeJWKSFetchValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "successfully fetched jwks",
 		})
 		return keySet, conditions, nil
@@ -619,7 +618,7 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeAuthenticatorValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: msg,
 	})
 	return &cachedJWTAuthenticator{
@@ -650,7 +649,7 @@ func (c *jwtCacheFillerController) updateStatus(
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "the JWTAuthenticator is ready",
 		})
 	}

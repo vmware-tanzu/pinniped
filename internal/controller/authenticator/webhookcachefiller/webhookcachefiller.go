@@ -47,7 +47,6 @@ const (
 	typeWebhookConnectionValid       = "WebhookConnectionValid"
 	typeEndpointURLValid             = "EndpointURLValid"
 	typeAuthenticatorValid           = "AuthenticatorValid"
-	reasonSuccess                    = "Success"
 	reasonNotReady                   = "NotReady"
 	reasonUnableToValidate           = "UnableToValidate"
 	reasonUnableToCreateClient       = "UnableToCreateClient"
@@ -291,7 +290,7 @@ func newWebhookAuthenticator(
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeAuthenticatorValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: msg,
 	})
 
@@ -333,7 +332,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeWebhookConnectionValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: "successfully dialed webhook server",
 	})
 	return conditions, nil
@@ -391,7 +390,7 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeEndpointURLValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  reasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: "spec.endpoint is a valid URL",
 	})
 	return &endpointHostPort, conditions, true
@@ -417,7 +416,7 @@ func (c *webhookCacheFillerController) updateStatus(
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "the WebhookAuthenticator is ready",
 		})
 	}

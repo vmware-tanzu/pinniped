@@ -48,7 +48,6 @@ const (
 	typeTransformsExpressionsValid           = "TransformsExpressionsValid"
 	typeTransformsExamplesPassed             = "TransformsExamplesPassed"
 
-	reasonSuccess                                     = "Success"
 	reasonNotReady                                    = "NotReady"
 	reasonUnableToValidate                            = "UnableToValidate"
 	reasonInvalidIssuerURL                            = "InvalidIssuerURL"
@@ -673,7 +672,7 @@ func appendIdentityProviderObjectRefKindCondition(expectedKinds []string, badSuf
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIdentityProvidersObjectRefKindValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "the kinds specified by .spec.identityProviders[].objectRef.kind are recognized",
 		})
 	}
@@ -701,7 +700,7 @@ func appendIdentityProvidersFoundCondition(
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIdentityProvidersFound,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "the resources specified by .spec.identityProviders[].objectRef were found",
 		})
 	}
@@ -721,7 +720,7 @@ func appendIdentityProviderObjectRefAPIGroupSuffixCondition(expectedSuffixName s
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIdentityProvidersAPIGroupSuffixValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "the API groups specified by .spec.identityProviders[].objectRef.apiGroup are recognized",
 		})
 	}
@@ -740,7 +739,7 @@ func appendTransformsExpressionsValidCondition(messages []string, conditions []*
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeTransformsExpressionsValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "the expressions specified by .spec.identityProviders[].transforms.expressions[] are valid",
 		})
 	}
@@ -759,7 +758,7 @@ func appendTransformsExamplesPassedCondition(messages []string, conditions []*me
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeTransformsExamplesPassed,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "the examples specified by .spec.identityProviders[].transforms.examples[] had no errors",
 		})
 	}
@@ -779,7 +778,7 @@ func appendIdentityProviderDuplicateDisplayNamesCondition(duplicateDisplayNames 
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIdentityProvidersDisplayNamesUnique,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "the names specified by .spec.identityProviders[].displayName are unique",
 		})
 	}
@@ -800,7 +799,7 @@ func appendIssuerURLValidCondition(err error, conditions []*metav1.Condition) []
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerURLValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "spec.issuer is a valid URL",
 		})
 	}
@@ -827,7 +826,7 @@ func (c *federationDomainWatcherController) updateStatus(
 		conditions = append(conditions, &metav1.Condition{
 			Type:   typeReady,
 			Status: metav1.ConditionTrue,
-			Reason: reasonSuccess,
+			Reason: conditionsutil.ReasonSuccess,
 			Message: fmt.Sprintf("the FederationDomain is ready and its endpoints are available: "+
 				"the discovery endpoint is %s/.well-known/openid-configuration", federationDomain.Spec.Issuer),
 		})
@@ -909,7 +908,7 @@ func (v *crossFederationDomainConfigValidator) Validate(federationDomain *superv
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerIsUnique,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "spec.issuer is unique among all FederationDomains",
 		})
 	}
@@ -925,7 +924,7 @@ func (v *crossFederationDomainConfigValidator) Validate(federationDomain *superv
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeOneTLSSecretPerIssuerHostname,
 			Status:  metav1.ConditionTrue,
-			Reason:  reasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: "all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL",
 		})
 	}

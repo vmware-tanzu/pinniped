@@ -308,6 +308,7 @@ func prepareControllers(
 				configMapInformer,
 				plog.New(),
 				controllerlib.WithInformer,
+				cache.NewExpiring(),
 			),
 			singletonWorker).
 		WithController(

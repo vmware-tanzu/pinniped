@@ -6,6 +6,8 @@ package oidcupstreamwatcher
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -15,11 +17,13 @@ import (
 	"testing"
 	"time"
 
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	expiringcache "k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
@@ -31,6 +35,7 @@ import (
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -119,6 +124,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				configMapInformer,
 				logger,
 				withInformer.WithInformer,
+				expiringcache.NewExpiring(),
 			)
 
 			unrelated := corev1.Secret{}
@@ -178,6 +184,7 @@ func TestOIDCUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
 				configMapInformer,
 				logger,
 				withInformer.WithInformer,
+				expiringcache.NewExpiring(),
 			)
 
 			unrelated := corev1.ConfigMap{}
@@ -237,6 +244,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 		name                   string
 		inputUpstreams         []runtime.Object
 		inputResources         []runtime.Object
+		inputValidatorCache    func(*testing.T) map[oidcDiscoveryCacheKey]*oidcDiscoveryCacheValue
 		wantErr                string
 		wantLogs               []string
 		wantResultingCache     []*oidctestutil.TestUpstreamOIDCIdentityProvider
@@ -1055,6 +1063,99 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 		},
 		{
+			name: "valid upstream which already exists in the OIDC discovery validation cache, should skip performing OIDC discovery again and just use cached discovery results",
+			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: testIssuerURL + "/this-path-does-not-exist",
+					TLS:    &idpv1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
+					Claims: idpv1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+				},
+				Status: idpv1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					// Was previously validated, so already has conditions.
+					Conditions: []metav1.Condition{
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
+					},
+				},
+			}},
+			inputResources: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			inputValidatorCache: func(t *testing.T) map[oidcDiscoveryCacheKey]*oidcDiscoveryCacheValue {
+				// Create a working OIDC discovery validator cache entry for the working issuer and CA bundle.
+				certPool := x509.NewCertPool()
+				require.True(t, certPool.AppendCertsFromPEM([]byte(testIssuerCA)))
+				httpClient := phttp.Default(certPool)
+				httpClient.Timeout = time.Minute // same timeout as in the production code
+				testCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				t.Cleanup(cancel)
+				// Really do OIDC discovery, so we can put the real result into the cache.
+				discoveredProvider, err := coreosoidc.NewProvider(coreosoidc.ClientContext(testCtx, httpClient), testIssuerURL)
+				require.NoError(t, err)
+				cacheValue := &oidcDiscoveryCacheValue{
+					provider: discoveredProvider,
+					client:   httpClient,
+				}
+				// Create the cache key to use with the above entry, and cache it at the issuer value that was
+				// configured in the OIDCIdentityProvider. If the production code tries to perform OIDC discovery
+				// on that URL, it will fail with a 404. But if the production code correctly reads the pre-cached
+				// discovery result from this cache, then it should skip discovery and use the value from this cache
+				// without encountering any errors.
+				cacheKey := oidcDiscoveryCacheKey{
+					issuer:       testIssuerURL + "/this-path-does-not-exist",
+					caBundleHash: sha256.Sum256([]byte(testIssuerCA)),
+				}
+				// Put it into the initial cache for this test.
+				return map[oidcDiscoveryCacheKey]*oidcDiscoveryCacheValue{
+					cacheKey: cacheValue,
+				}
+			},
+			wantLogs: []string{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
+					Scopes:                   testDefaultExpectedScopes,
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       false,
+					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
+					ResourceUID:              testUID,
+				},
+			},
+			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: idpv1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					// Conditions are unchanged.
+					Conditions: []metav1.Condition{
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
+					},
+				},
+			}},
+		},
+		{
 			name: "valid upstream with CA bundle read from a Secret",
 			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
@@ -1550,6 +1651,15 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			var log bytes.Buffer
 			logger := plog.TestLogger(t, &log)
 
+			validatorCache := expiringcache.NewExpiring()
+			if tt.inputValidatorCache != nil {
+				oidcValidatorCache := &ttlProviderCache{cache: validatorCache}
+				// add to the underlying validatorCache using oidcValidatorCache which wraps it
+				for key, value := range tt.inputValidatorCache(t) {
+					oidcValidatorCache.putProvider(key, value)
+				}
+			}
+
 			controller := New(
 				cache,
 				fakePinnipedClient,
@@ -1558,6 +1668,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				kubeInformers.Core().V1().ConfigMaps(),
 				logger,
 				controllerlib.WithInformer,
+				validatorCache,
 			)
 
 			ctx, cancel := context.WithCancel(context.Background())

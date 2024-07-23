@@ -5,6 +5,7 @@ package testlib
 
 import (
 	"encoding/base64"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -81,6 +82,20 @@ type TestOIDCUpstream struct {
 	Username         string   `json:"username"`
 	Password         string   `json:"password"`
 	ExpectedGroups   []string `json:"expectedGroups"`
+}
+
+// InferTheIssuerURL infers the downstream issuer URL from the callback associated with the upstream test client registration.
+func (upstream *TestOIDCUpstream) InferTheIssuerURL(t *testing.T) (*url.URL, string) {
+	t.Helper()
+	issuerURL, err := url.Parse(upstream.CallbackURL)
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
+	issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")
+
+	issuerAsString := issuerURL.String()
+	t.Logf("testing with downstream issuer URL %s", issuerAsString)
+
+	return issuerURL, issuerAsString
 }
 
 type TestLDAPUpstream struct {

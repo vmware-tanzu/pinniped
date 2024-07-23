@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,12 +48,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 	tempDir := t.TempDir()
 
-	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
-	issuerURL, err := url.Parse(env.SupervisorUpstreamOIDC.CallbackURL)
-	require.NoError(t, err)
-	require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
-	issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")
-	t.Logf("testing with downstream issuer URL %s", issuerURL.String())
+	issuerURL, _ := env.SupervisorUpstreamOIDC.InferTheIssuerURL(t)
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")

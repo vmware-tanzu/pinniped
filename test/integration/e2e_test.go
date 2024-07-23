@@ -70,12 +70,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 
-	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
-	issuerURL, err := url.Parse(env.SupervisorUpstreamOIDC.CallbackURL)
-	require.NoError(t, err)
-	require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
-	issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")
-	t.Logf("testing with downstream issuer URL %s", issuerURL.String())
+	issuerURL, _ := env.SupervisorUpstreamOIDC.InferTheIssuerURL(t)
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")

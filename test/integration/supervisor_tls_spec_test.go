@@ -23,15 +23,13 @@ import (
 // on the TLSSpec in Pinniped supervisor CRDs using OIDCIdentityProvider as an example.
 func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
-	env.SupervisorUpstreamOIDC.Issuer
 	testCases := []struct {
 		name               string
 		customResourceYaml string
 		customResourceName string
 		expectedError      string
 	}{
-		// TODO: use the OIDC provider from env instead of bar.com
-		// TODO: make ths a loop to also run the same tests on LDAP, AD, GitHub??
+		// TODO: make this a loop to also run the same tests on LDAP, AD, GitHub??
 		{
 			name: "should disallow certificate authority data source with missing name",
 			customResourceYaml: here.Doc(`
@@ -45,7 +43,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					certificateAuthorityDataSource:
 						kind: Secret
 						key: bar
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -69,7 +67,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						kind: Secret
 						name: ""
 						key: bar
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -92,7 +90,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					certificateAuthorityDataSource:
 						kind: Secret
 						name: foo
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -116,7 +114,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						kind: Secret
 						name: foo
 						key: ""
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -139,7 +137,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					certificateAuthorityDataSource:
 						name: foo
 						key: bar
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -163,7 +161,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						kind: ""
 						name: foo
 						key: bar
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -187,7 +185,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						kind: sorcery
 						name: foo
 						key: bar
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -211,7 +209,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						kind: Secret
 						name: foo
 						key: bar
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -235,7 +233,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						kind: ConfigMap
 						name: foo
 						key: bar
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -254,7 +252,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				issuer: https://foo.bar.com/oauth2/default
+				issuer: %s
 				authorizationConfig:
 					additionalScopes: [offline_access, email]
 					allowPasswordGrant: true
@@ -272,7 +270,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 			yamlFilepath := filepath.Join(t.TempDir(), fmt.Sprintf("tls-spec-validation-%s.yaml", tc.customResourceName))
 
 			resourceName := tc.customResourceName + "-" + testlib.RandHex(t, 7)
-			yamlBytes := []byte(fmt.Sprintf(tc.customResourceYaml, env.APIGroupSuffix, resourceName))
+			yamlBytes := []byte(fmt.Sprintf(tc.customResourceYaml, env.APIGroupSuffix, resourceName, env.SupervisorUpstreamOIDC.Issuer))
 
 			require.NoError(t, os.WriteFile(yamlFilepath, yamlBytes, 0600))
 

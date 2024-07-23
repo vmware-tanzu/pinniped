@@ -236,7 +236,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 	tests := []struct {
 		name                   string
 		inputUpstreams         []runtime.Object
-		inputSecrets           []runtime.Object
+		inputResources         []runtime.Object
 		wantErr                string
 		wantLogs               []string
 		wantResultingCache     []*oidctestutil.TestUpstreamOIDCIdentityProvider
@@ -246,7 +246,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			name: "no upstreams",
 		},
 		{
-			name: "missing secret",
+			name: "missing client Secret",
 			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
@@ -255,8 +255,8 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{},
-			wantErr:      controllerlib.ErrSyntheticRequeue.Error(),
+			inputResources: []runtime.Object{},
+			wantErr:        controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"False","reason":"SecretNotFound","message":"secret \"test-client-secret\" not found"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
@@ -271,33 +271,18 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "SecretNotFound",
-							Message:            `secret "test-client-secret" not found`,
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "discovered issuer configuration",
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: now, Reason: "SecretNotFound",
+							Message: `secret "test-client-secret" not found`},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration"},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
 		},
 		{
-			name: "secret has wrong type",
+			name: "client Secret has wrong type",
 			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
@@ -306,7 +291,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "some-other-type",
 				Data:       testValidSecretData,
@@ -326,27 +311,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "SecretWrongType",
-							Message:            `referenced Secret "test-client-secret" has wrong type "some-other-type" (should be "secrets.pinniped.dev/oidc-client")`,
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "discovered issuer configuration",
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: now, Reason: "SecretWrongType",
+							Message: `referenced Secret "test-client-secret" has wrong type "some-other-type" (should be "secrets.pinniped.dev/oidc-client")`},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration"},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -361,7 +331,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 			}},
@@ -380,27 +350,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "SecretMissingKeys",
-							Message:            `referenced Secret "test-client-secret" is missing required keys ["clientID" "clientSecret"]`,
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "discovered issuer configuration",
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: now, Reason: "SecretMissingKeys",
+							Message: `referenced Secret "test-client-secret" is missing required keys ["clientID" "clientSecret"]`},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration"},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -417,7 +372,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -438,27 +393,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidTLSConfig",
-							Message:            `spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidTLSConfig",
-							Message:            "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidTLSConfig",
+							Message: `spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7`},
+						{Type: "TLSConfigurationValid", Status: "False", LastTransitionTime: now, Reason: "InvalidTLSConfig",
+							Message: "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7"},
 					},
 				},
 			}},
@@ -475,7 +415,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -496,27 +436,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidTLSConfig",
-							Message:            `spec.tls.certificateAuthorityData is invalid: no certificates found`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidTLSConfig",
-							Message:            "spec.tls.certificateAuthorityData is invalid: no certificates found",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidTLSConfig",
+							Message: `spec.tls.certificateAuthorityData is invalid: no certificates found`},
+						{Type: "TLSConfigurationValid", Status: "False", LastTransitionTime: now, Reason: "InvalidTLSConfig",
+							Message: "spec.tls.certificateAuthorityData is invalid: no certificates found"},
 					},
 				},
 			}},
@@ -530,7 +455,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -550,27 +475,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message:            `failed to parse issuer URL: parse "%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": invalid URL escape "%in"`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: no TLS configuration provided",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `failed to parse issuer URL: parse "%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": invalid URL escape "%in"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: no TLS configuration provided"},
 					},
 				},
 			}},
@@ -584,7 +494,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -604,27 +514,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message:            `issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have "https" scheme, not "http"`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: no TLS configuration provided",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have "https" scheme, not "http"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: no TLS configuration provided"},
 					},
 				},
 			}},
@@ -638,7 +533,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -658,27 +553,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message:            `issuer URL '` + testIssuerURL + "?sub=foo" + `' cannot contain query or fragment component`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: no TLS configuration provided",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `issuer URL '` + testIssuerURL + "?sub=foo" + `' cannot contain query or fragment component`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: no TLS configuration provided"},
 					},
 				},
 			}},
@@ -692,7 +572,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -712,27 +592,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message:            `issuer URL '` + testIssuerURL + "#fragment" + `' cannot contain query or fragment component`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: no TLS configuration provided",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `issuer URL '` + testIssuerURL + "#fragment" + `' cannot contain query or fragment component`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: no TLS configuration provided"},
 					},
 				},
 			}},
@@ -747,7 +612,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -768,28 +633,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":
-Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":` + "\n" +
+								`Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -804,7 +654,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -824,27 +674,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `failed to parse authorization endpoint URL: parse "%": invalid URL escape "%"`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `failed to parse authorization endpoint URL: parse "%": invalid URL escape "%"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -859,7 +694,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -879,27 +714,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `failed to parse revocation endpoint URL: parse "%": invalid URL escape "%"`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `failed to parse revocation endpoint URL: parse "%": invalid URL escape "%"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -914,7 +734,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -934,27 +754,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `authorization endpoint URL 'http://example.com/authorize' must have "https" scheme, not "http"`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `authorization endpoint URL 'http://example.com/authorize' must have "https" scheme, not "http"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -969,7 +774,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -989,27 +794,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `revocation endpoint URL 'http://example.com/revoke' must have "https" scheme, not "http"`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `revocation endpoint URL 'http://example.com/revoke' must have "https" scheme, not "http"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -1024,7 +814,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1044,27 +834,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `token endpoint URL 'http://example.com/token' must have "https" scheme, not "http"`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `token endpoint URL 'http://example.com/token' must have "https" scheme, not "http"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -1079,7 +854,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1099,27 +874,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `token endpoint URL '' must have "https" scheme, not ""`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `token endpoint URL '' must have "https" scheme, not ""`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -1134,7 +894,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1154,27 +914,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `authorization endpoint URL '' must have "https" scheme, not ""`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `authorization endpoint URL '' must have "https" scheme, not ""`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -1196,12 +941,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
-						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: earlier, Reason: "SomeError1", Message: "some previous error 1"},
-						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: earlier, Reason: "SomeError2", Message: "some previous error 2"},
+						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: earlier, Reason: "SomeError1",
+							Message: "some previous error 1"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: earlier, Reason: "SomeError2",
+							Message: "some previous error 2"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1233,9 +980,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "discovered issuer configuration"},
-						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration"},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -1254,12 +1004,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1290,10 +1042,147 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
-						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
-						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
+					},
+				},
+			}},
+		},
+		{
+			name: "valid upstream with CA bundle read from a Secret",
+			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: testIssuerURL,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+							Kind: "Secret",
+							Name: "ca-bundle-secret",
+							Key:  "ca.crt",
+						},
+					},
+					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
+					Claims: idpv1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+				},
+			}},
+			inputResources: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+					Type:       "secrets.pinniped.dev/oidc-client",
+					Data:       testValidSecretData,
+				},
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "ca-bundle-secret"},
+					Type:       corev1.SecretTypeOpaque,
+					Data:       map[string][]byte{"ca.crt": []byte(testIssuerCA)},
+				},
+			},
+			wantLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
+			},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
+					Scopes:                   testDefaultExpectedScopes,
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       false,
+					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
+					ResourceUID:              testUID,
+				},
+			},
+			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: idpv1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []metav1.Condition{
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
+					},
+				},
+			}},
+		},
+		{
+			name: "valid upstream with CA bundle read from a ConfigMap",
+			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: testIssuerURL,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+							Kind: "ConfigMap",
+							Name: "ca-bundle-configmap",
+							Key:  "ca.crt",
+						},
+					},
+					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
+					Claims: idpv1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+				},
+			}},
+			inputResources: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+					Type:       "secrets.pinniped.dev/oidc-client",
+					Data:       testValidSecretData,
+				},
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "ca-bundle-configmap"},
+					Data:       map[string]string{"ca.crt": testIssuerCA},
+				},
+			},
+			wantLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: loaded TLS configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
+			},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
+					Scopes:                   testDefaultExpectedScopes,
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       false,
+					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
+					ResourceUID:              testUID,
+				},
+			},
+			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: idpv1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []metav1.Condition{
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1312,12 +1201,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1348,10 +1239,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
-						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
-						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1373,12 +1268,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1409,10 +1306,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
-						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
-						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1442,12 +1343,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1480,10 +1383,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
-						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
-						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1512,7 +1419,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1534,9 +1441,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 						{Type: "AdditionalAuthorizeParametersValid", Status: "False", LastTransitionTime: now, Reason: "DisallowedParameterName",
 							Message: "the following additionalAuthorizeParameters are not allowed: " +
 								"response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
-						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1551,7 +1461,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1572,28 +1482,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/ends-with-slash":
-oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/ends-with-slash" got "` + testIssuerURL + `/ends-with-slash/"`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/ends-with-slash":` + "\n" + `oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/ends-with-slash" got "` + testIssuerURL + `/ends-with-slash/"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -1608,7 +1502,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1629,28 +1523,13 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/":
-oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/" got "` + testIssuerURL + `"`,
-						},
-						{
-							Type:               "TLSConfigurationValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "spec.tls is valid: loaded TLS configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/":` + "\n" +
+								`oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/" got "` + testIssuerURL + `"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: loaded TLS configuration"},
 					},
 				},
 			}},
@@ -1661,7 +1540,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			t.Parallel()
 			fakePinnipedClient := supervisorfake.NewSimpleClientset(tt.inputUpstreams...)
 			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
-			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
+			fakeKubeClient := fake.NewSimpleClientset(tt.inputResources...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
 			cache.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{

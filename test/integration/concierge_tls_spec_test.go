@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/here"
@@ -223,21 +224,27 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			yamlBytes := []byte(fmt.Sprintf(tc.customResourceYaml, env.APIGroupSuffix, resourceName))
 
 			require.NoError(t, os.WriteFile(yamlFilepath, yamlBytes, 0600))
+
+			// Use --validate=false to disable old client-side validations to avoid getting different error messages in Kube 1.24 and older.
+			// Note that this also disables validations of unknown and duplicate fields, but that's not what this test is about.
 			//nolint:gosec // this is test code.
-			cmd := exec.CommandContext(context.Background(), "kubectl", []string{"apply", "-f", yamlFilepath}...)
+			cmd := exec.CommandContext(context.Background(), "kubectl", []string{"apply", "--validate=false", "-f", yamlFilepath}...)
+
 			var stdOut, stdErr bytes.Buffer
 			cmd.Stdout = &stdOut
 			cmd.Stderr = &stdErr
 			err := cmd.Run()
+
 			t.Cleanup(func() {
 				t.Helper()
 				//nolint:gosec // this is test code.
 				require.NoError(t, exec.Command("kubectl", []string{"delete", "--ignore-not-found", "-f", yamlFilepath}...).Run())
 			})
+
 			if tc.expectedError == "" {
+				assert.Empty(t, stdErr.String())
+				assert.Equal(t, fmt.Sprintf("webhookauthenticator.authentication.concierge.pinniped.dev/%s created\n", resourceName), stdOut.String())
 				require.NoError(t, err)
-				require.Equal(t, fmt.Sprintf("webhookauthenticator.authentication.concierge.pinniped.dev/%s created\n", resourceName), stdOut.String())
-				require.Empty(t, stdErr.String())
 			} else {
 				require.Equal(t, fmt.Sprintf(tc.expectedError, resourceName), strings.TrimSuffix(stdErr.String(), "\n"))
 			}

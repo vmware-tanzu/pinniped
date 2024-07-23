@@ -31,6 +31,35 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 			%s
 	`)
 
+	ldapIDPTemplate := here.Doc(`
+		apiVersion: idp.supervisor.%s/v1alpha1
+		kind: LDAPIdentityProvider
+		metadata:
+			name: %s
+		spec:
+			host: %s
+			bind:
+				secretName: foo-bar-bind-credentials
+			userSearch:
+				base: foo
+				attributes:
+					username: bar
+					uid: baz
+			%s
+	`)
+
+	activeDirectoryIDPTemplate := here.Doc(`
+		apiVersion: idp.supervisor.%s/v1alpha1
+		kind: ActiveDirectoryIdentityProvider
+		metadata:
+			name: %s
+		spec:
+			host: %s
+			bind:
+				secretName: foo-bar-bind-credentials
+			%s
+	`)
+
 	githubIDPTemplate := here.Doc(`
 		apiVersion: idp.supervisor.%s/v1alpha1
 		kind: GitHubIdentityProvider
@@ -52,7 +81,6 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 		expectedError       string
 		expectedGitHubError string
 	}{
-		// TODO: make this a loop to also run the same tests on LDAP, AD, GitHub??
 		{
 			name: "should disallow certificate authority data source with missing name",
 			tlsYAML: here.Doc(`
@@ -198,6 +226,36 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					`oidcidentityprovider.idp.supervisor.pinniped.dev`,
 					tc.expectedError,
 					"OIDCIdentityProvider",
+					resourceName,
+				)
+			})
+
+			t.Run("apply LDAP IDP", func(t *testing.T) {
+				resourceName := "test-ldap-idp-" + testlib.RandHex(t, 7)
+				yamlBytes := []byte(fmt.Sprintf(ldapIDPTemplate,
+					env.APIGroupSuffix, resourceName, env.SupervisorUpstreamLDAP.Host, indentedTLSYAML))
+
+				performKubectlApply(
+					t,
+					yamlBytes,
+					`ldapidentityprovider.idp.supervisor.pinniped.dev`,
+					tc.expectedError,
+					"LDAPIdentityProvider",
+					resourceName,
+				)
+			})
+
+			t.Run("apply ActiveDirectory IDP", func(t *testing.T) {
+				resourceName := "test-ad-idp-" + testlib.RandHex(t, 7)
+				yamlBytes := []byte(fmt.Sprintf(activeDirectoryIDPTemplate,
+					env.APIGroupSuffix, resourceName, env.SupervisorUpstreamLDAP.Host, indentedTLSYAML))
+
+				performKubectlApply(
+					t,
+					yamlBytes,
+					`activedirectoryidentityprovider.idp.supervisor.pinniped.dev`,
+					tc.expectedError,
+					"ActiveDirectoryIdentityProvider",
 					resourceName,
 				)
 			})

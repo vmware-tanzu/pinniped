@@ -23,13 +23,15 @@ import (
 // in Pinniped concierge CRDs using WebhookAuthenticator as an example.
 func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
+
+	localUserAuthenticatorEndpoint := env.TestWebhook.Endpoint
+
 	testCases := []struct {
 		name               string
 		customResourceYaml string
 		customResourceName string
 		expectedError      string
 	}{
-		// TODO: these "spec.endpoint" could use the real URL of the local-user-authenticator
 		// TODO: should we repeat these tests using the JWTAuthenticator too?
 		{
 			name: "should disallow certificate authority data source with missing name",
@@ -40,7 +42,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
@@ -58,7 +60,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
@@ -77,7 +79,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
@@ -95,7 +97,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
@@ -114,7 +116,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 				tls:
 					certificateAuthorityDataSource:
 						name: foo
@@ -132,7 +134,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 				tls:
 					certificateAuthorityDataSource:
 						kind: ""
@@ -151,7 +153,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 				tls:
 					certificateAuthorityDataSource:
 						kind: sorcery
@@ -170,7 +172,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
@@ -189,7 +191,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 				tls:
 					certificateAuthorityDataSource:
 						kind: ConfigMap
@@ -208,7 +210,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			metadata:
 				name: %s
 			spec:
-				endpoint: "https://web-auth/token"
+				endpoint: %s
 			`),
 			customResourceName: "no-tls-spec",
 			expectedError:      "",
@@ -221,7 +223,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			yamlFilepath := filepath.Join(t.TempDir(), fmt.Sprintf("tls-spec-validation-%s.yaml", tc.customResourceName))
 
 			resourceName := tc.customResourceName + "-" + testlib.RandHex(t, 7)
-			yamlBytes := []byte(fmt.Sprintf(tc.customResourceYaml, env.APIGroupSuffix, resourceName))
+			yamlBytes := []byte(fmt.Sprintf(tc.customResourceYaml, env.APIGroupSuffix, resourceName, localUserAuthenticatorEndpoint))
 
 			require.NoError(t, os.WriteFile(yamlFilepath, yamlBytes, 0600))
 

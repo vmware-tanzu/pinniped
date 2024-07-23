@@ -4,6 +4,7 @@ package integration
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"go.pinniped.dev/internal/here"
@@ -14,244 +15,166 @@ import (
 // on the TLSSpec in Pinniped supervisor CRDs using OIDCIdentityProvider as an example.
 func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
+
+	oidcIDPTemplate := here.Doc(`
+		apiVersion: idp.supervisor.%s/v1alpha1
+		kind: OIDCIdentityProvider
+		metadata:
+			name: %s
+		spec:
+			issuer: %s
+			authorizationConfig:
+				additionalScopes: [offline_access, email]
+				allowPasswordGrant: true
+			client:
+				secretName: foo-bar-client-credentials
+			%s
+	`)
+
+	githubIDPTemplate := here.Doc(`
+		apiVersion: idp.supervisor.%s/v1alpha1
+		kind: GitHubIdentityProvider
+		metadata:
+			name: %s
+		spec:
+			allowAuthentication:
+				organizations:
+					policy: AllGitHubUsers
+			client:
+				secretName: does-not-matter
+			githubAPI:
+				%s
+	`)
+
 	testCases := []struct {
-		name               string
-		customResourceYaml string
-		customResourceName string
-		expectedError      string
+		name                string
+		tlsYAML             string
+		expectedError       string
+		expectedGitHubError string
 	}{
 		// TODO: make this a loop to also run the same tests on LDAP, AD, GitHub??
 		{
 			name: "should disallow certificate authority data source with missing name",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
+			tlsYAML: here.Doc(`
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
 						key: bar
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
 			`),
-			customResourceName: "invalid-oidc-idp-missing-name",
-			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`,
+			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`,
+			expectedGitHubError: here.Doc(`
+				The %s "%s" is invalid:
+				* spec.githubAPI.tls.certificateAuthorityDataSource.name: Required value
+				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for name",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
+			tlsYAML: here.Doc(`
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
 						name: ""
 						key: bar
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
 			`),
-			customResourceName: "invalid-oidc-idp-empty-name",
-			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`,
+			expectedError:       `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`,
+			expectedGitHubError: `The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`,
 		},
 		{
 			name: "should disallow certificate authority data source with missing key",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
+			tlsYAML: here.Doc(`
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
 						name: foo
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
 			`),
-			customResourceName: "invalid-oidc-idp-missing-key",
-			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`,
+			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`,
+			expectedGitHubError: here.Doc(`
+				The %s "%s" is invalid:
+				* spec.githubAPI.tls.certificateAuthorityDataSource.key: Required value
+				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for key",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
+			tlsYAML: here.Doc(`
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
 						name: foo
 						key: ""
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
 			`),
-			customResourceName: "invalid-oidc-idp-empty-key",
-			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`,
+			expectedError:       `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`,
+			expectedGitHubError: `The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`,
 		},
 		{
 			name: "should disallow certificate authority data source with missing kind",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
+			tlsYAML: here.Doc(`
 				tls:
 					certificateAuthorityDataSource:
 						name: foo
 						key: bar
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
 			`),
-			customResourceName: "invalid-oidc-idp-missing-kind",
-			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`,
+			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`,
+			expectedGitHubError: here.Doc(`
+				The %s "%s" is invalid:
+				* spec.githubAPI.tls.certificateAuthorityDataSource.kind: Required value
+				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
 		},
 		{
-			name: "should disallow certificate authority data source with empty value kind",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
+			name: "should disallow certificate authority data source with empty value for kind",
+			tlsYAML: here.Doc(`
 				tls:
 					certificateAuthorityDataSource:
 						kind: ""
 						name: foo
 						key: bar
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
 			`),
-			customResourceName: "invalid-oidc-idp-invalid-kind",
-			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`,
+			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`,
+			expectedGitHubError: here.Doc(`
+				The %s "%s" is invalid:
+				* spec.githubAPI.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"
+				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
 		},
 		{
 			name: "should disallow certificate authority data source with invalid kind",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
+			tlsYAML: here.Doc(`
 				tls:
 					certificateAuthorityDataSource:
 						kind: sorcery
 						name: foo
 						key: bar
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
 			`),
-			customResourceName: "invalid-oidc-idp-invalid-kind",
-			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`,
+			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`,
+			expectedGitHubError: here.Doc(`
+				The %s "%s" is invalid:
+				* spec.githubAPI.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"
+				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
 		},
 		{
 			name: "should create a custom resource passing all validations using a Secret source",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
+			tlsYAML: here.Doc(`
 				tls:
 					certificateAuthorityDataSource:
 						kind: Secret
 						name: foo
 						key: bar
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
 			`),
-			customResourceName: "valid-oidc-idp-secret-kind",
-			expectedError:      "",
+			expectedError: "",
 		},
 		{
 			name: "should create a custom resource passing all validations using a ConfigMap source",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
+			tlsYAML: here.Doc(`
 				tls:
 					certificateAuthorityDataSource:
 						kind: ConfigMap
 						name: foo
 						key: bar
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
 			`),
-			customResourceName: "valid-oidc-idp-cm-kind",
-			expectedError:      "",
+			expectedError: "",
 		},
 		{
-			name: "should create a custom resource without any tls spec",
-			customResourceYaml: here.Doc(`
-			---
-			apiVersion: idp.supervisor.%s/v1alpha1
-			kind: OIDCIdentityProvider
-			metadata:
-				name: %s
-			spec:
-				issuer: %s
-				authorizationConfig:
-					additionalScopes: [offline_access, email]
-					allowPasswordGrant: true
-				client:
-					secretName: foo-bar-client-credentials
-			`),
-			customResourceName: "no-tls-spec",
-			expectedError:      "",
+			name:          "should create a custom resource without any tls spec",
+			tlsYAML:       "",
+			expectedError: "",
 		},
 	}
 
@@ -259,10 +182,46 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			resourceName := tc.customResourceName + "-" + testlib.RandHex(t, 7)
-			yamlBytes := []byte(fmt.Sprintf(tc.customResourceYaml, env.APIGroupSuffix, resourceName, env.SupervisorUpstreamOIDC.Issuer))
+			// Further indent every line except for the first line by four spaces.
+			// Use four spaces because that's what here.Doc uses.
+			// Do not indent the first line because the template already indents it.
+			indentedTLSYAML := strings.ReplaceAll(tc.tlsYAML, "\n", "\n    ")
 
-			performKubectlApply(t, yamlBytes, `oidcidentityprovider.idp.supervisor.pinniped.dev`, tc.expectedError, "OIDCIdentityProvider", resourceName)
+			t.Run("apply OIDC IDP", func(t *testing.T) {
+				resourceName := "test-oidc-idp-" + testlib.RandHex(t, 7)
+				yamlBytes := []byte(fmt.Sprintf(oidcIDPTemplate,
+					env.APIGroupSuffix, resourceName, env.SupervisorUpstreamOIDC.Issuer, indentedTLSYAML))
+
+				performKubectlApply(
+					t,
+					yamlBytes,
+					`oidcidentityprovider.idp.supervisor.pinniped.dev`,
+					tc.expectedError,
+					"OIDCIdentityProvider",
+					resourceName,
+				)
+			})
+
+			t.Run("apply GitHub IDP", func(t *testing.T) {
+				// GitHub is nested deeper
+				indentedTLSYAMLForGitHub := strings.ReplaceAll(indentedTLSYAML, "\n", "\n    ")
+
+				// This is how kubectl shows this error
+				expectedGitHubError := strings.ReplaceAll(tc.expectedGitHubError, "invalid:\n", "invalid: \n")
+
+				resourceName := "test-github-idp-" + testlib.RandHex(t, 7)
+				yamlBytes := []byte(fmt.Sprintf(githubIDPTemplate,
+					env.APIGroupSuffix, resourceName, indentedTLSYAMLForGitHub))
+
+				performKubectlApply(
+					t,
+					yamlBytes,
+					`githubidentityprovider.idp.supervisor.pinniped.dev`,
+					expectedGitHubError,
+					"GitHubIdentityProvider",
+					resourceName,
+				)
+			})
 		})
 	}
 }

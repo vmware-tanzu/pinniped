@@ -6,12 +6,14 @@ package githubupstreamwatcher
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/cache"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	k8sinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
@@ -400,14 +403,16 @@ func TestController(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                    string
-		githubIdentityProviders []runtime.Object
-		secretsAndConfigMaps    []runtime.Object
-		mockDialer              func(network, addr string, config *tls.Config) (*tls.Conn, error)
-		wantErr                 string
-		wantLogs                []string
-		wantResultingCache      []*upstreamgithub.ProviderConfig
-		wantResultingUpstreams  []idpv1alpha1.GitHubIdentityProvider
+		name                      string
+		githubIdentityProviders   []runtime.Object
+		secretsAndConfigMaps      []runtime.Object
+		mockDialer                func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error)
+		preexistingValidatedCache []GitHubValidatedAPICacheKey
+		wantErr                   string
+		wantLogs                  []string
+		wantResultingCache        []*upstreamgithub.ProviderConfig
+		wantResultingUpstreams    []idpv1alpha1.GitHubIdentityProvider
+		wantValidatedCache        []GitHubValidatedAPICacheKey
 	}{
 		{
 			name:                   "no GitHubIdentityProviders",
@@ -442,6 +447,12 @@ func TestController(t *testing.T) {
 					},
 					AllowedOrganizations: setutil.NewCaseInsensitiveSet("organization1", "org2"),
 					HttpClient:           phttp.Default(goodServerCertPool),
+				},
+			},
+			wantValidatedCache: []GitHubValidatedAPICacheKey{
+				{
+					address:           goodServerDomain,
+					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -500,6 +511,12 @@ func TestController(t *testing.T) {
 					HttpClient:           phttp.Default(goodServerCertPool),
 				},
 			},
+			wantValidatedCache: []GitHubValidatedAPICacheKey{
+				{
+					address:           goodServerDomain,
+					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+				},
+			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: validMinimalIDP.ObjectMeta,
@@ -538,12 +555,16 @@ func TestController(t *testing.T) {
 					return githubIDP
 				}(),
 			},
-			mockDialer: func(network, addr string, config *tls.Config) (*tls.Conn, error) {
-				require.Equal(t, "github.com:443", addr)
-				// don't actually dial github.com to avoid making external network calls in unit test
-				configClone := config.Clone()
-				configClone.RootCAs = goodServerCertPool
-				return tls.Dial(network, goodServerDomain, configClone)
+			mockDialer: func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+				t.Helper()
+
+				return func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+					require.Equal(t, "github.com:443", addr)
+					// don't actually dial github.com to avoid making external network calls in unit test
+					configClone := config.Clone()
+					configClone.RootCAs = goodServerCertPool
+					return tls.Dial(network, goodServerDomain, configClone)
+				}
 			},
 			wantResultingCache: []*upstreamgithub.ProviderConfig{
 				{
@@ -566,6 +587,12 @@ func TestController(t *testing.T) {
 					},
 					AllowedOrganizations: setutil.NewCaseInsensitiveSet(),
 					HttpClient:           phttp.Default(goodServerCertPool),
+				},
+			},
+			wantValidatedCache: []GitHubValidatedAPICacheKey{
+				{
+					address:           "github.com:443",
+					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -634,6 +661,12 @@ func TestController(t *testing.T) {
 					},
 					AllowedOrganizations: setutil.NewCaseInsensitiveSet(),
 					HttpClient:           phttp.Default(goodServerIPv6CertPool),
+				},
+			},
+			wantValidatedCache: []GitHubValidatedAPICacheKey{
+				{
+					address:           goodServerIPv6Domain,
+					caBundlePEMSHA256: sha256.Sum256(goodServerIPv6CA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -743,6 +776,12 @@ func TestController(t *testing.T) {
 					},
 					AllowedOrganizations: setutil.NewCaseInsensitiveSet("organization1", "org2"),
 					HttpClient:           phttp.Default(goodServerCertPool),
+				},
+			},
+			wantValidatedCache: []GitHubValidatedAPICacheKey{
+				{
+					address:           goodServerDomain,
+					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -920,6 +959,12 @@ func TestController(t *testing.T) {
 					HttpClient:           phttp.Default(goodServerCertPool),
 				},
 			},
+			wantValidatedCache: []GitHubValidatedAPICacheKey{
+				{
+					address:           goodServerDomain,
+					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+				},
+			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
 				{
 					ObjectMeta: func() metav1.ObjectMeta {
@@ -996,6 +1041,81 @@ func TestController(t *testing.T) {
 				buildLogForUpdatingTLSConfigurationValid("idp-with-tls-in-secret", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
 				buildLogForUpdatingGitHubConnectionValid("idp-with-tls-in-secret", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
 				buildLogForUpdatingPhase("idp-with-tls-in-secret", "Ready"),
+			},
+		},
+		{
+			name:                    "happy path with previously validated address/CA Bundle does not validate again",
+			secretsAndConfigMaps:    []runtime.Object{goodClientCredentialsSecret},
+			githubIdentityProviders: []runtime.Object{validFilledOutIDP},
+			mockDialer: func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+				t.Helper()
+
+				return func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+					t.Errorf("this test should not perform dial")
+					t.FailNow()
+					return nil, nil
+				}
+			},
+			preexistingValidatedCache: []GitHubValidatedAPICacheKey{
+				{
+					address:           goodServerDomain,
+					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+				},
+			},
+			wantResultingCache: []*upstreamgithub.ProviderConfig{
+				{
+					Name:               "some-idp-name",
+					ResourceUID:        "some-resource-uid",
+					APIBaseURL:         fmt.Sprintf("https://%s/api/v3", *validFilledOutIDP.Spec.GitHubAPI.Host),
+					UsernameAttribute:  "id",
+					GroupNameAttribute: "name",
+					OAuth2Config: &oauth2.Config{
+						ClientID:     "some-client-id",
+						ClientSecret: "some-client-secret",
+						Endpoint: oauth2.Endpoint{
+							AuthURL:       fmt.Sprintf("https://%s/login/oauth/authorize", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							DeviceAuthURL: "", // not used
+							TokenURL:      fmt.Sprintf("https://%s/login/oauth/access_token", *validFilledOutIDP.Spec.GitHubAPI.Host),
+							AuthStyle:     oauth2.AuthStyleInParams,
+						},
+						RedirectURL: "", // not used
+						Scopes:      []string{"read:user", "read:org"},
+					},
+					AllowedOrganizations: setutil.NewCaseInsensitiveSet("organization1", "org2"),
+					HttpClient:           phttp.Default(goodServerCertPool),
+				},
+			},
+			wantValidatedCache: []GitHubValidatedAPICacheKey{
+				{
+					address:           goodServerDomain,
+					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+				},
+			},
+			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
+				{
+					ObjectMeta: validFilledOutIDP.ObjectMeta,
+					Spec:       validFilledOutIDP.Spec,
+					Status: idpv1alpha1.GitHubIdentityProviderStatus{
+						Phase: idpv1alpha1.GitHubPhaseReady,
+						Conditions: []metav1.Condition{
+							buildClaimsValidatedTrue(t),
+							buildClientCredentialsSecretValidTrue(t, validFilledOutIDP.Spec.Client.SecretName),
+							buildGitHubConnectionValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
+							buildHostValidTrue(t, *validFilledOutIDP.Spec.GitHubAPI.Host),
+							buildOrganizationsPolicyValidTrue(t, *validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy),
+							buildTLSConfigurationValidTrue(t),
+						},
+					},
+				},
+			},
+			wantLogs: []string{
+				buildLogForUpdatingClientCredentialsSecretValid("some-idp-name", "True", "Success", fmt.Sprintf(`clientID and clientSecret have been read from spec.client.SecretName (\"%s\")`, validFilledOutIDP.Spec.Client.SecretName)),
+				buildLogForUpdatingClaimsValidTrue("some-idp-name"),
+				buildLogForUpdatingOrganizationPolicyValid("some-idp-name", "True", "Success", fmt.Sprintf(`spec.allowAuthentication.organizations.policy (\"%s\") is valid`, string(*validFilledOutIDP.Spec.AllowAuthentication.Organizations.Policy))),
+				buildLogForUpdatingHostValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is valid`, *validFilledOutIDP.Spec.GitHubAPI.Host),
+				buildLogForUpdatingTLSConfigurationValid("some-idp-name", "True", "Success", "spec.githubAPI.tls is valid: loaded TLS configuration"),
+				buildLogForUpdatingGitHubConnectionValid("some-idp-name", "True", "Success", `spec.githubAPI.host (\"%s\") is reachable and TLS verification succeeds`, *validFilledOutIDP.Spec.GitHubAPI.Host),
+				buildLogForUpdatingPhase("some-idp-name", "Ready"),
 			},
 		},
 		{
@@ -2015,8 +2135,8 @@ func TestController(t *testing.T) {
 			fakeKubeClient := kubernetesfake.NewSimpleClientset(tt.secretsAndConfigMaps...)
 			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(fakeKubeClient, 0)
 
-			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
-			cache.SetGitHubIdentityProviders([]upstreamprovider.UpstreamGithubIdentityProviderI{
+			idpCache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
+			idpCache.SetGitHubIdentityProviders([]upstreamprovider.UpstreamGithubIdentityProviderI{
 				upstreamgithub.New(
 					upstreamgithub.ProviderConfig{Name: "initial-entry-to-remove"},
 				),
@@ -2027,14 +2147,19 @@ func TestController(t *testing.T) {
 
 			gitHubIdentityProviderInformer := supervisorInformers.IDP().V1alpha1().GitHubIdentityProviders()
 
-			dialer := tt.mockDialer
-			if dialer == nil {
-				dialer = tls.Dial
+			dialer := tls.Dial
+			if tt.mockDialer != nil {
+				dialer = tt.mockDialer(t)
+			}
+
+			validatedCache := cache.NewExpiring()
+			for _, item := range tt.preexistingValidatedCache {
+				validatedCache.Set(item, nil, 1*time.Hour)
 			}
 
 			controller := New(
 				namespace,
-				cache,
+				idpCache,
 				fakeSupervisorClient,
 				gitHubIdentityProviderInformer,
 				kubeInformers.Core().V1().Secrets(),
@@ -2043,6 +2168,7 @@ func TestController(t *testing.T) {
 				controllerlib.WithInformer,
 				frozenClockForLastTransitionTime,
 				dialer,
+				validatedCache,
 			)
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -2061,8 +2187,8 @@ func TestController(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			// Verify what's in the cache
-			actualIDPList := cache.GetGitHubIdentityProviders()
+			// Verify what's in the IDP cache
+			actualIDPList := idpCache.GetGitHubIdentityProviders()
 			require.Equal(t, len(tt.wantResultingCache), len(actualIDPList))
 			for i := range len(tt.wantResultingCache) {
 				// Do not expect any particular order in the cache
@@ -2086,6 +2212,19 @@ func TestController(t *testing.T) {
 				compareTLSClientConfigWithinHttpClients(t, tt.wantResultingCache[i].HttpClient, actualProvider.GetConfig().HttpClient)
 				require.Equal(t, tt.wantResultingCache[i].OAuth2Config, actualProvider.GetConfig().OAuth2Config)
 				require.Contains(t, tt.wantResultingCache[i].APIBaseURL, actualProvider.GetConfig().APIBaseURL)
+			}
+
+			// Verify what's in the validated cache
+			var uniqueAddresses []string
+			for _, cachedIDP := range tt.wantResultingCache {
+				if !slices.Contains(uniqueAddresses, cachedIDP.APIBaseURL) {
+					uniqueAddresses = append(uniqueAddresses, cachedIDP.APIBaseURL)
+				}
+			}
+			require.Equal(t, len(uniqueAddresses), len(tt.wantValidatedCache), "every unique IDP address should have an entry in the validated cache")
+			for _, item := range tt.wantValidatedCache {
+				_, ok := validatedCache.Get(item)
+				require.True(t, ok, "item with address %q must be found in the validated cache", item.address)
 			}
 
 			// Verify the status conditions as reported in Kubernetes
@@ -2412,6 +2551,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 				controllerlib.WithInformer,
 				frozenClockForLastTransitionTime,
 				tls.Dial,
+				cache.NewExpiring(),
 			)
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -2535,6 +2675,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				observableInformers.WithInformer,
 				clock.RealClock{},
 				tls.Dial,
+				cache.NewExpiring(),
 			)
 
 			unrelated := &corev1.Secret{}
@@ -2591,6 +2732,7 @@ func TestGitHubUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
 				observableInformers.WithInformer,
 				clock.RealClock{},
 				tls.Dial,
+				cache.NewExpiring(),
 			)
 
 			unrelated := &corev1.ConfigMap{}
@@ -2647,6 +2789,7 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 				observableInformers.WithInformer,
 				clock.RealClock{},
 				tls.Dial,
+				cache.NewExpiring(),
 			)
 
 			unrelated := &idpv1alpha1.GitHubIdentityProvider{}

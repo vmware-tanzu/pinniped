@@ -23,6 +23,7 @@ import (
 // on the TLSSpec in Pinniped supervisor CRDs using OIDCIdentityProvider as an example.
 func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
+	env.SupervisorUpstreamOIDC.Issuer
 	testCases := []struct {
 		name               string
 		customResourceYaml string

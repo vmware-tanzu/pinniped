@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -370,13 +369,10 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			})
 
 			t.Run("apply jwt authenticator", func(t *testing.T) {
-				issuerURL, err := url.Parse(env.SupervisorUpstreamOIDC.CallbackURL)
-				require.NoError(t, err)
-				require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
-				issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")
+				_, supervisorIssuer := env.SupervisorUpstreamOIDC.InferTheIssuerURL(t)
 
 				jwtAuthenticatorResourceName := tc.resourceNamePrefix + "-" + testlib.RandHex(t, 7)
-				jwtAuthenticatorYamlBytes := []byte(fmt.Sprintf(tc.customJWTAuthenticatorYaml, env.APIGroupSuffix, jwtAuthenticatorResourceName, issuerURL.String()))
+				jwtAuthenticatorYamlBytes := []byte(fmt.Sprintf(tc.customJWTAuthenticatorYaml, env.APIGroupSuffix, jwtAuthenticatorResourceName, supervisorIssuer))
 
 				performKubectlApply(t, jwtAuthenticatorYamlBytes, tc.expectedError, "JWTAuthenticator", jwtAuthenticatorResourceName)
 			})

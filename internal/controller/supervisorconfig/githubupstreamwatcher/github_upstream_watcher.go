@@ -89,8 +89,9 @@ func (g *GitHubValidatedAPICache) MarkAsValidated(address string, caBundlePEM []
 		address:           address,
 		caBundlePEMSHA256: sha256.Sum256(caBundlePEM),
 	}
-	// Existence in the cache means it has been validated
-	g.cache.Set(key, nil, 24*365*time.Hour)
+	// Existence in the cache means it has been validated.
+	// The TTL in the cache is not important, it's just a "really long time".
+	g.cache.Set(key, nil, 365*24*time.Hour)
 }
 
 func (g *GitHubValidatedAPICache) IsValid(address string, caBundlePEM []byte) bool {
@@ -329,30 +330,17 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 		c.configMapInformer)
 	conditions = append(conditions, tlsConfigCondition)
 
-	var hostURL string
-	var httpClient *http.Client
-	if hostCondition.Status != metav1.ConditionTrue || tlsConfigCondition.Status != metav1.ConditionTrue {
-		conditions = append(conditions, &metav1.Condition{
-			Type:    GitHubConnectionValid,
-			Status:  metav1.ConditionUnknown,
-			Reason:  "UnableToValidate",
-			Message: "unable to validate; see other conditions for details",
-		})
-	} else {
-		address := hostPort.Endpoint()
-		var githubConnectionCondition *metav1.Condition
-		var githubConnectionErr error
-
-		githubConnectionCondition, hostURL, httpClient, githubConnectionErr = c.validateGitHubConnection(
-			address,
-			caBundlePEM,
-			certPool,
-		)
-		if githubConnectionErr != nil {
-			applicationErrors = append(applicationErrors, githubConnectionErr)
-		}
-		conditions = append(conditions, githubConnectionCondition)
+	githubConnectionCondition, hostURL, httpClient, githubConnectionErr := c.validateGitHubConnection(
+		hostPort,
+		caBundlePEM,
+		certPool,
+		hostCondition.Status == metav1.ConditionTrue,
+		tlsConfigCondition.Status == metav1.ConditionTrue,
+	)
+	if githubConnectionErr != nil {
+		applicationErrors = append(applicationErrors, githubConnectionErr)
 	}
+	conditions = append(conditions, githubConnectionCondition)
 
 	// The critical pattern to maintain is that every run of the sync loop will populate the exact number of the exact
 	// same set of conditions.  Conditions depending on other conditions should get Status: metav1.ConditionUnknown, or
@@ -435,15 +423,24 @@ func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Conditio
 }
 
 func (c *gitHubWatcherController) validateGitHubConnection(
-	address string,
+	hostPort *endpointaddr.HostPort,
 	caBundlePEM []byte,
 	certPool *x509.CertPool,
+	hostConditionOk, tlsConfigConditionOk bool,
 ) (*metav1.Condition, string, *http.Client, error) {
-	var conn *tls.Conn
-	var tlsDialErr error
+	if !hostConditionOk || !tlsConfigConditionOk {
+		return &metav1.Condition{
+			Type:    GitHubConnectionValid,
+			Status:  metav1.ConditionUnknown,
+			Reason:  "UnableToValidate",
+			Message: "unable to validate; see other conditions for details",
+		}, "", nil, nil
+	}
+
+	address := hostPort.Endpoint()
 
 	if !c.validatedCache.IsValid(address, caBundlePEM) {
-		conn, tlsDialErr = c.dialFunc("tcp", address, ptls.Default(certPool))
+		conn, tlsDialErr := c.dialFunc("tcp", address, ptls.Default(certPool))
 		if tlsDialErr != nil {
 			return &metav1.Condition{
 				Type:    GitHubConnectionValid,
@@ -452,7 +449,8 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 				Message: fmt.Sprintf("cannot dial server spec.githubAPI.host (%q): %s", address, buildDialErrorMessage(tlsDialErr)),
 			}, "", nil, tlsDialErr
 		}
-		tlsDialErr = conn.Close()
+		// Any error should be ignored. We have performed a successful Dial, so no need to requeue this Sync.
+		_ = conn.Close()
 	}
 
 	c.validatedCache.MarkAsValidated(address, caBundlePEM)
@@ -462,7 +460,7 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 		Status:  metav1.ConditionTrue,
 		Reason:  conditionsutil.ReasonSuccess,
 		Message: fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", address),
-	}, fmt.Sprintf("https://%s", address), phttp.Default(certPool), tlsDialErr
+	}, fmt.Sprintf("https://%s", address), phttp.Default(certPool), nil
 }
 
 // buildDialErrorMessage standardizes DNS error messages that appear differently on different platforms, so that tests and log grepping is uniform.

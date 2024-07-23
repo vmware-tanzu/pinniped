@@ -552,7 +552,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 		addSuffix("webhookauthenticators.authentication.concierge"): {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
 				{Name: "Endpoint", Type: "string", JSONPath: ".spec.endpoint"},
-				// Note that WebhookAuthenticators have a status type, but no controller currently sets the status, so we don't show it.
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},
@@ -560,7 +560,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
 				{Name: "Issuer", Type: "string", JSONPath: ".spec.issuer"},
 				{Name: "Audience", Type: "string", JSONPath: ".spec.audience"},
-				// Note that JWTAuthenticators have a status type, but no controller currently sets the status, so we don't show it.
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},

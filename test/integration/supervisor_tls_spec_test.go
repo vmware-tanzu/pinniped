@@ -3,17 +3,8 @@
 package integration
 
 import (
-	"bytes"
-	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/testlib"
@@ -51,7 +42,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					secretName: foo-bar-client-credentials
 			`),
 			customResourceName: "invalid-oidc-idp-missing-name",
-			expectedError:      `The OIDCIdentityProvider "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`,
+			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`,
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for name",
@@ -75,7 +66,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					secretName: foo-bar-client-credentials
 			`),
 			customResourceName: "invalid-oidc-idp-empty-name",
-			expectedError:      `The OIDCIdentityProvider "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`,
+			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`,
 		},
 		{
 			name: "should disallow certificate authority data source with missing key",
@@ -98,7 +89,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					secretName: foo-bar-client-credentials
 			`),
 			customResourceName: "invalid-oidc-idp-missing-key",
-			expectedError:      `The OIDCIdentityProvider "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`,
+			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`,
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for key",
@@ -122,7 +113,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					secretName: foo-bar-client-credentials
 			`),
 			customResourceName: "invalid-oidc-idp-empty-key",
-			expectedError:      `The OIDCIdentityProvider "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`,
+			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`,
 		},
 		{
 			name: "should disallow certificate authority data source with missing kind",
@@ -145,7 +136,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					secretName: foo-bar-client-credentials
 			`),
 			customResourceName: "invalid-oidc-idp-missing-kind",
-			expectedError:      `The OIDCIdentityProvider "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`,
+			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`,
 		},
 		{
 			name: "should disallow certificate authority data source with empty value kind",
@@ -169,7 +160,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					secretName: foo-bar-client-credentials
 			`),
 			customResourceName: "invalid-oidc-idp-invalid-kind",
-			expectedError:      `The OIDCIdentityProvider "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`,
+			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`,
 		},
 		{
 			name: "should disallow certificate authority data source with invalid kind",
@@ -193,7 +184,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					secretName: foo-bar-client-credentials
 			`),
 			customResourceName: "invalid-oidc-idp-invalid-kind",
-			expectedError:      `The OIDCIdentityProvider "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`,
+			expectedError:      `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`,
 		},
 		{
 			name: "should create a custom resource passing all validations using a Secret source",
@@ -267,36 +258,11 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			yamlFilepath := filepath.Join(t.TempDir(), fmt.Sprintf("tls-spec-validation-%s.yaml", tc.customResourceName))
 
 			resourceName := tc.customResourceName + "-" + testlib.RandHex(t, 7)
 			yamlBytes := []byte(fmt.Sprintf(tc.customResourceYaml, env.APIGroupSuffix, resourceName, env.SupervisorUpstreamOIDC.Issuer))
 
-			require.NoError(t, os.WriteFile(yamlFilepath, yamlBytes, 0600))
-
-			// Use --validate=false to disable old client-side validations to avoid getting different error messages in Kube 1.24 and older.
-			// Note that this also disables validations of unknown and duplicate fields, but that's not what this test is about.
-			//nolint:gosec // this is test code.
-			cmd := exec.CommandContext(context.Background(), "kubectl", []string{"apply", "--validate=false", "-f", yamlFilepath}...)
-
-			var stdOut, stdErr bytes.Buffer
-			cmd.Stdout = &stdOut
-			cmd.Stderr = &stdErr
-			err := cmd.Run()
-
-			t.Cleanup(func() {
-				t.Helper()
-				//nolint:gosec // this is test code.
-				require.NoError(t, exec.Command("kubectl", []string{"delete", "--ignore-not-found", "-f", yamlFilepath}...).Run())
-			})
-
-			if tc.expectedError == "" {
-				assert.Empty(t, stdErr.String())
-				assert.Equal(t, fmt.Sprintf("oidcidentityprovider.idp.supervisor.pinniped.dev/%s created\n", resourceName), stdOut.String())
-				require.NoError(t, err)
-			} else {
-				require.Equal(t, fmt.Sprintf(tc.expectedError, resourceName), strings.TrimSuffix(stdErr.String(), "\n"))
-			}
+			performKubectlApply(t, yamlBytes, `oidcidentityprovider.idp.supervisor.pinniped.dev`, tc.expectedError, "OIDCIdentityProvider", resourceName)
 		})
 	}
 }

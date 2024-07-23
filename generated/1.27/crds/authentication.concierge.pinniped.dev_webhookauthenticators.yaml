@@ -22,6 +22,9 @@ spec:
     - jsonPath: .spec.endpoint
       name: Endpoint
       type: string
+    - jsonPath: .status.phase
+      name: Status
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date

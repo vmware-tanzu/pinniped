@@ -109,8 +109,8 @@ type oidcDiscoveryCacheValue struct {
 // oidcDiscoveryCache caches the discovered provider along with the http Client to use for making calls to that provider,
 // for a particular combination OIDC issuer and CA bundle for that issuer.
 type oidcDiscoveryCache interface {
-	getProvider(*oidcDiscoveryCacheKey) *oidcDiscoveryCacheValue
-	putProvider(*oidcDiscoveryCacheKey, *oidcDiscoveryCacheValue)
+	getProvider(oidcDiscoveryCacheKey) *oidcDiscoveryCacheValue
+	putProvider(oidcDiscoveryCacheKey, *oidcDiscoveryCacheValue)
 }
 
 // ttlProviderCache caches the *coreosoidc.Provider associated with a particular issuer/TLS configuration,
@@ -121,7 +121,7 @@ type ttlProviderCache struct{ cache *cache.Expiring }
 var _ oidcDiscoveryCache = (*ttlProviderCache)(nil)
 
 // getProvider gets an entry from the ttlProviderCache.
-func (c *ttlProviderCache) getProvider(key *oidcDiscoveryCacheKey) *oidcDiscoveryCacheValue {
+func (c *ttlProviderCache) getProvider(key oidcDiscoveryCacheKey) *oidcDiscoveryCacheValue {
 	if result, ok := c.cache.Get(key); ok {
 		entry := result.(*oidcDiscoveryCacheValue)
 		return entry
@@ -130,7 +130,7 @@ func (c *ttlProviderCache) getProvider(key *oidcDiscoveryCacheKey) *oidcDiscover
 }
 
 // putProvider adds to the ttlProviderCache for a limited period of time.
-func (c *ttlProviderCache) putProvider(key *oidcDiscoveryCacheKey, value *oidcDiscoveryCacheValue) {
+func (c *ttlProviderCache) putProvider(key oidcDiscoveryCacheKey, value *oidcDiscoveryCacheValue) {
 	c.cache.Set(key, value, oidcValidatorCacheTTL)
 }
 
@@ -153,6 +153,7 @@ func New(
 	configMapInformer corev1informers.ConfigMapInformer,
 	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
+	validatorCache *cache.Expiring,
 ) controllerlib.Controller {
 	c := oidcWatcherController{
 		cache:                        idpCache,
@@ -161,7 +162,7 @@ func New(
 		oidcIdentityProviderInformer: oidcIdentityProviderInformer,
 		secretInformer:               secretInformer,
 		configMapInformer:            configMapInformer,
-		validatorCache:               &ttlProviderCache{cache: cache.NewExpiring()},
+		validatorCache:               &ttlProviderCache{cache: validatorCache},
 	}
 	return controllerlib.New(
 		controllerlib.Config{Name: oidcControllerName, Syncer: &c},
@@ -357,7 +358,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 	var httpClient *http.Client
 
 	// Get the discovered provider and HTTP client from cache, if they are found in the cache.
-	cacheKey := &oidcDiscoveryCacheKey{
+	cacheKey := oidcDiscoveryCacheKey{
 		issuer:       upstream.Spec.Issuer,
 		caBundleHash: sha256.Sum256(caBundlePEM), // note that this will always return the same hash for nil input
 	}

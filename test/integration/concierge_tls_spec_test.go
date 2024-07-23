@@ -365,7 +365,14 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 				webhookResourceName := tc.resourceNamePrefix + "-" + testlib.RandHex(t, 7)
 				webhookYamlBytes := []byte(fmt.Sprintf(tc.customWebhookAuthenticatorYaml, env.APIGroupSuffix, webhookResourceName, env.TestWebhook.Endpoint))
 
-				performKubectlApply(t, webhookYamlBytes, tc.expectedError, "WebhookAuthenticator", webhookResourceName)
+				performKubectlApply(
+					t,
+					webhookYamlBytes,
+					`webhookauthenticator.authentication.concierge.pinniped.dev`,
+					tc.expectedError,
+					"WebhookAuthenticator",
+					webhookResourceName,
+				)
 			})
 
 			t.Run("apply jwt authenticator", func(t *testing.T) {
@@ -374,7 +381,14 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 				jwtAuthenticatorResourceName := tc.resourceNamePrefix + "-" + testlib.RandHex(t, 7)
 				jwtAuthenticatorYamlBytes := []byte(fmt.Sprintf(tc.customJWTAuthenticatorYaml, env.APIGroupSuffix, jwtAuthenticatorResourceName, supervisorIssuer))
 
-				performKubectlApply(t, jwtAuthenticatorYamlBytes, tc.expectedError, "JWTAuthenticator", jwtAuthenticatorResourceName)
+				performKubectlApply(
+					t,
+					jwtAuthenticatorYamlBytes,
+					`jwtauthenticator.authentication.concierge.pinniped.dev`,
+					tc.expectedError,
+					"JWTAuthenticator",
+					jwtAuthenticatorResourceName,
+				)
 			})
 		})
 	}
@@ -383,6 +397,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 func performKubectlApply(
 	t *testing.T,
 	yamlBytes []byte,
+	expectedSuccessPrefix string,
 	expectedError string,
 	resourceType string,
 	resourceName string,
@@ -411,7 +426,7 @@ func performKubectlApply(
 
 	if expectedError == "" {
 		require.Empty(t, stdErr.String())
-		require.Regexp(t, "^(webhookauthenticator|jwtauthenticator)"+regexp.QuoteMeta(fmt.Sprintf(".authentication.concierge.pinniped.dev/%s created\n", resourceName)), stdOut.String())
+		require.Regexp(t, regexp.QuoteMeta(expectedSuccessPrefix)+regexp.QuoteMeta(fmt.Sprintf("/%s created\n", resourceName)), stdOut.String())
 		require.NoError(t, err)
 	} else {
 		require.Equal(t, fmt.Sprintf(expectedError, resourceType, resourceName), strings.TrimSuffix(stdErr.String(), "\n"))

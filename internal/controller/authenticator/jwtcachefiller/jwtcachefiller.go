@@ -155,7 +155,7 @@ func New(
 		},
 		withInformer(
 			jwtAuthenticators,
-			pinnipedcontroller.MatchAnythingFilter(nil), // TODO: use pinnipedcontroller.SingletonQueue()
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
@@ -190,7 +190,6 @@ type jwtCacheFillerController struct {
 
 // Sync implements controllerlib.Syncer.
 func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
-	// TODO: can ctx.Key.Name be the name of a Secret or ConfigMap??????
 	jwtAuthenticators, err := c.jwtAuthenticators.Lister().List(labels.Everything())
 	if err != nil {
 		return err
@@ -201,7 +200,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 		return nil
 	}
 
-	// Sort them by name so that tests are consistent
+	// Sort them by name so that order is predictable and therefore output is consistent for tests and logs.
 	slices.SortStableFunc(jwtAuthenticators, func(a, b *authenticationv1alpha1.JWTAuthenticator) int {
 		return strings.Compare(a.Name, b.Name)
 	})
@@ -210,7 +209,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	for _, jwtAuthenticator := range jwtAuthenticators {
 		err = c.syncIndividualJWTAuthenticator(ctx.Context, jwtAuthenticator)
 		if err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("error for JWTAuthenticator %s: %w", jwtAuthenticator.Name, err))
 		}
 	}
 	return utilerrors.NewAggregate(errs)

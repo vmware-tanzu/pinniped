@@ -718,6 +718,7 @@ func TestController(t *testing.T) {
 		wantUsernameClaim                   string
 		wantGroupsClaim                     string
 		wantNamesOfJWTAuthenticatorsInCache []string
+		skipTestingCachedAuthenticator      bool
 	}{
 		{
 			name: "Sync: no JWTAuthenticators found results in no errors and no status conditions",
@@ -800,8 +801,12 @@ func TestController(t *testing.T) {
 					Spec: *badIssuerJWKSURIJWTAuthenticatorSpec,
 				},
 			},
-			// TODO: Should there be more than one error shown here?
-			wantSyncLoopErr: testutil.WantExactErrorString(`could not parse provider jwks_uri: parse "https://.café   .com/café/café/café/coffee/jwks.json": invalid character " " in host name`),
+			wantSyncLoopErr: testutil.WantExactErrorString("[" +
+				`error for JWTAuthenticator another-invalid-jwt-authenticator: could not parse provider jwks_uri: parse "https://.café   .com/café/café/café/coffee/jwks.json": invalid character " " in host name` +
+				", " +
+				`error for JWTAuthenticator invalid-jwt-authenticator: could not parse provider jwks_uri: parse "https://.café   .com/café/café/café/coffee/jwks.json": invalid character " " in host name` +
+				"]",
+			),
 			wantLogs: []map[string]any{
 				{
 					"level":     "info",
@@ -823,7 +828,6 @@ func TestController(t *testing.T) {
 						"name": "new-jwt-authenticator",
 					},
 				},
-				// TODO: Should there be log lines for rejected JWTAuthenticators?
 			},
 			wantActions: func() []coretesting.Action {
 				updateValidStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
@@ -886,7 +890,6 @@ func TestController(t *testing.T) {
 					updateValidStatusAction,
 				}
 			},
-			// TODO: How is this working?
 			wantNamesOfJWTAuthenticatorsInCache: []string{
 				"existing-jwt-authenticator",
 				"new-jwt-authenticator",
@@ -1310,7 +1313,9 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
 				}
 			},
-			wantNamesOfJWTAuthenticatorsInCache: []string{}, // TODO: skip the tests because the authenticator left in the cache is the mock version that was added above
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
+			// skip the tests because the authenticator pre-loaded into the cache is the mock version that was added above
+			skipTestingCachedAuthenticator: true,
 		},
 		{
 			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions",
@@ -1414,7 +1419,7 @@ func TestController(t *testing.T) {
 			},
 			// no explicit logs, this is an issue of config, the user must provide TLS config for the
 			// custom cert provided for this server.
-			wantSyncLoopErr: testutil.WantSprintfErrorString(`could not perform oidc discovery on provider issuer: Get "%s/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`, goodIssuer),
+			wantSyncLoopErr: testutil.WantSprintfErrorString(`error for JWTAuthenticator test-name: could not perform oidc discovery on provider issuer: Get "%s/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`, goodIssuer),
 		},
 		{
 			name: "validateTLS: JWTAuthenticator with invalid CA: loop will fail, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
@@ -1559,7 +1564,8 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantClose: true, // the removed cache entry was also closed
+			wantNamesOfJWTAuthenticatorsInCache: []string{}, // it was removed from the cache
+			wantClose:                           true,       // the removed cache entry was also closed
 		},
 		{
 			name: "validateIssuer: parsing error (spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
@@ -1819,7 +1825,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr: testutil.WantExactErrorString(`could not perform oidc discovery on provider issuer: Get "` + goodIssuer + `/foo/bar/baz/shizzle/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`),
+			wantSyncLoopErr: testutil.WantExactErrorString(`error for JWTAuthenticator test-name: could not perform oidc discovery on provider issuer: Get "` + goodIssuer + `/foo/bar/baz/shizzle/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`),
 		},
 		{
 			name: "validateProviderDiscovery: excessively long errors truncated: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
@@ -1869,7 +1875,7 @@ func TestController(t *testing.T) {
 				}
 			},
 			// not currently truncating the logged err
-			wantSyncLoopErr: testutil.WantExactErrorString("could not perform oidc discovery on provider issuer: 404 Not Found: <html>\n\t\t  \t<head><title>404 not found page</title></head>\n\t\t\t<body>lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz should not reach end of string</body>\n\t\t</html>"),
+			wantSyncLoopErr: testutil.WantExactErrorString("error for JWTAuthenticator test-name: could not perform oidc discovery on provider issuer: 404 Not Found: <html>\n\t\t  \t<head><title>404 not found page</title></head>\n\t\t\t<body>lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz lots of text that is at least 300 characters long 0123456789 abcdefghijklmnopqrstuvwxyz should not reach end of string</body>\n\t\t</html>"),
 		},
 		// cannot be tested currently the way the coreos lib works.
 		// the constructor requires an issuer in the payload and validates the issuer matches the actual issuer,
@@ -1912,7 +1918,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr: testutil.WantExactErrorString(`could not parse provider jwks_uri: parse "https://.café   .com/café/café/café/coffee/jwks.json": invalid character " " in host name`),
+			wantSyncLoopErr: testutil.WantExactErrorString(`error for JWTAuthenticator test-name: could not parse provider jwks_uri: parse "https://.café   .com/café/café/café/coffee/jwks.json": invalid character " " in host name`),
 		},
 		{
 			name: "validateProviderJWKSURL: invalid scheme, requires 'https': loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
@@ -1951,7 +1957,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr: testutil.WantExactErrorString("jwks_uri http://.café.com/café/café/café/coffee/jwks.json has invalid scheme, require 'https'"),
+			wantSyncLoopErr: testutil.WantExactErrorString("error for JWTAuthenticator test-name: jwks_uri http://.café.com/café/café/café/coffee/jwks.json has invalid scheme, require 'https'"),
 		},
 		{
 			name: "validateProviderJWKSURL: remote jwks should not have been able to verify hardcoded test jwt token: loop will fail sync, will write failed and unknown conditions, and will enqueue new sync",
@@ -1991,7 +1997,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr: testutil.WantExactErrorString("remote jwks should not have been able to verify hardcoded test jwt token"),
+			wantSyncLoopErr: testutil.WantExactErrorString("error for JWTAuthenticator test-name: remote jwks should not have been able to verify hardcoded test jwt token"),
 		},
 		{
 			name: "validateJWKSFetch: could not fetch keys: loop will fail sync, will write failed and unknown status conditions, and will enqueue a resync",
@@ -2030,7 +2036,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr: testutil.WantExactErrorString("could not fetch keys: fetching keys oidc: get keys failed: 404 Not Found 404 page not found\n"),
+			wantSyncLoopErr: testutil.WantExactErrorString("error for JWTAuthenticator test-name: could not fetch keys: fetching keys oidc: get keys failed: 404 Not Found 404 page not found\n"),
 		},
 		{
 			name: "updateStatus: called with matching original and updated conditions: will not make request to update conditions",
@@ -2172,7 +2178,7 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantSyncLoopErr:                     testutil.WantExactErrorString("some update error"),
+			wantSyncLoopErr:                     testutil.WantExactErrorString("error for JWTAuthenticator test-name: some update error"),
 			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		// cannot be tested the way we are invoking oidc.New as we don't provide enough configuration
@@ -2271,11 +2277,15 @@ func TestController(t *testing.T) {
 				}
 				temp := cache.Get(expectedCacheKey)
 				require.NotNil(t, temp)
-				require.NotNil(t, temp.(*cachedJWTAuthenticator))
+				require.IsType(t, &cachedJWTAuthenticator{}, temp)
+
+				if tt.skipTestingCachedAuthenticator {
+					continue // skip the rest of this test for this authenticator
+				}
+
 				require.NotNil(t, temp.(*cachedJWTAuthenticator).Token)
 				cachedAuthenticator, ok := temp.(tokenAuthenticatorCloser)
 				require.True(t, ok)
-				require.NotNil(t, cachedAuthenticator)
 
 				// Schedule it to be closed at the end of the test.
 				t.Cleanup(cachedAuthenticator.Close)

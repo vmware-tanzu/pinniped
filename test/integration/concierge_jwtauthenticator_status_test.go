@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -55,7 +55,7 @@ func TestConciergeJWTAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExterna
 			name:                   "for a CA bundle from a Secret",
 			caBundleSourceSpecKind: "Secret",
 			createResourceForCABundle: func(t *testing.T, caBundle string) string {
-				createdResource := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-bundle", v1.SecretTypeOpaque, map[string]string{
+				createdResource := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-bundle", corev1.SecretTypeOpaque, map[string]string{
 					"ca.crt": caBundle,
 				})
 				return createdResource.Name

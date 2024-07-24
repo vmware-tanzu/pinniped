@@ -61,6 +61,9 @@ const (
 	GitHubConnectionValid        string = "GitHubConnectionValid"
 	ClaimsValid                  string = "ClaimsValid"
 
+	reasonInvalid     = "Invalid"
+	reasonInvalidHost = "InvalidHost"
+
 	defaultHost       = "github.com"
 	defaultApiBaseURL = "https://api.github.com"
 )
@@ -284,7 +287,7 @@ func validateOrganizationsPolicy(organizationsSpec *idpv1alpha1.GitHubOrganizati
 		return &metav1.Condition{
 			Type:    OrganizationsPolicyValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  "Invalid",
+			Reason:  reasonInvalid,
 			Message: "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed",
 		}
 	}
@@ -292,7 +295,7 @@ func validateOrganizationsPolicy(organizationsSpec *idpv1alpha1.GitHubOrganizati
 	return &metav1.Condition{
 		Type:    OrganizationsPolicyValid,
 		Status:  metav1.ConditionFalse,
-		Reason:  "Invalid",
+		Reason:  reasonInvalid,
 		Message: "spec.allowAuthentication.organizations.policy must be 'AllGitHubUsers' when spec.allowAuthentication.organizations.allowed is empty",
 	}
 }
@@ -397,7 +400,7 @@ func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Conditio
 		return &metav1.Condition{
 			Type:    HostValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  "InvalidHost",
+			Reason:  reasonInvalidHost,
 			Message: fmt.Sprintf("spec.githubAPI.host (%q) is not valid: %s", host, reason),
 		}
 	}
@@ -432,7 +435,7 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 		return &metav1.Condition{
 			Type:    GitHubConnectionValid,
 			Status:  metav1.ConditionUnknown,
-			Reason:  "UnableToValidate",
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: "unable to validate; see other conditions for details",
 		}, "", nil, nil
 	}
@@ -445,7 +448,7 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 			return &metav1.Condition{
 				Type:    GitHubConnectionValid,
 				Status:  metav1.ConditionFalse,
-				Reason:  "UnableToDialServer",
+				Reason:  conditionsutil.ReasonUnableToDialServer,
 				Message: fmt.Sprintf("cannot dial server spec.githubAPI.host (%q): %s", address, buildDialErrorMessage(tlsDialErr)),
 			}, "", nil, tlsDialErr
 		}
@@ -483,7 +486,7 @@ func validateUserAndGroupAttributes(upstream *idpv1alpha1.GitHubIdentityProvider
 		return &metav1.Condition{
 			Type:    ClaimsValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  "Invalid",
+			Reason:  reasonInvalid,
 			Message: message,
 		}
 	}

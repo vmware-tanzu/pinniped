@@ -12,9 +12,13 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+// Some common reasons shared by conditions of various resources.
 const (
-	// TODO: why only move one here, why not more?
-	ReasonSuccess = "Success"
+	ReasonSuccess            = "Success"
+	ReasonNotReady           = "NotReady"
+	ReasonUnableToValidate   = "UnableToValidate"
+	ReasonUnableToDialServer = "UnableToDialServer"
+	ReasonInvalidIssuerURL   = "InvalidIssuerURL"
 )
 
 // MergeConditions merges conditions into conditionsToUpdate.

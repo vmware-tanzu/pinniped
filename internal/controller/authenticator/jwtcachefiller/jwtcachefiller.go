@@ -56,9 +56,6 @@ const (
 	typeJWKSFetchValid     = "JWKSFetchValid"
 	typeAuthenticatorValid = "AuthenticatorValid"
 
-	reasonNotReady                                  = "NotReady"
-	reasonUnableToValidate                          = "UnableToValidate"
-	reasonInvalidIssuerURL                          = "InvalidIssuerURL"
 	reasonInvalidIssuerURLScheme                    = "InvalidIssuerURLScheme"
 	reasonInvalidIssuerURLFragment                  = "InvalidIssuerURLContainsFragment"
 	reasonInvalidIssuerURLQueryParams               = "InvalidIssuerURLContainsQueryParams"
@@ -322,7 +319,7 @@ func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*m
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerURLValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidIssuerURL,
+			Reason:  conditionsutil.ReasonInvalidIssuerURL,
 			Message: msg,
 		})
 		return nil, conditions, false
@@ -386,7 +383,7 @@ func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeDiscoveryValid,
 			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: msgUnableToValidate,
 		})
 		return nil, nil, conditions, nil
@@ -421,7 +418,7 @@ func (c *jwtCacheFillerController) validateProviderJWKSURL(provider *coreosoidc.
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeJWKSURLValid,
 			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: msgUnableToValidate,
 		})
 		return "", conditions, nil
@@ -484,7 +481,7 @@ func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksUR
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeJWKSFetchValid,
 			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: msgUnableToValidate,
 		})
 		return nil, conditions, nil
@@ -540,7 +537,7 @@ func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksUR
 	conditions = append(conditions, &metav1.Condition{
 		Type:    typeJWKSFetchValid,
 		Status:  metav1.ConditionUnknown,
-		Reason:  reasonUnableToValidate,
+		Reason:  conditionsutil.ReasonUnableToValidate,
 		Message: msg,
 	})
 	return nil, conditions, fmt.Errorf("%s: %w", errText, verifyWithKeySetErr)
@@ -559,7 +556,7 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeAuthenticatorValid,
 			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: msgUnableToValidate,
 		})
 		return nil, conditions, nil
@@ -641,7 +638,7 @@ func (c *jwtCacheFillerController) updateStatus(
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonNotReady,
+			Reason:  conditionsutil.ReasonNotReady,
 			Message: "the JWTAuthenticator is not ready: see other conditions for details",
 		})
 	} else {

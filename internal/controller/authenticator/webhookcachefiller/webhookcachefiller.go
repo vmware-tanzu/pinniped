@@ -50,13 +50,10 @@ const (
 	typeEndpointURLValid       = "EndpointURLValid"
 	typeAuthenticatorValid     = "AuthenticatorValid"
 
-	reasonNotReady                   = "NotReady"
-	reasonUnableToValidate           = "UnableToValidate"
 	reasonUnableToCreateClient       = "UnableToCreateClient"
 	reasonUnableToInstantiateWebhook = "UnableToInstantiateWebhook"
 	reasonInvalidEndpointURL         = "InvalidEndpointURL"
 	reasonInvalidEndpointURLScheme   = "InvalidEndpointURLScheme"
-	reasonUnableToDialServer         = "UnableToDialServer"
 
 	msgUnableToValidate = "unable to validate; see other conditions for details"
 )
@@ -252,7 +249,7 @@ func newWebhookAuthenticator(
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeAuthenticatorValid,
 			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: msgUnableToValidate,
 		})
 		return nil, conditions, nil
@@ -324,7 +321,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeWebhookConnectionValid,
 			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: msgUnableToValidate,
 		})
 		return conditions, nil
@@ -338,7 +335,7 @@ func (c *webhookCacheFillerController) validateConnection(certPool *x509.CertPoo
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeWebhookConnectionValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonUnableToDialServer,
+			Reason:  conditionsutil.ReasonUnableToDialServer,
 			Message: msg,
 		})
 		return conditions, fmt.Errorf("%s: %w", errText, err)
@@ -418,7 +415,7 @@ func (c *webhookCacheFillerController) updateStatus(
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonNotReady,
+			Reason:  conditionsutil.ReasonNotReady,
 			Message: "the WebhookAuthenticator is not ready: see other conditions for details",
 		})
 	} else {

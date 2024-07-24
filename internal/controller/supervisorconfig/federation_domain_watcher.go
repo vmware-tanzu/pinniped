@@ -48,9 +48,6 @@ const (
 	typeTransformsExpressionsValid           = "TransformsExpressionsValid"
 	typeTransformsExamplesPassed             = "TransformsExamplesPassed"
 
-	reasonNotReady                                    = "NotReady"
-	reasonUnableToValidate                            = "UnableToValidate"
-	reasonInvalidIssuerURL                            = "InvalidIssuerURL"
 	reasonDuplicateIssuer                             = "DuplicateIssuer"
 	reasonDifferentSecretRefsFound                    = "DifferentSecretRefsFound"
 	reasonLegacyConfigurationSuccess                  = "LegacyConfigurationSuccess"
@@ -792,7 +789,7 @@ func appendIssuerURLValidCondition(err error, conditions []*metav1.Condition) []
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerURLValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonInvalidIssuerURL,
+			Reason:  conditionsutil.ReasonInvalidIssuerURL,
 			Message: err.Error(),
 		})
 	} else {
@@ -818,7 +815,7 @@ func (c *federationDomainWatcherController) updateStatus(
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeReady,
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonNotReady,
+			Reason:  conditionsutil.ReasonNotReady,
 			Message: "the FederationDomain is not ready: see other conditions for details",
 		})
 	} else {
@@ -885,13 +882,13 @@ func (v *crossFederationDomainConfigValidator) Validate(federationDomain *superv
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeIssuerIsUnique,
 			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: "unable to check if spec.issuer is unique among all FederationDomains because URL cannot be parsed",
 		})
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeOneTLSSecretPerIssuerHostname,
 			Status:  metav1.ConditionUnknown,
-			Reason:  reasonUnableToValidate,
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: "unable to check if all FederationDomains are using the same TLS secret when using the same hostname in the spec.issuer URL because URL cannot be parsed",
 		})
 		return conditions

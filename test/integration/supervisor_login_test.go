@@ -1240,7 +1240,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
 		},
-		// TODO: this test is disabled- where can this be run?
 		{
 			name:      "active directory IDP using secret of type opaque to source ca bundle with all default options",
 			maybeSkip: skipActiveDirectoryTests,
@@ -1282,7 +1281,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
 		},
-		// TODO: this test is disabled- where can this be run?
 		{
 			name:      "active directory IDP using secret of type TLS to source ca bundle with all default options",
 			maybeSkip: skipActiveDirectoryTests,
@@ -1326,7 +1324,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			},
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
 		},
-		// TODO: this test is disabled- where can this be run?
 		{
 			name:      "active directory IDP using configmaps to source ca bundle with all default options",
 			maybeSkip: skipActiveDirectoryTests,
@@ -2948,7 +2945,7 @@ func testSupervisorLogin(
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 
-	issuerURL, _ := env.SupervisorUpstreamOIDC.InferTheIssuerURL(t)
+	issuerURL, _ := env.InferSupervisorIssuerURL(t)
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")

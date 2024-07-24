@@ -84,10 +84,10 @@ type TestOIDCUpstream struct {
 	ExpectedGroups   []string `json:"expectedGroups"`
 }
 
-// InferTheIssuerURL infers the downstream issuer URL from the callback associated with the upstream test client registration.
-func (upstream *TestOIDCUpstream) InferTheIssuerURL(t *testing.T) (*url.URL, string) {
+// InferSupervisorIssuerURL infers the downstream issuer URL from the callback associated with the upstream test client registration.
+func (e *TestEnv) InferSupervisorIssuerURL(t *testing.T) (*url.URL, string) {
 	t.Helper()
-	issuerURL, err := url.Parse(upstream.CallbackURL)
+	issuerURL, err := url.Parse(e.SupervisorUpstreamOIDC.CallbackURL)
 	require.NoError(t, err)
 	require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
 	issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")

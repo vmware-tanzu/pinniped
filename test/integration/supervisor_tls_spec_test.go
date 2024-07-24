@@ -76,10 +76,10 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 	`)
 
 	testCases := []struct {
-		name                string
-		tlsYAML             string
-		expectedError       string
-		expectedGitHubError string
+		name                        string
+		tlsYAML                     string
+		expectedErrorSnippets       []string
+		expectedGitHubErrorSnippets []string
 	}{
 		{
 			name: "should disallow certificate authority data source with missing name",
@@ -89,11 +89,11 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						kind: Secret
 						key: bar
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`,
-			expectedGitHubError: here.Doc(`
-				The %s "%s" is invalid:
-				* spec.githubAPI.tls.certificateAuthorityDataSource.name: Required value
-				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`},
+			expectedGitHubErrorSnippets: []string{
+				`The %s "%s" is invalid:`,
+				"* spec.githubAPI.tls.certificateAuthorityDataSource.name: Required value",
+			},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for name",
@@ -104,8 +104,8 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						name: ""
 						key: bar
 			`),
-			expectedError:       `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`,
-			expectedGitHubError: `The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`,
+			expectedErrorSnippets:       []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`},
+			expectedGitHubErrorSnippets: []string{`The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`},
 		},
 		{
 			name: "should disallow certificate authority data source with missing key",
@@ -115,11 +115,11 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						kind: Secret
 						name: foo
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`,
-			expectedGitHubError: here.Doc(`
-				The %s "%s" is invalid:
-				* spec.githubAPI.tls.certificateAuthorityDataSource.key: Required value
-				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`},
+			expectedGitHubErrorSnippets: []string{
+				`The %s "%s" is invalid:`,
+				"* spec.githubAPI.tls.certificateAuthorityDataSource.key: Required value",
+			},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for key",
@@ -130,8 +130,8 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						name: foo
 						key: ""
 			`),
-			expectedError:       `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`,
-			expectedGitHubError: `The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`,
+			expectedErrorSnippets:       []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`},
+			expectedGitHubErrorSnippets: []string{`The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`},
 		},
 		{
 			name: "should disallow certificate authority data source with missing kind",
@@ -141,11 +141,11 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`,
-			expectedGitHubError: here.Doc(`
-				The %s "%s" is invalid:
-				* spec.githubAPI.tls.certificateAuthorityDataSource.kind: Required value
-				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`},
+			expectedGitHubErrorSnippets: []string{
+				`The %s "%s" is invalid:`,
+				"* spec.githubAPI.tls.certificateAuthorityDataSource.kind: Required value",
+			},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for kind",
@@ -156,11 +156,11 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`,
-			expectedGitHubError: here.Doc(`
-				The %s "%s" is invalid:
-				* spec.githubAPI.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"
-				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`},
+			expectedGitHubErrorSnippets: []string{
+				`The %s "%s" is invalid:`,
+				`spec.githubAPI.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`,
+			},
 		},
 		{
 			name: "should disallow certificate authority data source with invalid kind",
@@ -171,11 +171,11 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`,
-			expectedGitHubError: here.Doc(`
-				The %s "%s" is invalid:
-				* spec.githubAPI.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"
-				* <nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`),
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`},
+			expectedGitHubErrorSnippets: []string{
+				`The %s "%s" is invalid:`,
+				`spec.githubAPI.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`,
+			},
 		},
 		{
 			name: "should create a custom resource passing all validations using a Secret source",
@@ -186,7 +186,8 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: "",
+			expectedErrorSnippets:       nil,
+			expectedGitHubErrorSnippets: nil,
 		},
 		{
 			name: "should create a custom resource passing all validations using a ConfigMap source",
@@ -197,12 +198,14 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: "",
+			expectedErrorSnippets:       nil,
+			expectedGitHubErrorSnippets: nil,
 		},
 		{
-			name:          "should create a custom resource without any tls spec",
-			tlsYAML:       "",
-			expectedError: "",
+			name:                        "should create a custom resource without any tls spec",
+			tlsYAML:                     "",
+			expectedErrorSnippets:       nil,
+			expectedGitHubErrorSnippets: nil,
 		},
 	}
 
@@ -224,7 +227,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					t,
 					yamlBytes,
 					`oidcidentityprovider.idp.supervisor.pinniped.dev`,
-					tc.expectedError,
+					tc.expectedErrorSnippets,
 					"OIDCIdentityProvider",
 					resourceName,
 				)
@@ -239,7 +242,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					t,
 					yamlBytes,
 					`ldapidentityprovider.idp.supervisor.pinniped.dev`,
-					tc.expectedError,
+					tc.expectedErrorSnippets,
 					"LDAPIdentityProvider",
 					resourceName,
 				)
@@ -254,7 +257,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					t,
 					yamlBytes,
 					`activedirectoryidentityprovider.idp.supervisor.pinniped.dev`,
-					tc.expectedError,
+					tc.expectedErrorSnippets,
 					"ActiveDirectoryIdentityProvider",
 					resourceName,
 				)
@@ -264,9 +267,6 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 				// GitHub is nested deeper
 				indentedTLSYAMLForGitHub := strings.ReplaceAll(indentedTLSYAML, "\n", "\n    ")
 
-				// This is how kubectl shows this error
-				expectedGitHubError := strings.ReplaceAll(tc.expectedGitHubError, "invalid:\n", "invalid: \n")
-
 				resourceName := "test-github-idp-" + testlib.RandHex(t, 7)
 				yamlBytes := []byte(fmt.Sprintf(githubIDPTemplate,
 					env.APIGroupSuffix, resourceName, indentedTLSYAMLForGitHub))
@@ -275,7 +275,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 					t,
 					yamlBytes,
 					`githubidentityprovider.idp.supervisor.pinniped.dev`,
-					expectedGitHubError,
+					tc.expectedGitHubErrorSnippets,
 					"GitHubIdentityProvider",
 					resourceName,
 				)

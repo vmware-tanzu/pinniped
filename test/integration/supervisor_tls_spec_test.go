@@ -92,7 +92,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`},
 			expectedGitHubErrorSnippets: []string{
 				`The %s "%s" is invalid:`,
-				"* spec.githubAPI.tls.certificateAuthorityDataSource.name: Required value",
+				"spec.githubAPI.tls.certificateAuthorityDataSource.name: Required value",
 			},
 		},
 		{
@@ -118,7 +118,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`},
 			expectedGitHubErrorSnippets: []string{
 				`The %s "%s" is invalid:`,
-				"* spec.githubAPI.tls.certificateAuthorityDataSource.key: Required value",
+				"spec.githubAPI.tls.certificateAuthorityDataSource.key: Required value",
 			},
 		},
 		{
@@ -144,7 +144,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`},
 			expectedGitHubErrorSnippets: []string{
 				`The %s "%s" is invalid:`,
-				"* spec.githubAPI.tls.certificateAuthorityDataSource.kind: Required value",
+				"spec.githubAPI.tls.certificateAuthorityDataSource.kind: Required value",
 			},
 		},
 		{

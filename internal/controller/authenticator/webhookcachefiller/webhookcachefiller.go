@@ -92,7 +92,7 @@ func New(
 		},
 		withInformer(
 			webhooks,
-			pinnipedcontroller.MatchAnythingFilter(nil), // nil parent func is fine because each event is distinct
+			pinnipedcontroller.MatchAnythingFilter(nil), // TODO: use pinnipedcontroller.SingletonQueue()
 			controllerlib.InformerOption{},
 		),
 		withInformer(
@@ -103,7 +103,7 @@ func New(
 					corev1.SecretTypeTLS,
 				},
 				pinnipedcontroller.SingletonQueue(),
-			), // nil parent func is fine because each event is distinct
+			),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
@@ -127,6 +127,9 @@ type webhookCacheFillerController struct {
 
 // Sync implements controllerlib.Syncer.
 func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
+	// TODO: can ctx.Key.Name be the name of a Secret or ConfigMap??????
+	//    Because the withInformer function calls above for secrets and configmaps use SingletonQueue(), the key will be empty for secrets and configmaps
+	//    Every Sync should loop over all webhookAuthenticators because any could have a CA bundle that was indirectly changed.
 	obj, err := c.webhooks.Lister().Get(ctx.Key.Name)
 	if err != nil && apierrors.IsNotFound(err) {
 		c.log.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")

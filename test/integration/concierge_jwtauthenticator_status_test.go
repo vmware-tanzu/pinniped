@@ -11,12 +11,101 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
+
+func TestConciergeJWTAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExternalBundleIsUpdated_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+
+	client := testlib.NewKubernetesClientset(t)
+
+	tests := []struct {
+		name                      string
+		caBundleSourceSpecKind    string
+		createResourceForCABundle func(t *testing.T, caBundle string) string
+		updateCABundle            func(t *testing.T, resourceName, caBundle string)
+	}{
+		{
+			name:                   "for a CA bundle from a ConfigMap",
+			caBundleSourceSpecKind: "ConfigMap",
+			createResourceForCABundle: func(t *testing.T, caBundle string) string {
+				createdResource := testlib.CreateTestConfigMap(t, env.ConciergeNamespace, "ca-bundle", map[string]string{
+					"ca.crt": caBundle,
+				})
+				return createdResource.Name
+			},
+			updateCABundle: func(t *testing.T, resourceName, caBundle string) {
+				configMap, err := client.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, resourceName, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				configMap.Data["ca.crt"] = caBundle
+
+				_, err = client.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, configMap, metav1.UpdateOptions{})
+				require.NoError(t, err)
+			},
+		},
+		{
+			name:                   "for a CA bundle from a Secret",
+			caBundleSourceSpecKind: "Secret",
+			createResourceForCABundle: func(t *testing.T, caBundle string) string {
+				createdResource := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-bundle", corev1.SecretTypeOpaque, map[string]string{
+					"ca.crt": caBundle,
+				})
+				return createdResource.Name
+			},
+			updateCABundle: func(t *testing.T, resourceName, caBundle string) {
+				secret, err := client.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, resourceName, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				secret.Data["ca.crt"] = []byte(caBundle)
+
+				_, err = client.CoreV1().Secrets(env.ConciergeNamespace).Update(ctx, secret, metav1.UpdateOptions{})
+				require.NoError(t, err)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Run several times because there is always a chance that the test could pass because the controller
+			// will resync every 3 minutes even if it does not pay attention to changes in ConfigMaps and Secrets.
+			for i := range 3 {
+				t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+					t.Parallel()
+
+					caBundleResourceName := test.createResourceForCABundle(t, env.SupervisorUpstreamOIDC.CABundle)
+
+					authenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authenticationv1alpha1.JWTAuthenticatorSpec{
+						Issuer:   env.SupervisorUpstreamOIDC.Issuer,
+						Audience: "does-not-matter",
+						TLS: &authenticationv1alpha1.TLSSpec{
+							CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
+								Kind: test.caBundleSourceSpecKind,
+								Name: caBundleResourceName,
+								Key:  "ca.crt",
+							},
+						},
+					}, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
+
+					test.updateCABundle(t, caBundleResourceName, "this is not a valid CA bundle value")
+					testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseError)
+
+					test.updateCABundle(t, caBundleResourceName, env.SupervisorUpstreamOIDC.CABundle)
+					testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
+				})
+			}
+		})
+	}
+}
 
 func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
@@ -25,7 +114,7 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 
 	tests := []struct {
 		name string
-		run  func(t *testing.T)
+		run  func(t *testing.T) // TODO: refactor this to make it a proper test table
 	}{
 		{
 			name: "valid spec with no errors and all good status conditions and phase will result in a jwt authenticator that is ready",
@@ -205,10 +294,9 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		tt := test
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			tt.run(t)
+			test.run(t)
 		})
 	}
 }

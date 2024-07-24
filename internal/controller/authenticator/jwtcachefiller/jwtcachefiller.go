@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,8 +22,8 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -154,7 +155,7 @@ func New(
 		},
 		withInformer(
 			jwtAuthenticators,
-			pinnipedcontroller.MatchAnythingFilter(nil), // nil parent func is fine because each event is distinct
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
@@ -165,7 +166,7 @@ func New(
 					corev1.SecretTypeTLS,
 				},
 				pinnipedcontroller.SingletonQueue(),
-			), // nil parent func is fine because each event is distinct
+			),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
@@ -189,24 +190,40 @@ type jwtCacheFillerController struct {
 
 // Sync implements controllerlib.Syncer.
 func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
-	obj, err := c.jwtAuthenticators.Lister().Get(ctx.Key.Name)
-	if err != nil && apierrors.IsNotFound(err) {
-		c.log.Info("Sync() found that the JWTAuthenticator does not exist yet or was deleted")
-		return nil
-	}
+	jwtAuthenticators, err := c.jwtAuthenticators.Lister().List(labels.Everything())
 	if err != nil {
-		// no unit test for this failure
-		return fmt.Errorf("failed to get JWTAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
+		return err
 	}
 
+	if len(jwtAuthenticators) == 0 {
+		c.log.Info("No JWTAuthenticators found")
+		return nil
+	}
+
+	// Sort them by name so that order is predictable and therefore output is consistent for tests and logs.
+	slices.SortStableFunc(jwtAuthenticators, func(a, b *authenticationv1alpha1.JWTAuthenticator) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	var errs []error
+	for _, jwtAuthenticator := range jwtAuthenticators {
+		err = c.syncIndividualJWTAuthenticator(ctx.Context, jwtAuthenticator)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error for JWTAuthenticator %s: %w", jwtAuthenticator.Name, err))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Context, jwtAuthenticator *authenticationv1alpha1.JWTAuthenticator) error {
 	cacheKey := authncache.Key{
 		APIGroup: authenticationv1alpha1.GroupName,
 		Kind:     "JWTAuthenticator",
-		Name:     ctx.Key.Name,
+		Name:     jwtAuthenticator.Name,
 	}
 
 	conditions := make([]*metav1.Condition, 0)
-	certPool, caBundlePEM, conditions, tlsBundleOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
+	certPool, caBundlePEM, conditions, tlsBundleOk := c.validateTLSBundle(jwtAuthenticator.Spec.TLS, conditions)
 	caBundlePEMSHA256 := sha256.Sum256(caBundlePEM) // note that this will always return the same hash for nil input
 
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
@@ -221,10 +238,10 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	if valueFromCache := c.cache.Get(cacheKey); valueFromCache != nil {
 		jwtAuthenticatorFromCache = c.cacheValueAsJWTAuthenticator(valueFromCache)
 		if jwtAuthenticatorFromCache != nil &&
-			reflect.DeepEqual(jwtAuthenticatorFromCache.spec, &obj.Spec) &&
+			reflect.DeepEqual(jwtAuthenticatorFromCache.spec, &jwtAuthenticator.Spec) &&
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
 			jwtAuthenticatorFromCache.caBundlePEMSHA256 == caBundlePEMSHA256 {
-			c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).
+			c.log.WithValues("jwtAuthenticator", klog.KObj(jwtAuthenticator), "issuer", jwtAuthenticator.Spec.Issuer).
 				Info("actual jwt authenticator and desired jwt authenticator are the same")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
 			return nil
@@ -232,14 +249,14 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	var errs []error
-	_, conditions, issuerOk := c.validateIssuer(obj.Spec.Issuer, conditions)
+	_, conditions, issuerOk := c.validateIssuer(jwtAuthenticator.Spec.Issuer, conditions)
 	okSoFar := tlsBundleOk && issuerOk
 
 	client := phttp.Default(certPool)
 	client.Timeout = 30 * time.Second // copied from Kube OIDC code
 	coreOSCtx := coreosoidc.ClientContext(context.Background(), client)
 
-	pJSON, provider, conditions, providerErr := c.validateProviderDiscovery(coreOSCtx, obj.Spec.Issuer, conditions, okSoFar)
+	pJSON, provider, conditions, providerErr := c.validateProviderDiscovery(coreOSCtx, jwtAuthenticator.Spec.Issuer, conditions, okSoFar)
 	errs = append(errs, providerErr)
 	okSoFar = okSoFar && providerErr == nil
 
@@ -253,7 +270,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 
 	newJWTAuthenticatorForCache, conditions, err := c.newCachedJWTAuthenticator(
 		client,
-		obj.Spec.DeepCopy(), // deep copy to avoid caching original object
+		jwtAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
 		keySet,
 		caBundlePEMSHA256,
 		conditions,
@@ -267,7 +284,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 		c.cache.Delete(cacheKey)
 	} else {
 		c.cache.Store(cacheKey, newJWTAuthenticatorForCache)
-		c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).
+		c.log.WithValues("jwtAuthenticator", klog.KObj(jwtAuthenticator), "issuer", jwtAuthenticator.Spec.Issuer).
 			Info("added new jwt authenticator")
 	}
 
@@ -276,7 +293,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	// removed from the cache, because we do not want any end-user authentications to use a closed authenticator.
 	jwtAuthenticatorFromCache.Close()
 
-	err = c.updateStatus(ctx.Context, obj, conditions)
+	err = c.updateStatus(ctx, jwtAuthenticator, conditions)
 	errs = append(errs, err)
 
 	// Sync loop errors:

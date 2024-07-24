@@ -70,7 +70,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 
-	issuerURL, _ := env.SupervisorUpstreamOIDC.InferTheIssuerURL(t)
+	issuerURL, _ := env.InferSupervisorIssuerURL(t)
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")

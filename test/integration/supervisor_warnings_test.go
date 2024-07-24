@@ -48,7 +48,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 	tempDir := t.TempDir()
 
-	issuerURL, _ := env.SupervisorUpstreamOIDC.InferTheIssuerURL(t)
+	issuerURL, _ := env.InferSupervisorIssuerURL(t)
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")

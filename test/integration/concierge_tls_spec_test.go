@@ -178,7 +178,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			})
 
 			t.Run("apply jwt authenticator", func(t *testing.T) {
-				_, supervisorIssuer := env.SupervisorUpstreamOIDC.InferTheIssuerURL(t)
+				_, supervisorIssuer := env.InferSupervisorIssuerURL(t)
 
 				jwtAuthenticatorResourceName := "test-jwt-authenticator-" + testlib.RandHex(t, 7)
 				jwtAuthenticatorYamlBytes := []byte(fmt.Sprintf(jwtAuthenticatorYamlTemplate,

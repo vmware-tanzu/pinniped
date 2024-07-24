@@ -703,7 +703,6 @@ func TestController(t *testing.T) {
 	tests := []struct {
 		name                 string
 		cache                func(*testing.T, *authncache.Cache, bool)
-		syncKey              controllerlib.Key
 		jwtAuthenticators    []runtime.Object
 		secretsAndConfigMaps []runtime.Object
 		// for modifying the clients to hack in arbitrary api responses
@@ -713,23 +712,21 @@ func TestController(t *testing.T) {
 		// Errors such as url.Parse of the issuer are not returned as they imply a user error.
 		// Since these errors trigger a resync, we are careful only to return an error when
 		// something can be automatically corrected on a retry (ie an error that might be networking).
-		wantSyncLoopErr                  testutil.RequireErrorStringFunc
-		wantLogs                         []map[string]any
-		wantActions                      func() []coretesting.Action
-		wantCacheEntries                 int
-		wantUsernameClaim                string
-		wantGroupsClaim                  string
-		runTestsOnResultingAuthenticator bool
+		wantSyncLoopErr                     testutil.RequireErrorStringFunc
+		wantLogs                            []map[string]any
+		wantActions                         func() []coretesting.Action
+		wantUsernameClaim                   string
+		wantGroupsClaim                     string
+		wantNamesOfJWTAuthenticatorsInCache []string
 	}{
 		{
-			name:    "Sync: JWTAuthenticator not found will abort sync loop, no status conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "Sync: no JWTAuthenticators found results in no errors and no status conditions",
 			wantLogs: []map[string]any{
 				{
 					"level":     "info",
 					"timestamp": "2099-08-08T13:57:36.123456Z",
 					"logger":    "jwtcachefiller-controller",
-					"message":   "Sync() found that the JWTAuthenticator does not exist yet or was deleted",
+					"message":   "No JWTAuthenticators found",
 				},
 			},
 			wantActions: func() []coretesting.Action {
@@ -740,8 +737,7 @@ func TestController(t *testing.T) {
 			},
 		},
 		{
-			name:    "Sync: valid and unchanged JWTAuthenticator: loop will preserve existing status conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "Sync: valid and unchanged JWTAuthenticator: loop will preserve existing status conditions",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -770,11 +766,134 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "Sync: changed JWTAuthenticator: loop will update timestamps only on relevant statuses",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "Sync: multiple valid and multiple invalid JWTAuthenticators",
+			jwtAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "existing-jwt-authenticator",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				},
+				&authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "new-jwt-authenticator",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+				},
+				&authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "invalid-jwt-authenticator",
+					},
+					Spec: *badIssuerJWKSURIJWTAuthenticatorSpec,
+				},
+				&authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-invalid-jwt-authenticator",
+					},
+					Spec: *badIssuerJWKSURIJWTAuthenticatorSpec,
+				},
+			},
+			// TODO: Should there be more than one error shown here?
+			wantSyncLoopErr: testutil.WantExactErrorString(`could not parse provider jwks_uri: parse "https://.café   .com/café/café/café/coffee/jwks.json": invalid character " " in host name`),
+			wantLogs: []map[string]any{
+				{
+					"level":     "info",
+					"timestamp": "2099-08-08T13:57:36.123456Z",
+					"logger":    "jwtcachefiller-controller",
+					"message":   "added new jwt authenticator",
+					"issuer":    goodIssuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "existing-jwt-authenticator",
+					},
+				},
+				{
+					"level":     "info",
+					"timestamp": "2099-08-08T13:57:36.123456Z",
+					"logger":    "jwtcachefiller-controller",
+					"message":   "added new jwt authenticator",
+					"issuer":    goodIssuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "new-jwt-authenticator",
+					},
+				},
+				// TODO: Should there be log lines for rejected JWTAuthenticators?
+			},
+			wantActions: func() []coretesting.Action {
+				updateValidStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "new-jwt-authenticator",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateValidStatusAction.Subresource = "status"
+				updateInvalidStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "invalid-jwt-authenticator",
+					},
+					Spec: *badIssuerJWKSURIJWTAuthenticatorSpec,
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyIssuerURLValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadJWKSURLValidParseURI("https://.café   .com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateInvalidStatusAction.Subresource = "status"
+				updateValidStatusAction.Subresource = "status"
+				updateAnotherInvalidStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-invalid-jwt-authenticator",
+					},
+					Spec: *badIssuerJWKSURIJWTAuthenticatorSpec,
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyIssuerURLValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadJWKSURLValidParseURI("https://.café   .com/café/café/café/coffee/jwks.json", frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateAnotherInvalidStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateAnotherInvalidStatusAction,
+					updateInvalidStatusAction,
+					updateValidStatusAction,
+				}
+			},
+			// TODO: How is this working?
+			wantNamesOfJWTAuthenticatorsInCache: []string{
+				"existing-jwt-authenticator",
+				"new-jwt-authenticator",
+			},
+		},
+		{
+			name: "Sync: changed JWTAuthenticator: loop will update timestamps only on relevant statuses",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -835,11 +954,10 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "Sync: valid JWTAuthenticator with CA: loop will complete successfully and update status conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "Sync: valid JWTAuthenticator with CA: loop will complete successfully and update status conditions",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -876,12 +994,10 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries:                 1,
-			runTestsOnResultingAuthenticator: true,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "Sync: valid JWTAuthenticator with CA from Secret: loop will complete successfully and update status conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "Sync: valid JWTAuthenticator with CA from Secret: loop will complete successfully and update status conditions",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -921,12 +1037,10 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries:                 1,
-			runTestsOnResultingAuthenticator: true,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "Sync: valid JWTAuthenticator with CA from ConfigMap: loop will complete successfully and update status conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "Sync: valid JWTAuthenticator with CA from ConfigMap: loop will complete successfully and update status conditions",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -966,12 +1080,10 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries:                 1,
-			runTestsOnResultingAuthenticator: true,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "Sync: JWTAuthenticator with custom username claim: loop will complete successfully and update status conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "Sync: JWTAuthenticator with custom username claim: loop will complete successfully and update status conditions",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1008,13 +1120,11 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries:                 1,
-			wantUsernameClaim:                someJWTAuthenticatorSpecWithUsernameClaim.Claims.Username,
-			runTestsOnResultingAuthenticator: true,
+			wantUsernameClaim:                   someJWTAuthenticatorSpecWithUsernameClaim.Claims.Username,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "Sync: JWTAuthenticator with custom groups claim: loop will complete successfully and update status conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "Sync: JWTAuthenticator with custom groups claim: loop will complete successfully and update status conditions",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1051,9 +1161,8 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries:                 1,
-			wantGroupsClaim:                  someJWTAuthenticatorSpecWithGroupsClaim.Claims.Groups,
-			runTestsOnResultingAuthenticator: true,
+			wantGroupsClaim:                     someJWTAuthenticatorSpecWithGroupsClaim.Claims.Groups,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
 			name: "Sync: JWTAuthenticator with new spec fields: loop will close previous instance of JWTAuthenticator and complete successfully and update status conditions",
@@ -1070,7 +1179,6 @@ func TestController(t *testing.T) {
 				)
 			},
 			wantClose: true,
-			syncKey:   controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1107,8 +1215,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries:                 1,
-			runTestsOnResultingAuthenticator: true,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
 			name: "Sync: JWTAuthenticator with external and changed CA bundle: loop will close previous instance of JWTAuthenticator and complete successfully and update status conditions",
@@ -1123,7 +1230,6 @@ func TestController(t *testing.T) {
 				)
 			},
 			wantClose: true,
-			syncKey:   controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1163,8 +1269,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries:                 1,
-			runTestsOnResultingAuthenticator: true,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
 			name: "Sync: JWTAuthenticator with no change: loop will abort early and not update status conditions",
@@ -1181,7 +1286,6 @@ func TestController(t *testing.T) {
 				)
 			},
 			wantClose: false,
-			syncKey:   controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1206,8 +1310,7 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
 				}
 			},
-			wantCacheEntries:                 1,
-			runTestsOnResultingAuthenticator: false, // skip the tests because the authenticator left in the cache is the mock version that was added above
+			wantNamesOfJWTAuthenticatorsInCache: []string{}, // TODO: skip the tests because the authenticator left in the cache is the mock version that was added above
 		},
 		{
 			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions",
@@ -1224,7 +1327,6 @@ func TestController(t *testing.T) {
 					struct{ authenticator.Token }{},
 				)
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1270,12 +1372,10 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries:                 1,
-			runTestsOnResultingAuthenticator: true,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "Sync: valid JWTAuthenticator without CA: loop will fail to cache the authenticator, will write failed and unknown status conditions, and will enqueue resync",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "Sync: valid JWTAuthenticator without CA: loop will fail to cache the authenticator, will write failed and unknown status conditions, and will enqueue resync",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1314,12 +1414,10 @@ func TestController(t *testing.T) {
 			},
 			// no explicit logs, this is an issue of config, the user must provide TLS config for the
 			// custom cert provided for this server.
-			wantSyncLoopErr:  testutil.WantSprintfErrorString(`could not perform oidc discovery on provider issuer: Get "%s/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`, goodIssuer),
-			wantCacheEntries: 0,
+			wantSyncLoopErr: testutil.WantSprintfErrorString(`could not perform oidc discovery on provider issuer: Get "%s/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`, goodIssuer),
 		},
 		{
-			name:    "validateTLS: JWTAuthenticator with invalid CA: loop will fail, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "validateTLS: JWTAuthenticator with invalid CA: loop will fail, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
 			jwtAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1356,11 +1454,9 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 0,
 		},
 		{
-			name:    "previously valid cached authenticator (which did not specify a CA bundle) changes and becomes invalid due to any problem with the CA bundle: loop will fail sync, will write failed and unknown status conditions, and will remove authenticator from cache",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "previously valid cached authenticator (which did not specify a CA bundle) changes and becomes invalid due to any problem with the CA bundle: loop will fail sync, will write failed and unknown status conditions, and will remove authenticator from cache",
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
@@ -1411,8 +1507,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantClose:        true,
-			wantCacheEntries: 0,
+			wantClose: true,
 		},
 		{
 			name: "previously valid cached authenticator's spec changes and becomes invalid for any other reason (this test uses an invalid spec.issuer URL): loop will fail sync, will write failed and unknown status conditions, and will remove authenticator from cache",
@@ -1436,7 +1531,6 @@ func TestController(t *testing.T) {
 					Spec: *invalidIssuerJWTAuthenticatorSpec,
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1465,8 +1559,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 0,    // removed from cache
-			wantClose:        true, // the removed cache entry was also closed
+			wantClose: true, // the removed cache entry was also closed
 		},
 		{
 			name: "validateIssuer: parsing error (spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
@@ -1478,7 +1571,6 @@ func TestController(t *testing.T) {
 					Spec: *invalidIssuerJWTAuthenticatorSpec,
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1518,7 +1610,6 @@ func TestController(t *testing.T) {
 					Spec: *invalidIssuerSchemeJWTAuthenticatorSpec,
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1562,7 +1653,6 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1610,7 +1700,6 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1658,7 +1747,6 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1702,7 +1790,6 @@ func TestController(t *testing.T) {
 					Spec: *validIssuerURLButDoesNotExistJWTAuthenticatorSpec,
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1748,7 +1835,6 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1799,7 +1885,6 @@ func TestController(t *testing.T) {
 					Spec: *badIssuerJWKSURIJWTAuthenticatorSpec,
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1839,7 +1924,6 @@ func TestController(t *testing.T) {
 					Spec: *badIssuerJWKSURISchemeJWTAuthenticatorSpec,
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1879,7 +1963,6 @@ func TestController(t *testing.T) {
 					Spec: *badIssuerUsesOurHardcodedPrivateKeyJWTAuthenticatorSpec,
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1920,7 +2003,6 @@ func TestController(t *testing.T) {
 					Spec: *jwksFetchShouldFailJWTAuthenticatorSpec,
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1964,7 +2046,6 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantLogs: []map[string]any{{
 				"level":     "info",
 				"timestamp": "2099-08-08T13:57:36.123456Z",
@@ -1981,7 +2062,7 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
 			name: "updateStatus: called with different original and updated conditions: will make request to update conditions",
@@ -2002,7 +2083,6 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			wantLogs: []map[string]any{{
 				"level":     "info",
 				"timestamp": "2099-08-08T13:57:36.123456Z",
@@ -2031,7 +2111,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
 			name: "updateStatus: when update request fails: error will enqueue a resync",
@@ -2052,7 +2132,6 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
 			configClient: func(client *conciergefake.Clientset) {
 				client.PrependReactor(
 					"update",
@@ -2093,8 +2172,8 @@ func TestController(t *testing.T) {
 					"name": "test-name",
 				},
 			}},
-			wantSyncLoopErr:  testutil.WantExactErrorString("some update error"),
-			wantCacheEntries: 1,
+			wantSyncLoopErr:                     testutil.WantExactErrorString("some update error"),
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		// cannot be tested the way we are invoking oidc.New as we don't provide enough configuration
 		// knobs to actually invoke the code in a broken way.  We always give a good client, good keys, and
@@ -2140,7 +2219,7 @@ func TestController(t *testing.T) {
 			kubeInformers.Start(ctx.Done())
 			controllerlib.TestRunSynchronously(t, controller)
 
-			syncCtx := controllerlib.Context{Context: ctx, Key: tt.syncKey}
+			syncCtx := controllerlib.Context{Context: ctx}
 
 			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantSyncLoopErr != nil {
 				testutil.RequireErrorStringFromErr(t, err, tt.wantSyncLoopErr)
@@ -2155,7 +2234,7 @@ func TestController(t *testing.T) {
 				require.Fail(t, cmp.Diff(tt.wantActions(), pinnipedAPIClient.Actions()), "actions should be exactly the expected number of actions and also contain the correct resources")
 			}
 
-			require.Equal(t, tt.wantCacheEntries, len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", tt.wantCacheEntries, len(cache.Keys()), cache.Keys()))
+			require.Equal(t, len(tt.wantNamesOfJWTAuthenticatorsInCache), len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", len(tt.wantNamesOfJWTAuthenticatorsInCache), len(cache.Keys()), cache.Keys()))
 
 			actualLogLines := testutil.SplitByNewline(log.String())
 			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
@@ -2183,105 +2262,108 @@ func TestController(t *testing.T) {
 				}
 			}
 
-			if !tt.runTestsOnResultingAuthenticator {
-				return // end of test unless we wanted to run tests on the resulting authenticator from the cache
-			}
+			for _, name := range tt.wantNamesOfJWTAuthenticatorsInCache {
+				// We expected the cache to have an entry, so pull that entry from the cache and test it.
+				expectedCacheKey := authncache.Key{
+					APIGroup: authenticationv1alpha1.GroupName,
+					Kind:     "JWTAuthenticator",
+					Name:     name,
+				}
+				temp := cache.Get(expectedCacheKey)
+				require.NotNil(t, temp)
+				require.NotNil(t, temp.(*cachedJWTAuthenticator))
+				require.NotNil(t, temp.(*cachedJWTAuthenticator).Token)
+				cachedAuthenticator, ok := temp.(tokenAuthenticatorCloser)
+				require.True(t, ok)
+				require.NotNil(t, cachedAuthenticator)
 
-			// We expected the cache to have an entry, so pull that entry from the cache and test it.
-			expectedCacheKey := authncache.Key{
-				APIGroup: authenticationv1alpha1.GroupName,
-				Kind:     "JWTAuthenticator",
-				Name:     syncCtx.Key.Name,
-			}
-			cachedAuthenticator, ok := cache.Get(expectedCacheKey).(tokenAuthenticatorCloser)
-			require.True(t, ok)
-			require.NotNil(t, cachedAuthenticator)
+				// Schedule it to be closed at the end of the test.
+				t.Cleanup(cachedAuthenticator.Close)
 
-			// Schedule it to be closed at the end of the test.
-			t.Cleanup(cachedAuthenticator.Close)
+				const (
+					goodSubject  = "some-subject"
+					group0       = "some-group-0"
+					group1       = "some-group-1"
+					goodUsername = "pinny123"
+				)
 
-			const (
-				goodSubject  = "some-subject"
-				group0       = "some-group-0"
-				group1       = "some-group-1"
-				goodUsername = "pinny123"
-			)
+				if tt.wantUsernameClaim == "" {
+					tt.wantUsernameClaim = "username"
+				}
 
-			if tt.wantUsernameClaim == "" {
-				tt.wantUsernameClaim = "username"
-			}
+				if tt.wantGroupsClaim == "" {
+					tt.wantGroupsClaim = "groups"
+				}
 
-			if tt.wantGroupsClaim == "" {
-				tt.wantGroupsClaim = "groups"
-			}
+				for _, test := range testTableForAuthenticateTokenTests(
+					t,
+					goodRSASigningKey,
+					goodRSASigningAlgo,
+					goodRSASigningKeyID,
+					group0,
+					group1,
+					goodUsername,
+					tt.wantUsernameClaim,
+					tt.wantGroupsClaim,
+					goodIssuer,
+				) {
+					t.Run(test.name, func(t *testing.T) {
+						t.Parallel()
 
-			for _, test := range testTableForAuthenticateTokenTests(
-				t,
-				goodRSASigningKey,
-				goodRSASigningAlgo,
-				goodRSASigningKeyID,
-				group0,
-				group1,
-				goodUsername,
-				tt.wantUsernameClaim,
-				tt.wantGroupsClaim,
-				goodIssuer,
-			) {
-				t.Run(test.name, func(t *testing.T) {
-					t.Parallel()
+						wellKnownClaims := josejwt.Claims{
+							Issuer:    goodIssuer,
+							Subject:   goodSubject,
+							Audience:  []string{goodAudience},
+							Expiry:    josejwt.NewNumericDate(time.Now().Add(time.Hour)),
+							NotBefore: josejwt.NewNumericDate(time.Now().Add(-time.Hour)),
+							IssuedAt:  josejwt.NewNumericDate(time.Now().Add(-time.Hour)),
+						}
+						var groups any
+						username := goodUsername
+						if test.jwtClaims != nil {
+							test.jwtClaims(&wellKnownClaims, &groups, &username)
+						}
 
-					wellKnownClaims := josejwt.Claims{
-						Issuer:    goodIssuer,
-						Subject:   goodSubject,
-						Audience:  []string{goodAudience},
-						Expiry:    josejwt.NewNumericDate(time.Now().Add(time.Hour)),
-						NotBefore: josejwt.NewNumericDate(time.Now().Add(-time.Hour)),
-						IssuedAt:  josejwt.NewNumericDate(time.Now().Add(-time.Hour)),
-					}
-					var groups any
-					username := goodUsername
-					if test.jwtClaims != nil {
-						test.jwtClaims(&wellKnownClaims, &groups, &username)
-					}
+						var signingKey any = goodECSigningKey
+						signingAlgo := goodECSigningAlgo
+						signingKID := goodECSigningKeyID
+						if test.jwtSignature != nil {
+							test.jwtSignature(&signingKey, &signingAlgo, &signingKID)
+						}
 
-					var signingKey any = goodECSigningKey
-					signingAlgo := goodECSigningAlgo
-					signingKID := goodECSigningKeyID
-					if test.jwtSignature != nil {
-						test.jwtSignature(&signingKey, &signingAlgo, &signingKID)
-					}
+						jwt := createJWT(
+							t,
+							signingKey,
+							signingAlgo,
+							signingKID,
+							&wellKnownClaims,
+							tt.wantGroupsClaim,
+							groups,
+							test.distributedGroupsClaimURL,
+							tt.wantUsernameClaim,
+							username,
+						)
 
-					jwt := createJWT(
-						t,
-						signingKey,
-						signingAlgo,
-						signingKID,
-						&wellKnownClaims,
-						tt.wantGroupsClaim,
-						groups,
-						test.distributedGroupsClaimURL,
-						tt.wantUsernameClaim,
-						username,
-					)
-
-					// Loop for a while here to allow the underlying OIDC authenticator to initialize itself asynchronously.
-					var (
-						rsp           *authenticator.Response
-						authenticated bool
-						err           error
-					)
-					_ = wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
-						rsp, authenticated, err = cachedAuthenticator.AuthenticateToken(context.Background(), jwt)
-						return !isNotInitialized(err), nil
+						// Loop for a while here to allow the underlying OIDC authenticator to initialize itself asynchronously.
+						var (
+							rsp           *authenticator.Response
+							authenticated bool
+							err           error
+						)
+						_ = wait.PollUntilContextTimeout(context.Background(), 10*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+							require.NotEmpty(t, cachedAuthenticator)
+							rsp, authenticated, err = cachedAuthenticator.AuthenticateToken(context.Background(), jwt)
+							return !isNotInitialized(err), nil
+						})
+						if test.wantErr != nil {
+							testutil.RequireErrorStringFromErr(t, err, test.wantErr)
+						} else {
+							require.NoError(t, err)
+							require.Equal(t, test.wantResponse, rsp)
+							require.Equal(t, test.wantAuthenticated, authenticated)
+						}
 					})
-					if test.wantErr != nil {
-						testutil.RequireErrorStringFromErr(t, err, test.wantErr)
-					} else {
-						require.NoError(t, err)
-						require.Equal(t, test.wantResponse, rsp)
-						require.Equal(t, test.wantAuthenticated, authenticated)
-					}
-				})
+				}
 			}
 		})
 	}

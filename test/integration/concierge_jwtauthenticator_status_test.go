@@ -113,190 +113,169 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 	t.Cleanup(cancel)
 
 	tests := []struct {
-		name string
-		run  func(t *testing.T) // TODO: refactor this to make it a proper test table
+		name           string
+		spec           authenticationv1alpha1.JWTAuthenticatorSpec
+		wantPhase      authenticationv1alpha1.JWTAuthenticatorPhase
+		wantConditions []metav1.Condition
 	}{
 		{
 			name: "valid spec with no errors and all good status conditions and phase will result in a jwt authenticator that is ready",
-			run: func(t *testing.T) {
-				caBundleString := base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle))
-				jwtAuthenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authenticationv1alpha1.JWTAuthenticatorSpec{
-					Issuer:   env.SupervisorUpstreamOIDC.Issuer,
-					Audience: "some-fake-audience",
-					TLS: &authenticationv1alpha1.TLSSpec{
-						CertificateAuthorityData: caBundleString,
-					},
-				}, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
-
-				testlib.WaitForJWTAuthenticatorStatusConditions(
-					ctx, t,
-					jwtAuthenticator.Name,
-					allSuccessfulJWTAuthenticatorConditions(len(caBundleString) != 0))
+			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
+				Issuer:   env.SupervisorUpstreamOIDC.Issuer,
+				Audience: "some-fake-audience",
+				TLS: &authenticationv1alpha1.TLSSpec{
+					CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+				},
 			},
+			wantPhase:      authenticationv1alpha1.JWTAuthenticatorPhaseReady,
+			wantConditions: allSuccessfulJWTAuthenticatorConditions(true),
 		},
 		{
 			name: "valid spec with invalid CA in TLS config will result in a jwt authenticator that is not ready",
-			run: func(t *testing.T) {
-				caBundleString := "invalid base64-encoded data"
-				jwtAuthenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authenticationv1alpha1.JWTAuthenticatorSpec{
-					Issuer:   env.SupervisorUpstreamOIDC.Issuer,
-					Audience: "some-fake-audience",
-					TLS: &authenticationv1alpha1.TLSSpec{
-						CertificateAuthorityData: caBundleString,
-					},
-				}, authenticationv1alpha1.JWTAuthenticatorPhaseError)
-
-				testlib.WaitForJWTAuthenticatorStatusConditions(
-					ctx, t,
-					jwtAuthenticator.Name,
-					replaceSomeConditions(
-						allSuccessfulJWTAuthenticatorConditions(len(caBundleString) != 0),
-						[]metav1.Condition{
-							{
-								Type:    "Ready",
-								Status:  "False",
-								Reason:  "NotReady",
-								Message: "the JWTAuthenticator is not ready: see other conditions for details",
-							}, {
-								Type:    "AuthenticatorValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "JWKSURLValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "JWKSFetchValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "DiscoveryURLValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "TLSConfigurationValid",
-								Status:  "False",
-								Reason:  "InvalidTLSConfig",
-								Message: "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7",
-							},
-						},
-					))
+			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
+				Issuer:   env.SupervisorUpstreamOIDC.Issuer,
+				Audience: "some-fake-audience",
+				TLS: &authenticationv1alpha1.TLSSpec{
+					CertificateAuthorityData: "invalid base64-encoded data",
+				},
 			},
+			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
+			wantConditions: replaceSomeConditions(
+				allSuccessfulJWTAuthenticatorConditions(true),
+				[]metav1.Condition{
+					{
+						Type:    "Ready",
+						Status:  "False",
+						Reason:  "NotReady",
+						Message: "the JWTAuthenticator is not ready: see other conditions for details",
+					}, {
+						Type:    "AuthenticatorValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "JWKSURLValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "JWKSFetchValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "DiscoveryURLValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "TLSConfigurationValid",
+						Status:  "False",
+						Reason:  "InvalidTLSConfig",
+						Message: "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7",
+					},
+				},
+			),
 		},
 		{
 			name: "valid spec with valid CA in TLS config but does not match issuer server will result in a jwt authenticator that is not ready",
-			run: func(t *testing.T) {
-				caBundleString := "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lWQUpzNStTbVRtaTJXeUI0bGJJRXBXaUs5a1RkUE1BMEdDU3FHU0liM0RRRUIKQ3dVQU1COHhDekFKQmdOVkJBWVRBbFZUTVJBd0RnWURWUVFLREFkUWFYWnZkR0ZzTUI0WERUSXdNRFV3TkRFMgpNamMxT0ZvWERUSTBNRFV3TlRFMk1qYzFPRm93SHpFTE1Ba0dBMVVFQmhNQ1ZWTXhFREFPQmdOVkJBb01CMUJwCmRtOTBZV3d3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRERZWmZvWGR4Z2NXTEMKZEJtbHB5a0tBaG9JMlBuUWtsVFNXMno1cGcwaXJjOGFRL1E3MXZzMTRZYStmdWtFTGlvOTRZYWw4R01DdVFrbApMZ3AvUEE5N1VYelhQNDBpK25iNXcwRGpwWWd2dU9KQXJXMno2MFRnWE5NSFh3VHk4ME1SZEhpUFVWZ0VZd0JpCmtkNThzdEFVS1Y1MnBQTU1reTJjNy9BcFhJNmRXR2xjalUvaFBsNmtpRzZ5dEw2REtGYjJQRWV3MmdJM3pHZ2IKOFVVbnA1V05DZDd2WjNVY0ZHNXlsZEd3aGc3cnZ4U1ZLWi9WOEhCMGJmbjlxamlrSVcxWFM4dzdpUUNlQmdQMApYZWhKZmVITlZJaTJtZlczNlVQbWpMdnVKaGpqNDIrdFBQWndvdDkzdWtlcEgvbWpHcFJEVm9wamJyWGlpTUYrCkYxdnlPNGMxQWdNQkFBR2pnWU13Z1lBd0hRWURWUjBPQkJZRUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1IKTUI4R0ExVWRJd1FZTUJhQUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1JNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQ0JnZ3JCZ0VGQlFjREFUQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BNEdBMVVkRHdFQi93UUVBd0lCCkJqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFYbEh4M2tIMDZwY2NDTDlEVE5qTnBCYnlVSytGd2R6T2IwWFYKcmpNaGtxdHVmdEpUUnR5T3hKZ0ZKNXhUR3pCdEtKamcrVU1pczBOV0t0VDBNWThVMU45U2c5SDl0RFpHRHBjVQpxMlVRU0Y4dXRQMVR3dnJIUzIrdzB2MUoxdHgrTEFiU0lmWmJCV0xXQ21EODUzRlVoWlFZekkvYXpFM28vd0p1CmlPUklMdUpNUk5vNlBXY3VLZmRFVkhaS1RTWnk3a25FcHNidGtsN3EwRE91eUFWdG9HVnlkb3VUR0FOdFhXK2YKczNUSTJjKzErZXg3L2RZOEJGQTFzNWFUOG5vZnU3T1RTTzdiS1kzSkRBUHZOeFQzKzVZUXJwNGR1Nmh0YUFMbAppOHNaRkhidmxpd2EzdlhxL3p1Y2JEaHEzQzBhZnAzV2ZwRGxwSlpvLy9QUUFKaTZLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
-				jwtAuthenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authenticationv1alpha1.JWTAuthenticatorSpec{
-					Issuer:   env.SupervisorUpstreamOIDC.Issuer,
-					Audience: "some-fake-audience",
-					// Some random generated cert
-					// Issuer: C=US, O=Pivotal
-					// No SAN provided
-					TLS: &authenticationv1alpha1.TLSSpec{
-						CertificateAuthorityData: caBundleString,
-					},
-				}, authenticationv1alpha1.JWTAuthenticatorPhaseError)
-
-				testlib.WaitForJWTAuthenticatorStatusConditions(
-					ctx, t,
-					jwtAuthenticator.Name,
-					replaceSomeConditions(
-						allSuccessfulJWTAuthenticatorConditions(len(caBundleString) != 0),
-						[]metav1.Condition{
-							{
-								Type:    "Ready",
-								Status:  "False",
-								Reason:  "NotReady",
-								Message: "the JWTAuthenticator is not ready: see other conditions for details",
-							}, {
-								Type:    "AuthenticatorValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "JWKSURLValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "JWKSFetchValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "DiscoveryURLValid",
-								Status:  "False",
-								Reason:  "InvalidDiscoveryProbe",
-								Message: `could not perform oidc discovery on provider issuer: Get "` + env.SupervisorUpstreamOIDC.Issuer + `/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`,
-							}, {
-								Type:    "TLSConfigurationValid",
-								Status:  "True",
-								Reason:  "Success",
-								Message: "spec.tls is valid: loaded TLS configuration",
-							},
-						},
-					))
+			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
+				Issuer:   env.SupervisorUpstreamOIDC.Issuer,
+				Audience: "some-fake-audience",
+				// Some random generated cert
+				// Issuer: C=US, O=Pivotal
+				// No SAN provided
+				TLS: &authenticationv1alpha1.TLSSpec{
+					CertificateAuthorityData: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lWQUpzNStTbVRtaTJXeUI0bGJJRXBXaUs5a1RkUE1BMEdDU3FHU0liM0RRRUIKQ3dVQU1COHhDekFKQmdOVkJBWVRBbFZUTVJBd0RnWURWUVFLREFkUWFYWnZkR0ZzTUI0WERUSXdNRFV3TkRFMgpNamMxT0ZvWERUSTBNRFV3TlRFMk1qYzFPRm93SHpFTE1Ba0dBMVVFQmhNQ1ZWTXhFREFPQmdOVkJBb01CMUJwCmRtOTBZV3d3Z2dFaU1BMEdDU3FHU0liM0RRRUJBUVVBQTRJQkR3QXdnZ0VLQW9JQkFRRERZWmZvWGR4Z2NXTEMKZEJtbHB5a0tBaG9JMlBuUWtsVFNXMno1cGcwaXJjOGFRL1E3MXZzMTRZYStmdWtFTGlvOTRZYWw4R01DdVFrbApMZ3AvUEE5N1VYelhQNDBpK25iNXcwRGpwWWd2dU9KQXJXMno2MFRnWE5NSFh3VHk4ME1SZEhpUFVWZ0VZd0JpCmtkNThzdEFVS1Y1MnBQTU1reTJjNy9BcFhJNmRXR2xjalUvaFBsNmtpRzZ5dEw2REtGYjJQRWV3MmdJM3pHZ2IKOFVVbnA1V05DZDd2WjNVY0ZHNXlsZEd3aGc3cnZ4U1ZLWi9WOEhCMGJmbjlxamlrSVcxWFM4dzdpUUNlQmdQMApYZWhKZmVITlZJaTJtZlczNlVQbWpMdnVKaGpqNDIrdFBQWndvdDkzdWtlcEgvbWpHcFJEVm9wamJyWGlpTUYrCkYxdnlPNGMxQWdNQkFBR2pnWU13Z1lBd0hRWURWUjBPQkJZRUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1IKTUI4R0ExVWRJd1FZTUJhQUZNTWJpSXFhdVkwajRVWWphWDl0bDJzby9LQ1JNQjBHQTFVZEpRUVdNQlFHQ0NzRwpBUVVGQndNQ0JnZ3JCZ0VGQlFjREFUQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BNEdBMVVkRHdFQi93UUVBd0lCCkJqQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFYbEh4M2tIMDZwY2NDTDlEVE5qTnBCYnlVSytGd2R6T2IwWFYKcmpNaGtxdHVmdEpUUnR5T3hKZ0ZKNXhUR3pCdEtKamcrVU1pczBOV0t0VDBNWThVMU45U2c5SDl0RFpHRHBjVQpxMlVRU0Y4dXRQMVR3dnJIUzIrdzB2MUoxdHgrTEFiU0lmWmJCV0xXQ21EODUzRlVoWlFZekkvYXpFM28vd0p1CmlPUklMdUpNUk5vNlBXY3VLZmRFVkhaS1RTWnk3a25FcHNidGtsN3EwRE91eUFWdG9HVnlkb3VUR0FOdFhXK2YKczNUSTJjKzErZXg3L2RZOEJGQTFzNWFUOG5vZnU3T1RTTzdiS1kzSkRBUHZOeFQzKzVZUXJwNGR1Nmh0YUFMbAppOHNaRkhidmxpd2EzdlhxL3p1Y2JEaHEzQzBhZnAzV2ZwRGxwSlpvLy9QUUFKaTZLQT09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K",
+				},
 			},
+			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
+			wantConditions: replaceSomeConditions(
+				allSuccessfulJWTAuthenticatorConditions(true),
+				[]metav1.Condition{
+					{
+						Type:    "Ready",
+						Status:  "False",
+						Reason:  "NotReady",
+						Message: "the JWTAuthenticator is not ready: see other conditions for details",
+					}, {
+						Type:    "AuthenticatorValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "JWKSURLValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "JWKSFetchValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "DiscoveryURLValid",
+						Status:  "False",
+						Reason:  "InvalidDiscoveryProbe",
+						Message: `could not perform oidc discovery on provider issuer: Get "` + env.SupervisorUpstreamOIDC.Issuer + `/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`,
+					}, {
+						Type:    "TLSConfigurationValid",
+						Status:  "True",
+						Reason:  "Success",
+						Message: "spec.tls is valid: loaded TLS configuration",
+					},
+				},
+			),
 		},
 		{
 			name: "invalid with bad issuer will result in a jwt authenticator that is not ready",
-			run: func(t *testing.T) {
-				caBundleString := base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle))
-				fakeIssuerURL := "https://127.0.0.1:443/some-fake-issuer"
-				jwtAuthenticator := testlib.CreateTestJWTAuthenticator(ctx, t, authenticationv1alpha1.JWTAuthenticatorSpec{
-					Issuer:   fakeIssuerURL,
-					Audience: "some-fake-audience",
-					TLS: &authenticationv1alpha1.TLSSpec{
-						CertificateAuthorityData: caBundleString,
-					},
-				}, authenticationv1alpha1.JWTAuthenticatorPhaseError)
-
-				testlib.WaitForJWTAuthenticatorStatusConditions(
-					ctx, t,
-					jwtAuthenticator.Name,
-					replaceSomeConditions(
-						allSuccessfulJWTAuthenticatorConditions(len(caBundleString) != 0),
-						[]metav1.Condition{
-							{
-								Type:    "Ready",
-								Status:  "False",
-								Reason:  "NotReady",
-								Message: "the JWTAuthenticator is not ready: see other conditions for details",
-							}, {
-								Type:    "AuthenticatorValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "JWKSURLValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "JWKSFetchValid",
-								Status:  "Unknown",
-								Reason:  "UnableToValidate",
-								Message: "unable to validate; see other conditions for details",
-							}, {
-								Type:    "DiscoveryURLValid",
-								Status:  "False",
-								Reason:  "InvalidDiscoveryProbe",
-								Message: fmt.Sprintf(`could not perform oidc discovery on provider issuer: Get "%s/.well-known/openid-configuration": dial tcp 127.0.0.1:443: connect: connection refused`, fakeIssuerURL),
-							},
-						},
-					))
+			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
+				Issuer:   env.SupervisorUpstreamOIDC.Issuer + "/this-is-the-wrong-path",
+				Audience: "some-fake-audience",
+				TLS: &authenticationv1alpha1.TLSSpec{
+					CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
+				},
 			},
+			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
+			wantConditions: replaceSomeConditions(
+				allSuccessfulJWTAuthenticatorConditions(true),
+				[]metav1.Condition{
+					{
+						Type:    "Ready",
+						Status:  "False",
+						Reason:  "NotReady",
+						Message: "the JWTAuthenticator is not ready: see other conditions for details",
+					}, {
+						Type:    "AuthenticatorValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "JWKSURLValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "JWKSFetchValid",
+						Status:  "Unknown",
+						Reason:  "UnableToValidate",
+						Message: "unable to validate; see other conditions for details",
+					}, {
+						Type:    "DiscoveryURLValid",
+						Status:  "False",
+						Reason:  "InvalidDiscoveryProbe",
+						Message: "could not perform oidc discovery on provider issuer: 404 Not Found: 404 page not found\n",
+					},
+				},
+			),
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			test.run(t)
+
+			jwtAuthenticator := testlib.CreateTestJWTAuthenticator(ctx, t, test.spec, test.wantPhase)
+			testlib.WaitForJWTAuthenticatorStatusConditions(ctx, t, jwtAuthenticator.Name, test.wantConditions)
 		})
 	}
 }

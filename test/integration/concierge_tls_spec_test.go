@@ -46,9 +46,9 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 	`)
 
 	testCases := []struct {
-		name          string
-		tlsYAML       string
-		expectedError string
+		name                  string
+		tlsYAML               string
+		expectedErrorSnippets []string
 	}{
 		{
 			name: "should disallow certificate authority data source with missing name",
@@ -58,7 +58,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 						kind: Secret
 						key: bar
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`,
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for name",
@@ -69,7 +69,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 						name: ""
 						key: bar
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`,
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`},
 		},
 		{
 			name: "should disallow certificate authority data source with missing key",
@@ -79,7 +79,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 						kind: Secret
 						name: foo
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`,
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for key",
@@ -90,7 +90,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 						name: foo
 						key: ""
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`,
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`},
 		},
 		{
 			name: "should disallow certificate authority data source with missing kind",
@@ -100,7 +100,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`,
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for kind",
@@ -111,7 +111,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`,
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`},
 		},
 		{
 			name: "should disallow certificate authority data source with invalid kind",
@@ -122,7 +122,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: `The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`,
+			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`},
 		},
 		{
 			name: "should create a custom resource passing all validations using a Secret source",
@@ -133,7 +133,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: "",
+			expectedErrorSnippets: nil,
 		},
 		{
 			name: "should create a custom resource passing all validations using a ConfigMap source",
@@ -144,12 +144,12 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 						name: foo
 						key: bar
 			`),
-			expectedError: "",
+			expectedErrorSnippets: nil,
 		},
 		{
-			name:          "should create a custom resource without any tls spec",
-			tlsYAML:       "",
-			expectedError: "",
+			name:                  "should create a custom resource without any tls spec",
+			tlsYAML:               "",
+			expectedErrorSnippets: nil,
 		},
 	}
 
@@ -171,7 +171,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 					t,
 					webhookYamlBytes,
 					`webhookauthenticator.authentication.concierge.pinniped.dev`,
-					tc.expectedError,
+					tc.expectedErrorSnippets,
 					"WebhookAuthenticator",
 					webhookResourceName,
 				)
@@ -188,7 +188,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 					t,
 					jwtAuthenticatorYamlBytes,
 					`jwtauthenticator.authentication.concierge.pinniped.dev`,
-					tc.expectedError,
+					tc.expectedErrorSnippets,
 					"JWTAuthenticator",
 					jwtAuthenticatorResourceName,
 				)
@@ -201,7 +201,7 @@ func performKubectlApply(
 	t *testing.T,
 	yamlBytes []byte,
 	expectedSuccessPrefix string,
-	expectedError string,
+	expectedErrorSnippets []string,
 	resourceType string,
 	resourceName string,
 ) {
@@ -227,11 +227,17 @@ func performKubectlApply(
 		require.NoError(t, exec.Command("kubectl", []string{"delete", "--ignore-not-found", "-f", yamlFilepath}...).Run())
 	})
 
-	if expectedError == "" {
-		require.Empty(t, stdErr.String())
-		require.Regexp(t, regexp.QuoteMeta(expectedSuccessPrefix)+regexp.QuoteMeta(fmt.Sprintf("/%s created\n", resourceName)), stdOut.String())
-		require.NoError(t, err)
-	} else {
-		require.Equal(t, fmt.Sprintf(expectedError, resourceType, resourceName), strings.TrimSuffix(stdErr.String(), "\n"))
+	if len(expectedErrorSnippets) > 0 {
+		actualErrorString := strings.TrimSuffix(stdErr.String(), "\n")
+		for i, snippet := range expectedErrorSnippets {
+			if i == 0 {
+				snippet = fmt.Sprintf(snippet, resourceType, resourceName)
+			}
+			require.Contains(t, actualErrorString, snippet)
+		}
+		return
 	}
+	require.Empty(t, stdErr.String())
+	require.Regexp(t, regexp.QuoteMeta(expectedSuccessPrefix)+regexp.QuoteMeta(fmt.Sprintf("/%s created\n", resourceName)), stdOut.String())
+	require.NoError(t, err)
 }

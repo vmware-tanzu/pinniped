@@ -5,6 +5,7 @@ package ldapupstreamwatcher
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -399,6 +400,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -591,6 +593,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(nil),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -658,6 +661,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.StartTLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(testCABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition: &metav1.Condition{
 					Type:   "LDAPConnectionValid",
@@ -778,6 +782,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(nil),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -829,6 +834,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -881,6 +887,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					LDAPConnectionProtocol:   upstreamldap.TLS,
 					UserSearchBase:           testUserSearchBase,
 					GroupSearchBase:          testGroupSearchBase,
+					CABundlePEMSHA256:        sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 					IDPSpecGeneration:        1234,
 					ConnectionValidCondition: condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 				}},
@@ -900,6 +907,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -918,6 +926,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.StartTLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithStartTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -937,6 +946,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.StartTLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithStartTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -954,6 +964,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				BindSecretResourceVersion: "4242",
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				IDPSpecGeneration:         1233,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
 			}},
@@ -975,6 +986,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -994,6 +1006,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				IDPSpecGeneration:         1234,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")), // already previously validated with version 4242
 			}},
 			setupMocks: func(conn *mockldapconn.MockConn) {
@@ -1013,6 +1026,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -1051,6 +1065,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -1094,6 +1109,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},
@@ -1132,6 +1148,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}}},
@@ -1193,6 +1210,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,
 				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(testCABundle),
 				IDPSpecGeneration:         1234,
 				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
 			}},

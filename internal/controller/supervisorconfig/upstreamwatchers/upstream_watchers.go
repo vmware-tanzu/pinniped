@@ -5,6 +5,7 @@ package upstreamwatchers
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -40,8 +41,9 @@ const (
 
 // ValidatedSettings is the struct which is cached by the ValidatedSettingsCacheI interface.
 type ValidatedSettings struct {
-	IDPSpecGeneration         int64  // which IDP spec was used during the validation
-	BindSecretResourceVersion string // which bind secret was used during the validation
+	IDPSpecGeneration         int64    // which IDP spec was used during the validation
+	BindSecretResourceVersion string   // which bind secret was used during the validation
+	CABundlePEMSHA256         [32]byte // hash of the CA bundle used during the validation
 
 	// Cache the setting for TLS vs StartTLS. This is always auto-discovered by probing the server.
 	LDAPConnectionProtocol upstreamldap.LDAPConnectionProtocol
@@ -277,11 +279,13 @@ func validateAndSetLDAPServerConnectivityAndSearchBase(
 	config *upstreamldap.ProviderConfig,
 	currentSecretVersion string,
 ) (*metav1.Condition, *metav1.Condition) {
-	// TODO: if the CA bundle has changed, then we should redo the below connection probes. So maybe this cache should also include the CA bundle (or the hash of the bundle) as part of the lookup?
 	validatedSettings, hasPreviousValidatedSettings := validatedSettingsCache.Get(upstream.Name(), currentSecretVersion, upstream.Generation())
 	var ldapConnectionValidCondition, searchBaseFoundCondition *metav1.Condition
 
-	if hasPreviousValidatedSettings && validatedSettings.UserSearchBase != "" && validatedSettings.GroupSearchBase != "" {
+	if hasPreviousValidatedSettings &&
+		validatedSettings.UserSearchBase != "" &&
+		validatedSettings.GroupSearchBase != "" &&
+		validatedSettings.CABundlePEMSHA256 == sha256.Sum256(config.CABundle) {
 		// Found previously validated settings in the cache (which is also not missing search base fields), so use them.
 		config.ConnectionProtocol = validatedSettings.LDAPConnectionProtocol
 		config.UserSearch.Base = validatedSettings.UserSearchBase
@@ -309,6 +313,7 @@ func validateAndSetLDAPServerConnectivityAndSearchBase(
 			validatedSettingsCache.Set(upstream.Name(), ValidatedSettings{
 				IDPSpecGeneration:         upstream.Generation(),
 				BindSecretResourceVersion: currentSecretVersion,
+				CABundlePEMSHA256:         sha256.Sum256(config.CABundle),
 				LDAPConnectionProtocol:    config.ConnectionProtocol,
 				UserSearchBase:            config.UserSearch.Base,
 				GroupSearchBase:           config.GroupSearch.Base,

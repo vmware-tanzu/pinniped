@@ -1696,11 +1696,10 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		expectedDownstreamLDAPGroups := env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 		expectedDownstreamOIDCGroups := env.SupervisorUpstreamOIDC.ExpectedGroups
 
-		authenticator := testlib.CreateTestJWTAuthenticator(testCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		createdLDAPProvider := setupClusterForEndToEndLDAPTest(t, expectedDownstreamLDAPUsername, env)
 		// Having one IDP should put the FederationDomain into a ready state.
 		testlib.WaitForFederationDomainStatusPhase(testCtx, t, federationDomain.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
-		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
+		authenticator := testlib.CreateTestJWTAuthenticator(testCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Create a ClusterRoleBinding to give our test user from the upstream read-only access to the cluster.
 		testlib.CreateTestClusterRoleBinding(t,

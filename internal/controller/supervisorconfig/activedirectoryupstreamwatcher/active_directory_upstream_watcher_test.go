@@ -235,6 +235,9 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		testGroupSearchFilter                 = "test-group-search-filter"
 		testGroupSearchUserAttributeForFilter = "test-group-search-filter-user-attr-for-filter"
 		testGroupSearchNameAttrName           = "test-group-name-attr"
+
+		caBundleConfigMapName = "test-ca-bundle-cm"
+		caBundleSecretName    = "test-ca-bundle-secret"
 	)
 
 	testValidSecretData := map[string][]byte{"username": []byte(testBindUsername), "password": []byte(testBindPassword)}
@@ -269,6 +272,51 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			},
 		},
 	}
+
+	validUpstreamWithConfigMapCABundleSource := validUpstream.DeepCopy()
+	validUpstreamWithConfigMapCABundleSource.Spec.TLS.CertificateAuthorityData = ""
+	validUpstreamWithConfigMapCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+		Kind: "ConfigMap",
+		Name: caBundleConfigMapName,
+		Key:  "ca.crt",
+	}
+	caBundleConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: caBundleConfigMapName, Namespace: testNamespace},
+		Data: map[string]string{
+			"ca.crt": string(testCABundle),
+		},
+	}
+
+	validUpstreamWithOpaqueSecretCABundleSource := validUpstream.DeepCopy()
+	validUpstreamWithOpaqueSecretCABundleSource.Spec.TLS.CertificateAuthorityData = ""
+	validUpstreamWithOpaqueSecretCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+		Kind: "Secret",
+		Name: caBundleSecretName,
+		Key:  "ca.crt",
+	}
+	caBundleOpaqueSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: caBundleSecretName, Namespace: testNamespace},
+		Type:       corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"ca.crt": testCABundle,
+		},
+	}
+
+	validUpstreamWithTLSSecretCABundleSource := validUpstream.DeepCopy()
+	validUpstreamWithTLSSecretCABundleSource.Spec.TLS.CertificateAuthorityData = ""
+	validUpstreamWithTLSSecretCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+		Kind: "Secret",
+		Name: caBundleSecretName,
+		Key:  "ca.crt",
+	}
+	caBundleTLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: caBundleSecretName, Namespace: testNamespace},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			"ca.crt": testCABundle,
+		},
+	}
+
 	editedValidUpstream := func(editFunc func(*idpv1alpha1.ActiveDirectoryIdentityProvider)) *idpv1alpha1.ActiveDirectoryIdentityProvider {
 		deepCopy := validUpstream.DeepCopy()
 		editFunc(deepCopy)
@@ -436,7 +484,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		name                     string
 		initialValidatedSettings map[string]upstreamwatchers.ValidatedSettings
 		inputUpstreams           []runtime.Object
-		inputSecrets             []runtime.Object
+		inputK8sObjects          []runtime.Object
 		setupMocks               func(conn *mockldapconn.MockConn)
 		dialErrors               map[string]error
 		wantErr                  string
@@ -449,9 +497,90 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
 		},
 		{
-			name:           "one valid upstream updates the cache to include only that upstream",
-			inputUpstreams: []runtime.Object{validUpstream},
-			inputSecrets:   []runtime.Object{validBindUserSecret("4242")},
+			name:            "one valid upstream using a configmap to source ca bundle should include that one upstream",
+			inputUpstreams:  []runtime.Object{validUpstreamWithConfigMapCABundleSource},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242"), caBundleConfigMap},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
+			wantResultingUpstreams: []idpv1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
+				Status: idpv1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}}, wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(activeDirectoryConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+				SearchBaseFoundCondition:  condPtr(withoutTime(searchBaseFoundInConfigCondition(0))),
+			}},
+		},
+		{
+			name:            "one valid upstream using an opaque secret to source ca bundle should include that one upstream",
+			inputUpstreams:  []runtime.Object{validUpstreamWithOpaqueSecretCABundleSource},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242"), caBundleOpaqueSecret},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
+			wantResultingUpstreams: []idpv1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
+				Status: idpv1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}}, wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(activeDirectoryConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+				SearchBaseFoundCondition:  condPtr(withoutTime(searchBaseFoundInConfigCondition(0))),
+			}},
+		},
+		{
+			name:            "one valid upstream using a TLS secret to source ca bundle should include that one upstream",
+			inputUpstreams:  []runtime.Object{validUpstreamWithTLSSecretCABundleSource},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242"), caBundleTLSSecret},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
+			wantResultingUpstreams: []idpv1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
+				Status: idpv1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}}, wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(activeDirectoryConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+				SearchBaseFoundCondition:  condPtr(withoutTime(searchBaseFoundInConfigCondition(0))),
+			}},
+		},
+		{
+			name:            "one valid upstream updates the cache to include only that upstream",
+			inputUpstreams:  []runtime.Object{validUpstream},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -479,7 +608,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		{
 			name:               "missing secret",
 			inputUpstreams:     []runtime.Object{validUpstream},
-			inputSecrets:       []runtime.Object{},
+			inputK8sObjects:    []runtime.Object{},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []idpv1alpha1.ActiveDirectoryIdentityProvider{{
@@ -503,7 +632,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		{
 			name:           "secret has wrong type",
 			inputUpstreams: []runtime.Object{validUpstream},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputK8sObjects: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: testBindSecretName, Namespace: testNamespace},
 				Type:       "some-other-type",
 				Data:       testValidSecretData,
@@ -531,7 +660,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 		{
 			name:           "secret is missing key",
 			inputUpstreams: []runtime.Object{validUpstream},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputK8sObjects: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: testBindSecretName, Namespace: testNamespace},
 				Type:       corev1.SecretTypeBasicAuth,
 			}},
@@ -560,7 +689,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.TLS.CertificateAuthorityData = "this-is-not-base64-encoded"
 			})},
-			inputSecrets:       []runtime.Object{validBindUserSecret("")},
+			inputK8sObjects:    []runtime.Object{validBindUserSecret("")},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []idpv1alpha1.ActiveDirectoryIdentityProvider{{
@@ -586,7 +715,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.TLS.CertificateAuthorityData = base64.StdEncoding.EncodeToString([]byte("this is not pem data"))
 			})},
-			inputSecrets:       []runtime.Object{validBindUserSecret("")},
+			inputK8sObjects:    []runtime.Object{validBindUserSecret("")},
 			wantErr:            controllerlib.ErrSyntheticRequeue.Error(),
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
 			wantResultingUpstreams: []idpv1alpha1.ActiveDirectoryIdentityProvider{{
@@ -612,7 +741,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.TLS = nil
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -683,7 +812,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.TLS = nil
 				upstream.Spec.GroupSearch.Attributes.GroupName = "sAMAccountName"
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -753,7 +882,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.Host = "ldap.example.com" // when the port is not specified, automatically switch ports for StartTLS
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -836,7 +965,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.Host = "ldap.example.com:5678" // when the port is specified, do not automatically switch ports for StartTLS
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Both dials fail, so there should be no bind.
 			},
@@ -902,7 +1031,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.TLS.CertificateAuthorityData = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -968,7 +1097,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.Bind.SecretName = "non-existent-secret"
 				upstream.UID = "other-uid"
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind for the one valid upstream configuration.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -1017,8 +1146,8 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			name: "when testing the connection to the LDAP server fails then the upstream is still added to the cache anyway but not to validatedsettings (treated like a warning)",
 			// If we can't connect, we can still try to allow users to log in, but update the conditions to say that there's a problem
 			// Also don't add anything to the validated settings so that the next time this runs we can try again.
-			inputUpstreams: []runtime.Object{validUpstream},
-			inputSecrets:   []runtime.Object{validBindUserSecret("")},
+			inputUpstreams:  []runtime.Object{validUpstream},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				// Expect two calls to each of these: once for trying TLS and once for trying StartTLS.
@@ -1056,7 +1185,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.UserSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				// Expect three calls bind: once for trying TLS and once for trying StartTLS (both fail), and one before querying for defaultNamingContext (succeeds)
@@ -1123,7 +1252,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.UserSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				// Expect 3 calls to each of these: once for trying TLS and once for trying StartTLS, one before querying
@@ -1163,7 +1292,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					searchBaseFoundInConfigCondition(1234),
 				}
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
 				BindSecretResourceVersion: "4242",
 				LDAPConnectionProtocol:    upstreamldap.TLS,
@@ -1207,7 +1336,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				}
 				upstream.Spec.UserSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
 				BindSecretResourceVersion: "4242",
 				LDAPConnectionProtocol:    upstreamldap.TLS,
@@ -1279,7 +1408,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				}
 				upstream.Spec.UserSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
 				BindSecretResourceVersion: "4242",
 				LDAPConnectionProtocol:    upstreamldap.TLS,
@@ -1353,7 +1482,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					searchBaseFoundInConfigCondition(1234),
 				}
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
 				BindSecretResourceVersion: "4242",
 				LDAPConnectionProtocol:    upstreamldap.StartTLS,
@@ -1394,7 +1523,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					activeDirectoryConnectionValidTrueCondition(1233, "4242"), // older spec generation!
 				}
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
 				BindSecretResourceVersion: "4242",
 				LDAPConnectionProtocol:    upstreamldap.TLS,
@@ -1437,7 +1566,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					activeDirectoryConnectionValidTrueCondition(1234, "4200"), // old version of the condition, as if the previous update of conditions had failed
 				}
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
 				BindSecretResourceVersion: "4242",
 				LDAPConnectionProtocol:    upstreamldap.TLS,
@@ -1486,7 +1615,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					},
 				}
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -1519,7 +1648,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					activeDirectoryConnectionValidTrueCondition(1234, "4241"), // same spec generation, old secret version
 				}
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")}, // newer secret version!
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")}, // newer secret version!
 			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
 				BindSecretResourceVersion: "4241",
 				LDAPConnectionProtocol:    upstreamldap.TLS,
@@ -1562,7 +1691,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.GroupSearch.Filter = ""
 				upstream.Spec.GroupSearch.Attributes = idpv1alpha1.ActiveDirectoryIdentityProviderGroupSearchAttributes{}
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -1623,7 +1752,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.UserSearch.Base = ""
 				upstream.Spec.GroupSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
@@ -1688,7 +1817,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.UserSearch.Attributes = idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
 				upstream.Spec.UserSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
@@ -1753,7 +1882,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.UserSearch.Attributes = idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
 				upstream.Spec.GroupSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
@@ -1818,7 +1947,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.UserSearch.Attributes = idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
 				upstream.Spec.GroupSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
@@ -1846,7 +1975,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.UserSearch.Attributes = idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
 				upstream.Spec.GroupSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
@@ -1882,7 +2011,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.UserSearch.Attributes = idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
 				upstream.Spec.GroupSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
@@ -1924,7 +2053,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.UserSearch.Attributes = idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
 				upstream.Spec.GroupSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(2)
@@ -1957,7 +2086,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 				upstream.Spec.UserSearch.Attributes = idpv1alpha1.ActiveDirectoryIdentityProviderUserSearchAttributes{}
 				upstream.Spec.GroupSearch.Base = ""
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
 				BindSecretResourceVersion: "4241",
 				LDAPConnectionProtocol:    upstreamldap.TLS,
@@ -2031,7 +2160,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 			inputUpstreams: []runtime.Object{editedValidUpstream(func(upstream *idpv1alpha1.ActiveDirectoryIdentityProvider) {
 				upstream.Spec.GroupSearch.SkipGroupRefresh = true
 			})},
-			inputSecrets: []runtime.Object{validBindUserSecret("4242")},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242")},
 			setupMocks: func(conn *mockldapconn.MockConn) {
 				// Should perform a test dial and bind.
 				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
@@ -2105,7 +2234,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 
 			fakePinnipedClient := supervisorfake.NewSimpleClientset(tt.inputUpstreams...)
 			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
-			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
+			fakeKubeClient := fake.NewSimpleClientset(tt.inputK8sObjects...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
 			cache.SetActiveDirectoryIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI{

@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -83,7 +84,7 @@ func TLSSpecForConcierge(source *authenticationv1alpha1.TLSSpec) *TLSSpec {
 // or as a reference to a kubernetes secret or configmap using the CertificateAuthorityDataSource, and returns
 // - a condition of type TLSConfigurationValid based on the validity of the ca bundle,
 // - a pem encoded ca bundle
-// - a X509 cert pool with the ca bundle
+// - a X509 cert pool with the ca bundle.
 func ValidateTLSConfig(
 	tlsSpec *TLSSpec,
 	conditionPrefix string,
@@ -134,6 +135,7 @@ func getCertPool(
 
 	var err error
 	caBundle := tlsSpec.CertificateAuthorityData
+	caBundleLength := len(caBundle)
 	field := fmt.Sprintf("%s.%s", conditionPrefix, "certificateAuthorityData")
 	// the ca data supplied inline in the CRDs is expected to be base64 encoded.
 	// However, the ca data read from kubernetes secrets or config map will not be base64 encoded.
@@ -146,6 +148,7 @@ func getCertPool(
 		// this will be used to report in the condition status in case an invalid TLS condition is encountered.
 		field = fmt.Sprintf("%s.%s", conditionPrefix, "certificateAuthorityDataSource")
 		caBundle, err = readCABundleFromSource(tlsSpec.CertificateAuthorityDataSource, namespace, secretInformer, configMapInformer)
+		caBundleLength = len(caBundle)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
 		}
@@ -167,7 +170,14 @@ func getCertPool(
 	ca := x509.NewCertPool()
 	ok := ca.AppendCertsFromPEM(bundleBytes)
 	if !ok {
-		return nil, nil, fmt.Errorf("%s is invalid: no certificates found", field)
+		if decodeRequired {
+			return nil, nil, fmt.Errorf("%s is invalid: no base64-encoded PEM certificates found in %d bytes of data (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")",
+				field, caBundleLength)
+		}
+		namespacedName := fmt.Sprintf("%s/%s", namespace, tlsSpec.CertificateAuthorityDataSource.Name)
+
+		return nil, nil, fmt.Errorf(`%s is invalid: key %q with %d bytes of data in %s %q is not a PEM-encoded certificate (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`,
+			field, tlsSpec.CertificateAuthorityDataSource.Key, caBundleLength, strings.ToLower(tlsSpec.CertificateAuthorityDataSource.Kind), namespacedName)
 	}
 
 	return ca, bundleBytes, nil

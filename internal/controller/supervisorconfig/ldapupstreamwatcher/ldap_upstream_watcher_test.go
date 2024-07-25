@@ -527,7 +527,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Status:             "False",
 							LastTransitionTime: now,
 							Reason:             "InvalidTLSConfig",
-							Message:            "spec.tls.certificateAuthorityData is invalid: no certificates found",
+							Message:            `spec.tls.certificateAuthorityData is invalid: no base64-encoded PEM certificates found in 28 bytes of data (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`,
 							ObservedGeneration: 1234,
 						},
 					},

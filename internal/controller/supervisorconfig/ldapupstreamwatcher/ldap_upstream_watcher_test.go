@@ -234,6 +234,9 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		testGroupSearchFilter                 = "test-group-search-filter"
 		testGroupSearchUserAttributeForFilter = "test-group-search-filter-user-attr-for-filter"
 		testGroupSearchNameAttrName           = "test-group-name-attr"
+
+		caBundleConfigMapName = "test-ca-bundle-cm"
+		caBundleSecretName    = "test-ca-bundle-secret"
 	)
 
 	testValidSecretData := map[string][]byte{"username": []byte(testBindUsername), "password": []byte(testBindPassword)}
@@ -277,6 +280,50 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		deepCopy := validUpstream.DeepCopy()
 		editFunc(deepCopy)
 		return deepCopy
+	}
+
+	validUpstreamWithConfigMapCABundleSource := validUpstream.DeepCopy()
+	validUpstreamWithConfigMapCABundleSource.Spec.TLS.CertificateAuthorityData = ""
+	validUpstreamWithConfigMapCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+		Kind: "ConfigMap",
+		Name: caBundleConfigMapName,
+		Key:  "ca.crt",
+	}
+	caBundleConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: caBundleConfigMapName, Namespace: testNamespace},
+		Data: map[string]string{
+			"ca.crt": string(testCABundle),
+		},
+	}
+
+	validUpstreamWithOpaqueSecretCABundleSource := validUpstream.DeepCopy()
+	validUpstreamWithOpaqueSecretCABundleSource.Spec.TLS.CertificateAuthorityData = ""
+	validUpstreamWithOpaqueSecretCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+		Kind: "Secret",
+		Name: caBundleSecretName,
+		Key:  "ca.crt",
+	}
+	caBundleOpaqueSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: caBundleSecretName, Namespace: testNamespace},
+		Type:       corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"ca.crt": testCABundle,
+		},
+	}
+
+	validUpstreamWithTLSSecretCABundleSource := validUpstream.DeepCopy()
+	validUpstreamWithTLSSecretCABundleSource.Spec.TLS.CertificateAuthorityData = ""
+	validUpstreamWithTLSSecretCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+		Kind: "Secret",
+		Name: caBundleSecretName,
+		Key:  "ca.crt",
+	}
+	caBundleTLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: caBundleSecretName, Namespace: testNamespace},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			"ca.crt": testCABundle,
+		},
 	}
 
 	providerConfigForValidUpstreamWithTLS := &upstreamldap.ProviderConfig{
@@ -377,6 +424,87 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		{
 			name:               "no LDAPIdentityProvider upstreams clears the cache",
 			wantResultingCache: []*upstreamldap.ProviderConfig{},
+		},
+		{
+			name:           "one valid upstream using a configmap to source CA bundles updates the cache to include only that upstream",
+			inputUpstreams: []runtime.Object{validUpstreamWithConfigMapCABundleSource},
+			inputSecrets:   []runtime.Object{validBindUserSecret("4242"), caBundleConfigMap},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+			}},
+		},
+		{
+			name:           "one valid upstream using an opaque secret to source CA bundles updates the cache to include only that upstream",
+			inputUpstreams: []runtime.Object{validUpstreamWithOpaqueSecretCABundleSource},
+			inputSecrets:   []runtime.Object{validBindUserSecret("4242"), caBundleOpaqueSecret},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+			}},
+		},
+		{
+			name:           "one valid upstream using a TLS secret to source CA bundles updates the cache to include only that upstream",
+			inputUpstreams: []runtime.Object{validUpstreamWithTLSSecretCABundleSource},
+			inputSecrets:   []runtime.Object{validBindUserSecret("4242"), caBundleTLSSecret},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundlePEMSHA256:         sha256.Sum256(providerConfigForValidUpstreamWithTLS.CABundle),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+			}},
 		},
 		{
 			name:           "one valid upstream updates the cache to include only that upstream",

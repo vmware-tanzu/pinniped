@@ -15,7 +15,6 @@ import (
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 )
 
@@ -25,8 +24,6 @@ const (
 	noTLSConfigurationMessage     = "no TLS configuration provided"
 	loadedTLSConfigurationMessage = "loaded TLS configuration"
 	typeTLSConfigurationValid     = "TLSConfigurationValid"
-
-	ErrNoCertificates = constable.Error("no certificates found")
 )
 
 type caBundleSource struct {
@@ -87,7 +84,6 @@ func TLSSpecForConcierge(source *authenticationv1alpha1.TLSSpec) *TLSSpec {
 // - a condition of type TLSConfigurationValid based on the validity of the ca bundle,
 // - a pem encoded ca bundle
 // - a X509 cert pool with the ca bundle
-// TODO: should this show the resource version of the Secret/ConfigMap to the user on all conditions?
 func ValidateTLSConfig(
 	tlsSpec *TLSSpec,
 	conditionPrefix string,
@@ -95,6 +91,12 @@ func ValidateTLSConfig(
 	secretInformer corev1informers.SecretInformer,
 	configMapInformer corev1informers.ConfigMapInformer,
 ) (*metav1.Condition, []byte, *x509.CertPool) {
+	// TODO: This func should return a struct that abstracts away the internals of how a CA bundle is held in memory
+	//	 and can return the CA bundle as string PEM, []byte base64-encoded, CertPool, hash, etc, as well as compare itself
+	//	 to either a different struct instance or a hash.
+	//
+	// TODO: There could easily be a hash type struct alias for the specific hash value (e.g. "[32]byte") with an Equality function.
+
 	certPool, bundle, err := getCertPool(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
 	if err != nil {
 		return invalidTLSCondition(err.Error()), nil, nil
@@ -165,7 +167,7 @@ func getCertPool(
 	ca := x509.NewCertPool()
 	ok := ca.AppendCertsFromPEM(bundleBytes)
 	if !ok {
-		return nil, nil, fmt.Errorf("%s is invalid: %s", field, ErrNoCertificates)
+		return nil, nil, fmt.Errorf("%s is invalid: no certificates found", field)
 	}
 
 	return ca, bundleBytes, nil

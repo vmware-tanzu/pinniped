@@ -12,13 +12,15 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"slices"
+	"strings"
 	"time"
 
 	k8sauthv1beta1 "k8s.io/api/authentication/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	k8snetutil "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
@@ -69,7 +71,7 @@ func New(
 	namespace string,
 	cache *authncache.Cache,
 	client conciergeclientset.Interface,
-	webhooks authinformers.WebhookAuthenticatorInformer,
+	webhookInformer authinformers.WebhookAuthenticatorInformer,
 	secretInformer corev1informers.SecretInformer,
 	configMapInformer corev1informers.ConfigMapInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -83,7 +85,7 @@ func New(
 				namespace:         namespace,
 				cache:             cache,
 				client:            client,
-				webhooks:          webhooks,
+				webhookInformer:   webhookInformer,
 				secretInformer:    secretInformer,
 				configMapInformer: configMapInformer,
 				clock:             clock,
@@ -91,8 +93,8 @@ func New(
 			},
 		},
 		withInformer(
-			webhooks,
-			pinnipedcontroller.MatchAnythingFilter(nil), // TODO: use pinnipedcontroller.SingletonQueue()
+			webhookInformer,
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
@@ -117,7 +119,7 @@ func New(
 type webhookCacheFillerController struct {
 	namespace         string
 	cache             *authncache.Cache
-	webhooks          authinformers.WebhookAuthenticatorInformer
+	webhookInformer   authinformers.WebhookAuthenticatorInformer
 	secretInformer    corev1informers.SecretInformer
 	configMapInformer corev1informers.ConfigMapInformer
 	client            conciergeclientset.Interface
@@ -127,27 +129,40 @@ type webhookCacheFillerController struct {
 
 // Sync implements controllerlib.Syncer.
 func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
-	// TODO: can ctx.Key.Name be the name of a Secret or ConfigMap??????
-	//    Because the withInformer function calls above for secrets and configmaps use SingletonQueue(), the key will be empty for secrets and configmaps
-	//    Every Sync should loop over all webhookAuthenticators because any could have a CA bundle that was indirectly changed.
-	obj, err := c.webhooks.Lister().Get(ctx.Key.Name)
-	if err != nil && apierrors.IsNotFound(err) {
-		c.log.Info("Sync() found that the WebhookAuthenticator does not exist yet or was deleted")
-		return nil
-	}
+	webhookAuthenticators, err := c.webhookInformer.Lister().List(labels.Everything())
 	if err != nil {
-		// no unit test for this failure
-		return fmt.Errorf("failed to get WebhookAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
+		return err
 	}
 
+	if len(webhookAuthenticators) == 0 {
+		c.log.Info("No WebhookAuthenticators found")
+		return nil
+	}
+
+	// Sort them by name so that order is predictable and therefore output is consistent for tests and logs.
+	slices.SortStableFunc(webhookAuthenticators, func(a, b *authenticationv1alpha1.WebhookAuthenticator) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	var errs []error
+	for _, webhookAuthenticator := range webhookAuthenticators {
+		err = c.syncIndividualWebhookAuthenticator(ctx.Context, webhookAuthenticator)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error for WebhookAuthenticator %s: %w", webhookAuthenticator.Name, err))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx context.Context, webhookAuthenticator *authenticationv1alpha1.WebhookAuthenticator) error {
 	cacheKey := authncache.Key{
 		APIGroup: authenticationv1alpha1.GroupName,
 		Kind:     "WebhookAuthenticator",
-		Name:     ctx.Key.Name,
+		Name:     webhookAuthenticator.Name,
 	}
 
 	conditions := make([]*metav1.Condition, 0)
-	certPool, caBundlePEM, conditions, tlsBundleOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
+	certPool, caBundlePEM, conditions, tlsBundleOk := c.validateTLSBundle(webhookAuthenticator.Spec.TLS, conditions)
 	caBundlePEMSHA256 := sha256.Sum256(caBundlePEM) // note that this will always return the same hash for nil input
 
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
@@ -161,10 +176,10 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	if valueFromCache := c.cache.Get(cacheKey); valueFromCache != nil {
 		webhookAuthenticatorFromCache := c.cacheValueAsWebhookAuthenticator(valueFromCache)
 		if webhookAuthenticatorFromCache != nil &&
-			reflect.DeepEqual(webhookAuthenticatorFromCache.spec, &obj.Spec) &&
+			reflect.DeepEqual(webhookAuthenticatorFromCache.spec, &webhookAuthenticator.Spec) &&
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
 			webhookAuthenticatorFromCache.caBundlePEMSHA256 == caBundlePEMSHA256 {
-			c.log.WithValues("webhookAuthenticator", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).
+			c.log.WithValues("webhookAuthenticator", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
 				Info("actual webhook authenticator and desired webhook authenticator are the same")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
 			return nil
@@ -172,7 +187,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	}
 
 	var errs []error
-	endpointHostPort, conditions, endpointOk := c.validateEndpoint(obj.Spec.Endpoint, conditions)
+	endpointHostPort, conditions, endpointOk := c.validateEndpoint(webhookAuthenticator.Spec.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
 
 	conditions, tlsNegotiateErr := c.validateConnection(certPool, endpointHostPort, conditions, okSoFar)
@@ -182,7 +197,7 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	newWebhookAuthenticatorForCache, conditions, err := newWebhookAuthenticator(
 		// Note that we use the whole URL when constructing the webhook client,
 		// not just the host and port that we validated above. We need the path, etc.
-		obj.Spec.Endpoint,
+		webhookAuthenticator.Spec.Endpoint,
 		caBundlePEM,
 		conditions,
 		okSoFar,
@@ -197,14 +212,14 @@ func (c *webhookCacheFillerController) Sync(ctx controllerlib.Context) error {
 	} else {
 		c.cache.Store(cacheKey, &cachedWebhookAuthenticator{
 			Token:             newWebhookAuthenticatorForCache,
-			spec:              obj.Spec.DeepCopy(), // deep copy to avoid caching original object
+			spec:              webhookAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
 			caBundlePEMSHA256: caBundlePEMSHA256,
 		})
-		c.log.WithValues("webhook", klog.KObj(obj), "endpoint", obj.Spec.Endpoint).
+		c.log.WithValues("webhook", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
 			Info("added new webhook authenticator")
 	}
 
-	err = c.updateStatus(ctx.Context, obj, conditions)
+	err = c.updateStatus(ctx, webhookAuthenticator, conditions)
 	errs = append(errs, err)
 
 	// Sync loop errors:

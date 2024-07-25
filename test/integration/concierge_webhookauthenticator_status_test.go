@@ -5,16 +5,109 @@ package integration
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	"go.pinniped.dev/test/testlib"
 )
+
+func TestConciergeWebhookAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExternalBundleIsUpdated_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+
+	client := testlib.NewKubernetesClientset(t)
+
+	tests := []struct {
+		name                      string
+		caBundleSourceSpecKind    string
+		createResourceForCABundle func(t *testing.T, caBundle string) string
+		updateCABundle            func(t *testing.T, resourceName, caBundle string)
+	}{
+		{
+			name:                   "for a CA bundle from a ConfigMap",
+			caBundleSourceSpecKind: "ConfigMap",
+			createResourceForCABundle: func(t *testing.T, caBundle string) string {
+				createdResource := testlib.CreateTestConfigMap(t, env.ConciergeNamespace, "ca-bundle", map[string]string{
+					"ca.crt": caBundle,
+				})
+				return createdResource.Name
+			},
+			updateCABundle: func(t *testing.T, resourceName, caBundle string) {
+				configMap, err := client.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, resourceName, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				configMap.Data["ca.crt"] = caBundle
+
+				_, err = client.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, configMap, metav1.UpdateOptions{})
+				require.NoError(t, err)
+			},
+		},
+		{
+			name:                   "for a CA bundle from a Secret",
+			caBundleSourceSpecKind: "Secret",
+			createResourceForCABundle: func(t *testing.T, caBundle string) string {
+				createdResource := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-bundle", corev1.SecretTypeOpaque, map[string]string{
+					"ca.crt": caBundle,
+				})
+				return createdResource.Name
+			},
+			updateCABundle: func(t *testing.T, resourceName, caBundle string) {
+				secret, err := client.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, resourceName, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				secret.Data["ca.crt"] = []byte(caBundle)
+
+				_, err = client.CoreV1().Secrets(env.ConciergeNamespace).Update(ctx, secret, metav1.UpdateOptions{})
+				require.NoError(t, err)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Run several times because there is always a chance that the test could pass because the controller
+			// will resync every 3 minutes even if it does not pay attention to changes in ConfigMaps and Secrets.
+			for i := range 3 {
+				t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+					t.Parallel()
+
+					caBundlePEM, err := base64.StdEncoding.DecodeString(testlib.IntegrationEnv(t).TestWebhook.TLS.CertificateAuthorityData)
+					require.NoError(t, err)
+
+					caBundleResourceName := test.createResourceForCABundle(t, string(caBundlePEM))
+
+					authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &authenticationv1alpha1.WebhookAuthenticatorSpec{
+						Endpoint: testlib.IntegrationEnv(t).TestWebhook.Endpoint,
+						TLS: &authenticationv1alpha1.TLSSpec{
+							CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
+								Kind: test.caBundleSourceSpecKind,
+								Name: caBundleResourceName,
+								Key:  "ca.crt",
+							},
+						},
+					}, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
+
+					test.updateCABundle(t, caBundleResourceName, "this is not a valid CA bundle value")
+					testlib.WaitForWebhookAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.WebhookAuthenticatorPhaseError)
+
+					test.updateCABundle(t, caBundleResourceName, string(caBundlePEM))
+					testlib.WaitForWebhookAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
+				})
+			}
+		})
+	}
+}
 
 func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 	testEnv := testlib.IntegrationEnv(t)
@@ -218,7 +311,7 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 		{
 			name: "valid authenticator can have empty TLS CertificateAuthorityData",
 			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
-				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "jwtauthenticator"),
+				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "webhookauthenticator"),
 				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "https://localhost/webhook-isnt-actually-here",
 					TLS: &authenticationv1alpha1.TLSSpec{
@@ -231,7 +324,7 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 			// since the CRD validations do not assess fitness of the value provided
 			name: "valid authenticator can have TLS CertificateAuthorityData string that is an invalid certificate",
 			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
-				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "jwtauthenticator"),
+				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "webhookauthenticator"),
 				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "https://localhost/webhook-isnt-actually-here",
 					TLS: &authenticationv1alpha1.TLSSpec{

@@ -170,7 +170,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 				performKubectlApply(
 					t,
 					webhookYamlBytes,
-					`webhookauthenticator.authentication.concierge.pinniped.dev`,
+					fmt.Sprintf(`webhookauthenticator.authentication.concierge.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"WebhookAuthenticator",
 					webhookResourceName,
@@ -187,7 +187,7 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 				performKubectlApply(
 					t,
 					jwtAuthenticatorYamlBytes,
-					`jwtauthenticator.authentication.concierge.pinniped.dev`,
+					fmt.Sprintf(`jwtauthenticator.authentication.concierge.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"JWTAuthenticator",
 					jwtAuthenticatorResourceName,

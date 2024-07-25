@@ -226,7 +226,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 				performKubectlApply(
 					t,
 					yamlBytes,
-					`oidcidentityprovider.idp.supervisor.pinniped.dev`,
+					fmt.Sprintf(`oidcidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"OIDCIdentityProvider",
 					resourceName,
@@ -241,7 +241,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 				performKubectlApply(
 					t,
 					yamlBytes,
-					`ldapidentityprovider.idp.supervisor.pinniped.dev`,
+					fmt.Sprintf(`ldapidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"LDAPIdentityProvider",
 					resourceName,
@@ -256,7 +256,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 				performKubectlApply(
 					t,
 					yamlBytes,
-					`activedirectoryidentityprovider.idp.supervisor.pinniped.dev`,
+					fmt.Sprintf(`activedirectoryidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"ActiveDirectoryIdentityProvider",
 					resourceName,

@@ -48,7 +48,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
 				Reason:  conditionsutil.ReasonSuccess,
-				Message: "tls is valid: " + noTLSConfigurationMessage,
+				Message: "spec.foo.tls is valid: " + noTLSConfigurationMessage,
 			},
 		},
 		{
@@ -58,7 +58,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
 				Reason:  conditionsutil.ReasonSuccess,
-				Message: "tls is valid: " + noTLSConfigurationMessage,
+				Message: "spec.foo.tls is valid: " + noTLSConfigurationMessage,
 			},
 		},
 		{
@@ -72,7 +72,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
 				Reason:  conditionsutil.ReasonSuccess,
-				Message: "tls is valid: " + loadedTLSConfigurationMessage,
+				Message: "spec.foo.tls is valid: " + loadedTLSConfigurationMessage,
 			},
 		},
 		{
@@ -84,7 +84,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: "tls.certificateAuthorityData is invalid: " + ErrNoCertificates.Error(),
+				Message: "spec.foo.tls.certificateAuthorityData is invalid: no certificates found",
 			},
 		},
 		{
@@ -96,7 +96,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: "tls.certificateAuthorityData is invalid: illegal base64 data at input byte 3",
+				Message: "spec.foo.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 3",
 			},
 		},
 		{
@@ -113,7 +113,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: "tls is invalid: both tls.certificateAuthorityDataSource and tls.certificateAuthorityData provided",
+				Message: "spec.foo.tls is invalid: both tls.certificateAuthorityDataSource and tls.certificateAuthorityData provided",
 			},
 		},
 		{
@@ -144,7 +144,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
 				Reason:  conditionsutil.ReasonSuccess,
-				Message: "tls is valid: loaded TLS configuration",
+				Message: "spec.foo.tls is valid: loaded TLS configuration",
 			},
 		},
 		{
@@ -175,7 +175,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
 				Reason:  conditionsutil.ReasonSuccess,
-				Message: "tls is valid: loaded TLS configuration",
+				Message: "spec.foo.tls is valid: loaded TLS configuration",
 			},
 		},
 		{
@@ -204,7 +204,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: `tls.certificateAuthorityDataSource is invalid: secret "awesome-namespace/awesome-secret-ba" of type "kubernetes.io/basic-auth" cannot be used as a certificate authority data source`,
+				Message: `spec.foo.tls.certificateAuthorityDataSource is invalid: secret "awesome-namespace/awesome-secret-ba" of type "kubernetes.io/basic-auth" cannot be used as a certificate authority data source`,
 			},
 		},
 		{
@@ -233,7 +233,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: `tls.certificateAuthorityDataSource is invalid: key "ca-bundle" not found in secret "awesome-namespace/awesome-secret"`,
+				Message: `spec.foo.tls.certificateAuthorityDataSource is invalid: key "ca-bundle" not found in secret "awesome-namespace/awesome-secret"`,
 			},
 		},
 		{
@@ -262,7 +262,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: `tls.certificateAuthorityDataSource is invalid: key "ca-bundle" has empty value in secret "awesome-namespace/awesome-secret"`,
+				Message: `spec.foo.tls.certificateAuthorityDataSource is invalid: key "ca-bundle" has empty value in secret "awesome-namespace/awesome-secret"`,
 			},
 		},
 		{
@@ -290,7 +290,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: `tls.certificateAuthorityDataSource is invalid: key "ca-bundle" not found in configmap "awesome-namespace/awesome-configmap"`,
+				Message: `spec.foo.tls.certificateAuthorityDataSource is invalid: key "ca-bundle" not found in configmap "awesome-namespace/awesome-configmap"`,
 			},
 		},
 		{
@@ -318,7 +318,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: `tls.certificateAuthorityDataSource is invalid: key "ca-bundle" has empty value in configmap "awesome-namespace/awesome-configmap"`,
+				Message: `spec.foo.tls.certificateAuthorityDataSource is invalid: key "ca-bundle" has empty value in configmap "awesome-namespace/awesome-configmap"`,
 			},
 		},
 		{
@@ -348,7 +348,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
 				Reason:  conditionsutil.ReasonSuccess,
-				Message: "tls is valid: loaded TLS configuration",
+				Message: "spec.foo.tls is valid: loaded TLS configuration",
 			},
 		},
 		{
@@ -366,7 +366,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: `tls.certificateAuthorityDataSource is invalid: failed to get secret "awesome-namespace/does-not-exist": secret "does-not-exist" not found`,
+				Message: `spec.foo.tls.certificateAuthorityDataSource is invalid: failed to get secret "awesome-namespace/does-not-exist": secret "does-not-exist" not found`,
 			},
 		},
 		{
@@ -384,7 +384,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: `tls.certificateAuthorityDataSource is invalid: failed to get configmap "awesome-namespace/does-not-exist": configmap "does-not-exist" not found`,
+				Message: `spec.foo.tls.certificateAuthorityDataSource is invalid: failed to get configmap "awesome-namespace/does-not-exist": configmap "does-not-exist" not found`,
 			},
 		},
 		{
@@ -412,7 +412,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionFalse,
 				Reason:  ReasonInvalidTLSConfig,
-				Message: "tls.certificateAuthorityDataSource is invalid: unsupported CA bundle source kind: SomethingElse",
+				Message: "spec.foo.tls.certificateAuthorityDataSource is invalid: unsupported CA bundle source kind: SomethingElse",
 			},
 		},
 	}
@@ -442,7 +442,7 @@ func TestValidateTLSConfig(t *testing.T) {
 			// which would do this same call for us.
 			sharedInformers.WaitForCacheSync(ctx.Done())
 
-			actualCondition, actualBundle, actualCertPool := ValidateTLSConfig(tt.tlsSpec, "tls", tt.namespace, secretsInformer, configMapInformer)
+			actualCondition, actualBundle, actualCertPool := ValidateTLSConfig(tt.tlsSpec, "spec.foo.tls", tt.namespace, secretsInformer, configMapInformer)
 
 			require.Equal(t, tt.expectedCondition, actualCondition)
 			require.Equal(t, tt.expectedBundle, actualBundle)

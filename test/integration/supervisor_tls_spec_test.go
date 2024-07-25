@@ -274,7 +274,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 				performKubectlApply(
 					t,
 					yamlBytes,
-					`githubidentityprovider.idp.supervisor.pinniped.dev`,
+					fmt.Sprintf(`githubidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
 					tc.expectedGitHubErrorSnippets,
 					"GitHubIdentityProvider",
 					resourceName,

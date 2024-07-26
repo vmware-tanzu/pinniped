@@ -64,10 +64,7 @@ func TestValidateTLSConfig(t *testing.T) {
 			tlsSpec: &TLSSpec{
 				CertificateAuthorityData: base64EncodedBundle,
 			},
-			expectedCABundle: &CABundle{
-				caBundle: testCA.Bundle(),
-				certPool: certPool,
-			},
+			expectedCABundle: NewCABundle(testCA.Bundle(), certPool),
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -138,10 +135,7 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCABundle: &CABundle{
-				caBundle: testCA.Bundle(),
-				certPool: certPool,
-			},
+			expectedCABundle: NewCABundle(testCA.Bundle(), certPool),
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -171,10 +165,7 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCABundle: &CABundle{
-				caBundle: testCA.Bundle(),
-				certPool: certPool,
-			},
+			expectedCABundle: NewCABundle(testCA.Bundle(), certPool),
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -403,10 +394,7 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCABundle: &CABundle{
-				caBundle: testCA.Bundle(),
-				certPool: certPool,
-			},
+			expectedCABundle: NewCABundle(testCA.Bundle(), certPool),
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,

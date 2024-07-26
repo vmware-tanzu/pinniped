@@ -6,7 +6,6 @@ package githubupstreamwatcher
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -40,6 +39,7 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -451,8 +451,8 @@ func TestController(t *testing.T) {
 			},
 			wantValidatedCache: []GitHubValidatedAPICacheKey{
 				{
-					address:           goodServerDomain,
-					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+					address:      goodServerDomain,
+					caBundleHash: tlsconfigutil.NewCABundleHash(goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -513,8 +513,8 @@ func TestController(t *testing.T) {
 			},
 			wantValidatedCache: []GitHubValidatedAPICacheKey{
 				{
-					address:           goodServerDomain,
-					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+					address:      goodServerDomain,
+					caBundleHash: tlsconfigutil.NewCABundleHash(goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -591,8 +591,8 @@ func TestController(t *testing.T) {
 			},
 			wantValidatedCache: []GitHubValidatedAPICacheKey{
 				{
-					address:           "github.com:443",
-					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+					address:      "github.com:443",
+					caBundleHash: tlsconfigutil.NewCABundleHash(goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -665,8 +665,8 @@ func TestController(t *testing.T) {
 			},
 			wantValidatedCache: []GitHubValidatedAPICacheKey{
 				{
-					address:           goodServerIPv6Domain,
-					caBundlePEMSHA256: sha256.Sum256(goodServerIPv6CA),
+					address:      goodServerIPv6Domain,
+					caBundleHash: tlsconfigutil.NewCABundleHash(goodServerIPv6CA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -780,8 +780,8 @@ func TestController(t *testing.T) {
 			},
 			wantValidatedCache: []GitHubValidatedAPICacheKey{
 				{
-					address:           goodServerDomain,
-					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+					address:      goodServerDomain,
+					caBundleHash: tlsconfigutil.NewCABundleHash(goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -961,8 +961,8 @@ func TestController(t *testing.T) {
 			},
 			wantValidatedCache: []GitHubValidatedAPICacheKey{
 				{
-					address:           goodServerDomain,
-					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+					address:      goodServerDomain,
+					caBundleHash: tlsconfigutil.NewCABundleHash(goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{
@@ -1058,8 +1058,8 @@ func TestController(t *testing.T) {
 			},
 			preexistingValidatedCache: []GitHubValidatedAPICacheKey{
 				{
-					address:           goodServerDomain,
-					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+					address:      goodServerDomain,
+					caBundleHash: tlsconfigutil.NewCABundleHash(goodServerCA),
 				},
 			},
 			wantResultingCache: []*upstreamgithub.ProviderConfig{
@@ -1087,8 +1087,8 @@ func TestController(t *testing.T) {
 			},
 			wantValidatedCache: []GitHubValidatedAPICacheKey{
 				{
-					address:           goodServerDomain,
-					caBundlePEMSHA256: sha256.Sum256(goodServerCA),
+					address:      goodServerDomain,
+					caBundleHash: tlsconfigutil.NewCABundleHash(goodServerCA),
 				},
 			},
 			wantResultingUpstreams: []idpv1alpha1.GitHubIdentityProvider{

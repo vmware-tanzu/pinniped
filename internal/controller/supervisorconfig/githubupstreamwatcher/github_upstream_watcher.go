@@ -6,9 +6,7 @@ package githubupstreamwatcher
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -74,8 +72,8 @@ type UpstreamGitHubIdentityProviderICache interface {
 }
 
 type GitHubValidatedAPICacheI interface {
-	MarkAsValidated(address string, caBundlePEM []byte)
-	IsValid(address string, caBundlePEM []byte) bool
+	MarkAsValidated(address string, caBundleHash tlsconfigutil.CABundleHash)
+	IsValid(address string, caBundleHash tlsconfigutil.CABundleHash) bool
 }
 
 type GitHubValidatedAPICache struct {
@@ -83,24 +81,24 @@ type GitHubValidatedAPICache struct {
 }
 
 type GitHubValidatedAPICacheKey struct {
-	address           string
-	caBundlePEMSHA256 [32]byte
+	address      string
+	caBundleHash tlsconfigutil.CABundleHash
 }
 
-func (g *GitHubValidatedAPICache) MarkAsValidated(address string, caBundlePEM []byte) {
+func (g *GitHubValidatedAPICache) MarkAsValidated(address string, caBundleHash tlsconfigutil.CABundleHash) {
 	key := GitHubValidatedAPICacheKey{
-		address:           address,
-		caBundlePEMSHA256: sha256.Sum256(caBundlePEM),
+		address:      address,
+		caBundleHash: caBundleHash,
 	}
 	// Existence in the cache means it has been validated.
 	// The TTL in the cache is not important, it's just a "really long time".
 	g.cache.Set(key, nil, 365*24*time.Hour)
 }
 
-func (g *GitHubValidatedAPICache) IsValid(address string, caBundlePEM []byte) bool {
+func (g *GitHubValidatedAPICache) IsValid(address string, caBundleHash tlsconfigutil.CABundleHash) bool {
 	key := GitHubValidatedAPICacheKey{
-		address:           address,
-		caBundlePEMSHA256: sha256.Sum256(caBundlePEM),
+		address:      address,
+		caBundleHash: caBundleHash,
 	}
 	_, ok := g.cache.Get(key)
 	return ok
@@ -335,8 +333,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 
 	githubConnectionCondition, hostURL, httpClient, githubConnectionErr := c.validateGitHubConnection(
 		hostPort,
-		caBundle.PEMBytes(),
-		caBundle.CertPool(),
+		caBundle,
 		hostCondition.Status == metav1.ConditionTrue,
 		tlsConfigCondition.Status == metav1.ConditionTrue,
 	)
@@ -425,11 +422,9 @@ func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Conditio
 	}, &hostPort
 }
 
-// TODO: this should take in a tlsconfigutil.CABundle
 func (c *gitHubWatcherController) validateGitHubConnection(
 	hostPort *endpointaddr.HostPort,
-	caBundlePEM []byte,
-	certPool *x509.CertPool,
+	caBundle *tlsconfigutil.CABundle,
 	hostConditionOk, tlsConfigConditionOk bool,
 ) (*metav1.Condition, string, *http.Client, error) {
 	if !hostConditionOk || !tlsConfigConditionOk {
@@ -443,8 +438,8 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 
 	address := hostPort.Endpoint()
 
-	if !c.validatedCache.IsValid(address, caBundlePEM) {
-		conn, tlsDialErr := c.dialFunc("tcp", address, ptls.Default(certPool))
+	if !c.validatedCache.IsValid(address, caBundle.Hash()) {
+		conn, tlsDialErr := c.dialFunc("tcp", address, ptls.Default(caBundle.CertPool()))
 		if tlsDialErr != nil {
 			return &metav1.Condition{
 				Type:    GitHubConnectionValid,
@@ -457,14 +452,14 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 		_ = conn.Close()
 	}
 
-	c.validatedCache.MarkAsValidated(address, caBundlePEM)
+	c.validatedCache.MarkAsValidated(address, caBundle.Hash())
 
 	return &metav1.Condition{
 		Type:    GitHubConnectionValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  conditionsutil.ReasonSuccess,
 		Message: fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", address),
-	}, fmt.Sprintf("https://%s", address), phttp.Default(certPool), nil
+	}, fmt.Sprintf("https://%s", address), phttp.Default(caBundle.CertPool()), nil
 }
 
 // buildDialErrorMessage standardizes DNS error messages that appear differently on different platforms, so that tests and log grepping is uniform.

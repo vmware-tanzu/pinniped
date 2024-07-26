@@ -1,3 +1,6 @@
+// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package tlsconfigutil
 
 import (
@@ -5,13 +8,24 @@ import (
 	"crypto/x509"
 )
 
-var sHA256OfEmptyData = sha256.Sum256(nil)
-var zeroSHA256 = [32]byte{}
+type CABundleHash struct {
+	hash [32]byte
+}
+
+func NewCABundleHash(bundle []byte) CABundleHash {
+	return CABundleHash{
+		hash: sha256.Sum256(bundle),
+	}
+}
+
+func (a CABundleHash) Equal(b CABundleHash) bool {
+	return a == b
+}
 
 // CABundle abstracts the internal representation of CA certificate bundles.
 type CABundle struct {
 	caBundle []byte
-	sha256   [32]byte
+	sha256   CABundleHash
 	certPool *x509.CertPool
 }
 
@@ -26,7 +40,7 @@ func NewCABundle(caBundle []byte) (*CABundle, bool) {
 
 	return &CABundle{
 		caBundle: caBundle,
-		sha256:   sha256.Sum256(caBundle),
+		sha256:   NewCABundleHash(caBundle),
 		certPool: certPool,
 	}, ok
 }
@@ -56,13 +70,9 @@ func (c *CABundle) CertPool() *x509.CertPool {
 }
 
 // Hash returns a sha256 sum of the CA bundle bytes.
-func (c *CABundle) Hash() [32]byte {
-	if c == nil || len(c.caBundle) < 1 {
-		return sHA256OfEmptyData
+func (c *CABundle) Hash() CABundleHash {
+	if c == nil {
+		return NewCABundleHash(nil)
 	}
-	// This handles improperly initialized receivers
-	if c.sha256 == zeroSHA256 {
-		c.sha256 = sha256.Sum256(c.caBundle)
-	}
-	return c.sha256 // note that this will always return the same hash for nil input
+	return c.sha256
 }

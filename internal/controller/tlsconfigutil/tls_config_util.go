@@ -90,12 +90,6 @@ func ValidateTLSConfig(
 	secretInformer corev1informers.SecretInformer,
 	configMapInformer corev1informers.ConfigMapInformer,
 ) (*metav1.Condition, *CABundle) {
-	// TODO: This func should return a struct that abstracts away the internals of how a CA bundle is held in memory
-	//	 and can return the CA bundle as string PEM, []byte base64-encoded, CertPool, hash, etc, as well as compare itself
-	//	 to either a different struct instance or a hash.
-	//
-	// TODO: There could easily be a hash type struct alias for the specific hash value (e.g. "[32]byte") with an Equality function.
-
 	caBundle, err := buildCABundle(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
 	if err != nil {
 		return invalidTLSCondition(err.Error()), nil

@@ -111,9 +111,9 @@ type tokenAuthenticatorCloser interface {
 
 type cachedJWTAuthenticator struct {
 	authenticator.Token
-	spec              *authenticationv1alpha1.JWTAuthenticatorSpec
-	caBundlePEMSHA256 [32]byte
-	cancel            context.CancelFunc
+	spec         *authenticationv1alpha1.JWTAuthenticatorSpec
+	caBundleHash tlsconfigutil.CABundleHash
+	cancel       context.CancelFunc
 }
 
 func (c *cachedJWTAuthenticator) Close() {
@@ -237,7 +237,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 		if jwtAuthenticatorFromCache != nil &&
 			reflect.DeepEqual(jwtAuthenticatorFromCache.spec, &jwtAuthenticator.Spec) &&
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
-			jwtAuthenticatorFromCache.caBundlePEMSHA256 == caBundle.Hash() {
+			jwtAuthenticatorFromCache.caBundleHash.Equal(caBundle.Hash()) {
 			c.log.WithValues("jwtAuthenticator", klog.KObj(jwtAuthenticator), "issuer", jwtAuthenticator.Spec.Issuer).
 				Info("actual jwt authenticator and desired jwt authenticator are the same")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
@@ -562,7 +562,7 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(
 	client *http.Client,
 	spec *authenticationv1alpha1.JWTAuthenticatorSpec,
 	keySet *coreosoidc.RemoteKeySet,
-	caBundlePEMSHA256 [32]byte,
+	caBundleHash tlsconfigutil.CABundleHash,
 	conditions []*metav1.Condition,
 	prereqOk bool,
 ) (*cachedJWTAuthenticator, []*metav1.Condition, error) {
@@ -633,10 +633,10 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(
 		Message: msg,
 	})
 	return &cachedJWTAuthenticator{
-		Token:             oidcAuthenticator,
-		spec:              spec,
-		caBundlePEMSHA256: caBundlePEMSHA256,
-		cancel:            cancel,
+		Token:        oidcAuthenticator,
+		spec:         spec,
+		caBundleHash: caBundleHash,
+		cancel:       cancel,
 	}, conditions, nil
 }
 

@@ -192,6 +192,11 @@ spec:
             - name: NO_PROXY
               value: #@ data.values.no_proxy
             #@ end
+            #! reduce OOM likelihood
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
           livenessProbe:
             httpGet:
               path: /healthz

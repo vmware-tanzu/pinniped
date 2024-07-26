@@ -27,18 +27,16 @@ import (
 func TestValidateTLSConfig(t *testing.T) {
 	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
-	bundle := testCA.Bundle()
 	certPool := x509.NewCertPool()
-	require.True(t, certPool.AppendCertsFromPEM(bundle))
-	base64EncodedBundle := base64.StdEncoding.EncodeToString(bundle)
+	require.True(t, certPool.AppendCertsFromPEM(testCA.Bundle()))
+	base64EncodedBundle := base64.StdEncoding.EncodeToString(testCA.Bundle())
 
 	tests := []struct {
 		name              string
 		tlsSpec           *TLSSpec
 		namespace         string
 		k8sObjects        []runtime.Object
-		expectedBundle    []byte
-		expectedCertPool  *x509.CertPool
+		expectedCABundle  *CABundle
 		expectedCondition *metav1.Condition
 	}{
 		{
@@ -66,8 +64,10 @@ func TestValidateTLSConfig(t *testing.T) {
 			tlsSpec: &TLSSpec{
 				CertificateAuthorityData: base64EncodedBundle,
 			},
-			expectedBundle:   bundle,
-			expectedCertPool: certPool,
+			expectedCABundle: &CABundle{
+				caBundle:   testCA.Bundle(),
+				caCertPool: certPool,
+			},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -134,12 +134,14 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 					Type: corev1.SecretTypeTLS,
 					Data: map[string][]byte{
-						"ca-bundle": bundle,
+						"ca-bundle": testCA.Bundle(),
 					},
 				},
 			},
-			expectedBundle:   bundle,
-			expectedCertPool: certPool,
+			expectedCABundle: &CABundle{
+				caBundle:   testCA.Bundle(),
+				caCertPool: certPool,
+			},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -165,12 +167,14 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 					Type: corev1.SecretTypeOpaque,
 					Data: map[string][]byte{
-						"ca-bundle": bundle,
+						"ca-bundle": testCA.Bundle(),
 					},
 				},
 			},
-			expectedBundle:   bundle,
-			expectedCertPool: certPool,
+			expectedCABundle: &CABundle{
+				caBundle:   testCA.Bundle(),
+				caCertPool: certPool,
+			},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -196,7 +200,7 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 					Type: corev1.SecretTypeBasicAuth,
 					Data: map[string][]byte{
-						"ca-bundle": bundle,
+						"ca-bundle": testCA.Bundle(),
 					},
 				},
 			},
@@ -225,7 +229,7 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 					Type: corev1.SecretTypeOpaque,
 					Data: map[string][]byte{
-						"wrong-key": bundle,
+						"wrong-key": testCA.Bundle(),
 					},
 				},
 			},
@@ -311,7 +315,7 @@ func TestValidateTLSConfig(t *testing.T) {
 						Namespace: "awesome-namespace",
 					},
 					Data: map[string]string{
-						"wrong-key": string(bundle),
+						"wrong-key": string(testCA.Bundle()),
 					},
 				},
 			},
@@ -395,12 +399,14 @@ func TestValidateTLSConfig(t *testing.T) {
 						Namespace: "awesome-namespace",
 					},
 					Data: map[string]string{
-						"ca-bundle": string(bundle),
+						"ca-bundle": string(testCA.Bundle()),
 					},
 				},
 			},
-			expectedBundle:   bundle,
-			expectedCertPool: certPool,
+			expectedCABundle: &CABundle{
+				caBundle:   testCA.Bundle(),
+				caCertPool: certPool,
+			},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -461,7 +467,7 @@ func TestValidateTLSConfig(t *testing.T) {
 						Namespace: "awesome-namespace",
 					},
 					Data: map[string]string{
-						"ca-bundle": string(bundle),
+						"ca-bundle": string(testCA.Bundle()),
 					},
 				},
 			},
@@ -499,11 +505,12 @@ func TestValidateTLSConfig(t *testing.T) {
 			// which would do this same call for us.
 			sharedInformers.WaitForCacheSync(ctx.Done())
 
-			actualCondition, actualBundle, actualCertPool := ValidateTLSConfig(tt.tlsSpec, "spec.foo.tls", tt.namespace, secretsInformer, configMapInformer)
+			actualCondition, actualBundle := ValidateTLSConfig(tt.tlsSpec, "spec.foo.tls", tt.namespace, secretsInformer, configMapInformer)
 
 			require.Equal(t, tt.expectedCondition, actualCondition)
-			require.Equal(t, tt.expectedBundle, actualBundle)
-			require.True(t, tt.expectedCertPool.Equal(actualCertPool), "expectedCertPool did not equal actualCertPool")
+			if tt.expectedCABundle != nil {
+				require.True(t, tt.expectedCABundle.IsEqual(actualBundle), "expectedCertPool did not equal actualCertPool")
+			}
 		})
 	}
 }
@@ -651,6 +658,71 @@ func TestTLSSpecForConcierge(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			actual := TLSSpecForConcierge(tt.conciergeTLSSpec)
+			require.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestCABundleIsEqual(t *testing.T) {
+	testCA, err := certauthority.New("Test CA", 1*time.Hour)
+	require.NoError(t, err)
+	certPool := x509.NewCertPool()
+	require.True(t, certPool.AppendCertsFromPEM(testCA.Bundle()))
+
+	tests := []struct {
+		name     string
+		left     *CABundle
+		right    *CABundle
+		expected bool
+	}{
+		{
+			name:     "should return equal when left and right are nil",
+			left:     nil,
+			right:    nil,
+			expected: true,
+		},
+		{
+			name:     "should return not equal when left is nil and right is not",
+			left:     nil,
+			right:    &CABundle{},
+			expected: false,
+		},
+		{
+			name:     "should return not equal when right is nil and left is not",
+			left:     &CABundle{},
+			right:    nil,
+			expected: false,
+		},
+		{
+			name: "should return equal when both left and right have same CA certificate bytes",
+			left: &CABundle{
+				caBundle:   testCA.Bundle(),
+				caCertPool: certPool,
+			},
+			right: &CABundle{
+				caBundle:   testCA.Bundle(),
+				caCertPool: certPool,
+			},
+			expected: true,
+		},
+		{
+			name: "should return not equal when both left and right do not have same CA certificate bytes",
+			left: &CABundle{
+				caBundle:   testCA.Bundle(),
+				caCertPool: certPool,
+			},
+			right: &CABundle{
+				caBundle:   []byte("something that is not a cert"),
+				caCertPool: nil,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			actual := tt.left.IsEqual(tt.right)
 			require.Equal(t, tt.expected, actual)
 		})
 	}

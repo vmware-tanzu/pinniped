@@ -244,7 +244,7 @@ func (c *webhookCacheFillerController) cacheValueAsWebhookAuthenticator(value au
 }
 
 func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []byte, []*metav1.Condition, bool) {
-	condition, pemBundle, certPool := tlsconfigutil.ValidateTLSConfig(
+	condition, caBundle := tlsconfigutil.ValidateTLSConfig(
 		tlsconfigutil.TLSSpecForConcierge(tlsSpec),
 		"spec.tls",
 		c.namespace,
@@ -252,7 +252,7 @@ func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authentication
 		c.configMapInformer)
 
 	conditions = append(conditions, condition)
-	return certPool, pemBundle, conditions, condition.Status == metav1.ConditionTrue
+	return caBundle.GetCertPool(), caBundle.GetCABundle(), conditions, condition.Status == metav1.ConditionTrue
 }
 
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle

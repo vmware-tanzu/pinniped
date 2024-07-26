@@ -325,7 +325,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	hostCondition, hostPort := validateHost(upstream.Spec.GitHubAPI)
 	conditions = append(conditions, hostCondition)
 
-	tlsConfigCondition, caBundlePEM, certPool := tlsconfigutil.ValidateTLSConfig(
+	tlsConfigCondition, caBundle := tlsconfigutil.ValidateTLSConfig(
 		tlsconfigutil.TLSSpecForSupervisor(upstream.Spec.GitHubAPI.TLS),
 		"spec.githubAPI.tls",
 		c.namespace,
@@ -335,8 +335,8 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 
 	githubConnectionCondition, hostURL, httpClient, githubConnectionErr := c.validateGitHubConnection(
 		hostPort,
-		caBundlePEM,
-		certPool,
+		caBundle.GetCABundle(),
+		caBundle.GetCertPool(),
 		hostCondition.Status == metav1.ConditionTrue,
 		tlsConfigCondition.Status == metav1.ConditionTrue,
 	)

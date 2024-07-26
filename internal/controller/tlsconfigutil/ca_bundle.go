@@ -16,12 +16,19 @@ type CABundle struct {
 }
 
 func NewCABundle(caBundle []byte) (*CABundle, bool) {
-	certPool := x509.NewCertPool()
+	var certPool *x509.CertPool
+	ok := true
+
+	if len(caBundle) > 0 {
+		certPool = x509.NewCertPool()
+		ok = certPool.AppendCertsFromPEM(caBundle)
+	}
+
 	return &CABundle{
 		caBundle: caBundle,
 		sha256:   sha256.Sum256(caBundle),
 		certPool: certPool,
-	}, certPool.AppendCertsFromPEM(caBundle)
+	}, ok
 }
 
 // PEMBytes returns the CA certificate bundle PEM bytes.
@@ -58,9 +65,4 @@ func (c *CABundle) Hash() [32]byte {
 		c.sha256 = sha256.Sum256(c.caBundle)
 	}
 	return c.sha256 // note that this will always return the same hash for nil input
-}
-
-// IsEqual returns whether a CABundle has the same CA certificate bundle as another.
-func (c *CABundle) IsEqual(other *CABundle) bool {
-	return c.Hash() == other.Hash()
 }

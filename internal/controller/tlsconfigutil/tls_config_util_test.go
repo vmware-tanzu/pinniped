@@ -497,7 +497,9 @@ func TestValidateTLSConfig(t *testing.T) {
 
 			require.Equal(t, tt.expectedCondition, actualCondition)
 			if tt.expectedCABundle != nil {
-				require.True(t, tt.expectedCABundle.IsEqual(actualBundle), "expectedCertPool did not equal actualCertPool")
+				require.Equal(t, tt.expectedCABundle.Hash(), actualBundle.Hash())
+				require.Equal(t, tt.expectedCABundle.PEMBytes(), actualBundle.PEMBytes())
+				require.True(t, tt.expectedCABundle.CertPool().Equal(actualBundle.CertPool()))
 			}
 		})
 	}

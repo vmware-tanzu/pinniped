@@ -65,6 +65,10 @@ type cachedWebhookAuthenticator struct {
 	caBundleHash tlsconfigutil.CABundleHash
 }
 
+func (*cachedWebhookAuthenticator) Close() {
+	// no-op, because no cleanup is needed on webhook authenticators
+}
+
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
 func New(
 	namespace string,
@@ -171,11 +175,11 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 	// convenience at the time of a configuration change, to catch typos and blatant misconfigurations, rather
 	// than to constantly monitor for external issues.
 	if valueFromCache := c.cache.Get(cacheKey); valueFromCache != nil {
-		webhookAuthenticatorFromCache := c.cacheValueAsWebhookAuthenticator(valueFromCache)
-		if webhookAuthenticatorFromCache != nil &&
-			reflect.DeepEqual(webhookAuthenticatorFromCache.spec, &webhookAuthenticator.Spec) &&
+		oldWebhookAuthenticatorFromCache := c.cacheValueAsWebhookAuthenticator(valueFromCache)
+		if oldWebhookAuthenticatorFromCache != nil &&
+			reflect.DeepEqual(oldWebhookAuthenticatorFromCache.spec, &webhookAuthenticator.Spec) &&
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
-			webhookAuthenticatorFromCache.caBundleHash.Equal(caBundle.Hash()) {
+			oldWebhookAuthenticatorFromCache.caBundleHash.Equal(caBundle.Hash()) {
 			c.log.WithValues("webhookAuthenticator", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
 				Info("actual webhook authenticator and desired webhook authenticator are the same")
 			// Stop, no more work to be done. This authenticator is already validated and cached.

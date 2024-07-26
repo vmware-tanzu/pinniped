@@ -20,12 +20,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
 	k8sinformers "k8s.io/client-go/informers"
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
@@ -41,6 +41,7 @@ import (
 	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crypto/ptls"
+	"go.pinniped.dev/internal/mocks/mockcachevalue"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
@@ -410,10 +411,10 @@ func TestController(t *testing.T) {
 		webhookAuthenticators []runtime.Object
 		secretsAndConfigMaps  []runtime.Object
 		// for modifying the clients to hack in arbitrary api responses
-		configClient    func(*conciergefake.Clientset)
-		wantSyncLoopErr testutil.RequireErrorStringFunc
-		wantLogs        []map[string]any
-		wantActions     func() []coretesting.Action
+		configClient func(*conciergefake.Clientset)
+		wantSyncErr  testutil.RequireErrorStringFunc
+		wantLogs     []map[string]any
+		wantActions  func() []coretesting.Action
 		// random comment so lines above don't have huge indents
 		wantNamesOfWebhookAuthenticatorsInCache []string
 	}{
@@ -833,6 +834,12 @@ func TestController(t *testing.T) {
 		{
 			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions",
 			cache: func(t *testing.T, cache *authncache.Cache) {
+				ctrl := gomock.NewController(t)
+				t.Cleanup(func() {
+					ctrl.Finish()
+				})
+				mockCacheValue := mockcachevalue.NewMockValue(ctrl)
+				mockCacheValue.EXPECT().Close().Times(1)
 				cache.Store(
 					authncache.Key{
 						Name:     "test-name",
@@ -842,7 +849,7 @@ func TestController(t *testing.T) {
 					// Only entries of type cachedWebhookAuthenticator are ever put into the cache, so this should never really happen.
 					// This test is to provide coverage on the production code which reads from the cache and casts those entries to
 					// the appropriate data type.
-					struct{ authenticator.Token }{},
+					mockCacheValue,
 				)
 			},
 			webhookAuthenticators: []runtime.Object{
@@ -859,7 +866,7 @@ func TestController(t *testing.T) {
 					"timestamp":  "2099-08-08T13:57:36.123456Z",
 					"logger":     "webhookcachefiller-controller",
 					"message":    "wrong webhook authenticator type in cache",
-					"actualType": "struct { authenticator.Token }",
+					"actualType": "*mockcachevalue.MockValue",
 				},
 				{
 					"level":     "info",
@@ -1097,7 +1104,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:                         testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority`),
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority`),
 			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
@@ -1337,7 +1344,7 @@ func TestController(t *testing.T) {
 					Spec: badWebhookAuthenticatorSpecGoodEndpointButUnknownCA,
 				},
 			},
-			wantSyncLoopErr: testutil.WantExactErrorString("error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority"),
+			wantSyncErr: testutil.WantExactErrorString("error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority"),
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1495,7 +1502,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:                         testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: dial tcp [::1]:4242: connect: connection refused`),
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: dial tcp [::1]:4242: connect: connection refused`),
 			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
@@ -1543,7 +1550,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:                         testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: dial tcp [::1]:443: connect: connection refused`),
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: dial tcp [::1]:443: connect: connection refused`),
 			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
@@ -1625,7 +1632,7 @@ func TestController(t *testing.T) {
 				}
 			},
 			wantNamesOfWebhookAuthenticatorsInCache: []string{},
-			wantSyncLoopErr:                         testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs`),
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs`),
 		},
 		{
 			name: "validateConnection: IPv6 address without port or brackets: should succeed since IPv6 brackets are optional without port",
@@ -1672,7 +1679,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:                         testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: dial tcp [::1]:443: connect: connection refused`),
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: dial tcp [::1]:443: connect: connection refused`),
 			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
@@ -1818,7 +1825,7 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:                         testutil.WantExactErrorString("error for WebhookAuthenticator test-name: some update error"),
+			wantSyncErr:                             testutil.WantExactErrorString("error for WebhookAuthenticator test-name: some update error"),
 			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
 		},
 	}
@@ -1861,8 +1868,8 @@ func TestController(t *testing.T) {
 
 			syncCtx := controllerlib.Context{Context: ctx}
 
-			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantSyncLoopErr != nil {
-				testutil.RequireErrorStringFromErr(t, err, tt.wantSyncLoopErr)
+			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantSyncErr != nil {
+				testutil.RequireErrorStringFromErr(t, err, tt.wantSyncErr)
 			} else {
 				require.NoError(t, err)
 			}

@@ -6,7 +6,6 @@ package webhookcachefiller
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -39,6 +38,7 @@ import (
 	conciergeinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/plog"
@@ -2030,8 +2030,8 @@ func newCacheValue(t *testing.T, spec authenticationv1alpha1.WebhookAuthenticato
 	t.Helper()
 
 	return &cachedWebhookAuthenticator{
-		spec:              &spec,
-		caBundlePEMSHA256: sha256.Sum256([]byte(caBundle)),
+		spec:         &spec,
+		caBundleHash: tlsconfigutil.NewCABundleHash([]byte(caBundle)),
 	}
 }
 

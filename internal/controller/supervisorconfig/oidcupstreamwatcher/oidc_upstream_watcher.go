@@ -96,7 +96,7 @@ type UpstreamOIDCIdentityProviderICache interface {
 // oidcDiscoveryCacheKey is the type of keys in an oidcDiscoveryCache.
 type oidcDiscoveryCacheKey struct {
 	issuer       string
-	caBundleHash [32]byte
+	caBundleHash tlsconfigutil.CABundleHash
 }
 
 // oidcDiscoveryCacheValue is the type of cache entries in an oidcDiscoveryCache.
@@ -359,7 +359,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 	// Get the discovered provider and HTTP client from cache, if they are found in the cache.
 	cacheKey := oidcDiscoveryCacheKey{
 		issuer:       upstream.Spec.Issuer,
-		caBundleHash: caBundle.Hash(), // note that this will always return the same hash for nil input
+		caBundleHash: caBundle.Hash(),
 	}
 	if cacheEntry := c.validatorCache.getProvider(cacheKey); cacheEntry != nil {
 		discoveredProvider = cacheEntry.provider

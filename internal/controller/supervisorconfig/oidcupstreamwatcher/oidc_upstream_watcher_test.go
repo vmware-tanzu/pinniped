@@ -6,7 +6,6 @@ package oidcupstreamwatcher
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -32,6 +31,7 @@ import (
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -1114,7 +1114,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				// without encountering any errors.
 				cacheKey := oidcDiscoveryCacheKey{
 					issuer:       testIssuerURL + "/this-path-does-not-exist",
-					caBundleHash: sha256.Sum256([]byte(testIssuerCA)),
+					caBundleHash: tlsconfigutil.NewCABundleHash([]byte(testIssuerCA)),
 				}
 				// Put it into the initial cache for this test.
 				return map[oidcDiscoveryCacheKey]*oidcDiscoveryCacheValue{

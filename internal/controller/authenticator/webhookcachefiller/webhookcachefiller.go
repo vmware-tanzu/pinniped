@@ -61,8 +61,8 @@ const (
 
 type cachedWebhookAuthenticator struct {
 	authenticator.Token
-	spec              *authenticationv1alpha1.WebhookAuthenticatorSpec
-	caBundlePEMSHA256 [32]byte
+	spec         *authenticationv1alpha1.WebhookAuthenticatorSpec
+	caBundleHash tlsconfigutil.CABundleHash
 }
 
 // New instantiates a new controllerlib.Controller which will populate the provided authncache.Cache.
@@ -162,8 +162,6 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 
 	conditions := make([]*metav1.Condition, 0)
 	caBundle, conditions, tlsBundleOk := c.validateTLSBundle(webhookAuthenticator.Spec.TLS, conditions)
-	caBundlePEMSHA256 := caBundle.Hash()
-
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
 	// There is no need to repeat validations for a spec that was already successfully validated. We are making a
 	// design decision to avoid repeating the validation which dials the server, even though the server's TLS
@@ -177,7 +175,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		if webhookAuthenticatorFromCache != nil &&
 			reflect.DeepEqual(webhookAuthenticatorFromCache.spec, &webhookAuthenticator.Spec) &&
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
-			webhookAuthenticatorFromCache.caBundlePEMSHA256 == caBundlePEMSHA256 {
+			webhookAuthenticatorFromCache.caBundleHash.Equal(caBundle.Hash()) {
 			c.log.WithValues("webhookAuthenticator", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
 				Info("actual webhook authenticator and desired webhook authenticator are the same")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
@@ -210,9 +208,9 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		c.cache.Delete(cacheKey)
 	} else {
 		c.cache.Store(cacheKey, &cachedWebhookAuthenticator{
-			Token:             newWebhookAuthenticatorForCache,
-			spec:              webhookAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
-			caBundlePEMSHA256: caBundlePEMSHA256,
+			Token:        newWebhookAuthenticatorForCache,
+			spec:         webhookAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
+			caBundleHash: caBundle.Hash(),
 		})
 		c.log.WithValues("webhook", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
 			Info("added new webhook authenticator")

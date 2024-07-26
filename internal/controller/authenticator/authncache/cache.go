@@ -36,6 +36,7 @@ type Key struct {
 
 type Value interface {
 	authenticator.Token
+	Close()
 }
 
 // New returns an empty cache.
@@ -45,21 +46,31 @@ func New() *Cache {
 
 // Get an authenticator by key.
 func (c *Cache) Get(key Key) Value {
-	res, _ := c.cache.Load(key)
-	if res == nil {
+	v, _ := c.cache.Load(key)
+	if v == nil {
 		return nil
 	}
-	return res.(Value)
+	return v.(Value)
 }
 
-// Store an authenticator into the cache.
+// Store an authenticator into the cache. If overwriting a value in the cache, closes the overwritten value.
 func (c *Cache) Store(key Key, value Value) {
-	c.cache.Store(key, value)
+	previousValue, _ := c.cache.Swap(key, value)
+	// Wait until after it has been overwritten in the cache to close it, to ensure that it is only closed
+	// after it is not available for cache reads anymore.
+	if previousValue != nil {
+		previousValue.(Value).Close()
+	}
 }
 
-// Delete an authenticator from the cache.
+// Delete an authenticator from the cache. Closes the authenticator after removing it from the cache.
 func (c *Cache) Delete(key Key) {
-	c.cache.Delete(key)
+	deletedValue, _ := c.cache.LoadAndDelete(key)
+	// Wait until after it has been removed from the cache to close it, to ensure that it is only closed
+	// after it is not available for cache reads anymore.
+	if deletedValue != nil {
+		deletedValue.(Value).Close()
+	}
 }
 
 // Keys currently stored in the cache.

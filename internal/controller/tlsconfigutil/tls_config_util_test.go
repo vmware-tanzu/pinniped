@@ -5,7 +5,6 @@ package tlsconfigutil
 
 import (
 	"context"
-	"crypto/x509"
 	"encoding/base64"
 	"testing"
 	"time"
@@ -27,9 +26,10 @@ import (
 func TestValidateTLSConfig(t *testing.T) {
 	testCA, err := certauthority.New("Test CA", 1*time.Hour)
 	require.NoError(t, err)
-	certPool := x509.NewCertPool()
-	require.True(t, certPool.AppendCertsFromPEM(testCA.Bundle()))
 	base64EncodedBundle := base64.StdEncoding.EncodeToString(testCA.Bundle())
+
+	testCABundle, ok := NewCABundle(testCA.Bundle())
+	require.True(t, ok)
 
 	tests := []struct {
 		name              string
@@ -64,7 +64,7 @@ func TestValidateTLSConfig(t *testing.T) {
 			tlsSpec: &TLSSpec{
 				CertificateAuthorityData: base64EncodedBundle,
 			},
-			expectedCABundle: NewCABundle(testCA.Bundle(), certPool),
+			expectedCABundle: testCABundle,
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -135,7 +135,7 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCABundle: NewCABundle(testCA.Bundle(), certPool),
+			expectedCABundle: testCABundle,
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -165,7 +165,7 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCABundle: NewCABundle(testCA.Bundle(), certPool),
+			expectedCABundle: testCABundle,
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
@@ -394,7 +394,7 @@ func TestValidateTLSConfig(t *testing.T) {
 					},
 				},
 			},
-			expectedCABundle: NewCABundle(testCA.Bundle(), certPool),
+			expectedCABundle: testCABundle,
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,

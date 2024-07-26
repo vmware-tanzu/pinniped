@@ -15,12 +15,13 @@ type CABundle struct {
 	certPool *x509.CertPool
 }
 
-func NewCABundle(caBundle []byte, certPool *x509.CertPool) *CABundle {
+func NewCABundle(caBundle []byte) (*CABundle, bool) {
+	certPool := x509.NewCertPool()
 	return &CABundle{
 		caBundle: caBundle,
 		sha256:   sha256.Sum256(caBundle),
 		certPool: certPool,
-	}
+	}, certPool.AppendCertsFromPEM(caBundle)
 }
 
 // GetCABundle returns the CA certificate bundle PEM bytes.

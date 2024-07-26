@@ -512,7 +512,46 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 					Phase:      "Ready",
 					Conditions: allConditionsTrue(1234, "4242"),
 				},
-			}}, wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundleHash:              tlsconfigutil.NewCABundleHash(providerConfigForValidUpstreamWithTLS.CABundle),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(activeDirectoryConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+				SearchBaseFoundCondition:  condPtr(withoutTime(searchBaseFoundInConfigCondition(0))),
+			}},
+		},
+		{
+			name:            "valid upstream spec using a configmap to source CA bundles that is already in the cache is updated to have a new ca bundle: Sync should now update the cache with the new CA bundle hash",
+			inputUpstreams:  []runtime.Object{validUpstreamWithConfigMapCABundleSource},
+			inputK8sObjects: []runtime.Object{validBindUserSecret("4242"), caBundleConfigMap},
+			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundleHash:              tlsconfigutil.NewCABundleHash([]byte("this CA bundle should be replaced")),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(activeDirectoryConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+				SearchBaseFoundCondition:  condPtr(withoutTime(searchBaseFoundInConfigCondition(0))),
+			}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
+			wantResultingUpstreams: []idpv1alpha1.ActiveDirectoryIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, UID: testResourceUID, Generation: 1234},
+				Status: idpv1alpha1.ActiveDirectoryIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
 				BindSecretResourceVersion: "4242",
 				LDAPConnectionProtocol:    upstreamldap.TLS,
 				UserSearchBase:            testUserSearchBase,

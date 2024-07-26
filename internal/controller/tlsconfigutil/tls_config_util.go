@@ -134,53 +134,64 @@ func buildCABundle(
 	}
 
 	var err error
-	caBundle := tlsSpec.CertificateAuthorityData
-	caBundleLength := len(caBundle)
-	field := fmt.Sprintf("%s.%s", conditionPrefix, "certificateAuthorityData")
-	// the ca data supplied inline in the CRDs is expected to be base64 encoded.
-	// However, the ca data read from kubernetes secrets or config map will not be base64 encoded.
-	// For kubernetes secrets, secret data read using the  client-go code automatically decodes base64 encoded values.
-	// So a base64 decode is required only when fetching ca bundle from the tls.certificateAuthorityData field.
-	decodeRequired := true
+	var caBundleAsBytes []byte
+	var originalCABundleLength int
+
+	type generateErrorForNoCertsInNonEmptyBundleFunc func() error
+	var generateErrorForNoCertsInNonEmptyBundle generateErrorForNoCertsInNonEmptyBundleFunc
+
 	if tlsSpec.CertificateAuthorityDataSource != nil {
-		decodeRequired = false
+		// CA data read from kubernetes secrets or config maps will not be base64 encoded.
+		// For kubernetes secrets, secret data read using the client-go code automatically decodes base64 encoded values.
+
 		// track the path of the field in the tlsSpec from which the CA data is sourced.
 		// this will be used to report in the condition status in case an invalid TLS condition is encountered.
-		field = fmt.Sprintf("%s.%s", conditionPrefix, "certificateAuthorityDataSource")
-		caBundle, err = readCABundleFromSource(tlsSpec.CertificateAuthorityDataSource, namespace, secretInformer, configMapInformer)
-		caBundleLength = len(caBundle)
+		field := fmt.Sprintf("%s.%s", conditionPrefix, "certificateAuthorityDataSource")
+		var bundleAsString string
+		bundleAsString, err = readCABundleFromSource(tlsSpec.CertificateAuthorityDataSource, namespace, secretInformer, configMapInformer)
 		if err != nil {
 			return nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
 		}
+		caBundleAsBytes = []byte(bundleAsString)
+		originalCABundleLength = len(bundleAsString)
+
+		generateErrorForNoCertsInNonEmptyBundle = func() error {
+			namespacedName := fmt.Sprintf("%s/%s", namespace, tlsSpec.CertificateAuthorityDataSource.Name)
+
+			return fmt.Errorf(`%s is invalid: key %q with %d bytes of data in %s %q is not a PEM-encoded certificate (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`,
+				field, tlsSpec.CertificateAuthorityDataSource.Key, originalCABundleLength, strings.ToLower(tlsSpec.CertificateAuthorityDataSource.Kind), namespacedName)
+		}
+	} else {
+		// the ca data supplied inline in the CRDs is expected to be base64 encoded.
+		field := fmt.Sprintf("%s.%s", conditionPrefix, "certificateAuthorityData")
+		var decodedBytes []byte
+		decodedBytes, err = base64.StdEncoding.DecodeString(tlsSpec.CertificateAuthorityData)
+		if err != nil {
+			return nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
+		}
+
+		caBundleAsBytes = decodedBytes
+		originalCABundleLength = len(tlsSpec.CertificateAuthorityData)
+
+		generateErrorForNoCertsInNonEmptyBundle = func() error {
+			return fmt.Errorf("%s is invalid: no base64-encoded PEM certificates found in %d bytes of data (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")",
+				field, originalCABundleLength)
+		}
 	}
 
-	if len(caBundle) == 0 {
+	// It is perfectly valid to have an empty CA bundle
+	if originalCABundleLength == 0 {
 		return nil, nil
-	}
-
-	bundleBytes := []byte(caBundle)
-	if decodeRequired {
-		bundleBytes, err = base64.StdEncoding.DecodeString(caBundle)
-		if err != nil {
-			return nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
-		}
 	}
 
 	// try to create a cert pool with the read ca data to determine validity of the ca bundle read from the tlsSpec.
 	certPool := x509.NewCertPool()
-	ok := certPool.AppendCertsFromPEM(bundleBytes)
+	ok := certPool.AppendCertsFromPEM(caBundleAsBytes)
 	if !ok {
-		if decodeRequired {
-			return nil, fmt.Errorf("%s is invalid: no base64-encoded PEM certificates found in %d bytes of data (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")",
-				field, caBundleLength)
-		}
-		namespacedName := fmt.Sprintf("%s/%s", namespace, tlsSpec.CertificateAuthorityDataSource.Name)
-
-		return nil, fmt.Errorf(`%s is invalid: key %q with %d bytes of data in %s %q is not a PEM-encoded certificate (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`,
-			field, tlsSpec.CertificateAuthorityDataSource.Key, caBundleLength, strings.ToLower(tlsSpec.CertificateAuthorityDataSource.Kind), namespacedName)
+		return nil, generateErrorForNoCertsInNonEmptyBundle()
 	}
 
-	return NewCABundle(bundleBytes, certPool), nil
+	return NewCABundle(caBundleAsBytes, certPool), nil
 }
 
 func readCABundleFromSource(source *caBundleSource, namespace string, secretInformer corev1informers.SecretInformer, configMapInformer corev1informers.ConfigMapInformer) (string, error) {

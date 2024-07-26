@@ -205,23 +205,32 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 	)
 	errs = append(errs, err)
 
-	if conditionsutil.HadErrorCondition(conditions) {
+	authenticatorValid := !conditionsutil.HadErrorCondition(conditions)
+
+	// If we calculated a failed status condition, then remove it from the cache even before we try to write
+	// the status, because writing the status can fail for various reasons.
+	if !authenticatorValid {
 		// The authenticator was determined to be invalid. Remove it from the cache, in case it was previously
 		// validated and cached. Do not allow an old, previously validated spec of the authenticator to continue
 		// being used for authentication.
 		c.cache.Delete(cacheKey)
-	} else {
+	}
+
+	updateErr := c.updateStatus(ctx, webhookAuthenticator, conditions)
+	errs = append(errs, updateErr)
+
+	// Only add this WebhookAuthenticator to the cache if the status update succeeds.
+	// If it were in the cache after failing to update the status, then the next Sync loop would see it in the cache
+	// and skip trying to update its status again, which would leave its old status permanently intact.
+	if authenticatorValid && updateErr == nil {
 		c.cache.Store(cacheKey, &cachedWebhookAuthenticator{
 			Token:        newWebhookAuthenticatorForCache,
 			spec:         webhookAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
 			caBundleHash: caBundle.Hash(),
 		})
-		c.log.WithValues("webhook", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
+		c.log.WithValues("webhookAuthenticator", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
 			Info("added new webhook authenticator")
 	}
-
-	err = c.updateStatus(ctx, webhookAuthenticator, conditions)
-	errs = append(errs, err)
 
 	// Sync loop errors:
 	// - Should not be configuration errors. Config errors a user must correct belong on the .Status

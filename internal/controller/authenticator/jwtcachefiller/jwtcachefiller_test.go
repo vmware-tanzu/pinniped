@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -2290,26 +2291,28 @@ func TestController(t *testing.T) {
 			actualLogLines := testutil.SplitByNewline(log.String())
 			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
 
-			for logLineNum, logLine := range actualLogLines {
-				require.NotNil(t, tt.wantLogs[logLineNum], "expected log line should never be empty")
-				var lineStruct map[string]any
-				err := json.Unmarshal([]byte(logLine), &lineStruct)
+			for actualLogLineNum, actualLogLine := range actualLogLines {
+				wantLine := tt.wantLogs[actualLogLineNum]
+				require.NotNil(t, wantLine, "expected log line should never be empty")
+
+				var actualParsedLine map[string]any
+				err := json.Unmarshal([]byte(actualLogLine), &actualParsedLine)
 				require.NoError(t, err)
 
-				require.Equal(t, tt.wantLogs[logLineNum]["level"], lineStruct["level"], fmt.Sprintf("log line (%d) log level should be correct (in: %s)", logLineNum, lineStruct))
+				wantLineAsJSON, err := json.Marshal(wantLine)
+				require.NoError(t, err)
+				wantLine["caller"] = "we don't want to actually make equality comparisons about this"
+				require.Lenf(t, actualParsedLine, len(wantLine), "actual: %s\nwant:   %s", actualLogLine, string(wantLineAsJSON))
+				require.Equal(t, sets.StringKeySet(actualParsedLine), sets.StringKeySet(wantLine))
 
-				require.Equal(t, tt.wantLogs[logLineNum]["timestamp"], lineStruct["timestamp"], fmt.Sprintf("log line (%d) timestamp should be correct (in: %s)", logLineNum, lineStruct))
-				require.Equal(t, tt.wantLogs[logLineNum]["logger"], lineStruct["logger"], fmt.Sprintf("log line (%d) logger should be correct", logLineNum))
-				require.NotEmpty(t, lineStruct["caller"], fmt.Sprintf("log line (%d) caller should not be empty", logLineNum))
-				require.Equal(t, tt.wantLogs[logLineNum]["message"], lineStruct["message"], fmt.Sprintf("log line (%d) message should be correct", logLineNum))
-				if lineStruct["issuer"] != nil {
-					require.Equal(t, tt.wantLogs[logLineNum]["issuer"], lineStruct["issuer"], fmt.Sprintf("log line (%d) issuer should be correct", logLineNum))
-				}
-				if lineStruct["jwtAuthenticator"] != nil {
-					require.Equal(t, tt.wantLogs[logLineNum]["jwtAuthenticator"], lineStruct["jwtAuthenticator"], fmt.Sprintf("log line (%d) jwtAuthenticator should be correct", logLineNum))
-				}
-				if lineStruct["actualType"] != nil {
-					require.Equal(t, tt.wantLogs[logLineNum]["actualType"], lineStruct["actualType"], fmt.Sprintf("log line (%d) actualType should be correct", logLineNum))
+				for k := range actualParsedLine {
+					if k == "caller" {
+						require.NotEmpty(t, actualParsedLine["caller"])
+					} else {
+						require.Equal(t, wantLine[k], actualParsedLine[k],
+							fmt.Sprintf("log line (%d) key %q was not equal\nactual: %s\nwant:   %s",
+								actualLogLineNum, k, actualParsedLine[k], wantLine[k]))
+					}
 				}
 			}
 

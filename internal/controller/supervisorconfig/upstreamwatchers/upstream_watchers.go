@@ -256,9 +256,9 @@ func ValidateGenericLDAP(
 	conditions.Append(secretValidCondition, true)
 
 	tlsSpec := tlsconfigutil.TLSSpecForSupervisor(upstream.Spec().TLSSpec())
-	tlsValidCondition, caBundle, _ := tlsconfigutil.ValidateTLSConfig(tlsSpec, "spec.tls", upstream.Namespace(), secretInformer, configMapInformer)
+	tlsValidCondition, caBundle := tlsconfigutil.ValidateTLSConfig(tlsSpec, "spec.tls", upstream.Namespace(), secretInformer, configMapInformer)
 	conditions.Append(tlsValidCondition, true)
-	config.CABundle = caBundle
+	config.CABundle = caBundle.GetCABundle()
 
 	var ldapConnectionValidCondition, searchBaseFoundCondition *metav1.Condition
 	// No point in trying to connect to the server if the config was already determined to be invalid.

@@ -4,7 +4,6 @@
 package tlsconfigutil
 
 import (
-	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -184,14 +183,12 @@ func buildCABundle(
 		return nil, nil
 	}
 
-	// try to create a cert pool with the read ca data to determine validity of the ca bundle read from the tlsSpec.
-	certPool := x509.NewCertPool()
-	ok := certPool.AppendCertsFromPEM(caBundleAsBytes)
+	caBundle, ok := NewCABundle(caBundleAsBytes)
 	if !ok {
 		return nil, generateErrorForNoCertsInNonEmptyBundle()
 	}
 
-	return NewCABundle(caBundleAsBytes, certPool), nil
+	return caBundle, nil
 }
 
 func readCABundleFromSource(source *caBundleSource, namespace string, secretInformer corev1informers.SecretInformer, configMapInformer corev1informers.ConfigMapInformer) (string, error) {

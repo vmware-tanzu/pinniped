@@ -1,6 +1,7 @@
 package tlsconfigutil
 
 import (
+	"crypto/sha256"
 	"crypto/x509"
 	"testing"
 	"time"
@@ -10,9 +11,34 @@ import (
 	"go.pinniped.dev/internal/certauthority"
 )
 
+func TestNewCABundle(t *testing.T) {
+	testCA, err := certauthority.New("Test CA", 1*time.Hour)
+	require.NoError(t, err)
+
+	t.Run("generates the certPool and hash for certificate input", func(t *testing.T) {
+		caBundle, ok := NewCABundle(testCA.Bundle())
+		require.True(t, ok)
+
+		require.Equal(t, testCA.Bundle(), caBundle.GetCABundle())
+		require.Equal(t, sha256.Sum256(testCA.Bundle()), caBundle.GetCABundleHash())
+		require.Equal(t, string(testCA.Bundle()), caBundle.GetCABundlePemString())
+		require.True(t, testCA.Pool().Equal(caBundle.GetCertPool()), "should be the cert pool of the testCA")
+	})
+
+	t.Run("returns false for non-certificate input", func(t *testing.T) {
+		caBundle, ok := NewCABundle([]byte("here are some bytes"))
+		require.False(t, ok)
+
+		require.Equal(t, []byte("here are some bytes"), caBundle.GetCABundle())
+		require.Equal(t, sha256.Sum256([]byte("here are some bytes")), caBundle.GetCABundleHash())
+		require.Equal(t, "here are some bytes", caBundle.GetCABundlePemString())
+		require.True(t, x509.NewCertPool().Equal(caBundle.GetCertPool()), "should be an empty cert pool")
+	})
+}
+
 func TestGetCABundle(t *testing.T) {
 	t.Run("returns the CA bundle", func(t *testing.T) {
-		caBundle := NewCABundle([]byte("here are some bytes"), nil)
+		caBundle, _ := NewCABundle([]byte("here are some bytes"))
 
 		require.Equal(t, []byte("here are some bytes"), caBundle.GetCABundle())
 	})
@@ -26,7 +52,7 @@ func TestGetCABundle(t *testing.T) {
 
 func TestGetCABundlePemString(t *testing.T) {
 	t.Run("returns the CA bundle PEM string", func(t *testing.T) {
-		caBundle := NewCABundle([]byte("here is a string"), nil)
+		caBundle, _ := NewCABundle([]byte("here is a string"))
 
 		require.Equal(t, "here is a string", caBundle.GetCABundlePemString())
 	})
@@ -38,11 +64,10 @@ func TestGetCABundlePemString(t *testing.T) {
 }
 
 func TestGetCertPool(t *testing.T) {
-	t.Run("returns the cert pool", func(t *testing.T) {
-		aCertPool := x509.NewCertPool()
-		caBundle := NewCABundle(nil, aCertPool)
+	t.Run("returns the generated cert pool", func(t *testing.T) {
+		caBundle, _ := NewCABundle(nil)
 
-		require.Equal(t, aCertPool, caBundle.GetCertPool())
+		require.Equal(t, x509.NewCertPool(), caBundle.GetCertPool())
 	})
 
 	t.Run("handles nil receiver by returning nil", func(t *testing.T) {
@@ -62,7 +87,7 @@ func TestGetCABundleHash(t *testing.T) {
 	sha256OfTest := [32]byte{159, 134, 208, 129, 136, 76, 125, 101, 154, 47, 234, 160, 197, 90, 208, 21, 163, 191, 79, 27, 43, 11, 130, 44, 209, 93, 108, 21, 176, 240, 10, 8}
 
 	t.Run("returns the SHA256", func(t *testing.T) {
-		caBundle := NewCABundle([]byte("test"), nil)
+		caBundle, _ := NewCABundle([]byte("test"))
 
 		require.Equal(t, sha256OfTest, caBundle.GetCABundleHash())
 	})
@@ -119,15 +144,27 @@ func TestCABundleIsEqual(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "should return equal when both left and right have same CA certificate bytes",
-			left:     NewCABundle(testCA.Bundle(), certPool),
-			right:    NewCABundle(testCA.Bundle(), certPool),
+			name: "should return equal when both left and right have same CA certificate bytes",
+			left: func() *CABundle {
+				caBundle, _ := NewCABundle(testCA.Bundle())
+				return caBundle
+			}(),
+			right: func() *CABundle {
+				caBundle, _ := NewCABundle(testCA.Bundle())
+				return caBundle
+			}(),
 			expected: true,
 		},
 		{
-			name:     "should return not equal when both left and right do not have same CA certificate bytes",
-			left:     NewCABundle(testCA.Bundle(), certPool),
-			right:    NewCABundle([]byte("something that is not a cert"), certPool),
+			name: "should return not equal when both left and right do not have same CA certificate bytes",
+			left: func() *CABundle {
+				caBundle, _ := NewCABundle(testCA.Bundle())
+				return caBundle
+			}(),
+			right: func() *CABundle {
+				caBundle, _ := NewCABundle([]byte("something that is not a cert"))
+				return caBundle
+			}(),
 			expected: false,
 		},
 	}

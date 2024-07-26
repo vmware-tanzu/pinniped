@@ -162,7 +162,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 
 	conditions := make([]*metav1.Condition, 0)
 	caBundle, conditions, tlsBundleOk := c.validateTLSBundle(webhookAuthenticator.Spec.TLS, conditions)
-	caBundlePEMSHA256 := caBundle.GetCABundleHash()
+	caBundlePEMSHA256 := caBundle.Hash()
 
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
 	// There is no need to repeat validations for a spec that was already successfully validated. We are making a
@@ -189,7 +189,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 	endpointHostPort, conditions, endpointOk := c.validateEndpoint(webhookAuthenticator.Spec.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
 
-	conditions, tlsNegotiateErr := c.validateConnection(caBundle.GetCertPool(), endpointHostPort, conditions, okSoFar)
+	conditions, tlsNegotiateErr := c.validateConnection(caBundle.CertPool(), endpointHostPort, conditions, okSoFar)
 	errs = append(errs, tlsNegotiateErr)
 	okSoFar = okSoFar && tlsNegotiateErr == nil
 
@@ -197,7 +197,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		// Note that we use the whole URL when constructing the webhook client,
 		// not just the host and port that we validated above. We need the path, etc.
 		webhookAuthenticator.Spec.Endpoint,
-		caBundle.GetCABundle(),
+		caBundle.PEMBytes(),
 		conditions,
 		okSoFar,
 	)

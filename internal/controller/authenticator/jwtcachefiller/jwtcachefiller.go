@@ -237,7 +237,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 		if jwtAuthenticatorFromCache != nil &&
 			reflect.DeepEqual(jwtAuthenticatorFromCache.spec, &jwtAuthenticator.Spec) &&
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
-			jwtAuthenticatorFromCache.caBundlePEMSHA256 == caBundle.GetCABundleHash() {
+			jwtAuthenticatorFromCache.caBundlePEMSHA256 == caBundle.Hash() {
 			c.log.WithValues("jwtAuthenticator", klog.KObj(jwtAuthenticator), "issuer", jwtAuthenticator.Spec.Issuer).
 				Info("actual jwt authenticator and desired jwt authenticator are the same")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
@@ -249,7 +249,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 	_, conditions, issuerOk := c.validateIssuer(jwtAuthenticator.Spec.Issuer, conditions)
 	okSoFar := tlsBundleOk && issuerOk
 
-	client := phttp.Default(caBundle.GetCertPool())
+	client := phttp.Default(caBundle.CertPool())
 	client.Timeout = 30 * time.Second // copied from Kube OIDC code
 	coreOSCtx := coreosoidc.ClientContext(context.Background(), client)
 
@@ -269,7 +269,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 		client,
 		jwtAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
 		keySet,
-		caBundle.GetCABundleHash(),
+		caBundle.Hash(),
 		conditions,
 		okSoFar)
 	errs = append(errs, err)

@@ -335,8 +335,8 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 
 	githubConnectionCondition, hostURL, httpClient, githubConnectionErr := c.validateGitHubConnection(
 		hostPort,
-		caBundle.GetCABundle(),
-		caBundle.GetCertPool(),
+		caBundle.PEMBytes(),
+		caBundle.CertPool(),
 		hostCondition.Status == metav1.ConditionTrue,
 		tlsConfigCondition.Status == metav1.ConditionTrue,
 	)

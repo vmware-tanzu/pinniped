@@ -97,40 +97,40 @@ func ValidateTLSConfig(
 	//
 	// TODO: There could easily be a hash type struct alias for the specific hash value (e.g. "[32]byte") with an Equality function.
 
-	certPool, bundle, err := getCertPool(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
+	caBundle, err := buildCABundle(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
 	if err != nil {
 		return invalidTLSCondition(err.Error()), nil
 	}
-	if bundle == nil {
+	if len(caBundle.GetCABundle()) < 1 {
 		// An empty or nil CA bundle results in a valid TLS condition which indicates that no CA data was supplied.
 		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), nil
 	}
 	return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, loadedTLSConfigurationMessage)),
-		NewCABundle(bundle, certPool)
+		caBundle
 }
 
-// getCertPool reads the unified tlsSpec and returns an X509 cert pool with the CA data that is read either from
+// buildCABundle reads the unified tlsSpec and returns an X509 cert pool with the CA data that is read either from
 // the inline tls.certificateAuthorityData or from a kubernetes secret or a config map as specified in the
 // tls.certificateAuthorityDataSource.
 // If the provided tlsSpec is nil, a nil CA bundle will be returned.
 // If the provided spec contains a CA bundle that is not properly encoded, an error will be returned.
-func getCertPool(
+func buildCABundle(
 	tlsSpec *TLSSpec,
 	conditionPrefix string,
 	namespace string,
 	secretInformer corev1informers.SecretInformer,
 	configMapInformer corev1informers.ConfigMapInformer,
-) (*x509.CertPool, []byte, error) {
+) (*CABundle, error) {
 	// if tlsSpec is nil, we return a nil cert pool and cert bundle. A nil error is also returned to indicate that
 	// a nil tlsSpec is nevertheless a valid one resulting in a valid TLS condition.
 	if tlsSpec == nil {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	// it is a configuration error to specify a ca bundle inline using the tls.certificateAuthorityDataSource field
 	// and also specifying a kubernetes secret or a config map to serve as the source for the ca bundle.
 	if len(tlsSpec.CertificateAuthorityData) > 0 && tlsSpec.CertificateAuthorityDataSource != nil {
-		return nil, nil, fmt.Errorf("%s is invalid: both tls.certificateAuthorityDataSource and tls.certificateAuthorityData provided", conditionPrefix)
+		return nil, fmt.Errorf("%s is invalid: both tls.certificateAuthorityDataSource and tls.certificateAuthorityData provided", conditionPrefix)
 	}
 
 	var err error
@@ -150,37 +150,37 @@ func getCertPool(
 		caBundle, err = readCABundleFromSource(tlsSpec.CertificateAuthorityDataSource, namespace, secretInformer, configMapInformer)
 		caBundleLength = len(caBundle)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
+			return nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
 		}
 	}
 
 	if len(caBundle) == 0 {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	bundleBytes := []byte(caBundle)
 	if decodeRequired {
 		bundleBytes, err = base64.StdEncoding.DecodeString(caBundle)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
+			return nil, fmt.Errorf("%s is invalid: %s", field, err.Error())
 		}
 	}
 
 	// try to create a cert pool with the read ca data to determine validity of the ca bundle read from the tlsSpec.
-	ca := x509.NewCertPool()
-	ok := ca.AppendCertsFromPEM(bundleBytes)
+	certPool := x509.NewCertPool()
+	ok := certPool.AppendCertsFromPEM(bundleBytes)
 	if !ok {
 		if decodeRequired {
-			return nil, nil, fmt.Errorf("%s is invalid: no base64-encoded PEM certificates found in %d bytes of data (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")",
+			return nil, fmt.Errorf("%s is invalid: no base64-encoded PEM certificates found in %d bytes of data (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")",
 				field, caBundleLength)
 		}
 		namespacedName := fmt.Sprintf("%s/%s", namespace, tlsSpec.CertificateAuthorityDataSource.Name)
 
-		return nil, nil, fmt.Errorf(`%s is invalid: key %q with %d bytes of data in %s %q is not a PEM-encoded certificate (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`,
+		return nil, fmt.Errorf(`%s is invalid: key %q with %d bytes of data in %s %q is not a PEM-encoded certificate (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`,
 			field, tlsSpec.CertificateAuthorityDataSource.Key, caBundleLength, strings.ToLower(tlsSpec.CertificateAuthorityDataSource.Kind), namespacedName)
 	}
 
-	return ca, bundleBytes, nil
+	return NewCABundle(bundleBytes, certPool), nil
 }
 
 func readCABundleFromSource(source *caBundleSource, namespace string, secretInformer corev1informers.SecretInformer, configMapInformer corev1informers.ConfigMapInformer) (string, error) {

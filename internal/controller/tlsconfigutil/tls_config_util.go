@@ -4,7 +4,6 @@
 package tlsconfigutil
 
 import (
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
@@ -81,43 +80,6 @@ func TLSSpecForConcierge(source *authenticationv1alpha1.TLSSpec) *TLSSpec {
 	return dest
 }
 
-// CABundle abstracts the internal representation of CA certificate bundles.
-type CABundle struct {
-	caBundle   []byte
-	caCertPool *x509.CertPool
-}
-
-// GetCABundle returns the CA certificate bundle PEM bytes.
-func (c *CABundle) GetCABundle() []byte {
-	return c.caBundle
-}
-
-// GetCABundlePemString returns the certificate bundle PEM formatted as a string.
-func (c *CABundle) GetCABundlePemString() string {
-	return string(c.caBundle)
-}
-
-// GetCertPool returns a X509 cert pool with the CA certificate bundle.
-func (c *CABundle) GetCertPool() *x509.CertPool {
-	return c.caCertPool
-}
-
-// GetCABundleHash returns a sha256 sum of the CA bundle bytes.
-func (c *CABundle) GetCABundleHash() [32]byte {
-	return sha256.Sum256(c.caBundle) // note that this will always return the same hash for nil input
-}
-
-// IsEqual returns whether a CABundle has the same CA certificate bundle as another.
-func (l *CABundle) IsEqual(r *CABundle) bool {
-	if l == nil && r == nil {
-		return true
-	}
-	if l == nil || r == nil {
-		return false
-	}
-	return sha256.Sum256(l.caBundle) == sha256.Sum256(r.GetCABundle())
-}
-
 // ValidateTLSConfig reads ca bundle in the tlsSpec, supplied either inline using the CertificateAuthorityDate
 // or as a reference to a kubernetes secret or configmap using the CertificateAuthorityDataSource, and returns
 // - a condition of type TLSConfigurationValid based on the validity of the ca bundle,
@@ -137,14 +99,14 @@ func ValidateTLSConfig(
 
 	certPool, bundle, err := getCertPool(tlsSpec, conditionPrefix, namespace, secretInformer, configMapInformer)
 	if err != nil {
-		return invalidTLSCondition(err.Error()), &CABundle{}
+		return invalidTLSCondition(err.Error()), nil
 	}
 	if bundle == nil {
 		// An empty or nil CA bundle results in a valid TLS condition which indicates that no CA data was supplied.
 		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), nil
 	}
 	return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, loadedTLSConfigurationMessage)),
-		&CABundle{bundle, certPool}
+		NewCABundle(bundle, certPool)
 }
 
 // getCertPool reads the unified tlsSpec and returns an X509 cert pool with the CA data that is read either from

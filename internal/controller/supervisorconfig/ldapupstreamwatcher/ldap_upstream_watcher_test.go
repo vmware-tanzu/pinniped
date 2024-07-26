@@ -453,6 +453,42 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			}},
 		},
 		{
+			name:           "valid upstream spec using a configmap to source CA bundles that is already in the cache is updated to have a new ca bundle: Sync should now update the cache with the new CA bundle hash",
+			inputUpstreams: []runtime.Object{validUpstreamWithConfigMapCABundleSource},
+			inputSecrets:   []runtime.Object{validBindUserSecret("4242"), caBundleConfigMap},
+			initialValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundleHash:              tlsconfigutil.NewCABundleHash([]byte("this CA bundle should be replaced")),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+			}},
+			setupMocks: func(conn *mockldapconn.MockConn) {
+				// Should perform a test dial and bind.
+				conn.EXPECT().Bind(testBindUsername, testBindPassword).Times(1)
+				conn.EXPECT().Close().Times(1)
+			},
+			wantResultingCache: []*upstreamldap.ProviderConfig{providerConfigForValidUpstreamWithTLS},
+			wantResultingUpstreams: []idpv1alpha1.LDAPIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testResourceUID},
+				Status: idpv1alpha1.LDAPIdentityProviderStatus{
+					Phase:      "Ready",
+					Conditions: allConditionsTrue(1234, "4242"),
+				},
+			}},
+			wantValidatedSettings: map[string]upstreamwatchers.ValidatedSettings{testName: {
+				BindSecretResourceVersion: "4242",
+				LDAPConnectionProtocol:    upstreamldap.TLS,
+				UserSearchBase:            testUserSearchBase,
+				GroupSearchBase:           testGroupSearchBase,
+				CABundleHash:              tlsconfigutil.NewCABundleHash(providerConfigForValidUpstreamWithTLS.CABundle),
+				IDPSpecGeneration:         1234,
+				ConnectionValidCondition:  condPtr(ldapConnectionValidTrueConditionWithoutTimeOrGeneration("4242")),
+			}},
+		},
+		{
 			name:           "one valid upstream using an opaque secret to source CA bundles updates the cache to include only that upstream",
 			inputUpstreams: []runtime.Object{validUpstreamWithOpaqueSecretCABundleSource},
 			inputSecrets:   []runtime.Object{validBindUserSecret("4242"), caBundleOpaqueSecret},

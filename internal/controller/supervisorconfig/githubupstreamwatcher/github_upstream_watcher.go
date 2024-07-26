@@ -425,6 +425,7 @@ func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Conditio
 	}, &hostPort
 }
 
+// TODO: this should take in a tlsconfigutil.CABundle
 func (c *gitHubWatcherController) validateGitHubConnection(
 	hostPort *endpointaddr.HostPort,
 	caBundlePEM []byte,

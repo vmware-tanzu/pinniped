@@ -222,7 +222,6 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 
 	conditions := make([]*metav1.Condition, 0)
 	caBundle, conditions, tlsBundleOk := c.validateTLSBundle(jwtAuthenticator.Spec.TLS, conditions)
-	caBundlePEMSHA256 := caBundle.GetCABundleHash()
 
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
 	// There is no need to repeat validations for a spec that was already successfully validated. We are making a
@@ -238,7 +237,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 		if jwtAuthenticatorFromCache != nil &&
 			reflect.DeepEqual(jwtAuthenticatorFromCache.spec, &jwtAuthenticator.Spec) &&
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
-			jwtAuthenticatorFromCache.caBundlePEMSHA256 == caBundlePEMSHA256 {
+			jwtAuthenticatorFromCache.caBundlePEMSHA256 == caBundle.GetCABundleHash() {
 			c.log.WithValues("jwtAuthenticator", klog.KObj(jwtAuthenticator), "issuer", jwtAuthenticator.Spec.Issuer).
 				Info("actual jwt authenticator and desired jwt authenticator are the same")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
@@ -270,7 +269,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 		client,
 		jwtAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
 		keySet,
-		caBundlePEMSHA256,
+		caBundle.GetCABundleHash(),
 		conditions,
 		okSoFar)
 	errs = append(errs, err)

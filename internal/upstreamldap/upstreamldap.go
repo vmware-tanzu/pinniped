@@ -74,7 +74,7 @@ const (
 	TLS      = LDAPConnectionProtocol("TLS")
 )
 
-// ProviderConfig includes all of the settings for connection and searching for users and groups in
+// ProviderConfig includes all the settings for connection and searching for users and groups in
 // the upstream LDAP IDP. It also provides methods for testing the connection and performing logins.
 // The nested structs are not pointer fields to enable deep copy on function params and return values.
 type ProviderConfig struct {
@@ -92,6 +92,7 @@ type ProviderConfig struct {
 	ConnectionProtocol LDAPConnectionProtocol
 
 	// PEM-encoded CA cert bundle to trust when connecting to the LDAP server. Can be nil.
+	// TODO: should this be a tlsconfigutil.CABundle?
 	CABundle []byte
 
 	// BindUsername is the username to use when performing a bind with the upstream LDAP IDP.

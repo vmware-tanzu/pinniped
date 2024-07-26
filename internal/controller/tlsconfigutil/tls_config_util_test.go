@@ -65,8 +65,8 @@ func TestValidateTLSConfig(t *testing.T) {
 				CertificateAuthorityData: base64EncodedBundle,
 			},
 			expectedCABundle: &CABundle{
-				caBundle:   testCA.Bundle(),
-				caCertPool: certPool,
+				caBundle: testCA.Bundle(),
+				certPool: certPool,
 			},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
@@ -139,8 +139,8 @@ func TestValidateTLSConfig(t *testing.T) {
 				},
 			},
 			expectedCABundle: &CABundle{
-				caBundle:   testCA.Bundle(),
-				caCertPool: certPool,
+				caBundle: testCA.Bundle(),
+				certPool: certPool,
 			},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
@@ -172,8 +172,8 @@ func TestValidateTLSConfig(t *testing.T) {
 				},
 			},
 			expectedCABundle: &CABundle{
-				caBundle:   testCA.Bundle(),
-				caCertPool: certPool,
+				caBundle: testCA.Bundle(),
+				certPool: certPool,
 			},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
@@ -404,8 +404,8 @@ func TestValidateTLSConfig(t *testing.T) {
 				},
 			},
 			expectedCABundle: &CABundle{
-				caBundle:   testCA.Bundle(),
-				caCertPool: certPool,
+				caBundle: testCA.Bundle(),
+				certPool: certPool,
 			},
 			expectedCondition: &metav1.Condition{
 				Type:    typeTLSConfigurationValid,
@@ -658,71 +658,6 @@ func TestTLSSpecForConcierge(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			actual := TLSSpecForConcierge(tt.conciergeTLSSpec)
-			require.Equal(t, tt.expected, actual)
-		})
-	}
-}
-
-func TestCABundleIsEqual(t *testing.T) {
-	testCA, err := certauthority.New("Test CA", 1*time.Hour)
-	require.NoError(t, err)
-	certPool := x509.NewCertPool()
-	require.True(t, certPool.AppendCertsFromPEM(testCA.Bundle()))
-
-	tests := []struct {
-		name     string
-		left     *CABundle
-		right    *CABundle
-		expected bool
-	}{
-		{
-			name:     "should return equal when left and right are nil",
-			left:     nil,
-			right:    nil,
-			expected: true,
-		},
-		{
-			name:     "should return not equal when left is nil and right is not",
-			left:     nil,
-			right:    &CABundle{},
-			expected: false,
-		},
-		{
-			name:     "should return not equal when right is nil and left is not",
-			left:     &CABundle{},
-			right:    nil,
-			expected: false,
-		},
-		{
-			name: "should return equal when both left and right have same CA certificate bytes",
-			left: &CABundle{
-				caBundle:   testCA.Bundle(),
-				caCertPool: certPool,
-			},
-			right: &CABundle{
-				caBundle:   testCA.Bundle(),
-				caCertPool: certPool,
-			},
-			expected: true,
-		},
-		{
-			name: "should return not equal when both left and right do not have same CA certificate bytes",
-			left: &CABundle{
-				caBundle:   testCA.Bundle(),
-				caCertPool: certPool,
-			},
-			right: &CABundle{
-				caBundle:   []byte("something that is not a cert"),
-				caCertPool: nil,
-			},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			actual := tt.left.IsEqual(tt.right)
 			require.Equal(t, tt.expected, actual)
 		})
 	}

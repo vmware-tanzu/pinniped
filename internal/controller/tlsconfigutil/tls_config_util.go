@@ -100,7 +100,7 @@ func ValidateTLSConfig(
 	if err != nil {
 		return invalidTLSCondition(err.Error()), nil
 	}
-	if len(caBundle.GetCABundle()) < 1 {
+	if len(caBundle.PEMBytes()) < 1 {
 		// An empty or nil CA bundle results in a valid TLS condition which indicates that no CA data was supplied.
 		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), nil
 	}

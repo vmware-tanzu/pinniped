@@ -24,32 +24,32 @@ func NewCABundle(caBundle []byte) (*CABundle, bool) {
 	}, certPool.AppendCertsFromPEM(caBundle)
 }
 
-// GetCABundle returns the CA certificate bundle PEM bytes.
-func (c *CABundle) GetCABundle() []byte {
+// PEMBytes returns the CA certificate bundle PEM bytes.
+func (c *CABundle) PEMBytes() []byte {
 	if c == nil {
 		return nil
 	}
 	return c.caBundle
 }
 
-// GetCABundlePemString returns the certificate bundle PEM formatted as a string.
-func (c *CABundle) GetCABundlePemString() string {
+// PEMString returns the certificate bundle PEM formatted as a string.
+func (c *CABundle) PEMString() string {
 	if c == nil {
 		return ""
 	}
 	return string(c.caBundle)
 }
 
-// GetCertPool returns a X509 cert pool with the CA certificate bundle.
-func (c *CABundle) GetCertPool() *x509.CertPool {
+// CertPool returns a X509 cert pool with the CA certificate bundle.
+func (c *CABundle) CertPool() *x509.CertPool {
 	if c == nil {
 		return nil
 	}
 	return c.certPool
 }
 
-// GetCABundleHash returns a sha256 sum of the CA bundle bytes.
-func (c *CABundle) GetCABundleHash() [32]byte {
+// Hash returns a sha256 sum of the CA bundle bytes.
+func (c *CABundle) Hash() [32]byte {
 	if c == nil || len(c.caBundle) < 1 {
 		return sHA256OfEmptyData
 	}
@@ -62,5 +62,5 @@ func (c *CABundle) GetCABundleHash() [32]byte {
 
 // IsEqual returns whether a CABundle has the same CA certificate bundle as another.
 func (c *CABundle) IsEqual(other *CABundle) bool {
-	return c.GetCABundleHash() == other.GetCABundleHash()
+	return c.Hash() == other.Hash()
 }

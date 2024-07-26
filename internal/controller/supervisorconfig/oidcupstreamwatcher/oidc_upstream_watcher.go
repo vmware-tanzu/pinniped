@@ -359,7 +359,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 	// Get the discovered provider and HTTP client from cache, if they are found in the cache.
 	cacheKey := oidcDiscoveryCacheKey{
 		issuer:       upstream.Spec.Issuer,
-		caBundleHash: caBundle.GetCABundleHash(), // note that this will always return the same hash for nil input
+		caBundleHash: caBundle.Hash(), // note that this will always return the same hash for nil input
 	}
 	if cacheEntry := c.validatorCache.getProvider(cacheKey); cacheEntry != nil {
 		discoveredProvider = cacheEntry.provider
@@ -373,7 +373,7 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 
 	// If the provider does not exist in the cache, do a fresh discovery lookup and save to the cache.
 	if discoveredProvider == nil {
-		httpClient = defaultClientShortTimeout(caBundle.GetCertPool())
+		httpClient = defaultClientShortTimeout(caBundle.CertPool())
 
 		_, issuerURLCondition := validateHTTPSURL(upstream.Spec.Issuer, "issuer", reasonUnreachable)
 		if issuerURLCondition != nil {

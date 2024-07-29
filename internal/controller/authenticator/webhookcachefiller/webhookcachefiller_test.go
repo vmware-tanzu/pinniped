@@ -453,11 +453,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -505,21 +506,45 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         goodWebhookDefaultServingCertEndpoint,
+					"webhookAuthenticator": map[string]any{
+						"name": "another-invalid-webhook-authenticator",
+					},
+				},
+				{
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "existing-webhook-authenticator",
 					},
 				},
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         goodWebhookDefaultServingCertEndpoint,
+					"webhookAuthenticator": map[string]any{
+						"name": "invalid-webhook-authenticator",
+					},
+				},
+				{
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "new-webhook-authenticator",
 					},
@@ -604,11 +629,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -649,11 +675,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -704,11 +731,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": true,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -756,6 +784,19 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: badWebhookAuthenticatorSpecInvalidTLS,
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": true,
+					"endpoint":         badWebhookAuthenticatorSpecInvalidTLS.Endpoint,
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
+					},
 				},
 			},
 			wantActions: func() []coretesting.Action {
@@ -817,7 +858,7 @@ func TestController(t *testing.T) {
 					"level":     "info",
 					"timestamp": "2099-08-08T13:57:36.123456Z",
 					"logger":    "webhookcachefiller-controller",
-					"message":   "actual webhook authenticator and desired webhook authenticator are the same",
+					"message":   "cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations",
 					"endpoint":  goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
@@ -870,11 +911,12 @@ func TestController(t *testing.T) {
 					"actualType": "*mockcachevalue.MockValue",
 				},
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -935,11 +977,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": true,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -1038,11 +1081,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -1087,11 +1131,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  hostLocalIPv6Server.URL,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    hostLocalIPv6Server.URL,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -1134,6 +1179,19 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWithoutCA,
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         goodWebhookAuthenticatorSpecWithoutCA.Endpoint,
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1171,6 +1229,19 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: badWebhookAuthenticatorSpecInvalidTLS,
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         badWebhookAuthenticatorSpecInvalidTLS.Endpoint,
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
+					},
 				},
 			},
 			wantActions: func() []coretesting.Action {
@@ -1222,6 +1293,19 @@ func TestController(t *testing.T) {
 					},
 					Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 						Endpoint: badEndpointInvalidURL,
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": true,
+					"endpoint":         badEndpointInvalidURL,
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
 					},
 				},
 			},
@@ -1289,6 +1373,19 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": true,
+					"endpoint":         badEndpointInvalidURL,
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1333,6 +1430,19 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         badEndpointInvalidURL,
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1373,6 +1483,19 @@ func TestController(t *testing.T) {
 					},
 					Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 						Endpoint: badEndpointNoHTTPS,
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         badEndpointNoHTTPS,
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
 					},
 				},
 			},
@@ -1422,6 +1545,19 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         "https://[0:0:0:0:0:0:0:1]:69999/some/fake/path",
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1466,6 +1602,19 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantSyncErr: testutil.WantExactErrorString("error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority"),
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         badWebhookAuthenticatorSpecGoodEndpointButUnknownCA.Endpoint,
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1508,11 +1657,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpointBut404,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpointBut404,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -1560,11 +1710,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  fmt.Sprintf("https://localhost:%s", localhostURL.Port()),
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    fmt.Sprintf("https://localhost:%s", localhostURL.Port()),
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -1590,6 +1741,19 @@ func TestController(t *testing.T) {
 						TLS: &authenticationv1alpha1.TLSSpec{
 							CertificateAuthorityData: base64.StdEncoding.EncodeToString(caForLocalhostAs127001.Bundle()),
 						},
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         "https://[0:0:0:0:0:0:0:1]:4242/some/fake/path",
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
 					},
 				},
 			},
@@ -1638,6 +1802,19 @@ func TestController(t *testing.T) {
 						TLS: &authenticationv1alpha1.TLSSpec{
 							CertificateAuthorityData: base64.StdEncoding.EncodeToString(caForLocalhostAs127001.Bundle()),
 						},
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         "https://[0:0:0:0:0:0:0:1]/some/fake/path",
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
 					},
 				},
 			},
@@ -1695,11 +1872,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  hostAs127001WebhookServer.URL,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    hostAs127001WebhookServer.URL,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -1724,6 +1902,19 @@ func TestController(t *testing.T) {
 					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
 						Conditions: allHappyConditionsSuccess(hostLocalWithExampleDotComCertServer.URL, frozenMetav1Now, 0),
 						Phase:      "Ready",
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         localWithExampleDotComWeebhookAuthenticatorSpec.Endpoint,
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
 					},
 				},
 			},
@@ -1767,6 +1958,19 @@ func TestController(t *testing.T) {
 						TLS: &authenticationv1alpha1.TLSSpec{
 							CertificateAuthorityData: base64.StdEncoding.EncodeToString(caForLocalhostAs127001.Bundle()),
 						},
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "webhookcachefiller-controller",
+					"message":          "invalid webhook authenticator",
+					"removedFromCache": false,
+					"endpoint":         "https://0:0:0:0:0:0:0:1/some/fake/path",
+					"webhookAuthenticator": map[string]any{
+						"name": "test-name",
 					},
 				},
 			},
@@ -1819,11 +2023,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -1858,11 +2063,12 @@ func TestController(t *testing.T) {
 			},
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "webhookcachefiller-controller",
+					"message":     "added or updated webhook authenticator in cache",
+					"isOverwrite": false,
+					"endpoint":    goodWebhookDefaultServingCertEndpoint,
 					"webhookAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -1979,8 +2185,12 @@ func TestController(t *testing.T) {
 			require.Equal(t, tt.wantActions(), pinnipedAPIClient.Actions())
 			require.Equal(t, len(tt.wantNamesOfWebhookAuthenticatorsInCache), len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", len(tt.wantNamesOfWebhookAuthenticatorsInCache), len(cache.Keys()), cache.Keys()))
 
+			wantLogsAsJSON, err := json.Marshal(tt.wantLogs)
+			require.NoError(t, err)
+
 			actualLogLines := testutil.SplitByNewline(log.String())
-			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
+			require.Equalf(t, len(tt.wantLogs), len(actualLogLines),
+				"log line count should be correct\nactual: %s\nwant:   %s", actualLogLines, wantLogsAsJSON)
 
 			for actualLogLineNum, actualLogLine := range actualLogLines {
 				wantLine := tt.wantLogs[actualLogLineNum]

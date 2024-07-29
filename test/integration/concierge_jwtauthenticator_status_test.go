@@ -222,7 +222,7 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 						Type:    "TLSConfigurationValid",
 						Status:  "True",
 						Reason:  "Success",
-						Message: "spec.tls is valid: loaded TLS configuration",
+						Message: "spec.tls is valid: using configured CA bundle",
 					},
 				},
 			),
@@ -424,7 +424,7 @@ func TestConciergeJWTAuthenticatorCRDValidations_Parallel(t *testing.T) {
 func allSuccessfulJWTAuthenticatorConditions(caBundleExists bool) []metav1.Condition {
 	tlsConfigValidMsg := "no CA bundle specified"
 	if caBundleExists {
-		tlsConfigValidMsg = "spec.tls is valid: loaded TLS configuration"
+		tlsConfigValidMsg = "spec.tls is valid: using configured CA bundle"
 	}
 	return []metav1.Condition{{
 		Type:    "AuthenticatorValid",

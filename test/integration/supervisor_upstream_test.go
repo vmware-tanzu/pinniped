@@ -50,7 +50,7 @@ Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nananananan
 				Type:    "TLSConfigurationValid",
 				Status:  "True",
 				Reason:  "Success",
-				Message: `spec.tls is valid: no TLS configuration provided`,
+				Message: `spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image`,
 			},
 		})
 	})
@@ -94,7 +94,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				Type:    "TLSConfigurationValid",
 				Status:  "True",
 				Reason:  "Success",
-				Message: `spec.tls is valid: loaded TLS configuration`,
+				Message: `spec.tls is valid: using configured CA bundle`,
 			},
 		})
 	})
@@ -137,7 +137,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				Type:    "TLSConfigurationValid",
 				Status:  "True",
 				Reason:  "Success",
-				Message: `spec.tls is valid: loaded TLS configuration`,
+				Message: `spec.tls is valid: using configured CA bundle`,
 			},
 		})
 	})

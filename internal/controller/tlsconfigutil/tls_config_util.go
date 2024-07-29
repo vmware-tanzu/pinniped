@@ -21,8 +21,8 @@ import (
 const (
 	ReasonInvalidTLSConfig = "InvalidTLSConfig"
 
-	noTLSConfigurationMessage     = "no TLS configuration provided"
-	loadedTLSConfigurationMessage = "loaded TLS configuration"
+	noTLSConfigurationMessage     = "no TLS configuration provided: using default root CA bundle from container image"
+	loadedTLSConfigurationMessage = "using configured CA bundle"
 	typeTLSConfigurationValid     = "TLSConfigurationValid"
 )
 
@@ -94,7 +94,7 @@ func ValidateTLSConfig(
 	if err != nil {
 		return invalidTLSCondition(err.Error()), nil
 	}
-	if len(caBundle.PEMBytes()) < 1 {
+	if len(caBundle.PEMBytes()) == 0 {
 		// An empty or nil CA bundle results in a valid TLS condition which indicates that no CA data was supplied.
 		return validTLSCondition(fmt.Sprintf("%s is valid: %s", conditionPrefix, noTLSConfigurationMessage)), nil
 	}

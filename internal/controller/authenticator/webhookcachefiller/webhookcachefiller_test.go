@@ -268,7 +268,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "spec.tls is valid: loaded TLS configuration",
+			Message:            "spec.tls is valid: using configured CA bundle",
 		}
 	}
 	happyTLSConfigurationValidNoCA := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -278,7 +278,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "spec.tls is valid: no TLS configuration provided",
+			Message:            "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image",
 		}
 	}
 	sadTLSConfigurationValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {

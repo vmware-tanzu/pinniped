@@ -140,7 +140,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
 				Reason:  conditionsutil.ReasonSuccess,
-				Message: "spec.foo.tls is valid: loaded TLS configuration",
+				Message: "spec.foo.tls is valid: using configured CA bundle",
 			},
 		},
 		{
@@ -170,7 +170,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
 				Reason:  conditionsutil.ReasonSuccess,
-				Message: "spec.foo.tls is valid: loaded TLS configuration",
+				Message: "spec.foo.tls is valid: using configured CA bundle",
 			},
 		},
 		{
@@ -399,7 +399,7 @@ func TestValidateTLSConfig(t *testing.T) {
 				Type:    typeTLSConfigurationValid,
 				Status:  metav1.ConditionTrue,
 				Reason:  conditionsutil.ReasonSuccess,
-				Message: "spec.foo.tls is valid: loaded TLS configuration",
+				Message: "spec.foo.tls is valid: using configured CA bundle",
 			},
 		},
 		{

@@ -117,6 +117,8 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)
 
+	unusedLocalhostPort := findRecentlyUnusedLocalhostPorts(t, 1)[0]
+
 	tests := []struct {
 		name           string
 		spec           authenticationv1alpha1.JWTAuthenticatorSpec
@@ -219,10 +221,12 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 						Reason:  "UnableToValidate",
 						Message: "unable to validate; see other conditions for details",
 					}, {
-						Type:    "DiscoveryURLValid",
-						Status:  "False",
-						Reason:  "InvalidDiscoveryProbe",
-						Message: `could not perform oidc discovery on provider issuer: Get "` + env.SupervisorUpstreamOIDC.Issuer + `/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`,
+						Type:   "DiscoveryURLValid",
+						Status: "False",
+						Reason: "InvalidDiscoveryProbe",
+						Message: `could not perform oidc discovery on provider issuer: Get "` +
+							env.SupervisorUpstreamOIDC.Issuer +
+							`/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`,
 					},
 				},
 			),
@@ -230,7 +234,7 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 		{
 			name: "invalid with bad issuer will result in a jwt authenticator that is not ready",
 			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
-				Issuer:   env.SupervisorUpstreamOIDC.Issuer + "/this-is-the-wrong-path",
+				Issuer:   fmt.Sprintf("https://127.0.0.1:%s/some-fake-issuer-path", unusedLocalhostPort),
 				Audience: "some-fake-audience",
 				TLS: &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(env.SupervisorUpstreamOIDC.CABundle)),
@@ -261,10 +265,14 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 						Reason:  "UnableToValidate",
 						Message: "unable to validate; see other conditions for details",
 					}, {
-						Type:    "DiscoveryURLValid",
-						Status:  "False",
-						Reason:  "InvalidDiscoveryProbe",
-						Message: "could not perform oidc discovery on provider issuer: 404 Not Found: 404 page not found\n",
+						Type:   "DiscoveryURLValid",
+						Status: "False",
+						Reason: "InvalidDiscoveryProbe",
+						Message: fmt.Sprintf(
+							`could not perform oidc discovery on provider issuer: `+
+								`Get "https://127.0.0.1:%s/some-fake-issuer-path/.well-known/openid-configuration": `+
+								`dial tcp 127.0.0.1:%s: connect: connection refused`,
+							unusedLocalhostPort, unusedLocalhostPort),
 					},
 				},
 			),
@@ -310,7 +318,7 @@ func TestConciergeJWTAuthenticatorCRDValidations_Parallel(t *testing.T) {
 			jwtAuthenticator: &authenticationv1alpha1.JWTAuthenticator{
 				ObjectMeta: objectMeta,
 				Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
-					Issuer:   "https://example.com",
+					Issuer:   env.CLIUpstreamOIDC.Issuer,
 					Audience: "",
 				},
 			},

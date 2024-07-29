@@ -382,7 +382,7 @@ func allSuccessfulWebhookAuthenticatorConditions() []metav1.Condition {
 			Type:    "TLSConfigurationValid",
 			Status:  "True",
 			Reason:  "Success",
-			Message: "spec.tls is valid: loaded TLS configuration",
+			Message: "spec.tls is valid: using configured CA bundle",
 		},
 		{
 			Type:    "WebhookConnectionValid",

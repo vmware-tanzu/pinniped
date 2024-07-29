@@ -21,6 +21,11 @@ import (
 
 func TestConciergeJWTAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExternalBundleIsUpdated_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
+
+	if len(env.SupervisorUpstreamOIDC.CABundle) == 0 {
+		t.Skip("skipping external CA bundle test because env.SupervisorUpstreamOIDC.CABundle is empty")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)
 
@@ -128,7 +133,7 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 				},
 			},
 			wantPhase:      authenticationv1alpha1.JWTAuthenticatorPhaseReady,
-			wantConditions: allSuccessfulJWTAuthenticatorConditions(true),
+			wantConditions: allSuccessfulJWTAuthenticatorConditions(len(env.SupervisorUpstreamOIDC.CABundle) != 0),
 		},
 		{
 			name: "valid spec with invalid CA in TLS config will result in a jwt authenticator that is not ready",
@@ -218,11 +223,6 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 						Status:  "False",
 						Reason:  "InvalidDiscoveryProbe",
 						Message: `could not perform oidc discovery on provider issuer: Get "` + env.SupervisorUpstreamOIDC.Issuer + `/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`,
-					}, {
-						Type:    "TLSConfigurationValid",
-						Status:  "True",
-						Reason:  "Success",
-						Message: "spec.tls is valid: using configured CA bundle",
 					},
 				},
 			),
@@ -238,7 +238,7 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 			},
 			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
 			wantConditions: replaceSomeConditions(
-				allSuccessfulJWTAuthenticatorConditions(true),
+				allSuccessfulJWTAuthenticatorConditions(len(env.SupervisorUpstreamOIDC.CABundle) != 0),
 				[]metav1.Condition{
 					{
 						Type:    "Ready",
@@ -422,7 +422,7 @@ func TestConciergeJWTAuthenticatorCRDValidations_Parallel(t *testing.T) {
 }
 
 func allSuccessfulJWTAuthenticatorConditions(caBundleExists bool) []metav1.Condition {
-	tlsConfigValidMsg := "no CA bundle specified"
+	tlsConfigValidMsg := "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"
 	if caBundleExists {
 		tlsConfigValidMsg = "spec.tls is valid: using configured CA bundle"
 	}

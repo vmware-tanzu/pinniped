@@ -178,6 +178,29 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
 	}
 
+	skipExternalCABundleOIDCTestsWhenCABundleIsEmpty := func(t *testing.T) {
+		t.Helper()
+		if len(env.SupervisorUpstreamOIDC.CABundle) == 0 {
+			t.Skip("skipping external CA bundle test because env.SupervisorUpstreamOIDC.CABundle is empty")
+		}
+	}
+
+	skipExternalCABundleLDAPTestsWhenCABundleIsEmpty := func(t *testing.T) {
+		t.Helper()
+		skipLDAPTests(t)
+		if len(env.SupervisorUpstreamLDAP.CABundle) == 0 {
+			t.Skip("skipping external CA bundle test because env.SupervisorUpstreamLDAP.CABundle is empty")
+		}
+	}
+
+	skipExternalCABundleActiveDirectoryTestsWhenCABundleIsEmpty := func(t *testing.T) {
+		t.Helper()
+		skipActiveDirectoryTests(t)
+		if len(env.SupervisorUpstreamActiveDirectory.CABundle) == 0 {
+			t.Skip("skipping external CA bundle test because env.SupervisorUpstreamActiveDirectory.CABundle is empty")
+		}
+	}
+
 	basicOIDCIdentityProviderSpec := func() idpv1alpha1.OIDCIdentityProviderSpec {
 		return idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -340,7 +363,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 		{
 			name:      "oidc IDP using secrets of type opaque to source ca bundle with default username and groups claim settings",
-			maybeSkip: skipNever,
+			maybeSkip: skipExternalCABundleOIDCTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idpSpec := basicOIDCIdentityProviderSpec()
 				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
@@ -355,7 +378,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					Name: caSecret.Name,
 					Key:  "ca.crt",
 				}
-
 				return testlib.CreateTestOIDCIdentityProvider(t, idpSpec, idpv1alpha1.PhaseReady).Name
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
@@ -369,7 +391,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 		{
 			name:      "oidc IDP using secrets of type TLS to source ca bundle with default username and groups claim settings",
-			maybeSkip: skipNever,
+			maybeSkip: skipExternalCABundleOIDCTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idpSpec := basicOIDCIdentityProviderSpec()
 				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
@@ -386,7 +408,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					Name: caSecret.Name,
 					Key:  "ca.crt",
 				}
-
 				return testlib.CreateTestOIDCIdentityProvider(t, idpSpec, idpv1alpha1.PhaseReady).Name
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
@@ -400,7 +421,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 		{
 			name:      "oidc IDP using configmaps to source ca bundle with default username and groups claim settings",
-			maybeSkip: skipNever,
+			maybeSkip: skipExternalCABundleOIDCTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idpSpec := basicOIDCIdentityProviderSpec()
 				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
@@ -414,7 +435,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					Name: caConfigMap.Name,
 					Key:  "ca.crt",
 				}
-
 				return testlib.CreateTestOIDCIdentityProvider(t, idpSpec, idpv1alpha1.PhaseReady).Name
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
@@ -429,7 +449,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 
 		{
 			name:      "oidc IDP using secrets of type opaque to source ca bundle with default username and groups claim settings",
-			maybeSkip: skipNever,
+			maybeSkip: skipExternalCABundleOIDCTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idpSpec := basicOIDCIdentityProviderSpec()
 				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
@@ -444,7 +464,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					Name: caSecret.Name,
 					Key:  "ca.crt",
 				}
-
 				return testlib.CreateTestOIDCIdentityProvider(t, idpSpec, idpv1alpha1.PhaseReady).Name
 			},
 			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
@@ -655,14 +674,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 		{
 			name:      "ldap IDP using secrets of type opaque to source ca bundle and with email as username and groups names as DNs and using an LDAP provider which supports TLS",
-			maybeSkip: skipLDAPTests,
+			maybeSkip: skipExternalCABundleLDAPTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
 					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeOpaque,
 						map[string]string{
 							"ca.crt": env.SupervisorUpstreamLDAP.CABundle,
 						})
-
 					spec.TLS.CertificateAuthorityData = ""
 					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
 						Kind: "Secret",
@@ -705,7 +723,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 		{
 			name:      "ldap IDP using secrets of type TLS to source ca bundle and with email as username and groups names as DNs and using an LDAP provider which supports TLS",
-			maybeSkip: skipLDAPTests,
+			maybeSkip: skipExternalCABundleLDAPTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
 					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeTLS,
@@ -714,7 +732,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							"tls.crt": "",
 							"tls.key": "",
 						})
-
 					spec.TLS.CertificateAuthorityData = ""
 					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
 						Kind: "Secret",
@@ -757,14 +774,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 		{
 			name:      "ldap IDP using configmaps to source ca bundle and with email as username and groups names as DNs and using an LDAP provider which supports TLS",
-			maybeSkip: skipLDAPTests,
+			maybeSkip: skipExternalCABundleLDAPTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
 					caConfigMap := testlib.CreateTestConfigMap(t, env.SupervisorNamespace, "ca-cert",
 						map[string]string{
 							"ca.crt": env.SupervisorUpstreamLDAP.CABundle,
 						})
-
 					spec.TLS.CertificateAuthorityData = ""
 					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
 						Kind: "ConfigMap",
@@ -1242,14 +1258,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 		{
 			name:      "active directory IDP using secret of type opaque to source ca bundle with all default options",
-			maybeSkip: skipActiveDirectoryTests,
+			maybeSkip: skipExternalCABundleActiveDirectoryTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createActiveDirectoryIdentityProvider(t, func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec) {
 					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeOpaque,
 						map[string]string{
 							"ca.crt": env.SupervisorUpstreamActiveDirectory.CABundle,
 						})
-
 					spec.TLS.CertificateAuthorityData = ""
 					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
 						Kind: "Secret",
@@ -1283,7 +1298,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 		{
 			name:      "active directory IDP using secret of type TLS to source ca bundle with all default options",
-			maybeSkip: skipActiveDirectoryTests,
+			maybeSkip: skipExternalCABundleActiveDirectoryTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createActiveDirectoryIdentityProvider(t, func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec) {
 					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeTLS,
@@ -1292,7 +1307,6 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							"tls.crt": "",
 							"tls.key": "",
 						})
-
 					spec.TLS.CertificateAuthorityData = ""
 					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
 						Kind: "Secret",
@@ -1326,14 +1340,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		},
 		{
 			name:      "active directory IDP using configmaps to source ca bundle with all default options",
-			maybeSkip: skipActiveDirectoryTests,
+			maybeSkip: skipExternalCABundleActiveDirectoryTestsWhenCABundleIsEmpty,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createActiveDirectoryIdentityProvider(t, func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec) {
 					caConfigMap := testlib.CreateTestConfigMap(t, env.SupervisorNamespace, "ca-cert",
 						map[string]string{
 							"ca.crt": env.SupervisorUpstreamActiveDirectory.CABundle,
 						})
-
 					spec.TLS.CertificateAuthorityData = ""
 					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
 						Kind: "Secret",

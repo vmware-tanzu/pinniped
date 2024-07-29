@@ -74,35 +74,35 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
-	ca, err := certauthority.New("Downstream Test CA", 1*time.Hour)
+	federationDomainSelfSignedCA, err := certauthority.New("Downstream Test CA", 1*time.Hour)
 	require.NoError(t, err)
 
 	// Save that bundle plus the one that signs the upstream issuer, for test purposes.
-	testCABundlePath := filepath.Join(t.TempDir(), "test-ca.pem")
-	testCABundlePEM := []byte(string(ca.Bundle()) + "\n" + env.SupervisorUpstreamOIDC.CABundle)
-	testCABundleBase64 := base64.StdEncoding.EncodeToString(testCABundlePEM)
-	require.NoError(t, os.WriteFile(testCABundlePath, testCABundlePEM, 0600))
+	federationDomainCABundlePath := filepath.Join(t.TempDir(), "test-ca.pem")
+	federationDomainCABundlePEM := federationDomainSelfSignedCA.Bundle()
+	require.NoError(t, os.WriteFile(federationDomainCABundlePath, federationDomainCABundlePEM, 0600))
 
 	// Use the CA to issue a TLS server cert.
 	t.Logf("issuing test certificate")
-	tlsCert, err := ca.IssueServerCert([]string{issuerURL.Hostname()}, nil, 1*time.Hour)
+	federationDomainTLSServingCert, err := federationDomainSelfSignedCA.IssueServerCert(
+		[]string{issuerURL.Hostname()}, nil, 1*time.Hour)
 	require.NoError(t, err)
-	certPEM, keyPEM, err := certauthority.ToPEM(tlsCert)
+	federationDomainTLSServingCertPEM, federationDomainTLSServingCertKeyPEM, err := certauthority.ToPEM(federationDomainTLSServingCert)
 	require.NoError(t, err)
 
 	// Write the serving cert to a secret.
-	certSecret := testlib.CreateTestSecret(t,
+	federationDomainTLSServingCertSecret := testlib.CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"oidc-provider-tls",
 		corev1.SecretTypeTLS,
-		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
+		map[string]string{"tls.crt": string(federationDomainTLSServingCertPEM), "tls.key": string(federationDomainTLSServingCertKeyPEM)},
 	)
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
 	federationDomain := testlib.CreateTestFederationDomain(topSetupCtx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer: issuerURL.String(),
-			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: federationDomainTLSServingCertSecret.Name},
 		},
 		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)
@@ -113,7 +113,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	defaultJWTAuthenticatorSpec := authenticationv1alpha1.JWTAuthenticatorSpec{
 		Issuer:   federationDomain.Spec.Issuer,
 		Audience: clusterAudience,
-		TLS:      &authenticationv1alpha1.TLSSpec{CertificateAuthorityData: testCABundleBase64},
+		TLS:      &authenticationv1alpha1.TLSSpec{CertificateAuthorityData: base64.StdEncoding.EncodeToString(federationDomainCABundlePEM)},
 	}
 
 	// Add an OIDC upstream IDP and try using it to authenticate during kubectl commands.
@@ -172,7 +172,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -231,7 +231,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// in this test, use a secret of type TLS to source ca bundle for the JWT authenticator
 		caSecret := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-cert", corev1.SecretTypeTLS,
 			map[string]string{
-				"ca.crt":  string(testCABundlePEM),
+				"ca.crt":  string(federationDomainCABundlePEM),
 				"tls.crt": "",
 				"tls.key": "",
 			})
@@ -243,6 +243,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			Key:  "ca.crt",
 		}
 		authenticator := testlib.CreateTestJWTAuthenticator(testCtx, t, *jwtAuthnSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
+
 		// Create upstream OIDC provider and wait for it to become ready.
 		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -273,7 +274,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			"--oidc-scopes", "offline_access,openid,pinniped:request-audience", // does not request username or groups
@@ -334,9 +335,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// in this test, use a secret of type opaque to source ca bundle for the JWT authenticator
 		caSecret := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-cert", corev1.SecretTypeOpaque,
 			map[string]string{
-				"ca.crt": string(testCABundlePEM),
+				"ca.crt": string(federationDomainCABundlePEM),
 			})
-		t.Logf("created secret %s/%s", caSecret.Namespace, caSecret.Name)
 		jwtAuthnSpec := defaultJWTAuthenticatorSpec.DeepCopy()
 		jwtAuthnSpec.TLS.CertificateAuthorityData = ""
 		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
@@ -344,9 +344,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			Name: caSecret.Name,
 			Key:  "ca.crt",
 		}
-
 		authenticator := testlib.CreateTestJWTAuthenticator(testCtx, t, *jwtAuthnSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
-		t.Logf("authenticator: %s/%s; concierge ns: %s", authenticator.Namespace, authenticator.Name, env.ConciergeNamespace)
+
 		// Create upstream OIDC provider and wait for it to become ready.
 		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -378,7 +377,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
 			"--oidc-skip-listen",
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -474,7 +473,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		// in this test, use a configmap to source ca bundle for the JWT authenticator
 		caConfigMap := testlib.CreateTestConfigMap(t, env.ConciergeNamespace, "ca-cert",
 			map[string]string{
-				"ca.crt": string(testCABundlePEM),
+				"ca.crt": string(federationDomainCABundlePEM),
 			})
 		jwtAuthnSpec := defaultJWTAuthenticatorSpec.DeepCopy()
 		jwtAuthnSpec.TLS.CertificateAuthorityData = ""
@@ -483,8 +482,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			Name: caConfigMap.Name,
 			Key:  "ca.crt",
 		}
+		authenticator := testlib.CreateTestJWTAuthenticator(testCtx, t, *jwtAuthnSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 
-		authenticator := testlib.CreateTestJWTAuthenticator(testCtx, t, defaultJWTAuthenticatorSpec, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 		// Create upstream OIDC provider and wait for it to become ready.
 		createdProvider := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -516,7 +515,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
 			"--oidc-skip-listen",
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -649,7 +648,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-browser",
 			"--oidc-skip-listen",
 			"--upstream-identity-provider-flow", "cli_password", // create a kubeconfig configured to use the cli_password flow
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -729,7 +728,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-name", oidcIdentityProvider.Name,
 			"--upstream-identity-provider-type", "oidc",
 			"--upstream-identity-provider-flow", "cli_password",
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -1116,7 +1115,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
@@ -1172,7 +1171,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
@@ -1228,7 +1227,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--upstream-identity-provider-flow", "cli_password", // put cli_password in the kubeconfig, so we can override it with the env var
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
@@ -1317,7 +1316,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", testCABundlePath,
+			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes

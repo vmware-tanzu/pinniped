@@ -162,16 +162,23 @@ func TestParse(t *testing.T) {
 			expectErr:   `host "___.example.com" is not a valid hostname or IP address`,
 		},
 		{
-			name:        "invalid host with uppercase",
-			input:       "HOST.EXAMPLE.COM",
-			defaultPort: 443,
-			expectErr:   `host "HOST.EXAMPLE.COM" is not a valid hostname or IP address`,
-		},
-		{
 			name:        "invalid host with extra port",
 			input:       "host.example.com:port1:port2",
 			defaultPort: 443,
 			expectErr:   `host "host.example.com:port1:port2" is not a valid hostname or IP address`,
+		},
+		{
+			name:           "hostname with upper case letters should be valid",
+			input:          "HoSt.EXamplE.cOM",
+			defaultPort:    443,
+			expect:         HostPort{Host: "HoSt.EXamplE.cOM", Port: 443},
+			expectEndpoint: "HoSt.EXamplE.cOM:443",
+		},
+		{
+			name:        "unicode chars are disallowed in host names",
+			input:       "Hello.世界🙂.com",
+			defaultPort: 443,
+			expectErr:   `host "Hello.世界🙂.com" is not a valid hostname or IP address`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -292,11 +299,19 @@ func TestParseFromURL(t *testing.T) {
 			defaultPort: 443,
 			expectErr:   `host "___.example.com" is not a valid hostname or IP address`,
 		},
+
 		{
-			name:        "invalid host with uppercase",
-			input:       "http://HOST.EXAMPLE.COM",
+			name:           "hostname with upper case letters should be valid",
+			input:          "https://HoSt.EXamplE.cOM",
+			defaultPort:    443,
+			expect:         HostPort{Host: "HoSt.EXamplE.cOM", Port: 443},
+			expectEndpoint: "HoSt.EXamplE.cOM:443",
+		},
+		{
+			name:        "unicode chars are disallowed in host names",
+			input:       "https://Hello.世界🙂.com",
 			defaultPort: 443,
-			expectErr:   `host "HOST.EXAMPLE.COM" is not a valid hostname or IP address`,
+			expectErr:   `host "Hello.世界🙂.com" is not a valid hostname or IP address`,
 		},
 		// new tests for new functionality
 		{

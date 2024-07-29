@@ -65,7 +65,8 @@ func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
 	// Check if the host part is a IPv4 or IPv6 address or a valid hostname according to RFC 1123.
 	switch {
 	case len(validation.IsValidIP(field.NewPath("UNKNOWN_PATH"), host)) == 0:
-	case len(validation.IsDNS1123Subdomain(host)) == 0:
+	// the host name should be case-insensitive.
+	case len(validation.IsDNS1123Subdomain(strings.ToLower(host))) == 0:
 	default:
 		return HostPort{}, fmt.Errorf("host %q is not a valid hostname or IP address", host)
 	}

@@ -82,13 +82,13 @@ func TestConciergeWebhookAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExt
 				t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 					t.Parallel()
 
-					caBundlePEM, err := base64.StdEncoding.DecodeString(testlib.IntegrationEnv(t).TestWebhook.TLS.CertificateAuthorityData)
+					caBundlePEM, err := base64.StdEncoding.DecodeString(env.TestWebhook.TLS.CertificateAuthorityData)
 					require.NoError(t, err)
 
 					caBundleResourceName := test.createResourceForCABundle(t, string(caBundlePEM))
 
 					authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &authenticationv1alpha1.WebhookAuthenticatorSpec{
-						Endpoint: testlib.IntegrationEnv(t).TestWebhook.Endpoint,
+						Endpoint: env.TestWebhook.Endpoint,
 						TLS: &authenticationv1alpha1.TLSSpec{
 							CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
 								Kind: test.caBundleSourceSpecKind,
@@ -97,6 +97,9 @@ func TestConciergeWebhookAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExt
 							},
 						},
 					}, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
+
+					t.Logf("created webhookauthenticator %s with CA bundle source %s %s",
+						authenticator.Name, test.caBundleSourceSpecKind, caBundleResourceName)
 
 					test.updateCABundle(t, caBundleResourceName, "this is not a valid CA bundle value")
 					testlib.WaitForWebhookAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.WebhookAuthenticatorPhaseError)
@@ -110,7 +113,7 @@ func TestConciergeWebhookAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExt
 }
 
 func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
-	testEnv := testlib.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)
 
@@ -126,7 +129,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		{
 			name: "basic test to see if the WebhookAuthenticator wakes up or not",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
-				return &testlib.IntegrationEnv(t).TestWebhook
+				return &env.TestWebhook
 			},
 			initialPhase:    authenticationv1alpha1.WebhookAuthenticatorPhaseReady,
 			finalConditions: allSuccessfulWebhookAuthenticatorConditions(),
@@ -135,7 +138,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 			name: "valid spec with invalid CA in TLS config will result in a WebhookAuthenticator that is not ready",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				caBundleString := "invalid base64-encoded data"
-				webhookSpec := testEnv.TestWebhook.DeepCopy()
+				webhookSpec := env.TestWebhook.DeepCopy()
 				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleString,
 				}
@@ -172,7 +175,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		{
 			name: "valid spec with valid CA in TLS config but does not match issuer server will result in a WebhookAuthenticator that is not ready",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
-				webhookSpec := testEnv.TestWebhook.DeepCopy()
+				webhookSpec := env.TestWebhook.DeepCopy()
 				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleSomePivotalCA,
 				}
@@ -204,7 +207,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		{
 			name: "invalid with unresponsive endpoint will result in a WebhookAuthenticator that is not ready",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
-				webhookSpec := testEnv.TestWebhook.DeepCopy()
+				webhookSpec := env.TestWebhook.DeepCopy()
 				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleSomePivotalCA,
 				}

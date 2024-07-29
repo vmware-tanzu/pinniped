@@ -101,6 +101,9 @@ func TestConciergeJWTAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExterna
 						},
 					}, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
+					t.Logf("created jwtauthenticator %s with CA bundle source %s %s",
+						authenticator.Name, test.caBundleSourceSpecKind, caBundleResourceName)
+
 					test.updateCABundle(t, caBundleResourceName, "this is not a valid CA bundle value")
 					testlib.WaitForJWTAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseError)
 

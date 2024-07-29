@@ -755,11 +755,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": false,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -812,21 +813,45 @@ func TestController(t *testing.T) {
 			),
 			wantLogs: []map[string]any{
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "jwtcachefiller-controller",
-					"message":   "added new jwt authenticator",
-					"issuer":    goodIssuer,
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           badIssuerJWKSURIJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "another-invalid-jwt-authenticator",
+					},
+				},
+				{
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "jwtcachefiller-controller",
+					"message":     "added or updated jwt authenticator in cache",
+					"isOverwrite": false,
+					"issuer":      goodIssuer,
 					"jwtAuthenticator": map[string]any{
 						"name": "existing-jwt-authenticator",
 					},
 				},
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "jwtcachefiller-controller",
-					"message":   "added new jwt authenticator",
-					"issuer":    goodIssuer,
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           badIssuerJWKSURIJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "invalid-jwt-authenticator",
+					},
+				},
+				{
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "jwtcachefiller-controller",
+					"message":     "added or updated jwt authenticator in cache",
+					"isOverwrite": false,
+					"issuer":      goodIssuer,
 					"jwtAuthenticator": map[string]any{
 						"name": "new-jwt-authenticator",
 					},
@@ -926,11 +951,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": false,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -973,11 +999,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": false,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -1016,11 +1043,12 @@ func TestController(t *testing.T) {
 				someSecretWithCA,
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": false,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -1059,11 +1087,12 @@ func TestController(t *testing.T) {
 				someConfigMapWithCA,
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": false,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -1099,11 +1128,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": false,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -1140,11 +1170,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": false,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -1193,11 +1224,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": true,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -1302,11 +1334,12 @@ func TestController(t *testing.T) {
 				someSecretWithCA,
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": true,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -1358,7 +1391,7 @@ func TestController(t *testing.T) {
 				"level":     "info",
 				"timestamp": "2099-08-08T13:57:36.123456Z",
 				"logger":    "jwtcachefiller-controller",
-				"message":   "actual jwt authenticator and desired jwt authenticator are the same",
+				"message":   "cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations",
 				"issuer":    goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
@@ -1413,11 +1446,12 @@ func TestController(t *testing.T) {
 					"actualType": "*mockcachevalue.MockValue",
 				},
 				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "jwtcachefiller-controller",
-					"message":   "added new jwt authenticator",
-					"issuer":    goodIssuer,
+					"level":       "info",
+					"timestamp":   "2099-08-08T13:57:36.123456Z",
+					"logger":      "jwtcachefiller-controller",
+					"message":     "added or updated jwt authenticator in cache",
+					"isOverwrite": false,
+					"issuer":      goodIssuer,
 					"jwtAuthenticator": map[string]any{
 						"name": "test-name",
 					},
@@ -1451,6 +1485,19 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: *missingTLSJWTAuthenticatorSpec,
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           missingTLSJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
 				},
 			},
 			wantActions: func() []coretesting.Action {
@@ -1493,6 +1540,19 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: *invalidTLSJWTAuthenticatorSpec,
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           invalidTLSJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
 				},
 			},
 			wantActions: func() []coretesting.Action {
@@ -1548,6 +1608,19 @@ func TestController(t *testing.T) {
 					Spec: *invalidTLSJWTAuthenticatorSpec,
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": true,
+					"issuer":           invalidTLSJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1600,6 +1673,19 @@ func TestController(t *testing.T) {
 					Spec: *invalidIssuerJWTAuthenticatorSpec,
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": true,
+					"issuer":           invalidIssuerJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1641,6 +1727,19 @@ func TestController(t *testing.T) {
 					Spec: *invalidIssuerJWTAuthenticatorSpec,
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           invalidIssuerJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1678,6 +1777,19 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: *invalidIssuerSchemeJWTAuthenticatorSpec,
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           invalidIssuerSchemeJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
 				},
 			},
 			wantActions: func() []coretesting.Action {
@@ -1720,6 +1832,19 @@ func TestController(t *testing.T) {
 						Issuer:   "https://www.example.com/foo/bar/#do-not-include-fragment",
 						Audience: goodAudience,
 						TLS:      goodOIDCIssuerServerTLSSpec,
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           "https://www.example.com/foo/bar/#do-not-include-fragment",
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
 					},
 				},
 			},
@@ -1770,6 +1895,19 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           "https://www.example.com/foo/bar/?query-params=not-allowed",
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1817,6 +1955,19 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           "https://www.example.com/foo/bar/.well-known/openid-configuration",
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1858,6 +2009,19 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: *validIssuerURLButDoesNotExistJWTAuthenticatorSpec,
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           validIssuerURLButDoesNotExistJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
 				},
 			},
 			wantActions: func() []coretesting.Action {
@@ -1902,6 +2066,19 @@ func TestController(t *testing.T) {
 						Issuer:   goodIssuer + "/path/to/not/found",
 						Audience: goodAudience,
 						TLS:      goodOIDCIssuerServerTLSSpec,
+					},
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           goodIssuer + "/path/to/not/found",
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
 					},
 				},
 			},
@@ -1955,6 +2132,19 @@ func TestController(t *testing.T) {
 					Spec: *badIssuerJWKSURIJWTAuthenticatorSpec,
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           badIssuerJWKSURIJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1992,6 +2182,19 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: *badIssuerJWKSURISchemeJWTAuthenticatorSpec,
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           badIssuerJWKSURISchemeJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
 				},
 			},
 			wantActions: func() []coretesting.Action {
@@ -2033,6 +2236,19 @@ func TestController(t *testing.T) {
 					Spec: *badIssuerUsesOurHardcodedPrivateKeyJWTAuthenticatorSpec,
 				},
 			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           badIssuerUsesOurHardcodedPrivateKeyJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
+				},
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2071,6 +2287,19 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: *jwksFetchShouldFailJWTAuthenticatorSpec,
+				},
+			},
+			wantLogs: []map[string]any{
+				{
+					"level":            "info",
+					"timestamp":        "2099-08-08T13:57:36.123456Z",
+					"logger":           "jwtcachefiller-controller",
+					"message":          "invalid jwt authenticator",
+					"removedFromCache": false,
+					"issuer":           jwksFetchShouldFailJWTAuthenticatorSpec.Issuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
 				},
 			},
 			wantActions: func() []coretesting.Action {
@@ -2117,11 +2346,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": false,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -2154,11 +2384,12 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "added new jwt authenticator",
-				"issuer":    goodIssuer,
+				"level":       "info",
+				"timestamp":   "2099-08-08T13:57:36.123456Z",
+				"logger":      "jwtcachefiller-controller",
+				"message":     "added or updated jwt authenticator in cache",
+				"isOverwrite": false,
+				"issuer":      goodIssuer,
 				"jwtAuthenticator": map[string]any{
 					"name": "test-name",
 				},
@@ -2288,8 +2519,12 @@ func TestController(t *testing.T) {
 
 			require.Equal(t, len(tt.wantNamesOfJWTAuthenticatorsInCache), len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", len(tt.wantNamesOfJWTAuthenticatorsInCache), len(cache.Keys()), cache.Keys()))
 
+			wantLogsAsJSON, err := json.Marshal(tt.wantLogs)
+			require.NoError(t, err)
+
 			actualLogLines := testutil.SplitByNewline(log.String())
-			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
+			require.Equalf(t, len(tt.wantLogs), len(actualLogLines),
+				"log line count should be correct\nactual: %s\nwant:   %s", actualLogLines, wantLogsAsJSON)
 
 			for actualLogLineNum, actualLogLine := range actualLogLines {
 				wantLine := tt.wantLogs[actualLogLineNum]

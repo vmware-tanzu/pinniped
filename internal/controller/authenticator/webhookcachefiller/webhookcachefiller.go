@@ -174,14 +174,15 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 	// rather than trying to show the most up-to-date status possible. These validations are for administrator
 	// convenience at the time of a configuration change, to catch typos and blatant misconfigurations, rather
 	// than to constantly monitor for external issues.
+	var oldWebhookAuthenticatorFromCache *cachedWebhookAuthenticator
 	if valueFromCache := c.cache.Get(cacheKey); valueFromCache != nil {
-		oldWebhookAuthenticatorFromCache := c.cacheValueAsWebhookAuthenticator(valueFromCache)
+		oldWebhookAuthenticatorFromCache = c.cacheValueAsWebhookAuthenticator(valueFromCache)
 		if oldWebhookAuthenticatorFromCache != nil &&
 			reflect.DeepEqual(oldWebhookAuthenticatorFromCache.spec, &webhookAuthenticator.Spec) &&
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
 			oldWebhookAuthenticatorFromCache.caBundleHash.Equal(caBundle.Hash()) {
 			c.log.WithValues("webhookAuthenticator", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
-				Info("actual webhook authenticator and desired webhook authenticator are the same")
+				Info("cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
 			return nil
 		}
@@ -214,6 +215,11 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		// validated and cached. Do not allow an old, previously validated spec of the authenticator to continue
 		// being used for authentication.
 		c.cache.Delete(cacheKey)
+		c.log.WithValues(
+			"webhookAuthenticator", klog.KObj(webhookAuthenticator),
+			"endpoint", webhookAuthenticator.Spec.Endpoint,
+			"removedFromCache", oldWebhookAuthenticatorFromCache != nil,
+		).Info("invalid webhook authenticator")
 	}
 
 	updateErr := c.updateStatus(ctx, webhookAuthenticator, conditions)
@@ -228,8 +234,11 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 			spec:         webhookAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
 			caBundleHash: caBundle.Hash(),
 		})
-		c.log.WithValues("webhookAuthenticator", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
-			Info("added new webhook authenticator")
+		c.log.WithValues(
+			"webhookAuthenticator", klog.KObj(webhookAuthenticator),
+			"endpoint", webhookAuthenticator.Spec.Endpoint,
+			"isOverwrite", oldWebhookAuthenticatorFromCache != nil,
+		).Info("added or updated webhook authenticator in cache")
 	}
 
 	// Sync loop errors:
@@ -456,11 +465,14 @@ func (c *webhookCacheFillerController) updateStatus(
 		})
 	}
 
+	// TODO: this should use c.log.WithValues("webhookAuthenticator", original.Name)
+	log := plog.New().WithName(controllerName).WithValues("webhookAuthenticator", original.Name)
+
 	_ = conditionsutil.MergeConditions(
 		conditions,
 		original.Generation,
 		&updated.Status.Conditions,
-		plog.New().WithName(controllerName),
+		log,
 		metav1.NewTime(c.clock.Now()),
 	)
 
@@ -468,5 +480,8 @@ func (c *webhookCacheFillerController) updateStatus(
 		return nil
 	}
 	_, err := c.client.AuthenticationV1alpha1().WebhookAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
+	if err == nil {
+		log.Debug("webhookauthenticator status successfully updated")
+	}
 	return err
 }

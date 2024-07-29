@@ -239,7 +239,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
 			oldJWTAuthenticatorFromCache.caBundleHash.Equal(caBundle.Hash()) {
 			c.log.WithValues("jwtAuthenticator", klog.KObj(jwtAuthenticator), "issuer", jwtAuthenticator.Spec.Issuer).
-				Info("actual jwt authenticator and desired jwt authenticator are the same")
+				Info("cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
 			return nil
 		}
@@ -283,6 +283,11 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 		// validated and cached. Do not allow an old, previously validated spec of the authenticator to continue
 		// being used for authentication.
 		c.cache.Delete(cacheKey)
+		c.log.WithValues(
+			"jwtAuthenticator", klog.KObj(jwtAuthenticator),
+			"issuer", jwtAuthenticator.Spec.Issuer,
+			"removedFromCache", oldJWTAuthenticatorFromCache != nil,
+		).Info("invalid jwt authenticator")
 	}
 
 	updateErr := c.updateStatus(ctx, jwtAuthenticator, conditions)
@@ -293,8 +298,11 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 	// and skip trying to update its status again, which would leave its old status permanently intact.
 	if authenticatorValid && updateErr == nil {
 		c.cache.Store(cacheKey, newJWTAuthenticatorForCache)
-		c.log.WithValues("jwtAuthenticator", klog.KObj(jwtAuthenticator), "issuer", jwtAuthenticator.Spec.Issuer).
-			Info("added new jwt authenticator")
+		c.log.WithValues(
+			"jwtAuthenticator", klog.KObj(jwtAuthenticator),
+			"issuer", jwtAuthenticator.Spec.Issuer,
+			"isOverwrite", oldJWTAuthenticatorFromCache != nil,
+		).Info("added or updated jwt authenticator in cache")
 	}
 
 	// Sync loop errors:
@@ -669,11 +677,14 @@ func (c *jwtCacheFillerController) updateStatus(
 		})
 	}
 
+	// TODO: this should use c.log.WithValues("jwtAuthenticator", original.Name)
+	log := plog.New().WithName(controllerName).WithValues("jwtAuthenticator", original.Name)
+
 	_ = conditionsutil.MergeConditions(
 		conditions,
 		original.Generation,
 		&updated.Status.Conditions,
-		plog.New().WithName(controllerName),
+		log,
 		metav1.NewTime(c.clock.Now()),
 	)
 
@@ -681,5 +692,8 @@ func (c *jwtCacheFillerController) updateStatus(
 		return nil
 	}
 	_, err := c.client.AuthenticationV1alpha1().JWTAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
+	if err == nil {
+		log.Debug("jwtauthenticator status successfully updated")
+	}
 	return err
 }

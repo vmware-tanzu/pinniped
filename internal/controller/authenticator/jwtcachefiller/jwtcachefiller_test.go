@@ -998,7 +998,7 @@ func TestController(t *testing.T) {
 			runTestsOnResultingAuthenticator: false, // skip the tests because the authenticator left in the cache is the mock version that was added above
 		},
 		{
-			name: "Sync: JWTAuthenticator update when cached authenticator is different type: loop will complete successfully and update status conditions.",
+			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions.",
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				cache.Store(
 					authncache.Key{
@@ -1006,6 +1006,9 @@ func TestController(t *testing.T) {
 						Kind:     "JWTAuthenticator",
 						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
 					},
+					// Only entries of type cachedJWTAuthenticator are ever put into the cache, so this should never really happen.
+					// This test is to provide coverage on the production code which reads from the cache and casts those entries to
+					// the appropriate data type.
 					struct{ authenticator.Token }{},
 				)
 			},
@@ -1142,6 +1145,58 @@ func TestController(t *testing.T) {
 				}
 			},
 			wantCacheEntries: 0,
+		},
+		{
+			name: "previously valid cached authenticator's spec changes and becomes invalid (e.g. spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, and will remove authenticator from cache",
+			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "JWTAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, *someJWTAuthenticatorSpec, wantClose),
+				)
+			},
+			jwtAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *invalidIssuerJWTAuthenticatorSpec,
+				},
+			},
+			syncKey: controllerlib.Key{Name: "test-name"},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *invalidIssuerJWTAuthenticatorSpec,
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+								sadIssuerURLValidInvalid("https://.café   .com/café/café/café/coffee", frozenMetav1Now, 0),
+								unknownDiscoveryURLValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								unknownJWKSURLValid(frozenMetav1Now, 0),
+								unknownJWKSFetch(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantCacheEntries: 0,    // removed from cache
+			wantClose:        true, // the removed cache entry was also closed
 		},
 		{
 			name: "validateIssuer: parsing error (spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",

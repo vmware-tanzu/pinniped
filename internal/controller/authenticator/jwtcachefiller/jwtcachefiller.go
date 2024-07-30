@@ -119,6 +119,9 @@ type cachedJWTAuthenticator struct {
 }
 
 func (c *cachedJWTAuthenticator) Close() {
+	if c == nil {
+		return
+	}
 	c.cancel()
 }
 
@@ -162,12 +165,12 @@ type jwtCacheFillerController struct {
 // Sync implements controllerlib.Syncer.
 func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	obj, err := c.jwtAuthenticators.Lister().Get(ctx.Key.Name)
-
 	if err != nil && apierrors.IsNotFound(err) {
 		c.log.Info("Sync() found that the JWTAuthenticator does not exist yet or was deleted")
 		return nil
 	}
 	if err != nil {
+		// no unit test for this failure
 		return fmt.Errorf("failed to get JWTAuthenticator %s/%s: %w", ctx.Key.Namespace, ctx.Key.Name, err)
 	}
 
@@ -177,35 +180,37 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 		Name:     ctx.Key.Name,
 	}
 
-	// If this authenticator already exists, then only recreate it if is different from the desired
-	// authenticator. We don't want to be creating a new authenticator for every resync period.
-	//
-	// If we do need to recreate the authenticator, then make sure cancel the old one to avoid
-	// goroutine leaks.
-	if value := c.cache.Get(cacheKey); value != nil {
-		jwtAuthenticator := c.extractValueAsJWTAuthenticator(value)
-		if jwtAuthenticator != nil {
-			if reflect.DeepEqual(jwtAuthenticator.spec, &obj.Spec) {
-				c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).Info("actual jwt authenticator and desired jwt authenticator are the same")
-				return nil
-			}
-			jwtAuthenticator.Close()
+	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
+	// There is no need to repeat validations for a spec that was already successfully validated. We are making a
+	// design decision to avoid repeating the validation which dials the server, even though the server's TLS
+	// configuration could have changed, because it is also possible that the network could be flaky. We are choosing
+	// to prefer to keep the authenticator cached (available for end-user auth attempts) during times of network flakes
+	// rather than trying to show the most up-to-date status possible. These validations are for administrator
+	// convenience at the time of a configuration change, to catch typos and blatant misconfigurations, rather
+	// than to constantly monitor for external issues.
+	var jwtAuthenticatorFromCache *cachedJWTAuthenticator
+	if valueFromCache := c.cache.Get(cacheKey); valueFromCache != nil {
+		jwtAuthenticatorFromCache = c.cacheValueAsJWTAuthenticator(valueFromCache)
+		if jwtAuthenticatorFromCache != nil && reflect.DeepEqual(jwtAuthenticatorFromCache.spec, &obj.Spec) {
+			c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).
+				Info("actual jwt authenticator and desired jwt authenticator are the same")
+			// Stop, no more work to be done. This authenticator is already validated and cached.
+			return nil
 		}
 	}
 
 	conditions := make([]*metav1.Condition, 0)
-	specCopy := obj.Spec.DeepCopy()
 	var errs []error
 
-	rootCAs, conditions, tlsOk := c.validateTLS(specCopy.TLS, conditions)
-	_, conditions, issuerOk := c.validateIssuer(specCopy.Issuer, conditions)
+	rootCAs, conditions, tlsOk := c.validateTLSBundle(obj.Spec.TLS, conditions)
+	_, conditions, issuerOk := c.validateIssuer(obj.Spec.Issuer, conditions)
 	okSoFar := tlsOk && issuerOk
 
 	client := phttp.Default(rootCAs)
 	client.Timeout = 30 * time.Second // copied from Kube OIDC code
 	coreOSCtx := coreosoidc.ClientContext(context.Background(), client)
 
-	pJSON, provider, conditions, providerErr := c.validateProviderDiscovery(coreOSCtx, specCopy.Issuer, conditions, okSoFar)
+	pJSON, provider, conditions, providerErr := c.validateProviderDiscovery(coreOSCtx, obj.Spec.Issuer, conditions, okSoFar)
 	errs = append(errs, providerErr)
 	okSoFar = okSoFar && providerErr == nil
 
@@ -217,20 +222,29 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	errs = append(errs, jwksFetchErr)
 	okSoFar = okSoFar && jwksFetchErr == nil
 
-	// Make a deep copy of the spec so we aren't storing pointers to something that the informer cache
-	// may mutate! We don't store status as status is derived from spec.
-	cachedAuthenticator, conditions, err := c.newCachedJWTAuthenticator(
+	newJWTAuthenticatorForCache, conditions, err := c.newCachedJWTAuthenticator(
 		client,
-		obj.Spec.DeepCopy(),
+		obj.Spec.DeepCopy(), // deep copy to avoid caching original object
 		keySet,
 		conditions,
 		okSoFar)
 	errs = append(errs, err)
 
-	if !conditionsutil.HadErrorCondition(conditions) {
-		c.cache.Store(cacheKey, cachedAuthenticator)
-		c.log.Info("added new jwt authenticator", "jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer)
+	if conditionsutil.HadErrorCondition(conditions) {
+		// The authenticator was determined to be invalid. Remove it from the cache, in case it was previously
+		// validated and cached. Do not allow an old, previously validated spec of the authenticator to continue
+		// being used for authentication.
+		c.cache.Delete(cacheKey)
+	} else {
+		c.cache.Store(cacheKey, newJWTAuthenticatorForCache)
+		c.log.WithValues("jwtAuthenticator", klog.KObj(obj), "issuer", obj.Spec.Issuer).
+			Info("added new jwt authenticator")
 	}
+
+	// In case we just overwrote or deleted the authenticator from the cache, clean up the old instance
+	// to avoid leaking goroutines. It's safe to call Close() on nil. We avoid calling Close() until it is
+	// removed from the cache, because we do not want any end-user authentications to use a closed authenticator.
+	jwtAuthenticatorFromCache.Close()
 
 	err = c.updateStatus(ctx.Context, obj, conditions)
 	errs = append(errs, err)
@@ -243,7 +257,7 @@ func (c *jwtCacheFillerController) Sync(ctx controllerlib.Context) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func (c *jwtCacheFillerController) extractValueAsJWTAuthenticator(value authncache.Value) *cachedJWTAuthenticator {
+func (c *jwtCacheFillerController) cacheValueAsJWTAuthenticator(value authncache.Value) *cachedJWTAuthenticator {
 	jwtAuthenticator, ok := value.(*cachedJWTAuthenticator)
 	if !ok {
 		actualType := "<nil>"
@@ -256,7 +270,7 @@ func (c *jwtCacheFillerController) extractValueAsJWTAuthenticator(value authncac
 	return jwtAuthenticator
 }
 
-func (c *jwtCacheFillerController) validateTLS(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
+func (c *jwtCacheFillerController) validateTLSBundle(tlsSpec *authenticationv1alpha1.TLSSpec, conditions []*metav1.Condition) (*x509.CertPool, []*metav1.Condition, bool) {
 	rootCAs, _, err := pinnipedcontroller.BuildCertPoolAuth(tlsSpec)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "invalid TLS configuration", err.Error())

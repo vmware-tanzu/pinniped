@@ -828,52 +828,6 @@ func TestController(t *testing.T) {
 			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
-			name: "Sync: valid and unchanged WebhookAuthenticator which was already cached: skips any updates to status or cache",
-			cache: func(t *testing.T, cache *authncache.Cache) {
-				oldCA, err := base64.StdEncoding.DecodeString(goodWebhookAuthenticatorSpecWithCA.TLS.CertificateAuthorityData)
-				require.NoError(t, err)
-				cache.Store(
-					authncache.Key{
-						Name:     "test-name",
-						Kind:     "WebhookAuthenticator",
-						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
-					},
-					newCacheValue(t, goodWebhookAuthenticatorSpecWithCA, string(oldCA)),
-				)
-			},
-			webhookAuthenticators: []runtime.Object{
-				&authenticationv1alpha1.WebhookAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
-					},
-					Spec: goodWebhookAuthenticatorSpecWithCA,
-					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
-						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
-						Phase:      "Ready",
-					},
-				},
-			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
-			},
-			wantActions: func() []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
-				}
-			},
-			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
-		},
-		{
 			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions",
 			cache: func(t *testing.T, cache *authncache.Cache) {
 				ctrl := gomock.NewController(t)

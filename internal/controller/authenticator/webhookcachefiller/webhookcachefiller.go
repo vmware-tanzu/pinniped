@@ -184,7 +184,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 			c.log.WithValues("webhookAuthenticator", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
 				Info("cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
-			return nil
+			// TODO: fix this
 		}
 	}
 

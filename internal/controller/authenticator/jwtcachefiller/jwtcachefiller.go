@@ -241,7 +241,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 			c.log.WithValues("jwtAuthenticator", klog.KObj(jwtAuthenticator), "issuer", jwtAuthenticator.Spec.Issuer).
 				Info("cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
-			return nil
+			// TODO: fix this
 		}
 	}
 

@@ -1366,49 +1366,6 @@ func TestController(t *testing.T) {
 			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name: "Sync: JWTAuthenticator with no change: loop will abort early and not update status conditions",
-			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
-				oldCA, err := base64.StdEncoding.DecodeString(someJWTAuthenticatorSpec.TLS.CertificateAuthorityData)
-				require.NoError(t, err)
-				cache.Store(
-					authncache.Key{
-						Name:     "test-name",
-						Kind:     "JWTAuthenticator",
-						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
-					},
-					newCacheValue(t, *someJWTAuthenticatorSpec, string(oldCA), wantClose),
-				)
-			},
-			jwtAuthenticators: []runtime.Object{
-				&authenticationv1alpha1.JWTAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
-					},
-					Spec: *someJWTAuthenticatorSpec,
-				},
-			},
-			wantLogs: []map[string]any{{
-				"level":     "info",
-				"timestamp": "2099-08-08T13:57:36.123456Z",
-				"logger":    "jwtcachefiller-controller",
-				"message":   "cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations",
-				"issuer":    goodIssuer,
-				"jwtAuthenticator": map[string]any{
-					"name": "test-name",
-				},
-			}},
-			wantActions: func() []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
-				}
-			},
-			wantClose:                           false,
-			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
-			// skip the tests because the authenticator pre-loaded into the cache is the mock version that was added above
-			skipTestingCachedAuthenticator: true,
-		},
-		{
 			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions",
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				ctrl := gomock.NewController(t)

@@ -60,7 +60,7 @@ const (
 
 type cachedWebhookAuthenticator struct {
 	authenticator.Token
-	spec         *authenticationv1alpha1.WebhookAuthenticatorSpec
+	endpoint     string
 	caBundleHash tlsconfigutil.CABundleHash
 }
 
@@ -163,12 +163,17 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		Name:     webhookAuthenticator.Name,
 	}
 
-	conditions := make([]*metav1.Condition, 0)
-	caBundle, conditions, tlsBundleOk := c.validateTLSBundle(webhookAuthenticator.Spec.TLS, conditions)
-
-	webhookSpecificLogger := c.log.WithValues(
+	logger := c.log.WithValues(
 		"webhookAuthenticator", webhookAuthenticator.Name,
 		"endpoint", webhookAuthenticator.Spec.Endpoint)
+
+	var errs []error
+	conditions := make([]*metav1.Condition, 0)
+
+	caBundle, conditions, tlsBundleOk := c.validateTLSBundle(webhookAuthenticator.Spec.TLS, conditions)
+
+	endpointHostPort, conditions, endpointOk := c.validateEndpoint(webhookAuthenticator.Spec.Endpoint, conditions)
+	okSoFar := tlsBundleOk && endpointOk
 
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
 	// There is no need to repeat validations for a spec that was already successfully validated. We are making a
@@ -178,24 +183,16 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 	// rather than trying to show the most up-to-date status possible. These validations are for administrator
 	// convenience at the time of a configuration change, to catch typos and blatant misconfigurations, rather
 	// than to constantly monitor for external issues.
-	var oldWebhookAuthenticatorFromCache *cachedWebhookAuthenticator
-	if valueFromCache := c.cache.Get(cacheKey); valueFromCache != nil {
-		oldWebhookAuthenticatorFromCache = c.cacheValueAsWebhookAuthenticator(valueFromCache, webhookSpecificLogger)
-		if oldWebhookAuthenticatorFromCache != nil &&
-			reflect.DeepEqual(oldWebhookAuthenticatorFromCache.spec, &webhookAuthenticator.Spec) &&
-			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
-			oldWebhookAuthenticatorFromCache.caBundleHash.Equal(caBundle.Hash()) {
-			webhookSpecificLogger.Info("cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations")
-			// Stop, no more work to be done. This authenticator is already validated and cached.
-			return nil
-		}
+	foundAuthenticatorInCache, alreadyValidatedTheseSettings := c.havePreviouslyValidated(
+		cacheKey, webhookAuthenticator.Spec.Endpoint, tlsBundleOk, caBundle.Hash(), logger)
+	if alreadyValidatedTheseSettings {
+		// Stop, no more work to be done. This authenticator is already validated and cached.
+		// TODO: Append hardcoded list of remaining success conditions and skip redoing the remaining validations below.
+		//       Make sure that the conditions array is still checked for any errors, and the status and cache are still updated, as below.
+		return nil
 	}
 
-	var errs []error
-	endpointHostPort, conditions, endpointOk := c.validateEndpoint(webhookAuthenticator.Spec.Endpoint, conditions)
-	okSoFar := tlsBundleOk && endpointOk
-
-	conditions, tlsNegotiateErr := c.validateConnection(caBundle.CertPool(), endpointHostPort, conditions, okSoFar, webhookSpecificLogger)
+	conditions, tlsNegotiateErr := c.validateConnection(caBundle.CertPool(), endpointHostPort, conditions, okSoFar, logger)
 	errs = append(errs, tlsNegotiateErr)
 	okSoFar = okSoFar && tlsNegotiateErr == nil
 
@@ -218,11 +215,11 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		// validated and cached. Do not allow an old, previously validated spec of the authenticator to continue
 		// being used for authentication.
 		c.cache.Delete(cacheKey)
-		webhookSpecificLogger.Info("invalid webhook authenticator",
-			"removedFromCache", oldWebhookAuthenticatorFromCache != nil)
+		logger.Info("invalid webhook authenticator",
+			"removedFromCache", foundAuthenticatorInCache)
 	}
 
-	updateErr := c.updateStatus(ctx, webhookAuthenticator, conditions, webhookSpecificLogger)
+	updateErr := c.updateStatus(ctx, webhookAuthenticator, conditions, logger)
 	errs = append(errs, updateErr)
 
 	// Only add this WebhookAuthenticator to the cache if the status update succeeds.
@@ -231,11 +228,11 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 	if authenticatorValid && updateErr == nil {
 		c.cache.Store(cacheKey, &cachedWebhookAuthenticator{
 			Token:        newWebhookAuthenticatorForCache,
-			spec:         webhookAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
+			endpoint:     webhookAuthenticator.Spec.Endpoint,
 			caBundleHash: caBundle.Hash(),
 		})
-		webhookSpecificLogger.Info("added or updated webhook authenticator in cache",
-			"isOverwrite", oldWebhookAuthenticatorFromCache != nil)
+		logger.Info("added or updated webhook authenticator in cache",
+			"isOverwrite", foundAuthenticatorInCache)
 	}
 
 	// Sync loop errors:
@@ -244,6 +241,31 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 	// - Other errors, such as networking errors, etc. are the types of errors that should return here
 	//   and signal the controller to retry the sync loop. These may be corrected by machines.
 	return utilerrors.NewAggregate(errs)
+}
+
+func (c *webhookCacheFillerController) havePreviouslyValidated(
+	cacheKey authncache.Key,
+	endpoint string,
+	tlsBundleOk bool,
+	caBundleHash tlsconfigutil.CABundleHash,
+	logger plog.Logger,
+) (bool, bool) {
+	var authenticatorFromCache *cachedWebhookAuthenticator
+	valueFromCache := c.cache.Get(cacheKey)
+	if valueFromCache == nil {
+		return false, false
+	}
+	authenticatorFromCache = c.cacheValueAsWebhookAuthenticator(valueFromCache, logger)
+	if authenticatorFromCache == nil {
+		return false, false
+	}
+	if authenticatorFromCache.endpoint == endpoint &&
+		tlsBundleOk && // if there was any error while validating the latest CA bundle, then do not consider it previously validated
+		authenticatorFromCache.caBundleHash.Equal(caBundleHash) {
+		logger.Info("cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations")
+		return true, true
+	}
+	return true, false // found the authenticator, but it had not been previously validated with these same settings
 }
 
 func (c *webhookCacheFillerController) cacheValueAsWebhookAuthenticator(value authncache.Value, log plog.Logger) *cachedWebhookAuthenticator {

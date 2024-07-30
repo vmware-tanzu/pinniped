@@ -768,7 +768,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogLines: []string{
-				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations","webhookAuthenticator":"test-name","endpoint":"%s"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).havePreviouslyValidated","message":"cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations","webhookAuthenticator":"test-name","endpoint":"%s"}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -2038,7 +2038,7 @@ func newCacheValue(t *testing.T, spec authenticationv1alpha1.WebhookAuthenticato
 	t.Helper()
 
 	return &cachedWebhookAuthenticator{
-		spec:         &spec,
+		endpoint:     spec.Endpoint,
 		caBundleHash: tlsconfigutil.NewCABundleHash([]byte(caBundle)),
 	}
 }

@@ -1444,6 +1444,10 @@ func TestController(t *testing.T) {
 					"logger":     "jwtcachefiller-controller",
 					"message":    "wrong JWT authenticator type in cache",
 					"actualType": "*mockcachevalue.MockValue",
+					"issuer":     goodIssuer,
+					"jwtAuthenticator": map[string]any{
+						"name": "test-name",
+					},
 				},
 				{
 					"level":       "info",
@@ -2914,7 +2918,7 @@ func newCacheValue(t *testing.T, spec authenticationv1alpha1.JWTAuthenticatorSpe
 	})
 
 	return &cachedJWTAuthenticator{
-		spec:         &spec,
+		issuer:       spec.Issuer,
 		caBundleHash: tlsconfigutil.NewCABundleHash([]byte(caBundle)),
 		cancel: func() {
 			wasClosed = true

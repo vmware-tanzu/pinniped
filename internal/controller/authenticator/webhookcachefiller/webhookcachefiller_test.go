@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,7 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
 	k8sinformers "k8s.io/client-go/informers"
 	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
@@ -414,20 +414,15 @@ func TestController(t *testing.T) {
 		// for modifying the clients to hack in arbitrary api responses
 		configClient func(*conciergefake.Clientset)
 		wantSyncErr  testutil.RequireErrorStringFunc
-		wantLogs     []map[string]any
+		wantLogLines []string
 		wantActions  func() []coretesting.Action
 		// random comment so lines above don't have huge indents
 		wantNamesOfWebhookAuthenticatorsInCache []string
 	}{
 		{
 			name: "Sync: No WebhookAuthenticators found results in no errors and no status conditions",
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "No WebhookAuthenticators found",
-				},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).Sync","message":"No WebhookAuthenticators found"}`,
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -451,18 +446,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -504,51 +489,11 @@ func TestController(t *testing.T) {
 					Spec: badWebhookAuthenticatorSpecInvalidTLS,
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "another-invalid-webhook-authenticator",
-					},
-				},
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "existing-webhook-authenticator",
-					},
-				},
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "invalid-webhook-authenticator",
-					},
-				},
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "new-webhook-authenticator",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"another-invalid-webhook-authenticator"},"endpoint":"%s","removedFromCache":false}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"existing-webhook-authenticator"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"invalid-webhook-authenticator"},"endpoint":"%s","removedFromCache":false}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"new-webhook-authenticator"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateValidStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -627,18 +572,8 @@ func TestController(t *testing.T) {
 			secretsAndConfigMaps: []runtime.Object{
 				someSecretWithCA,
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -673,18 +608,8 @@ func TestController(t *testing.T) {
 			secretsAndConfigMaps: []runtime.Object{
 				someConfigMapWithCA,
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -729,18 +654,8 @@ func TestController(t *testing.T) {
 			secretsAndConfigMaps: []runtime.Object{
 				someConfigMapWithCA,
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": true,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":true}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -786,18 +701,8 @@ func TestController(t *testing.T) {
 					Spec: badWebhookAuthenticatorSpecInvalidTLS,
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": true,
-					"endpoint":         badWebhookAuthenticatorSpecInvalidTLS.Endpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","removedFromCache":true}`, badWebhookAuthenticatorSpecInvalidTLS.Endpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -902,25 +807,9 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":      "info",
-					"timestamp":  "2099-08-08T13:57:36.123456Z",
-					"logger":     "webhookcachefiller-controller",
-					"message":    "wrong webhook authenticator type in cache",
-					"actualType": "*mockcachevalue.MockValue",
-				},
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).cacheValueAsWebhookAuthenticator","message":"wrong webhook authenticator type in cache","actualType":"*mockcachevalue.MockValue"}`,
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -975,18 +864,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": true,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":true}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1046,7 +925,7 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 				},
 			},
-			wantLogs: []map[string]any{},
+			wantLogLines: []string{}, // wants no logs
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1079,18 +958,8 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1129,18 +998,8 @@ func TestController(t *testing.T) {
 					}(),
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    hostLocalIPv6Server.URL,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, hostLocalIPv6Server.URL),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1179,18 +1038,8 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWithoutCA,
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         goodWebhookAuthenticatorSpecWithoutCA.Endpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","removedFromCache":false}`, goodWebhookAuthenticatorSpecWithoutCA.Endpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1231,18 +1080,8 @@ func TestController(t *testing.T) {
 					Spec: badWebhookAuthenticatorSpecInvalidTLS,
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         badWebhookAuthenticatorSpecInvalidTLS.Endpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","removedFromCache":false}`, badWebhookAuthenticatorSpecInvalidTLS.Endpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1296,18 +1135,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": true,
-					"endpoint":         badEndpointInvalidURL,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","removedFromCache":true}`, badEndpointInvalidURL),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1373,18 +1202,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": true,
-					"endpoint":         badEndpointInvalidURL,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","removedFromCache":true}`, badEndpointInvalidURL),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1430,18 +1249,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         badEndpointInvalidURL,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","removedFromCache":false}`, badEndpointInvalidURL),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1486,18 +1295,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         badEndpointNoHTTPS,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","removedFromCache":false}`, badEndpointNoHTTPS),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1545,18 +1344,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         "https://[0:0:0:0:0:0:0:1]:69999/some/fake/path",
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"https://[0:0:0:0:0:0:0:1]:69999/some/fake/path","removedFromCache":false}`,
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1602,18 +1391,8 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantSyncErr: testutil.WantExactErrorString("error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority"),
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         badWebhookAuthenticatorSpecGoodEndpointButUnknownCA.Endpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","removedFromCache":false}`, badWebhookAuthenticatorSpecGoodEndpointButUnknownCA.Endpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1655,18 +1434,8 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWith404Endpoint,
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpointBut404,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpointBut404),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1708,18 +1477,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    fmt.Sprintf("https://localhost:%s", localhostURL.Port()),
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, fmt.Sprintf("https://localhost:%s", localhostURL.Port())),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -1744,18 +1503,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         "https://[0:0:0:0:0:0:0:1]:4242/some/fake/path",
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"https://[0:0:0:0:0:0:0:1]:4242/some/fake/path","removedFromCache":false}`,
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1805,18 +1554,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         "https://[0:0:0:0:0:0:0:1]/some/fake/path",
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"https://[0:0:0:0:0:0:0:1]/some/fake/path","removedFromCache":false}`,
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1870,18 +1609,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    hostAs127001WebhookServer.URL,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, hostAs127001WebhookServer.URL),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -1905,18 +1634,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         localWithExampleDotComWeebhookAuthenticatorSpec.Endpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","removedFromCache":false}`, localWithExampleDotComWeebhookAuthenticatorSpec.Endpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1961,18 +1680,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":            "info",
-					"timestamp":        "2099-08-08T13:57:36.123456Z",
-					"logger":           "webhookcachefiller-controller",
-					"message":          "invalid webhook authenticator",
-					"removedFromCache": false,
-					"endpoint":         "https://0:0:0:0:0:0:0:1/some/fake/path",
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":{"name":"test-name"},"endpoint":"https://0:0:0:0:0:0:0:1/some/fake/path","removedFromCache":false}`,
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -2021,18 +1730,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -2061,18 +1760,8 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":       "info",
-					"timestamp":   "2099-08-08T13:57:36.123456Z",
-					"logger":      "webhookcachefiller-controller",
-					"message":     "added or updated webhook authenticator in cache",
-					"isOverwrite": false,
-					"endpoint":    goodWebhookDefaultServingCertEndpoint,
-					"webhookAuthenticator": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":{"name":"test-name"},"endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -2113,7 +1802,7 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 				},
 			},
-			wantLogs: []map[string]any{},
+			wantLogLines: []string{}, // wants no logs
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -2185,36 +1874,11 @@ func TestController(t *testing.T) {
 			require.Equal(t, tt.wantActions(), pinnipedAPIClient.Actions())
 			require.Equal(t, len(tt.wantNamesOfWebhookAuthenticatorsInCache), len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", len(tt.wantNamesOfWebhookAuthenticatorsInCache), len(cache.Keys()), cache.Keys()))
 
-			wantLogsAsJSON, err := json.Marshal(tt.wantLogs)
-			require.NoError(t, err)
-
-			actualLogLines := testutil.SplitByNewline(log.String())
-			require.Equalf(t, len(tt.wantLogs), len(actualLogLines),
-				"log line count should be correct\nactual: %s\nwant:   %s", actualLogLines, wantLogsAsJSON)
-
-			for actualLogLineNum, actualLogLine := range actualLogLines {
-				wantLine := tt.wantLogs[actualLogLineNum]
-				require.NotNil(t, wantLine, "expected log line should never be empty")
-
-				var actualParsedLine map[string]any
-				err := json.Unmarshal([]byte(actualLogLine), &actualParsedLine)
-				require.NoError(t, err)
-
-				wantLineAsJSON, err := json.Marshal(wantLine)
-				require.NoError(t, err)
-				wantLine["caller"] = "we don't want to actually make equality comparisons about this"
-				require.Lenf(t, actualParsedLine, len(wantLine), "actual: %s\nwant:   %s", actualLogLine, string(wantLineAsJSON))
-				require.Equal(t, sets.StringKeySet(actualParsedLine), sets.StringKeySet(wantLine))
-
-				for k := range actualParsedLine {
-					if k == "caller" {
-						require.NotEmpty(t, actualParsedLine["caller"])
-					} else {
-						require.Equal(t, wantLine[k], actualParsedLine[k],
-							fmt.Sprintf("log line (%d) key %q was not equal\nactual: %s\nwant:   %s",
-								actualLogLineNum, k, actualParsedLine[k], wantLine[k]))
-					}
-				}
+			if len(tt.wantLogLines) == 0 {
+				require.Empty(t, log.String())
+			} else {
+				actualLog, _ := strings.CutSuffix(log.String(), "\n")
+				require.Equal(t, tt.wantLogLines, strings.Split(actualLog, "\n"))
 			}
 		})
 	}

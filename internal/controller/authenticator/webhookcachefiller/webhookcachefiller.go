@@ -26,7 +26,6 @@ import (
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
@@ -181,7 +180,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 			reflect.DeepEqual(oldWebhookAuthenticatorFromCache.spec, &webhookAuthenticator.Spec) &&
 			tlsBundleOk && // if there was any error while validating the CA bundle, then run remaining validations and update status
 			oldWebhookAuthenticatorFromCache.caBundleHash.Equal(caBundle.Hash()) {
-			c.log.WithValues("webhookAuthenticator", klog.KObj(webhookAuthenticator), "endpoint", webhookAuthenticator.Spec.Endpoint).
+			c.log.WithValues("webhookAuthenticator", webhookAuthenticator.Name, "endpoint", webhookAuthenticator.Spec.Endpoint).
 				Info("cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations")
 			// Stop, no more work to be done. This authenticator is already validated and cached.
 			return nil
@@ -216,7 +215,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		// being used for authentication.
 		c.cache.Delete(cacheKey)
 		c.log.WithValues(
-			"webhookAuthenticator", klog.KObj(webhookAuthenticator),
+			"webhookAuthenticator", webhookAuthenticator.Name,
 			"endpoint", webhookAuthenticator.Spec.Endpoint,
 			"removedFromCache", oldWebhookAuthenticatorFromCache != nil,
 		).Info("invalid webhook authenticator")
@@ -235,7 +234,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 			caBundleHash: caBundle.Hash(),
 		})
 		c.log.WithValues(
-			"webhookAuthenticator", klog.KObj(webhookAuthenticator),
+			"webhookAuthenticator", webhookAuthenticator.Name,
 			"endpoint", webhookAuthenticator.Spec.Endpoint,
 			"isOverwrite", oldWebhookAuthenticatorFromCache != nil,
 		).Info("added or updated webhook authenticator in cache")

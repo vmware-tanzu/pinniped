@@ -479,11 +479,14 @@ func (c *webhookCacheFillerController) updateStatus(
 	)
 
 	if equality.Semantic.DeepEqual(original, updated) {
+		logger.Debug("choosing to not update the webhookauthenticator status since there is no update to make",
+			"phase", updated.Status.Phase)
 		return nil
 	}
 	_, err := c.client.AuthenticationV1alpha1().WebhookAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
 	if err == nil {
-		logger.Debug("webhookauthenticator status successfully updated")
+		logger.Debug("webhookauthenticator status successfully updated",
+			"phase", updated.Status.Phase)
 	}
 	return err
 }

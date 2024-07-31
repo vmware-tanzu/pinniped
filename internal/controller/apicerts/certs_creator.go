@@ -26,7 +26,7 @@ const (
 	TLSCertificateChainSecretKey     = "tlsCertificateChain"
 )
 
-type certsManagerController struct {
+type certsCreatorController struct {
 	namespace               string
 	certsSecretResourceName string
 	certsSecretLabels       map[string]string
@@ -41,7 +41,7 @@ type certsManagerController struct {
 	serviceNameForGeneratedCertCommonName string
 }
 
-func NewCertsManagerController(
+func NewCertsCreatorController(
 	namespace string,
 	certsSecretResourceName string,
 	certsSecretLabels map[string]string,
@@ -56,7 +56,7 @@ func NewCertsManagerController(
 	return controllerlib.New(
 		controllerlib.Config{
 			Name: "certs-manager-controller",
-			Syncer: &certsManagerController{
+			Syncer: &certsCreatorController{
 				namespace:                             namespace,
 				certsSecretResourceName:               certsSecretResourceName,
 				certsSecretLabels:                     certsSecretLabels,
@@ -80,7 +80,7 @@ func NewCertsManagerController(
 	)
 }
 
-func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
+func (c *certsCreatorController) Sync(ctx controllerlib.Context) error {
 	// Try to get the secret from the informer cache.
 	_, err := c.secretInformer.Lister().Secrets(c.namespace).Get(c.certsSecretResourceName)
 	notFound := apierrors.IsNotFound(err)
@@ -140,6 +140,6 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("could not create secret: %w", err)
 	}
 
-	plog.Info("certsManagerController Sync successfully created secret")
+	plog.Info("certsCreatorController Sync successfully created secret")
 	return nil
 }

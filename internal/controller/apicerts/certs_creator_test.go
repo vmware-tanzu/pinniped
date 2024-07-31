@@ -39,7 +39,7 @@ func TestManagerControllerOptions(t *testing.T) {
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			observableWithInitialEventOption = testutil.NewObservableWithInitialEventOption()
 			secretsInformer := k8sinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
-			_ = NewCertsManagerController(
+			_ = NewCertsCreatorController(
 				installedInNamespace,
 				certsSecretResourceName,
 				make(map[string]string),
@@ -134,7 +134,7 @@ func TestManagerControllerSync(t *testing.T) {
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func(serviceName string) {
 			// Set this at the last second to allow for injection of server override.
-			subject = NewCertsManagerController(
+			subject = NewCertsCreatorController(
 				installedInNamespace,
 				certsSecretResourceName,
 				map[string]string{

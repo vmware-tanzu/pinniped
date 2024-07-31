@@ -1,9 +1,7 @@
 // Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package controllermanager provides an entrypoint into running all of the controllers that run as
-// a part of Pinniped.
-package controllermanager
+package server
 
 import (
 	"fmt"

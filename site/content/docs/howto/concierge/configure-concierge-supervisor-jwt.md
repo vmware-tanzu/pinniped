@@ -56,6 +56,9 @@ spec:
   # If the TLS certificate of your FederationDomain is not signed by
   # a standard CA trusted by the Concierge pods by default, then
   # specify its CA here as a base64-encoded PEM.
+  # Alternatively, the CA bundle can be specified in a Secret or
+  # ConfigMap that will be dynamically watched by Pinniped for
+  # changes to the CA bundle (see API docs for details).
   tls:
     certificateAuthorityData: LS0tLS1CRUdJTiBDRVJUSUZJQ0...0tLQo=
 ```

@@ -46,12 +46,7 @@ Get "https://127.0.0.1:444444/invalid-url-that-is-really-really-long-nananananan
 				Reason:  "Success",
 				Message: "additionalAuthorizeParameters parameter names are allowed",
 			},
-			{
-				Type:    "TLSConfigurationValid",
-				Status:  "True",
-				Reason:  "Success",
-				Message: `spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image`,
-			},
+			expectedTLSConfigValidCondition(false), // we are not configuring a CA bundle on the OIDCIdentityProvider in this test
 		})
 	})
 
@@ -90,12 +85,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				Reason:  "Success",
 				Message: "additionalAuthorizeParameters parameter names are allowed",
 			},
-			{
-				Type:    "TLSConfigurationValid",
-				Status:  "True",
-				Reason:  "Success",
-				Message: `spec.tls is valid: using configured CA bundle`,
-			},
+			expectedTLSConfigValidCondition(env.SupervisorUpstreamOIDC.CABundle != ""),
 		})
 	})
 
@@ -133,12 +123,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + env.Su
 				Reason:  "Success",
 				Message: "additionalAuthorizeParameters parameter names are allowed",
 			},
-			{
-				Type:    "TLSConfigurationValid",
-				Status:  "True",
-				Reason:  "Success",
-				Message: `spec.tls is valid: using configured CA bundle`,
-			},
+			expectedTLSConfigValidCondition(env.SupervisorUpstreamOIDC.CABundle != ""),
 		})
 	})
 }
@@ -152,4 +137,22 @@ func expectUpstreamConditions(t *testing.T, upstream *idpv1alpha1.OIDCIdentityPr
 		normalized = append(normalized, c)
 	}
 	require.ElementsMatch(t, expected, normalized)
+}
+
+func expectedTLSConfigValidCondition(caBundleConfigured bool) metav1.Condition {
+	if caBundleConfigured {
+		return metav1.Condition{
+			Type:    "TLSConfigurationValid",
+			Status:  "True",
+			Reason:  "Success",
+			Message: `spec.tls is valid: using configured CA bundle`,
+		}
+	}
+
+	return metav1.Condition{
+		Type:    "TLSConfigurationValid",
+		Status:  "True",
+		Reason:  "Success",
+		Message: `spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image`,
+	}
 }

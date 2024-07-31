@@ -244,7 +244,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			spec.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 			secret.Name, secret.ResourceVersion,
 		)
-		requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
+		requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg, env.SupervisorUpstreamActiveDirectory.CABundle != "")
 
 		return adIDP, secret
 	}
@@ -297,7 +297,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			spec.Host, env.SupervisorUpstreamLDAP.BindUsername,
 			secret.Name, secret.ResourceVersion,
 		)
-		requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+		requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
 
 		return ldapIDP, secret
 	}
@@ -1135,7 +1135,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -1201,7 +1201,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -1349,7 +1349,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 						})
 					spec.TLS.CertificateAuthorityData = ""
 					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
-						Kind: "Secret",
+						Kind: "ConfigMap",
 						Name: caConfigMap.Name,
 						Key:  "ca.crt",
 					}
@@ -1492,7 +1492,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg, len(env.SupervisorUpstreamActiveDirectory.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -1559,7 +1559,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg, len(env.SupervisorUpstreamActiveDirectory.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -2812,7 +2812,12 @@ func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]any, 
 	return additionalClaims
 }
 
-func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv1alpha1.LDAPIdentityProvider, expectedLDAPConnectionValidMessage string) {
+func requireSuccessfulLDAPIdentityProviderConditions(
+	t *testing.T,
+	ldapIDP *idpv1alpha1.LDAPIdentityProvider,
+	expectedLDAPConnectionValidMessage string,
+	caBundleConfigured bool,
+) {
 	require.Len(t, ldapIDP.Status.Conditions, 3)
 
 	conditionsSummary := [][]string{}
@@ -2824,7 +2829,11 @@ func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv
 		case "BindSecretValid":
 			require.Equal(t, "loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
-			require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
+			if caBundleConfigured {
+				require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
+			} else {
+				require.Equal(t, "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
+			}
 		case "LDAPConnectionValid":
 			require.Equal(t, expectedLDAPConnectionValidMessage, condition.Message)
 		}
@@ -2837,7 +2846,12 @@ func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv
 	}, conditionsSummary)
 }
 
-func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider, expectedActiveDirectoryConnectionValidMessage string) {
+func requireSuccessfulActiveDirectoryIdentityProviderConditions(
+	t *testing.T,
+	adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider,
+	expectedActiveDirectoryConnectionValidMessage string,
+	caBundleConfigured bool,
+) {
 	require.Len(t, adIDP.Status.Conditions, 4)
 
 	conditionsSummary := [][]string{}
@@ -2849,7 +2863,11 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 		case "BindSecretValid":
 			require.Equal(t, "loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
-			require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
+			if caBundleConfigured {
+				require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
+			} else {
+				require.Equal(t, "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
+			}
 		case "LDAPConnectionValid":
 			require.Equal(t, expectedActiveDirectoryConnectionValidMessage, condition.Message)
 		}
@@ -2870,7 +2888,13 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 	}, conditionsSummary)
 }
 
-func requireEventuallySuccessfulLDAPIdentityProviderConditions(t *testing.T, requireEventually *require.Assertions, ldapIDP *idpv1alpha1.LDAPIdentityProvider, expectedLDAPConnectionValidMessage string) {
+func requireEventuallySuccessfulLDAPIdentityProviderConditions(
+	t *testing.T,
+	requireEventually *require.Assertions,
+	ldapIDP *idpv1alpha1.LDAPIdentityProvider,
+	expectedLDAPConnectionValidMessage string,
+	caBundleConfigured bool,
+) {
 	t.Helper()
 	requireEventually.Len(ldapIDP.Status.Conditions, 3)
 
@@ -2883,7 +2907,11 @@ func requireEventuallySuccessfulLDAPIdentityProviderConditions(t *testing.T, req
 		case "BindSecretValid":
 			requireEventually.Equal("loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
-			requireEventually.Equal("spec.tls is valid: using configured CA bundle", condition.Message)
+			if caBundleConfigured {
+				require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
+			} else {
+				require.Equal(t, "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
+			}
 		case "LDAPConnectionValid":
 			requireEventually.Equal(expectedLDAPConnectionValidMessage, condition.Message)
 		}
@@ -2896,7 +2924,13 @@ func requireEventuallySuccessfulLDAPIdentityProviderConditions(t *testing.T, req
 	}, conditionsSummary)
 }
 
-func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, requireEventually *require.Assertions, adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider, expectedActiveDirectoryConnectionValidMessage string) {
+func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(
+	t *testing.T,
+	requireEventually *require.Assertions,
+	adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider,
+	expectedActiveDirectoryConnectionValidMessage string,
+	caBundleConfigured bool,
+) {
 	t.Helper()
 	requireEventually.Len(adIDP.Status.Conditions, 4)
 
@@ -2909,7 +2943,11 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *tes
 		case "BindSecretValid":
 			requireEventually.Equal("loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
-			requireEventually.Equal("spec.tls is valid: using configured CA bundle", condition.Message)
+			if caBundleConfigured {
+				require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
+			} else {
+				require.Equal(t, "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
+			}
 		case "LDAPConnectionValid":
 			requireEventually.Equal(expectedActiveDirectoryConnectionValidMessage, condition.Message)
 		}

@@ -347,7 +347,7 @@ func prepareControllers(
 			),
 			singletonWorker).
 		WithController(
-			apicerts.NewCertsManagerController(
+			apicerts.NewCertsCreatorController(
 				podInfo.Namespace,
 				certificateName,
 				cfg.Labels,

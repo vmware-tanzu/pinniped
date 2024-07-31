@@ -27,7 +27,6 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 	corev1informers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
 
@@ -221,7 +220,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 	}
 
 	logger := c.log.WithValues(
-		"jwtAuthenticator", klog.KObj(jwtAuthenticator),
+		"jwtAuthenticator", jwtAuthenticator.Name,
 		"issuer", jwtAuthenticator.Spec.Issuer)
 
 	var errs []error
@@ -287,7 +286,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 			"removedFromCache", foundAuthenticatorInCache)
 	}
 
-	updateErr := c.updateStatus(ctx, jwtAuthenticator, conditions)
+	updateErr := c.updateStatus(ctx, jwtAuthenticator, conditions, logger)
 	errs = append(errs, updateErr)
 
 	// Only add this JWTAuthenticator to the cache if the status update succeeds.
@@ -339,7 +338,8 @@ func (c *jwtCacheFillerController) cacheValueAsJWTAuthenticator(value authncache
 		if t := reflect.TypeOf(value); t != nil {
 			actualType = t.String()
 		}
-		logger.WithValues("actualType", actualType).Info("wrong JWT authenticator type in cache")
+		logger.Info("wrong JWT authenticator type in cache",
+			"actualType", actualType)
 		return nil
 	}
 	return jwtAuthenticator
@@ -675,6 +675,7 @@ func (c *jwtCacheFillerController) updateStatus(
 	ctx context.Context,
 	original *authenticationv1alpha1.JWTAuthenticator,
 	conditions []*metav1.Condition,
+	logger plog.Logger,
 ) error {
 	updated := original.DeepCopy()
 
@@ -696,23 +697,23 @@ func (c *jwtCacheFillerController) updateStatus(
 		})
 	}
 
-	// TODO: this should use c.log.WithValues("jwtAuthenticator", original.Name)
-	log := plog.New().WithName(controllerName).WithValues("jwtAuthenticator", original.Name)
-
 	_ = conditionsutil.MergeConditions(
 		conditions,
 		original.Generation,
 		&updated.Status.Conditions,
-		log,
+		logger,
 		metav1.NewTime(c.clock.Now()),
 	)
 
 	if equality.Semantic.DeepEqual(original, updated) {
+		logger.Debug("choosing to not update the jwtauthenticator status since there is no update to make",
+			"phase", updated.Status.Phase)
 		return nil
 	}
 	_, err := c.client.AuthenticationV1alpha1().JWTAuthenticators().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
 	if err == nil {
-		log.Debug("jwtauthenticator status successfully updated")
+		logger.Debug("jwtauthenticator status successfully updated",
+			"phase", updated.Status.Phase)
 	}
 	return err
 }

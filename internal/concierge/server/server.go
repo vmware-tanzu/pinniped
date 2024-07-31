@@ -32,7 +32,6 @@ import (
 	"go.pinniped.dev/internal/config/featuregates"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
 	"go.pinniped.dev/internal/controllerinit"
-	"go.pinniped.dev/internal/controllermanager"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
@@ -152,8 +151,8 @@ func (a *App) runServer(ctx context.Context) error {
 
 	// Prepare to start the controllers, but defer actually starting them until the
 	// post start hook of the aggregated API server.
-	buildControllers, err := controllermanager.PrepareControllers(
-		&controllermanager.Config{
+	buildControllers, err := PrepareControllers(
+		&Config{
 			ServerInstallationInfo:           podInfo,
 			APIGroupSuffix:                   *cfg.APIGroupSuffix,
 			NamesConfig:                      &cfg.NamesConfig,

@@ -113,8 +113,9 @@ spec:
                         - ConfigMap
                         type: string
                       name:
-                        description: Name of the secret or configmap from which to
-                          read the CA bundle.
+                        description: |-
+                          Name of the secret or configmap from which to read the CA bundle.
+                          The referenced secret or configmap must be created in the same namespace where Pinniped Concierge is installed.
                         minLength: 1
                         type: string
                     required:

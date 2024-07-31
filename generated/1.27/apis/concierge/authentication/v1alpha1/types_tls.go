@@ -11,6 +11,7 @@ type CABundleSource struct {
 	// +kubebuilder:validation:Enum=Secret;ConfigMap
 	Kind string `json:"kind"`
 	// Name of the secret or configmap from which to read the CA bundle.
+	// The referenced secret or configmap must be created in the same namespace where Pinniped Concierge is installed.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 	// Key within the secret or configmap from which to read the CA bundle.

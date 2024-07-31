@@ -40,6 +40,7 @@ CABundleSource provides a source for CA bundle used for client-side TLS verifica
 Secrets must be of type kubernetes.io/tls or Opaque. +
 For configmaps, the value associated with the key is not expected to be base64 encoded. +
 | *`name`* __string__ | Name of the secret or configmap from which to read the CA bundle. +
+The referenced secret or configmap must be created in the same namespace where Pinniped Concierge is installed. +
 | *`key`* __string__ | Key within the secret or configmap from which to read the CA bundle. +
 |===
 
@@ -1684,6 +1685,7 @@ CABundleSource provides a source for CA bundle used for client-side TLS verifica
 Secrets must be of type kubernetes.io/tls or Opaque. +
 For configmaps, the value associated with the key is not expected to be base64 encoded. +
 | *`name`* __string__ | Name of the secret or configmap from which to read the CA bundle. +
+The referenced secret or configmap must be created in the same namespace where Pinniped Supervisor is installed. +
 | *`key`* __string__ | Key within the secret or configmap from which to read the CA bundle. +
 |===
 

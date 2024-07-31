@@ -1158,7 +1158,7 @@ func TestController(t *testing.T) {
 			wantClose:                           true,
 		},
 		{
-			name: "Sync: previously cached JWTAuthenticator gets new spec fields, but status update fails: loop will leave it in the cache and avoid calling close",
+			name: "Sync: previously cached authenticator gets new spec fields, but status update fails: loop will leave it in the cache and avoid calling close",
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				oldCA, err := base64.StdEncoding.DecodeString(otherJWTAuthenticatorSpec.TLS.CertificateAuthorityData)
 				require.NoError(t, err)
@@ -1207,8 +1207,69 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
+			// skip the tests because the authenticator preloaded into the cache is the mock version that was added above
 			skipTestingCachedAuthenticator:      true,
 			wantSyncErr:                         testutil.WantExactErrorString("error for JWTAuthenticator test-name: some update error"),
+			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"}, // keeps the old entry in the cache
+			wantClose:                           false,
+		},
+		{
+			name: "Sync: previously cached valid authenticator with unchanged issuer URL and CA bundle hash has invalid status conditions in informer cache, as can happen on subsequent sync soon after multiple quick status updates (when the informer cache finally catches up): should update status in current sync",
+			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
+				oldCA, err := base64.StdEncoding.DecodeString(someJWTAuthenticatorSpec.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "JWTAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, *someJWTAuthenticatorSpec, string(oldCA), wantClose),
+				)
+			},
+			jwtAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadReadyCondition(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadJWKSFetch("some remote jwks error", frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).havePreviouslyValidated","message":"cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations","jwtAuthenticator":"test-name","issuer":"%s"}`, someJWTAuthenticatorSpec.Issuer),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).updateStatus","message":"jwtauthenticator status successfully updated","jwtAuthenticator":"test-name","issuer":"%s","phase":"Ready"}`, someJWTAuthenticatorSpec.Issuer),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(jwtAuthenticatorsGVR, "", &authenticationv1alpha1.JWTAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: *someJWTAuthenticatorSpec,
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{ // updates the status to ready
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(jwtAuthenticatorsGVR, jwtAUthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			// skip the tests because the authenticator preloaded into the cache is the mock version that was added above
+			skipTestingCachedAuthenticator:      true,
 			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"}, // keeps the old entry in the cache
 			wantClose:                           false,
 		},
@@ -1261,7 +1322,7 @@ func TestController(t *testing.T) {
 			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name: "Sync: JWTAuthenticator with no change: loop will abort early and not update status conditions",
+			name: "Sync: previously cached JWTAuthenticator with no change: will not update status conditions",
 			cache: func(t *testing.T, cache *authncache.Cache, wantClose bool) {
 				oldCA, err := base64.StdEncoding.DecodeString(someJWTAuthenticatorSpec.TLS.CertificateAuthorityData)
 				require.NoError(t, err)
@@ -1280,10 +1341,15 @@ func TestController(t *testing.T) {
 						Name: "test-name",
 					},
 					Spec: *someJWTAuthenticatorSpec,
+					Status: authenticationv1alpha1.JWTAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodIssuer, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
 				},
 			},
 			wantLogLines: []string{
 				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).havePreviouslyValidated","message":"cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations","jwtAuthenticator":"test-name","issuer":"%s"}`, goodIssuer),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).updateStatus","message":"choosing to not update the jwtauthenticator status since there is no update to make","jwtAuthenticator":"test-name","issuer":"%s","phase":"Ready"}`, goodIssuer),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -1291,10 +1357,10 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(jwtAuthenticatorsGVR, "", metav1.ListOptions{}),
 				}
 			},
+			// skip the tests because the authenticator preloaded into the cache is the mock version that was added above
+			skipTestingCachedAuthenticator:      true,
 			wantClose:                           false,
 			wantNamesOfJWTAuthenticatorsInCache: []string{"test-name"},
-			// skip the tests because the authenticator pre-loaded into the cache is the mock version that was added above
-			skipTestingCachedAuthenticator: true,
 		},
 		{
 			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions",

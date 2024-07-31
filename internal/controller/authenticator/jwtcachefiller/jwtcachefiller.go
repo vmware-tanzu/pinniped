@@ -225,6 +225,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 
 	var errs []error
 	conditions := make([]*metav1.Condition, 0)
+	var newJWTAuthenticatorForCache *cachedJWTAuthenticator
 
 	caBundle, conditions, tlsBundleOk := c.validateTLSBundle(jwtAuthenticator.Spec.TLS, conditions)
 
@@ -232,21 +233,74 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 	okSoFar := tlsBundleOk && issuerOk
 
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
-	// There is no need to repeat validations for a spec that was already successfully validated. We are making a
-	// design decision to avoid repeating the validation which dials the server, even though the server's TLS
-	// configuration could have changed, because it is also possible that the network could be flaky. We are choosing
-	// to prefer to keep the authenticator cached (available for end-user auth attempts) during times of network flakes
-	// rather than trying to show the most up-to-date status possible. These validations are for administrator
-	// convenience at the time of a configuration change, to catch typos and blatant misconfigurations, rather
-	// than to constantly monitor for external issues.
-	foundAuthenticatorInCache, alreadyValidatedTheseSettings := c.havePreviouslyValidated(
+	// There is no need to repeat connection probe validations for a URL and CA bundle combination that was already
+	// successfully validated. We are making a design decision to avoid repeating the validation which dials the server,
+	// even though the server's TLS configuration could have changed, because it is also possible that the network
+	// could be flaky. We are choosing to prefer to keep the authenticator cached (available for end-user auth attempts)
+	// during times of network flakes rather than trying to show the most up-to-date status possible. These validations
+	// are for administrator convenience at the time of a configuration change, to catch typos and blatant
+	// misconfigurations, rather than to constantly monitor for external issues.
+	foundAuthenticatorInCache, previouslyValidatedWithSameEndpointAndBundle := c.havePreviouslyValidated(
 		cacheKey, jwtAuthenticator.Spec.Issuer, tlsBundleOk, caBundle.Hash(), logger)
-	if alreadyValidatedTheseSettings {
-		// Stop, no more work to be done. This authenticator is already validated and cached.
-		// TODO: Append hardcoded list of remaining success conditions and skip redoing the remaining validations below.
-		//       Make sure that the conditions array is still checked for any errors, and the status and cache are still updated, as below.
-		return nil
+	if previouslyValidatedWithSameEndpointAndBundle {
+		// Because the authenticator was previously cached, that implies that the following conditions were
+		// previously validated. These are the expensive validations to repeat, so skip them this time.
+		// However, the status may be lagging behind due to the informer cache being slow to catch up
+		// after previous status updates, so always calculate the new status conditions again and check
+		// if they need to be updated.
+		conditions = append(conditions,
+			successfulDiscoveryValidCondition(),
+			successfulJWKSURLValidCondition(),
+			successfulJWKSFetchValidCondition(),
+			successfulAuthenticatorValidCondition(),
+		)
+	} else {
+		// Run all remaining validations.
+		a, moreConditions, moreErrs := c.doExpensiveValidations(jwtAuthenticator, caBundle, okSoFar)
+		newJWTAuthenticatorForCache = a
+		conditions = append(conditions, moreConditions...)
+		errs = append(errs, moreErrs...)
 	}
+
+	authenticatorValid := !conditionsutil.HadErrorCondition(conditions)
+
+	// If we calculated a failed status condition, then remove it from the cache even before we try to write
+	// the status, because writing the status can fail for various reasons.
+	if !authenticatorValid {
+		// The authenticator was determined to be invalid. Remove it from the cache, in case it was previously
+		// validated and cached. Do not allow an old, previously validated spec of the authenticator to continue
+		// being used for authentication.
+		c.cache.Delete(cacheKey)
+		logger.Info("invalid jwt authenticator",
+			"removedFromCache", foundAuthenticatorInCache)
+	}
+
+	// Always try to update the status, even when we found it in the authenticator cache.
+	updateErr := c.updateStatus(ctx, jwtAuthenticator, conditions, logger)
+	errs = append(errs, updateErr)
+
+	// Only add/update this authenticator to the cache when we have a new one and the status update succeeded.
+	if newJWTAuthenticatorForCache != nil && authenticatorValid && updateErr == nil {
+		c.cache.Store(cacheKey, newJWTAuthenticatorForCache)
+		logger.Info("added or updated jwt authenticator in cache",
+			"isOverwrite", foundAuthenticatorInCache)
+	}
+
+	// Sync loop errors:
+	// - Should not be configuration errors. Config errors a user must correct belong on the .Status
+	//   object. The controller simply must wait for a user to correct before running again.
+	// - Other errors, such as networking errors, etc. are the types of errors that should return here
+	//   and signal the controller to retry the sync loop. These may be corrected by machines.
+	return utilerrors.NewAggregate(errs)
+}
+
+func (c *jwtCacheFillerController) doExpensiveValidations(
+	jwtAuthenticator *authenticationv1alpha1.JWTAuthenticator,
+	caBundle *tlsconfigutil.CABundle,
+	okSoFar bool,
+) (*cachedJWTAuthenticator, []*metav1.Condition, []error) {
+	var conditions []*metav1.Condition
+	var errs []error
 
 	client := phttp.Default(caBundle.CertPool())
 	client.Timeout = 30 * time.Second // copied from Kube OIDC code
@@ -273,37 +327,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 		okSoFar)
 	errs = append(errs, err)
 
-	authenticatorValid := !conditionsutil.HadErrorCondition(conditions)
-
-	// If we calculated a failed status condition, then remove it from the cache even before we try to write
-	// the status, because writing the status can fail for various reasons.
-	if !authenticatorValid {
-		// The authenticator was determined to be invalid. Remove it from the cache, in case it was previously
-		// validated and cached. Do not allow an old, previously validated spec of the authenticator to continue
-		// being used for authentication.
-		c.cache.Delete(cacheKey)
-		logger.Info("invalid jwt authenticator",
-			"removedFromCache", foundAuthenticatorInCache)
-	}
-
-	updateErr := c.updateStatus(ctx, jwtAuthenticator, conditions, logger)
-	errs = append(errs, updateErr)
-
-	// Only add this JWTAuthenticator to the cache if the status update succeeds.
-	// If it were in the cache after failing to update the status, then the next Sync loop would see it in the cache
-	// and skip trying to update its status again, which would leave its old status permanently intact.
-	if authenticatorValid && updateErr == nil {
-		c.cache.Store(cacheKey, newJWTAuthenticatorForCache)
-		logger.Info("added or updated jwt authenticator in cache",
-			"isOverwrite", foundAuthenticatorInCache)
-	}
-
-	// Sync loop errors:
-	// - Should not be configuration errors. Config errors a user must correct belong on the .Status
-	//   object. The controller simply must wait for a user to correct before running again.
-	// - Other errors, such as networking errors, etc. are the types of errors that should return here
-	//   and signal the controller to retry the sync loop. These may be corrected by machines.
-	return utilerrors.NewAggregate(errs)
+	return newJWTAuthenticatorForCache, conditions, errs
 }
 
 func (c *jwtCacheFillerController) havePreviouslyValidated(
@@ -423,6 +447,15 @@ func (c *jwtCacheFillerController) validateIssuer(issuer string, conditions []*m
 	return conditions, true
 }
 
+func successfulDiscoveryValidCondition() *metav1.Condition {
+	return &metav1.Condition{
+		Type:    typeDiscoveryValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  conditionsutil.ReasonSuccess,
+		Message: "discovery performed successfully",
+	}
+}
+
 func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context, issuer string, conditions []*metav1.Condition, prereqOk bool) (*providerJSON, *coreosoidc.Provider, []*metav1.Condition, error) {
 	if !prereqOk {
 		conditions = append(conditions, &metav1.Condition{
@@ -448,14 +481,17 @@ func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context
 		// resync err, may be machine or other types of non-config error
 		return nil, nil, conditions, fmt.Errorf("%s: %s", errText, err)
 	}
-	msg := "discovery performed successfully"
-	conditions = append(conditions, &metav1.Condition{
-		Type:    typeDiscoveryValid,
+	conditions = append(conditions, successfulDiscoveryValidCondition())
+	return pJSON, provider, conditions, nil
+}
+
+func successfulJWKSURLValidCondition() *metav1.Condition {
+	return &metav1.Condition{
+		Type:    typeJWKSURLValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  conditionsutil.ReasonSuccess,
-		Message: msg,
-	})
-	return pJSON, provider, conditions, nil
+		Message: "jwks_uri is a valid URL",
+	}
 }
 
 func (c *jwtCacheFillerController) validateProviderJWKSURL(provider *coreosoidc.Provider, pJSON *providerJSON, conditions []*metav1.Condition, prereqOk bool) (string, []*metav1.Condition, error) {
@@ -508,13 +544,17 @@ func (c *jwtCacheFillerController) validateProviderJWKSURL(provider *coreosoidc.
 		return pJSON.JWKSURL, conditions, fmt.Errorf("%s", msg)
 	}
 
-	conditions = append(conditions, &metav1.Condition{
-		Type:    typeJWKSURLValid,
+	conditions = append(conditions, successfulJWKSURLValidCondition())
+	return pJSON.JWKSURL, conditions, nil
+}
+
+func successfulJWKSFetchValidCondition() *metav1.Condition {
+	return &metav1.Condition{
+		Type:    typeJWKSFetchValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  conditionsutil.ReasonSuccess,
-		Message: "jwks_uri is a valid URL",
-	})
-	return pJSON.JWKSURL, conditions, nil
+		Message: "successfully fetched jwks",
+	}
 }
 
 // validateJWKSFetch deliberately takes an unsigned JWT to trigger coreosoidc.NewRemoteKeySet to
@@ -567,12 +607,7 @@ func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksUR
 	// This error indicates success of this check. We only wanted to test if we could fetch, we aren't actually
 	// testing for valid signature verification.
 	if strings.Contains(verifyErrString, "failed to verify id token signature") {
-		conditions = append(conditions, &metav1.Condition{
-			Type:    typeJWKSFetchValid,
-			Status:  metav1.ConditionTrue,
-			Reason:  conditionsutil.ReasonSuccess,
-			Message: "successfully fetched jwks",
-		})
+		conditions = append(conditions, successfulJWKSFetchValidCondition())
 		return keySet, conditions, nil
 	}
 
@@ -586,6 +621,15 @@ func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksUR
 		Message: msg,
 	})
 	return nil, conditions, fmt.Errorf("%s: %w", errText, verifyWithKeySetErr)
+}
+
+func successfulAuthenticatorValidCondition() *metav1.Condition {
+	return &metav1.Condition{
+		Type:    typeAuthenticatorValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  conditionsutil.ReasonSuccess,
+		Message: "authenticator initialized",
+	}
 }
 
 // newCachedJWTAuthenticator creates a jwt authenticator from the provided spec.
@@ -656,13 +700,7 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(
 		// resync err, lots of possible issues that may or may not be machine related
 		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
-	msg := "authenticator initialized"
-	conditions = append(conditions, &metav1.Condition{
-		Type:    typeAuthenticatorValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  conditionsutil.ReasonSuccess,
-		Message: msg,
-	})
+	conditions = append(conditions, successfulAuthenticatorValidCondition())
 	return &cachedJWTAuthenticator{
 		Token:        oidcAuthenticator,
 		issuer:       spec.Issuer,

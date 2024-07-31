@@ -169,6 +169,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 
 	var errs []error
 	conditions := make([]*metav1.Condition, 0)
+	var newWebhookAuthenticatorForCache *cachedWebhookAuthenticator
 
 	caBundle, conditions, tlsBundleOk := c.validateTLSBundle(webhookAuthenticator.Spec.TLS, conditions)
 
@@ -176,35 +177,32 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 	okSoFar := tlsBundleOk && endpointOk
 
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
-	// There is no need to repeat validations for a spec that was already successfully validated. We are making a
-	// design decision to avoid repeating the validation which dials the server, even though the server's TLS
-	// configuration could have changed, because it is also possible that the network could be flaky. We are choosing
-	// to prefer to keep the authenticator cached (available for end-user auth attempts) during times of network flakes
-	// rather than trying to show the most up-to-date status possible. These validations are for administrator
-	// convenience at the time of a configuration change, to catch typos and blatant misconfigurations, rather
-	// than to constantly monitor for external issues.
-	foundAuthenticatorInCache, alreadyValidatedTheseSettings := c.havePreviouslyValidated(
+	// There is no need to repeat connection probe validations for a URL and CA bundle combination that was already
+	// successfully validated. We are making a design decision to avoid repeating the validation which dials the server,
+	// even though the server's TLS configuration could have changed, because it is also possible that the network
+	// could be flaky. We are choosing to prefer to keep the authenticator cached (available for end-user auth attempts)
+	// during times of network flakes rather than trying to show the most up-to-date status possible. These validations
+	// are for administrator convenience at the time of a configuration change, to catch typos and blatant
+	// misconfigurations, rather than to constantly monitor for external issues.
+	foundAuthenticatorInCache, previouslyValidatedWithSameEndpointAndBundle := c.havePreviouslyValidated(
 		cacheKey, webhookAuthenticator.Spec.Endpoint, tlsBundleOk, caBundle.Hash(), logger)
-	if alreadyValidatedTheseSettings {
-		// Stop, no more work to be done. This authenticator is already validated and cached.
-		// TODO: Append hardcoded list of remaining success conditions and skip redoing the remaining validations below.
-		//       Make sure that the conditions array is still checked for any errors, and the status and cache are still updated, as below.
-		return nil
+	if previouslyValidatedWithSameEndpointAndBundle {
+		// Because the authenticator was previously cached, that implies that the following conditions were
+		// previously validated. These are the expensive validations to repeat, so skip them this time.
+		// However, the status may be lagging behind due to the informer cache being slow to catch up
+		// after previous status updates, so always calculate the new status conditions again and check
+		// if they need to be updated.
+		conditions = append(conditions,
+			successfulWebhookConnectionValidCondition(),
+			successfulAuthenticatorValidCondition(),
+		)
+	} else {
+		// Run all remaining validations.
+		a, moreConditions, moreErrs := c.doExpensiveValidations(webhookAuthenticator, endpointHostPort, caBundle, okSoFar, logger)
+		newWebhookAuthenticatorForCache = a
+		conditions = append(conditions, moreConditions...)
+		errs = append(errs, moreErrs...)
 	}
-
-	conditions, tlsNegotiateErr := c.validateConnection(caBundle.CertPool(), endpointHostPort, conditions, okSoFar, logger)
-	errs = append(errs, tlsNegotiateErr)
-	okSoFar = okSoFar && tlsNegotiateErr == nil
-
-	newWebhookAuthenticatorForCache, conditions, err := newWebhookAuthenticator(
-		// Note that we use the whole URL when constructing the webhook client,
-		// not just the host and port that we validated above. We need the path, etc.
-		webhookAuthenticator.Spec.Endpoint,
-		caBundle.PEMBytes(),
-		conditions,
-		okSoFar,
-	)
-	errs = append(errs, err)
 
 	authenticatorValid := !conditionsutil.HadErrorCondition(conditions)
 
@@ -219,18 +217,13 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 			"removedFromCache", foundAuthenticatorInCache)
 	}
 
+	// Always try to update the status, even when we found it in the authenticator cache.
 	updateErr := c.updateStatus(ctx, webhookAuthenticator, conditions, logger)
 	errs = append(errs, updateErr)
 
-	// Only add this WebhookAuthenticator to the cache if the status update succeeds.
-	// If it were in the cache after failing to update the status, then the next Sync loop would see it in the cache
-	// and skip trying to update its status again, which would leave its old status permanently intact.
-	if authenticatorValid && updateErr == nil {
-		c.cache.Store(cacheKey, &cachedWebhookAuthenticator{
-			Token:        newWebhookAuthenticatorForCache,
-			endpoint:     webhookAuthenticator.Spec.Endpoint,
-			caBundleHash: caBundle.Hash(),
-		})
+	// Only add/update this authenticator to the cache when we have a new one and the status update succeeded.
+	if newWebhookAuthenticatorForCache != nil && authenticatorValid && updateErr == nil {
+		c.cache.Store(cacheKey, newWebhookAuthenticatorForCache)
 		logger.Info("added or updated webhook authenticator in cache",
 			"isOverwrite", foundAuthenticatorInCache)
 	}
@@ -241,6 +234,41 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 	// - Other errors, such as networking errors, etc. are the types of errors that should return here
 	//   and signal the controller to retry the sync loop. These may be corrected by machines.
 	return utilerrors.NewAggregate(errs)
+}
+
+func (c *webhookCacheFillerController) doExpensiveValidations(
+	webhookAuthenticator *authenticationv1alpha1.WebhookAuthenticator,
+	endpointHostPort *endpointaddr.HostPort,
+	caBundle *tlsconfigutil.CABundle,
+	okSoFar bool,
+	logger plog.Logger,
+) (*cachedWebhookAuthenticator, []*metav1.Condition, []error) {
+	var newWebhookAuthenticatorForCache *cachedWebhookAuthenticator
+	var conditions []*metav1.Condition
+	var errs []error
+
+	conditions, tlsNegotiateErr := c.validateConnection(caBundle.CertPool(), endpointHostPort, conditions, okSoFar, logger)
+	errs = append(errs, tlsNegotiateErr)
+	okSoFar = okSoFar && tlsNegotiateErr == nil
+
+	newAuthenticator, conditions, err := newWebhookAuthenticator(
+		// Note that we use the whole URL when constructing the webhook client,
+		// not just the host and port that we validated above. We need the path, etc.
+		webhookAuthenticator.Spec.Endpoint,
+		caBundle.PEMBytes(),
+		conditions,
+		okSoFar,
+	)
+	errs = append(errs, err)
+
+	if newAuthenticator != nil {
+		newWebhookAuthenticatorForCache = &cachedWebhookAuthenticator{
+			Token:        newAuthenticator,
+			endpoint:     webhookAuthenticator.Spec.Endpoint,
+			caBundleHash: caBundle.Hash(),
+		}
+	}
+	return newWebhookAuthenticatorForCache, conditions, errs
 }
 
 func (c *webhookCacheFillerController) havePreviouslyValidated(
@@ -292,6 +320,15 @@ func (c *webhookCacheFillerController) validateTLSBundle(tlsSpec *authentication
 
 	conditions = append(conditions, condition)
 	return caBundle, conditions, condition.Status == metav1.ConditionTrue
+}
+
+func successfulAuthenticatorValidCondition() *metav1.Condition {
+	return &metav1.Condition{
+		Type:    typeAuthenticatorValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  conditionsutil.ReasonSuccess,
+		Message: "authenticator initialized",
+	}
 }
 
 // newWebhookAuthenticator creates a webhook from the provided API server url and caBundle
@@ -362,15 +399,18 @@ func newWebhookAuthenticator(
 		return nil, conditions, fmt.Errorf("%s: %w", errText, err)
 	}
 
-	msg := "authenticator initialized"
-	conditions = append(conditions, &metav1.Condition{
-		Type:    typeAuthenticatorValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  conditionsutil.ReasonSuccess,
-		Message: msg,
-	})
+	conditions = append(conditions, successfulAuthenticatorValidCondition())
 
 	return webhookAuthenticator, conditions, nil
+}
+
+func successfulWebhookConnectionValidCondition() *metav1.Condition {
+	return &metav1.Condition{
+		Type:    typeWebhookConnectionValid,
+		Status:  metav1.ConditionTrue,
+		Reason:  conditionsutil.ReasonSuccess,
+		Message: "successfully dialed webhook server",
+	}
 }
 
 func (c *webhookCacheFillerController) validateConnection(
@@ -411,12 +451,7 @@ func (c *webhookCacheFillerController) validateConnection(
 		logger.Error("error closing dialer", err)
 	}
 
-	conditions = append(conditions, &metav1.Condition{
-		Type:    typeWebhookConnectionValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  conditionsutil.ReasonSuccess,
-		Message: "successfully dialed webhook server",
-	})
+	conditions = append(conditions, successfulWebhookConnectionValidCondition())
 	return conditions, nil
 }
 

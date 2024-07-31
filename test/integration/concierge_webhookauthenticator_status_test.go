@@ -112,6 +112,42 @@ func TestConciergeWebhookAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExt
 	}
 }
 
+func TestConciergeWebhookAuthenticatorStatusShouldBeOverwrittenByControllerAfterAnyManualEdits_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+
+	conciergeClient := testlib.NewConciergeClientset(t)
+
+	// Run several times because there is always a chance that the test could pass because the controller
+	// will resync every 3 minutes even if it does not pay attention to changes in status.
+	for i := range 3 {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			t.Parallel()
+
+			authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &env.TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
+
+			updatedAuthenticator, err := conciergeClient.AuthenticationV1alpha1().WebhookAuthenticators().Get(ctx, authenticator.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+
+			updatedAuthenticator.Status.Phase = "Pending"
+			originalFirstConditionMessage := updatedAuthenticator.Status.Conditions[0].Message
+			updatedAuthenticator.Status.Conditions[0].Message = "this is a manually edited message that should go away"
+			_, err = conciergeClient.AuthenticationV1alpha1().WebhookAuthenticators().UpdateStatus(ctx, updatedAuthenticator, metav1.UpdateOptions{})
+			require.NoError(t, err)
+
+			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+				gotAuthenticator, err := conciergeClient.AuthenticationV1alpha1().WebhookAuthenticators().Get(ctx, authenticator.Name, metav1.GetOptions{})
+				requireEventually.NoError(err)
+				requireEventually.Equal(authenticationv1alpha1.WebhookAuthenticatorPhaseReady, gotAuthenticator.Status.Phase,
+					"the controller should have changed the phase back to Ready")
+				requireEventually.Equal(originalFirstConditionMessage, gotAuthenticator.Status.Conditions[0].Message,
+					"the controller should have changed the message back to the correct value but it didn't")
+			}, 30*time.Second, 250*time.Millisecond)
+		})
+	}
+}
+
 func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)

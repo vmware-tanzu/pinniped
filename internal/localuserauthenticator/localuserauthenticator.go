@@ -293,7 +293,7 @@ func startControllers(
 	controllerManager := controllerlib.
 		NewManager().
 		WithController(
-			apicerts.NewCertsManagerController(
+			apicerts.NewCertsCreatorController(
 				namespace,
 				certsSecretResourceName,
 				map[string]string{

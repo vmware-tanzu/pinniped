@@ -144,7 +144,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 
 		// API certs controllers are responsible for managing the TLS certificates used to serve Pinniped's API.
 		WithController(
-			apicerts.NewCertsManagerController(
+			apicerts.NewCertsCreatorController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ServingCertificateSecret,
 				c.Labels,
@@ -296,7 +296,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 			singletonWorker,
 		).
 		WithController(
-			apicerts.NewCertsManagerController(
+			apicerts.NewCertsCreatorController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ImpersonationSignerSecret,
 				c.Labels,

@@ -19,11 +19,17 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+// The following key names are unexported, to prevent a leaky abstraction.
+// Even the string literals should only be used in a very limited set of places:
+// - The unit tests for this file
+// - The unit tests for retrieve_from_secret.go
+// - Integration tests
+// Comment must end in a period, so here's a period: .
 const (
-	CACertificateSecretKey           = "caCertificate"
-	CACertificatePrivateKeySecretKey = "caCertificatePrivateKey"
+	caCertificateSecretKey           = "caCertificate"
+	caCertificatePrivateKeySecretKey = "caCertificatePrivateKey"
+	tlsCertificateChainSecretKey     = "tlsCertificateChain"
 	tlsPrivateKeySecretKey           = "tlsPrivateKey"
-	TLSCertificateChainSecretKey     = "tlsCertificateChain"
 )
 
 type certsCreatorController struct {
@@ -111,8 +117,8 @@ func (c *certsCreatorController) Sync(ctx controllerlib.Context) error {
 			Labels:    c.certsSecretLabels,
 		},
 		Data: map[string][]byte{
-			CACertificateSecretKey:           ca.Bundle(),
-			CACertificatePrivateKeySecretKey: caPrivateKeyPEM,
+			caCertificateSecretKey:           ca.Bundle(),
+			caCertificatePrivateKeySecretKey: caPrivateKeyPEM,
 		},
 	}
 
@@ -132,7 +138,7 @@ func (c *certsCreatorController) Sync(ctx controllerlib.Context) error {
 		}
 
 		secret.Data[tlsPrivateKeySecretKey] = tlsPrivateKeyPEM
-		secret.Data[TLSCertificateChainSecretKey] = tlsCertChainPEM
+		secret.Data[tlsCertificateChainSecretKey] = tlsCertChainPEM
 	}
 
 	_, err = c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx.Context, &secret, metav1.CreateOptions{})

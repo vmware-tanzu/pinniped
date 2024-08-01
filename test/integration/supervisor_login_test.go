@@ -2824,32 +2824,8 @@ func requireSuccessfulLDAPIdentityProviderConditions(
 	expectedLDAPConnectionValidMessage string,
 	caBundleConfigured bool,
 ) {
-	require.Len(t, ldapIDP.Status.Conditions, 3)
-
-	conditionsSummary := [][]string{}
-	for _, condition := range ldapIDP.Status.Conditions {
-		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
-		t.Logf("Saw LDAPIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
-			condition.Type, string(condition.Status), condition.Reason, condition.Message)
-		switch condition.Type {
-		case "BindSecretValid":
-			require.Equal(t, "loaded bind secret", condition.Message)
-		case "TLSConfigurationValid":
-			if caBundleConfigured {
-				require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
-			} else {
-				require.Equal(t, "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
-			}
-		case "LDAPConnectionValid":
-			require.Equal(t, expectedLDAPConnectionValidMessage, condition.Message)
-		}
-	}
-
-	require.ElementsMatch(t, [][]string{
-		{"BindSecretValid", "True", "Success"},
-		{"TLSConfigurationValid", "True", "Success"},
-		{"LDAPConnectionValid", "True", "Success"},
-	}, conditionsSummary)
+	requireEventuallySuccessfulLDAPIdentityProviderConditions(t,
+		require.New(t), ldapIDP, expectedLDAPConnectionValidMessage, caBundleConfigured)
 }
 
 func requireSuccessfulActiveDirectoryIdentityProviderConditions(
@@ -2858,106 +2834,37 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(
 	expectedActiveDirectoryConnectionValidMessage string,
 	caBundleConfigured bool,
 ) {
-	require.Len(t, adIDP.Status.Conditions, 4)
-
-	conditionsSummary := [][]string{}
-	for _, condition := range adIDP.Status.Conditions {
-		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
-		t.Logf("Saw ActiveDirectoryIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
-			condition.Type, string(condition.Status), condition.Reason, condition.Message)
-		switch condition.Type {
-		case "BindSecretValid":
-			require.Equal(t, "loaded bind secret", condition.Message)
-		case "TLSConfigurationValid":
-			if caBundleConfigured {
-				require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
-			} else {
-				require.Equal(t, "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
-			}
-		case "LDAPConnectionValid":
-			require.Equal(t, expectedActiveDirectoryConnectionValidMessage, condition.Message)
-		}
-	}
-
-	expectedUserSearchReason := ""
-	if adIDP.Spec.UserSearch.Base == "" || adIDP.Spec.GroupSearch.Base == "" {
-		expectedUserSearchReason = "Success"
-	} else {
-		expectedUserSearchReason = "UsingConfigurationFromSpec"
-	}
-
-	require.ElementsMatch(t, [][]string{
-		{"BindSecretValid", "True", "Success"},
-		{"TLSConfigurationValid", "True", "Success"},
-		{"LDAPConnectionValid", "True", "Success"},
-		{"SearchBaseFound", "True", expectedUserSearchReason},
-	}, conditionsSummary)
+	requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t,
+		require.New(t), adIDP, expectedActiveDirectoryConnectionValidMessage, caBundleConfigured)
 }
 
 func requireEventuallySuccessfulLDAPIdentityProviderConditions(
 	t *testing.T,
-	requireEventually *require.Assertions,
+	assertions *require.Assertions,
 	ldapIDP *idpv1alpha1.LDAPIdentityProvider,
 	expectedLDAPConnectionValidMessage string,
 	caBundleConfigured bool,
 ) {
 	t.Helper()
-	requireEventually.Len(ldapIDP.Status.Conditions, 3)
+	assertions.Len(ldapIDP.Status.Conditions, 3)
 
-	conditionsSummary := [][]string{}
-	for _, condition := range ldapIDP.Status.Conditions {
-		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
-		t.Logf("Saw ActiveDirectoryIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
-			condition.Type, string(condition.Status), condition.Reason, condition.Message)
-		switch condition.Type {
-		case "BindSecretValid":
-			requireEventually.Equal("loaded bind secret", condition.Message)
-		case "TLSConfigurationValid":
-			if caBundleConfigured {
-				require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
-			} else {
-				require.Equal(t, "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
-			}
-		case "LDAPConnectionValid":
-			requireEventually.Equal(expectedLDAPConnectionValidMessage, condition.Message)
-		}
-	}
-
-	requireEventually.ElementsMatch([][]string{
+	assertions.ElementsMatch([][]string{
 		{"BindSecretValid", "True", "Success"},
 		{"TLSConfigurationValid", "True", "Success"},
 		{"LDAPConnectionValid", "True", "Success"},
-	}, conditionsSummary)
+	}, conditionsSummaryFromActualConditions(t,
+		assertions, ldapIDP.Status.Conditions, caBundleConfigured, expectedLDAPConnectionValidMessage))
 }
 
 func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(
 	t *testing.T,
-	requireEventually *require.Assertions,
+	assertions *require.Assertions,
 	adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider,
 	expectedActiveDirectoryConnectionValidMessage string,
 	caBundleConfigured bool,
 ) {
 	t.Helper()
-	requireEventually.Len(adIDP.Status.Conditions, 4)
-
-	conditionsSummary := [][]string{}
-	for _, condition := range adIDP.Status.Conditions {
-		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
-		t.Logf("Saw ActiveDirectoryIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
-			condition.Type, string(condition.Status), condition.Reason, condition.Message)
-		switch condition.Type {
-		case "BindSecretValid":
-			requireEventually.Equal("loaded bind secret", condition.Message)
-		case "TLSConfigurationValid":
-			if caBundleConfigured {
-				require.Equal(t, "spec.tls is valid: using configured CA bundle", condition.Message)
-			} else {
-				require.Equal(t, "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
-			}
-		case "LDAPConnectionValid":
-			requireEventually.Equal(expectedActiveDirectoryConnectionValidMessage, condition.Message)
-		}
-	}
+	assertions.Len(adIDP.Status.Conditions, 4)
 
 	expectedUserSearchReason := ""
 	if adIDP.Spec.UserSearch.Base == "" || adIDP.Spec.GroupSearch.Base == "" {
@@ -2966,12 +2873,41 @@ func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(
 		expectedUserSearchReason = "UsingConfigurationFromSpec"
 	}
 
-	requireEventually.ElementsMatch([][]string{
+	assertions.ElementsMatch([][]string{
 		{"BindSecretValid", "True", "Success"},
 		{"TLSConfigurationValid", "True", "Success"},
 		{"LDAPConnectionValid", "True", "Success"},
 		{"SearchBaseFound", "True", expectedUserSearchReason},
-	}, conditionsSummary)
+	}, conditionsSummaryFromActualConditions(t,
+		assertions, adIDP.Status.Conditions, caBundleConfigured, expectedActiveDirectoryConnectionValidMessage))
+}
+
+func conditionsSummaryFromActualConditions(
+	t *testing.T,
+	assertions *require.Assertions,
+	conditions []metav1.Condition,
+	caBundleConfigured bool,
+	expectedLDAPConnectionValidMessage string,
+) [][]string {
+	conditionsSummary := [][]string{}
+	for _, condition := range conditions {
+		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
+		t.Logf("Saw identity provider with Status.Condition Type=%s Status=%s Reason=%s Message=%s",
+			condition.Type, string(condition.Status), condition.Reason, condition.Message)
+		switch condition.Type {
+		case "BindSecretValid":
+			assertions.Equal("loaded bind secret", condition.Message)
+		case "TLSConfigurationValid":
+			if caBundleConfigured {
+				assertions.Equal("spec.tls is valid: using configured CA bundle", condition.Message)
+			} else {
+				assertions.Equal("spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
+			}
+		case "LDAPConnectionValid":
+			assertions.Equal(expectedLDAPConnectionValidMessage, condition.Message)
+		}
+	}
+	return conditionsSummary
 }
 
 func testSupervisorLogin(

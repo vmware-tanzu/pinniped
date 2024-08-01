@@ -313,6 +313,7 @@ func startControllers(
 			apicerts.NewCertsObserverController(
 				namespace,
 				certsSecretResourceName,
+				apicerts.RetrieveCertificateFromSecret,
 				dynamicCertProvider,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,

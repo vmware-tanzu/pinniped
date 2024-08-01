@@ -140,19 +140,16 @@ func expectUpstreamConditions(t *testing.T, upstream *idpv1alpha1.OIDCIdentityPr
 }
 
 func expectedTLSConfigValidCondition(caBundleConfigured bool) metav1.Condition {
-	if caBundleConfigured {
-		return metav1.Condition{
-			Type:    "TLSConfigurationValid",
-			Status:  "True",
-			Reason:  "Success",
-			Message: `spec.tls is valid: using configured CA bundle`,
-		}
-	}
-
-	return metav1.Condition{
+	c := metav1.Condition{
 		Type:    "TLSConfigurationValid",
 		Status:  "True",
 		Reason:  "Success",
-		Message: `spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image`,
+		Message: "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image",
 	}
+
+	if caBundleConfigured {
+		c.Message = "spec.tls is valid: using configured CA bundle"
+	}
+
+	return c
 }

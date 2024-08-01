@@ -239,12 +239,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 
 		adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, spec, idpv1alpha1.ActiveDirectoryPhaseReady)
 
-		expectedMsg := fmt.Sprintf(
+		expectedActiveDirectoryConnectionValidMessage := fmt.Sprintf(
 			`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 			spec.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 			secret.Name, secret.ResourceVersion,
 		)
-		requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg, env.SupervisorUpstreamActiveDirectory.CABundle != "")
+		requireSuccessfulActiveDirectoryIdentityProviderConditions(t,
+			adIDP, expectedActiveDirectoryConnectionValidMessage, env.SupervisorUpstreamActiveDirectory.CABundle != "")
 
 		return adIDP, secret
 	}
@@ -292,12 +293,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 
 		ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, spec, idpv1alpha1.LDAPPhaseReady)
 
-		expectedMsg := fmt.Sprintf(
+		expectedLDAPConnectionValidMessage := fmt.Sprintf(
 			`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 			spec.Host, env.SupervisorUpstreamLDAP.BindUsername,
 			secret.Name, secret.ResourceVersion,
 		)
-		requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
+		requireSuccessfulLDAPIdentityProviderConditions(t,
+			ldapIDP, expectedLDAPConnectionValidMessage, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
 
 		return ldapIDP, secret
 	}
@@ -1124,7 +1126,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				updatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Update(ctx, secret, metav1.UpdateOptions{})
 				require.NoError(t, err)
 
-				expectedMsg := fmt.Sprintf(
+				expectedLDAPConnectionValidMessage := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
 					updatedSecret.Name, updatedSecret.ResourceVersion,
@@ -1135,7 +1137,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t,
+						requireEventually, idp, expectedLDAPConnectionValidMessage, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -1190,7 +1193,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					},
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
-				expectedMsg := fmt.Sprintf(
+				expectedLDAPConnectionValidMessage := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
 					recreatedSecret.Name, recreatedSecret.ResourceVersion,
@@ -1201,7 +1204,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t,
+						requireEventually, idp, expectedLDAPConnectionValidMessage, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -1481,7 +1485,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				updatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Update(ctx, secret, metav1.UpdateOptions{})
 				require.NoError(t, err)
 
-				expectedMsg := fmt.Sprintf(
+				expectedActiveDirectoryConnectionValidMessage := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 					updatedSecret.Name, updatedSecret.ResourceVersion,
@@ -1492,7 +1496,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg, len(env.SupervisorUpstreamActiveDirectory.CABundle) != 0)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t,
+						requireEventually, idp, expectedActiveDirectoryConnectionValidMessage, len(env.SupervisorUpstreamActiveDirectory.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -1548,7 +1553,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
 
-				expectedMsg := fmt.Sprintf(
+				expectedActiveDirectoryConnectionValidMessage := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 					recreatedSecret.Name, recreatedSecret.ResourceVersion,
@@ -1559,7 +1564,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg, len(env.SupervisorUpstreamActiveDirectory.CABundle) != 0)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t,
+						requireEventually, idp, expectedActiveDirectoryConnectionValidMessage, len(env.SupervisorUpstreamActiveDirectory.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},

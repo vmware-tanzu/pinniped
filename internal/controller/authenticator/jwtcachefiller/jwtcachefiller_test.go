@@ -1247,7 +1247,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogLines: []string{
-				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).havePreviouslyValidated","message":"cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations","jwtAuthenticator":"test-name","issuer":"%s"}`, someJWTAuthenticatorSpec.Issuer),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).syncIndividualJWTAuthenticator","message":"cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations","jwtAuthenticator":"test-name","issuer":"%s"}`, someJWTAuthenticatorSpec.Issuer),
 				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).updateStatus","message":"jwtauthenticator status successfully updated","jwtAuthenticator":"test-name","issuer":"%s","phase":"Ready"}`, someJWTAuthenticatorSpec.Issuer),
 			},
 			wantActions: func() []coretesting.Action {
@@ -1348,7 +1348,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogLines: []string{
-				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).havePreviouslyValidated","message":"cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations","jwtAuthenticator":"test-name","issuer":"%s"}`, goodIssuer),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).syncIndividualJWTAuthenticator","message":"cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations","jwtAuthenticator":"test-name","issuer":"%s"}`, goodIssuer),
 				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"jwtcachefiller-controller","caller":"jwtcachefiller/jwtcachefiller.go:<line>$jwtcachefiller.(*jwtCacheFillerController).updateStatus","message":"choosing to not update the jwtauthenticator status since there is no update to make","jwtAuthenticator":"test-name","issuer":"%s","phase":"Ready"}`, goodIssuer),
 			},
 			wantActions: func() []coretesting.Action {

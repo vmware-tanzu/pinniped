@@ -768,7 +768,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogLines: []string{
-				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).havePreviouslyValidated","message":"cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations","webhookAuthenticator":"test-name","endpoint":"%s"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations","webhookAuthenticator":"test-name","endpoint":"%s"}`, goodWebhookDefaultServingCertEndpoint),
 				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"choosing to not update the webhookauthenticator status since there is no update to make","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
@@ -987,7 +987,7 @@ func TestController(t *testing.T) {
 				},
 			},
 			wantLogLines: []string{
-				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).havePreviouslyValidated","message":"cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations","webhookAuthenticator":"test-name","endpoint":"%s"}`, goodWebhookAuthenticatorSpecWithCA.Endpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations","webhookAuthenticator":"test-name","endpoint":"%s"}`, goodWebhookAuthenticatorSpecWithCA.Endpoint),
 				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookAuthenticatorSpecWithCA.Endpoint),
 			},
 			wantActions: func() []coretesting.Action {

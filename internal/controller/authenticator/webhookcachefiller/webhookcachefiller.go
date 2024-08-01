@@ -192,6 +192,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		// However, the status may be lagging behind due to the informer cache being slow to catch up
 		// after previous status updates, so always calculate the new status conditions again and check
 		// if they need to be updated.
+		logger.Info("cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations")
 		conditions = append(conditions,
 			successfulWebhookConnectionValidCondition(),
 			successfulAuthenticatorValidCondition(),
@@ -290,7 +291,6 @@ func (c *webhookCacheFillerController) havePreviouslyValidated(
 	if authenticatorFromCache.endpoint == endpoint &&
 		tlsBundleOk && // if there was any error while validating the latest CA bundle, then do not consider it previously validated
 		authenticatorFromCache.caBundleHash.Equal(caBundleHash) {
-		logger.Info("cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations")
 		return true, true
 	}
 	return true, false // found the authenticator, but it had not been previously validated with these same settings

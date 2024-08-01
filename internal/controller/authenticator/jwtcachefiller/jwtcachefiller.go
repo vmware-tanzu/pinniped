@@ -248,6 +248,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 		// However, the status may be lagging behind due to the informer cache being slow to catch up
 		// after previous status updates, so always calculate the new status conditions again and check
 		// if they need to be updated.
+		logger.Info("cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations")
 		conditions = append(conditions,
 			successfulDiscoveryValidCondition(),
 			successfulJWKSURLValidCondition(),
@@ -320,7 +321,7 @@ func (c *jwtCacheFillerController) doExpensiveValidations(
 
 	newJWTAuthenticatorForCache, conditions, err := c.newCachedJWTAuthenticator(
 		client,
-		jwtAuthenticator.Spec.DeepCopy(), // deep copy to avoid caching original object
+		&jwtAuthenticator.Spec,
 		keySet,
 		caBundle.Hash(),
 		conditions,
@@ -349,7 +350,6 @@ func (c *jwtCacheFillerController) havePreviouslyValidated(
 	if authenticatorFromCache.issuer == issuer &&
 		tlsBundleOk && // if there was any error while validating the latest CA bundle, then do not consider it previously validated
 		authenticatorFromCache.caBundleHash.Equal(caBundleHash) {
-		logger.Info("cached jwt authenticator and desired jwt authenticator are the same: already cached, so skipping validations")
 		return true, true
 	}
 	return true, false // found the authenticator, but it had not been previously validated with these same settings

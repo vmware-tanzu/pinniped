@@ -242,6 +242,8 @@ func TestObserverControllerSync(t *testing.T) {
 
 				actualCertChain, actualKey = dynamicCertProvider.CurrentCertKeyContent()
 				r.True(strings.HasPrefix(string(actualCertChain), `-----BEGIN CERTIFICATE-----`), "not a cert:\n%s", string(actualCertChain))
+				// Confirm that the embed worked successfully
+				r.True(len(privateKeyPrefix) > 0, "privateKeyPrefix should be non-empty")
 				r.True(strings.HasPrefix(string(actualKey), privateKeyPrefix), "not a key:\n%s", string(actualKey))
 			})
 		})

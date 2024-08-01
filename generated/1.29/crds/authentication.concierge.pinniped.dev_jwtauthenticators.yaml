@@ -96,25 +96,28 @@ spec:
                       If omitted, a default set of system roots will be trusted.
                     type: string
                   certificateAuthorityDataSource:
-                    description: Reference to a CA bundle in a secret or a configmap.
+                    description: |-
+                      Reference to a CA bundle in a secret or a configmap.
+                      Any changes to the CA bundle in the secret or configmap will be dynamically reloaded.
                     properties:
                       key:
-                        description: Key within the secret or configmap from which
-                          to read the CA bundle.
+                        description: |-
+                          Key is the key name within the secret or configmap from which to read the CA bundle.
+                          The value found at this key in the secret or configmap must not be empty, and must be a valid PEM-encoded
+                          certificate bundle.
                         minLength: 1
                         type: string
                       kind:
                         description: |-
-                          Whether the CA bundle is being sourced from a kubernetes secret or a configmap.
+                          Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap.
                           Secrets must be of type kubernetes.io/tls or Opaque.
-                          For configmaps, the value associated with the key is not expected to be base64 encoded.
                         enum:
                         - Secret
                         - ConfigMap
                         type: string
                       name:
                         description: |-
-                          Name of the secret or configmap from which to read the CA bundle.
+                          Name is the resource name of the secret or configmap from which to read the CA bundle.
                           The referenced secret or configmap must be created in the same namespace where Pinniped Concierge is installed.
                         minLength: 1
                         type: string

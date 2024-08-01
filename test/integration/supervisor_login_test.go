@@ -375,7 +375,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 						"ca.crt": string(caData),
 					})
 				idpSpec.TLS.CertificateAuthorityData = ""
-				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "Secret",
 					Name: caSecret.Name,
 					Key:  "ca.crt",
@@ -405,7 +405,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 						"tls.key": "",
 					})
 				idpSpec.TLS.CertificateAuthorityData = ""
-				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "Secret",
 					Name: caSecret.Name,
 					Key:  "ca.crt",
@@ -432,7 +432,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					"ca.crt": string(caData),
 				})
 				idpSpec.TLS.CertificateAuthorityData = ""
-				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "ConfigMap",
 					Name: caConfigMap.Name,
 					Key:  "ca.crt",
@@ -461,7 +461,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 						"ca.crt": string(caData),
 					})
 				idpSpec.TLS.CertificateAuthorityData = ""
-				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "Secret",
 					Name: caSecret.Name,
 					Key:  "ca.crt",
@@ -684,7 +684,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							"ca.crt": env.SupervisorUpstreamLDAP.CABundle,
 						})
 					spec.TLS.CertificateAuthorityData = ""
-					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 						Kind: "Secret",
 						Name: caSecret.Name,
 						Key:  "ca.crt",
@@ -735,7 +735,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							"tls.key": "",
 						})
 					spec.TLS.CertificateAuthorityData = ""
-					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 						Kind: "Secret",
 						Name: caSecret.Name,
 						Key:  "ca.crt",
@@ -784,7 +784,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							"ca.crt": env.SupervisorUpstreamLDAP.CABundle,
 						})
 					spec.TLS.CertificateAuthorityData = ""
-					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 						Kind: "ConfigMap",
 						Name: caConfigMap.Name,
 						Key:  "ca.crt",
@@ -1270,7 +1270,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							"ca.crt": env.SupervisorUpstreamActiveDirectory.CABundle,
 						})
 					spec.TLS.CertificateAuthorityData = ""
-					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 						Kind: "Secret",
 						Name: caSecret.Name,
 						Key:  "ca.crt",
@@ -1312,7 +1312,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							"tls.key": "",
 						})
 					spec.TLS.CertificateAuthorityData = ""
-					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 						Kind: "Secret",
 						Name: caSecret.Name,
 						Key:  "ca.crt",
@@ -1352,7 +1352,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 							"ca.crt": env.SupervisorUpstreamActiveDirectory.CABundle,
 						})
 					spec.TLS.CertificateAuthorityData = ""
-					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 						Kind: "ConfigMap",
 						Name: caConfigMap.Name,
 						Key:  "ca.crt",

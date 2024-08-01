@@ -237,7 +237,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			})
 		jwtAuthnSpec := defaultJWTAuthenticatorSpec.DeepCopy()
 		jwtAuthnSpec.TLS.CertificateAuthorityData = ""
-		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
+		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 			Kind: "Secret",
 			Name: caSecret.Name,
 			Key:  "ca.crt",
@@ -339,7 +339,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			})
 		jwtAuthnSpec := defaultJWTAuthenticatorSpec.DeepCopy()
 		jwtAuthnSpec.TLS.CertificateAuthorityData = ""
-		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
+		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 			Kind: "Secret",
 			Name: caSecret.Name,
 			Key:  "ca.crt",
@@ -477,7 +477,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			})
 		jwtAuthnSpec := defaultJWTAuthenticatorSpec.DeepCopy()
 		jwtAuthnSpec.TLS.CertificateAuthorityData = ""
-		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
+		jwtAuthnSpec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 			Kind: "ConfigMap",
 			Name: caConfigMap.Name,
 			Key:  "ca.crt",

@@ -155,7 +155,7 @@ func TestController(t *testing.T) {
 	goodWebhookAuthenticatorSpecWithCAFromSecret := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodWebhookDefaultServingCertEndpoint,
 		TLS: &authenticationv1alpha1.TLSSpec{
-			CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
+			CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 				Kind: "Secret",
 				Name: "secret-with-ca",
 				Key:  "ca.crt",
@@ -175,7 +175,7 @@ func TestController(t *testing.T) {
 	goodWebhookAuthenticatorSpecWithCAFromConfigMap := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodWebhookDefaultServingCertEndpoint,
 		TLS: &authenticationv1alpha1.TLSSpec{
-			CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
+			CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 				Kind: "ConfigMap",
 				Name: "configmap-with-ca",
 				Key:  "ca.crt",

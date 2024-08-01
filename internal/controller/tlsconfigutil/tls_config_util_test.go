@@ -535,7 +535,7 @@ func TestTLSSpecForSupervisor(t *testing.T) {
 		{
 			name: "should return tls spec with certificateAuthorityDataSource",
 			supervisorTLSSpec: &idpv1alpha1.TLSSpec{
-				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+				CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "Secret",
 					Name: "awesome-secret",
 					Key:  "ca-bundle",
@@ -553,7 +553,7 @@ func TestTLSSpecForSupervisor(t *testing.T) {
 			name: "should return tls spec when source has all fields filled",
 			supervisorTLSSpec: &idpv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64EncodedBundle,
-				CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+				CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "Secret",
 					Name: "awesome-secret",
 					Key:  "ca-bundle",
@@ -609,7 +609,7 @@ func TestTLSSpecForConcierge(t *testing.T) {
 		{
 			name: "should return tls spec with certificateAuthorityDataSource",
 			conciergeTLSSpec: &authenticationv1alpha1.TLSSpec{
-				CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
+				CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "Secret",
 					Name: "awesome-secret",
 					Key:  "ca-bundle",
@@ -627,7 +627,7 @@ func TestTLSSpecForConcierge(t *testing.T) {
 			name: "should return tls spec when source has all fields filled",
 			conciergeTLSSpec: &authenticationv1alpha1.TLSSpec{
 				CertificateAuthorityData: base64EncodedBundle,
-				CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
+				CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "Secret",
 					Name: "awesome-secret",
 					Key:  "ca-bundle",

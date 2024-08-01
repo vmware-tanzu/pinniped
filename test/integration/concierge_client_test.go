@@ -83,7 +83,7 @@ func TestClient(t *testing.T) {
 						"tls.key": "",
 					})
 				spec.TLS.CertificateAuthorityData = ""
-				spec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
+				spec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "Secret",
 					Name: caSecret.Name,
 					Key:  "ca.crt",
@@ -98,7 +98,7 @@ func TestClient(t *testing.T) {
 						"ca.crt": string(TLSCABundle),
 					})
 				spec.TLS.CertificateAuthorityData = ""
-				spec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
+				spec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "Secret",
 					Name: caSecret.Name,
 					Key:  "ca.crt",
@@ -113,7 +113,7 @@ func TestClient(t *testing.T) {
 						"ca.crt": string(TLSCABundle),
 					})
 				spec.TLS.CertificateAuthorityData = ""
-				spec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CABundleSource{
+				spec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 					Kind: "ConfigMap",
 					Name: caConfigmap.Name,
 					Key:  "ca.crt",

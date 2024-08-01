@@ -1162,7 +1162,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
 					Issuer: testIssuerURL,
 					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+						CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 							Kind: "Secret",
 							Name: "ca-bundle-secret",
 							Key:  "ca.crt",
@@ -1229,7 +1229,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
 					Issuer: testIssuerURL,
 					TLS: &idpv1alpha1.TLSSpec{
-						CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+						CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 							Kind: "ConfigMap",
 							Name: "ca-bundle-configmap",
 							Key:  "ca.crt",

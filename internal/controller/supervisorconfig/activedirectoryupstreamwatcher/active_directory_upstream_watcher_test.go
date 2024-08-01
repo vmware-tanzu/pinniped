@@ -275,7 +275,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 
 	validUpstreamWithConfigMapCABundleSource := validUpstream.DeepCopy()
 	validUpstreamWithConfigMapCABundleSource.Spec.TLS.CertificateAuthorityData = ""
-	validUpstreamWithConfigMapCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+	validUpstreamWithConfigMapCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 		Kind: "ConfigMap",
 		Name: caBundleConfigMapName,
 		Key:  "ca.crt",
@@ -289,7 +289,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 
 	validUpstreamWithOpaqueSecretCABundleSource := validUpstream.DeepCopy()
 	validUpstreamWithOpaqueSecretCABundleSource.Spec.TLS.CertificateAuthorityData = ""
-	validUpstreamWithOpaqueSecretCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+	validUpstreamWithOpaqueSecretCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 		Kind: "Secret",
 		Name: caBundleSecretName,
 		Key:  "ca.crt",
@@ -304,7 +304,7 @@ func TestActiveDirectoryUpstreamWatcherControllerSync(t *testing.T) {
 
 	validUpstreamWithTLSSecretCABundleSource := validUpstream.DeepCopy()
 	validUpstreamWithTLSSecretCABundleSource.Spec.TLS.CertificateAuthorityData = ""
-	validUpstreamWithTLSSecretCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CABundleSource{
+	validUpstreamWithTLSSecretCABundleSource.Spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 		Kind: "Secret",
 		Name: caBundleSecretName,
 		Key:  "ca.crt",

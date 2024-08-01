@@ -90,7 +90,7 @@ func TestConciergeWebhookAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExt
 					authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &authenticationv1alpha1.WebhookAuthenticatorSpec{
 						Endpoint: env.TestWebhook.Endpoint,
 						TLS: &authenticationv1alpha1.TLSSpec{
-							CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
+							CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 								Kind: test.caBundleSourceSpecKind,
 								Name: caBundleResourceName,
 								Key:  "ca.crt",

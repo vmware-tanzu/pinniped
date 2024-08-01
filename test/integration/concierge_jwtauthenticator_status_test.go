@@ -93,7 +93,7 @@ func TestConciergeJWTAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExterna
 						Issuer:   env.SupervisorUpstreamOIDC.Issuer,
 						Audience: "does-not-matter",
 						TLS: &authenticationv1alpha1.TLSSpec{
-							CertificateAuthorityDataSource: &authenticationv1alpha1.CABundleSource{
+							CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
 								Kind: test.caBundleSourceSpecKind,
 								Name: caBundleResourceName,
 								Key:  "ca.crt",

@@ -894,7 +894,7 @@ func TestController(t *testing.T) {
 					otherIDP := validFilledOutIDP.DeepCopy()
 					otherIDP.Name = "idp-with-tls-in-secret"
 					otherIDP.Spec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
-						CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+						CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 							Kind: "Secret",
 							Name: goodCABundleSecret.Name,
 							Key:  "ca.crt",
@@ -906,7 +906,7 @@ func TestController(t *testing.T) {
 					otherIDP := validFilledOutIDP.DeepCopy()
 					otherIDP.Name = "idp-with-tls-in-config-map"
 					otherIDP.Spec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
-						CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+						CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 							Kind: "ConfigMap",
 							Name: goodCABundleConfigMap.Name,
 							Key:  "ca.crt",
@@ -975,7 +975,7 @@ func TestController(t *testing.T) {
 					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						otherSpec := validFilledOutIDP.Spec.DeepCopy()
 						otherSpec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
-							CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+							CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 								Kind: "ConfigMap",
 								Name: goodCABundleSecret.Name,
 								Key:  "ca.crt",
@@ -1004,7 +1004,7 @@ func TestController(t *testing.T) {
 					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						otherSpec := validFilledOutIDP.Spec.DeepCopy()
 						otherSpec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
-							CertificateAuthorityDataSource: &idpv1alpha1.CABundleSource{
+							CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
 								Kind: "Secret",
 								Name: goodCABundleSecret.Name,
 								Key:  "ca.crt",

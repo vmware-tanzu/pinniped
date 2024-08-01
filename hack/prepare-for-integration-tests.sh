@@ -15,6 +15,9 @@
 # For example, to alternatively build and deploy Pinniped as a Carvel package, use:
 #   PINNIPED_USE_LOCAL_KIND_REGISTRY=1 ./hack/prepare-for-integration-tests.sh --clean --pre-install ./hack/lib/carvel_packages/build.sh --alternate-deploy ./hack/lib/carvel_packages/deploy.sh
 #
+# Set PINNIPED_USE_CONTOUR=1 when running this script to cause the kind cluster created by this script to be
+# ready for using PINNIPED_USE_CONTOUR=1 with subsequent hack scripts, e.g. prepare-supervisor-on-kind.sh.
+#
 set -euo pipefail
 
 pinniped_path="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -109,9 +112,6 @@ while (("$#")); do
     ;;
   -*)
     log_error "Unsupported flag $1" >&2
-    if [[ "$1" == *"active-directory"* ]]; then
-      log_error "Did you mean --get-active-directory-vars?"
-    fi
     exit 1
     ;;
   *)

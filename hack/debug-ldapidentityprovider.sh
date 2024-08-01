@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -62,9 +62,6 @@ while (("$#")); do
     ;;
   -*)
     log_error "Unsupported flag $1" >&2
-    if [[ "$1" == *"active-directory"* ]]; then
-      log_error "Did you mean --get-active-directory-vars?"
-    fi
     exit 1
     ;;
   *)

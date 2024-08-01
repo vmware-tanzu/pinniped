@@ -19,22 +19,33 @@ cd "$ROOT"
 source /tmp/integration-test-env
 
 # Create WebhookAuthenticator.
+echo "Creating WebhookAuthenticator..."
 cat <<EOF | kubectl apply -f - 1>&2
 kind: WebhookAuthenticator
 apiVersion: authentication.concierge.pinniped.dev/v1alpha1
 metadata:
-  name: my-webhook
+  name: my-webhook-authenticator
 spec:
   endpoint: ${PINNIPED_TEST_WEBHOOK_ENDPOINT}
   tls:
     certificateAuthorityData: ${PINNIPED_TEST_WEBHOOK_CA_BUNDLE}
 EOF
 
+echo "Waiting for WebhookAuthenticator to be ready..."
+kubectl wait --for=condition=Ready webhookauthenticator my-webhook-authenticator --timeout 60s
+
+# Compile the CLI.
+echo "Building the Pinniped CLI..."
+go build ./cmd/pinniped
+
 # Use the CLI to get a kubeconfig that will use this WebhookAuthenticator.
-go build -o /tmp/pinniped ./cmd/pinniped
+echo "Generating webhook kubeconfig..."
 /tmp/pinniped get kubeconfig \
   --concierge-authenticator-type webhook \
-  --concierge-authenticator-name my-webhook \
-  --static-token "$PINNIPED_TEST_USER_TOKEN" >/tmp/kubeconfig-with-webhook-auth.yaml
+  --concierge-authenticator-name my-webhook-authenticator \
+  --static-token "$PINNIPED_TEST_USER_TOKEN" >kubeconfig-webhook.yaml
 
-echo "export KUBECONFIG=/tmp/kubeconfig-with-webhook-auth.yaml"
+echo
+echo "To log in using webhook:"
+echo "PINNIPED_DEBUG=true ./pinniped whoami --kubeconfig ./kubeconfig-webhook.yaml"
+echo

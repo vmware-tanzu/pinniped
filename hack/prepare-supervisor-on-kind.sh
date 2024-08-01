@@ -28,7 +28,7 @@
 #   PINNIPED_USE_CONTOUR=1 hack/prepare-for-integration-tests.sh -c
 #   PINNIPED_USE_CONTOUR=1 hack/prepare-supervisor-on-kind.sh --oidc --ldap
 #
-# Depends on `step` which can be installed by `brew install step` on MacOS.
+# This script depends on `step` which can be installed by `brew install step` on MacOS.
 #
 
 set -euo pipefail
@@ -69,11 +69,11 @@ while (("$#")); do
     shift
     ;;
   --github)
+    # This assumes that you used the --get-github-vars flag with hack/prepare-for-integration-tests.sh.
     use_github_upstream=yes
     shift
     ;;
   --ad)
-    # Use an ActiveDirectoryIdentityProvider.
     # This assumes that you used the --get-active-directory-vars flag with hack/prepare-for-integration-tests.sh.
     use_ad_upstream=yes
     shift
@@ -499,6 +499,7 @@ fi
 
 # Make a JWTAuthenticator which respects JWTs from the Supervisor's issuer.
 # The issuer URL must be accessible from within the cluster for OIDC discovery.
+echo "Creating JWTAuthenticator..."
 cat <<EOF | kubectl apply -f -
 apiVersion: authentication.concierge.pinniped.dev/v1alpha1
 kind: JWTAuthenticator
@@ -511,9 +512,8 @@ spec:
     certificateAuthorityData: $certificateAuthorityData
 EOF
 
-echo "Waiting for JWTAuthenticator to initialize or update..."
-# Sleeping is a race, but that's probably good enough for the purposes of this script.
-sleep 5
+echo "Waiting for JWTAuthenticator to be ready..."
+kubectl wait --for=condition=Ready jwtauthenticator my-jwt-authenticator --timeout 60s
 
 # Compile the CLI.
 echo "Building the Pinniped CLI..."
@@ -566,10 +566,11 @@ if [[ "${PINNIPED_USE_CONTOUR:-}" == "" && ("$use_oidc_upstream" == "yes" || "$u
   echo "    open -a \"Google Chrome\" --args --proxy-server=\"$proxy_server\""
   echo "Note that Chrome must be fully quit before being started with --proxy-server."
   echo "Then open the login URL shown below in that new Chrome window."
-  echo
-  echo "When prompted for username and password, use these values:"
-  echo
 fi
+
+echo
+echo "When prompted for username and password, use these values:"
+echo
 
 if [[ "$use_oidc_upstream" == "yes" ]]; then
   echo "    OIDC Username: $PINNIPED_TEST_SUPERVISOR_UPSTREAM_OIDC_USERNAME"
@@ -599,22 +600,22 @@ fi
 # Once the CLI has cached your tokens, it will automatically refresh your short-lived credentials whenever
 # they expire, so you should not be prompted to log in again for the rest of the day.
 if [[ "$use_oidc_upstream" == "yes" ]]; then
-  echo "To log in using OIDC, run:"
+  echo "To log in using OIDC:"
   echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-oidc.yaml"
   echo
 fi
 if [[ "$use_ldap_upstream" == "yes" ]]; then
-  echo "To log in using LDAP, run:"
+  echo "To log in using LDAP:"
   echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-ldap.yaml"
   echo
 fi
 if [[ "$use_ad_upstream" == "yes" ]]; then
-  echo "To log in using AD, run:"
+  echo "To log in using AD:"
   echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-ad.yaml"
   echo
 fi
 if [[ "$use_github_upstream" == "yes" ]]; then
-  echo "To log in using GitHub, run:"
+  echo "To log in using GitHub:"
   echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-github.yaml"
   echo
 fi

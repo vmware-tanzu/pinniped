@@ -61,7 +61,7 @@ func NewCertsCreatorController(
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "certs-manager-controller",
+			Name: "certs-creator-controller",
 			Syncer: &certsCreatorController{
 				namespace:                             namespace,
 				certsSecretResourceName:               certsSecretResourceName,

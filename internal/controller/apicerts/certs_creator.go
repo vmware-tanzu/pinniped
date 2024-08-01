@@ -110,9 +110,9 @@ func (c *certsCreatorController) Sync(ctx controllerlib.Context) error {
 			Namespace: c.namespace,
 			Labels:    c.certsSecretLabels,
 		},
-		StringData: map[string]string{
-			CACertificateSecretKey:           string(ca.Bundle()),
-			CACertificatePrivateKeySecretKey: string(caPrivateKeyPEM),
+		Data: map[string][]byte{
+			CACertificateSecretKey:           ca.Bundle(),
+			CACertificatePrivateKeySecretKey: caPrivateKeyPEM,
 		},
 	}
 
@@ -131,8 +131,8 @@ func (c *certsCreatorController) Sync(ctx controllerlib.Context) error {
 			return fmt.Errorf("could not PEM encode serving certificate: %w", err)
 		}
 
-		secret.StringData[tlsPrivateKeySecretKey] = string(tlsPrivateKeyPEM)
-		secret.StringData[TLSCertificateChainSecretKey] = string(tlsCertChainPEM)
+		secret.Data[tlsPrivateKeySecretKey] = tlsPrivateKeyPEM
+		secret.Data[TLSCertificateChainSecretKey] = tlsCertChainPEM
 	}
 
 	_, err = c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx.Context, &secret, metav1.CreateOptions{})

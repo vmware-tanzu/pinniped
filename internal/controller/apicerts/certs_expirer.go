@@ -31,7 +31,7 @@ type certsExpirerController struct {
 	// this controller will start to try to rotate it.
 	renewBefore time.Duration
 
-	secretKey string
+	certificateRetriever RetrieveFromSecretFunc
 
 	logger plog.Logger
 }
@@ -46,7 +46,7 @@ func NewCertsExpirerController(
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	renewBefore time.Duration,
-	secretKey string,
+	certificateRetriever RetrieveFromSecretFunc,
 	logger plog.Logger,
 ) controllerlib.Controller {
 	const name = "certs-expirer-controller"
@@ -59,7 +59,7 @@ func NewCertsExpirerController(
 				k8sClient:               k8sClient,
 				secretInformer:          secretInformer,
 				renewBefore:             renewBefore,
-				secretKey:               secretKey,
+				certificateRetriever:    certificateRetriever,
 				logger:                  logger.WithName(name),
 			},
 		},
@@ -83,7 +83,6 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 			"controller", ctx.Name,
 			"namespace", c.namespace,
 			"name", c.certsSecretResourceName,
-			"key", c.secretKey,
 			"renewBefore", c.renewBefore.String(),
 		)
 		return nil
@@ -91,7 +90,7 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 
 	notBefore, notAfter, err := c.getCertBounds(secret)
 	if err != nil {
-		return fmt.Errorf("failed to get cert bounds for secret %q with key %q: %w", secret.Name, c.secretKey, err)
+		return fmt.Errorf("failed to get cert bounds for secret %q: %w", secret.Name, err)
 	}
 
 	certAge := time.Since(notBefore)
@@ -100,7 +99,6 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 		"controller", ctx.Name,
 		"namespace", c.namespace,
 		"name", c.certsSecretResourceName,
-		"key", c.secretKey,
 		"renewBefore", c.renewBefore.String(),
 		"notBefore", notBefore.String(),
 		"notAfter", notAfter.String(),
@@ -130,7 +128,7 @@ func (c *certsExpirerController) Sync(ctx controllerlib.Context) error {
 // getCertBounds returns the NotBefore and NotAfter fields of the TLS
 // certificate in the provided secret, or an error.
 func (c *certsExpirerController) getCertBounds(secret *corev1.Secret) (time.Time, time.Time, error) {
-	certPEM := secret.Data[c.secretKey]
+	certPEM, _ := c.certificateRetriever(secret)
 	if certPEM == nil {
 		return time.Time{}, time.Time{}, constable.Error("failed to find certificate")
 	}

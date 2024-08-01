@@ -367,6 +367,7 @@ func prepareControllers(
 			apicerts.NewAPIServiceUpdaterController(
 				podInfo.Namespace,
 				certificateName,
+				apicerts.RetrieveCAFromSecret,
 				clientSecretSupervisorGroupData.APIServiceName(),
 				aggregatorClient,
 				secretInformer,
@@ -378,6 +379,7 @@ func prepareControllers(
 			apicerts.NewCertsObserverController(
 				podInfo.Namespace,
 				certificateName,
+				apicerts.RetrieveCertificateFromSecret,
 				dynamicServingCertProvider,
 				secretInformer,
 				controllerlib.WithInformer,
@@ -392,7 +394,7 @@ func prepareControllers(
 				secretInformer,
 				controllerlib.WithInformer,
 				9*30*24*time.Hour, // about 9 months
-				apicerts.TLSCertificateChainSecretKey,
+				apicerts.RetrieveCertificateFromSecret,
 				plog.New(),
 			),
 			singletonWorker,

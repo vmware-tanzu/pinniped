@@ -5,6 +5,7 @@ package apicerts
 
 import (
 	"context"
+	_ "embed"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,9 @@ import (
 	"go.pinniped.dev/internal/testutil"
 )
 
+//go:embed testdata/private_key_prefix.txt
+var privateKeyPrefix string
+
 func TestObserverControllerInformerFilters(t *testing.T) {
 	spec.Run(t, "informer filters", func(t *testing.T, when spec.G, it spec.S) {
 		const installedInNamespace = "some-namespace"
@@ -39,6 +43,7 @@ func TestObserverControllerInformerFilters(t *testing.T) {
 			_ = NewCertsObserverController(
 				installedInNamespace,
 				certsSecretResourceName,
+				nil,
 				nil,
 				secretsInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
@@ -119,6 +124,9 @@ func TestObserverControllerSync(t *testing.T) {
 			subject = NewCertsObserverController(
 				installedInNamespace,
 				certsSecretResourceName,
+				func(secret *corev1.Secret) ([]byte, []byte) {
+					return secret.Data["some-key-for-certificate"], secret.Data["some-key-for-private-key"]
+				},
 				dynamicCertProvider,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -202,7 +210,7 @@ func TestObserverControllerSync(t *testing.T) {
 				ca, err := certauthority.Load(string(caCrt), string(caKey))
 				require.NoError(t, err)
 
-				pem, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
+				servingCert, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
 				require.NoError(t, err)
 
 				apiServingCertSecret := &corev1.Secret{
@@ -211,9 +219,9 @@ func TestObserverControllerSync(t *testing.T) {
 						Namespace: installedInNamespace,
 					},
 					Data: map[string][]byte{
-						"caCertificate":       []byte("fake cert"),
-						"tlsPrivateKey":       pem.KeyPEM,
-						"tlsCertificateChain": pem.CertPEM,
+						"some-pretend-ca-EXTRA":    []byte("fake cert"),
+						"some-key-for-certificate": servingCert.CertPEM,
+						"some-key-for-private-key": servingCert.KeyPEM,
 					},
 				}
 				err = kubeInformerClient.Tracker().Add(apiServingCertSecret)
@@ -234,7 +242,7 @@ func TestObserverControllerSync(t *testing.T) {
 
 				actualCertChain, actualKey = dynamicCertProvider.CurrentCertKeyContent()
 				r.True(strings.HasPrefix(string(actualCertChain), `-----BEGIN CERTIFICATE-----`), "not a cert:\n%s", string(actualCertChain))
-				r.True(strings.HasPrefix(string(actualKey), `-----BEGIN PRIVATE KEY-----`), "not a key:\n%s", string(actualKey))
+				r.True(strings.HasPrefix(string(actualKey), privateKeyPrefix), "not a key:\n%s", string(actualKey))
 			})
 		})
 

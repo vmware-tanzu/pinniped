@@ -102,8 +102,8 @@ func TestExpirerControllerFilters(t *testing.T) {
 				nil, // k8sClient, not needed
 				secretsInformer,
 				withInformer.WithInformer,
-				0,  // renewBefore, not needed
-				"", // not needed
+				0,   // renewBefore, not needed
+				nil, // not needed
 				logger,
 			)
 
@@ -134,14 +134,14 @@ func TestExpirerControllerSync(t *testing.T) {
 	}{
 		{
 			name:       "secret does not exist",
-			wantLog:    `{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"certs-expirer-controller","caller":"apicerts/certs_expirer.go:<line>$apicerts.(*certsExpirerController).Sync","message":"secret does not exist yet or was deleted","controller":"","namespace":"some-namespace","name":"some-resource-name","key":"some-awesome-key","renewBefore":"0s"}`,
+			wantLog:    `{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"certs-expirer-controller","caller":"apicerts/certs_expirer.go:<line>$apicerts.(*certsExpirerController).Sync","message":"secret does not exist yet or was deleted","controller":"","namespace":"some-namespace","name":"some-resource-name","renewBefore":"0s"}`,
 			wantDelete: false,
 		},
 		{
 			name:           "secret missing key",
 			fillSecretData: func(t *testing.T, m map[string][]byte) {},
 			wantDelete:     false,
-			wantError:      `failed to get cert bounds for secret "some-resource-name" with key "some-awesome-key": failed to find certificate`,
+			wantError:      `failed to get cert bounds for secret "some-resource-name": failed to find certificate`,
 		},
 		{
 			name:        "lifetime below threshold",
@@ -214,7 +214,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				require.NoError(t, err)
 			},
 			wantDelete: false,
-			wantError:  `failed to get cert bounds for secret "some-resource-name" with key "some-awesome-key": failed to decode certificate PEM`,
+			wantError:  `failed to get cert bounds for secret "some-resource-name": failed to decode certificate PEM`,
 		},
 	}
 	for _, test := range tests {
@@ -265,7 +265,9 @@ func TestExpirerControllerSync(t *testing.T) {
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				test.renewBefore,
-				fakeTestKey,
+				func(secret *corev1.Secret) ([]byte, []byte) {
+					return secret.Data[fakeTestKey], nil
+				},
 				logger,
 			)
 

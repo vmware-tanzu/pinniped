@@ -64,7 +64,13 @@ func (c *apiServiceUpdaterController) Sync(ctx controllerlib.Context) error {
 	}
 
 	// Update the APIService to give it the new CA bundle.
-	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, c.apiServiceName, c.namespace, certSecret.Data[CACertificateSecretKey]); err != nil {
+	if err := UpdateAPIService(
+		ctx.Context,
+		c.aggregatorClient,
+		c.apiServiceName,
+		c.namespace,
+		certSecret.Data[CACertificateSecretKey],
+	); err != nil {
 		return fmt.Errorf("could not update the API service: %w", err)
 	}
 

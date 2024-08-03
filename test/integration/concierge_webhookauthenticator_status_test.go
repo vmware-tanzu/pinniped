@@ -28,13 +28,13 @@ func TestConciergeWebhookAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExt
 
 	tests := []struct {
 		name                      string
-		caBundleSourceSpecKind    string
+		caBundleSourceSpecKind    authenticationv1alpha1.CertificateAuthorityDataSourceKind
 		createResourceForCABundle func(t *testing.T, caBundle string) string
 		updateCABundle            func(t *testing.T, resourceName, caBundle string)
 	}{
 		{
 			name:                   "for a CA bundle from a ConfigMap",
-			caBundleSourceSpecKind: "ConfigMap",
+			caBundleSourceSpecKind: authenticationv1alpha1.CertificateAuthorityDataSourceKindConfigMap,
 			createResourceForCABundle: func(t *testing.T, caBundle string) string {
 				createdResource := testlib.CreateTestConfigMap(t, env.ConciergeNamespace, "ca-bundle", map[string]string{
 					"ca.crt": caBundle,
@@ -53,7 +53,7 @@ func TestConciergeWebhookAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExt
 		},
 		{
 			name:                   "for a CA bundle from a Secret",
-			caBundleSourceSpecKind: "Secret",
+			caBundleSourceSpecKind: authenticationv1alpha1.CertificateAuthorityDataSourceKindSecret,
 			createResourceForCABundle: func(t *testing.T, caBundle string) string {
 				createdResource := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-bundle", corev1.SecretTypeOpaque, map[string]string{
 					"ca.crt": caBundle,

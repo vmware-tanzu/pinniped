@@ -52,7 +52,7 @@ func TLSSpecForSupervisor(source *idpv1alpha1.TLSSpec) *TLSSpec {
 
 	if source.CertificateAuthorityDataSource != nil {
 		dest.CertificateAuthorityDataSource = &caBundleSource{
-			Kind: source.CertificateAuthorityDataSource.Kind,
+			Kind: string(source.CertificateAuthorityDataSource.Kind),
 			Name: source.CertificateAuthorityDataSource.Name,
 			Key:  source.CertificateAuthorityDataSource.Key,
 		}
@@ -71,7 +71,7 @@ func TLSSpecForConcierge(source *authenticationv1alpha1.TLSSpec) *TLSSpec {
 	}
 	if source.CertificateAuthorityDataSource != nil {
 		dest.CertificateAuthorityDataSource = &caBundleSource{
-			Kind: source.CertificateAuthorityDataSource.Kind,
+			Kind: string(source.CertificateAuthorityDataSource.Kind),
 			Name: source.CertificateAuthorityDataSource.Name,
 			Key:  source.CertificateAuthorityDataSource.Key,
 		}

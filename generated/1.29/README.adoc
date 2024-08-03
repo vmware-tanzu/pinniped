@@ -38,6 +38,7 @@ CertificateAuthorityDataSourceSpec provides a source for CA bundle used for clie
 | Field | Description
 | *`kind`* __string__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
 Secrets must be of type kubernetes.io/tls or Opaque. +
+Allowed values are "Secret" or "ConfigMap". +
 | *`name`* __string__ | Name is the resource name of the secret or configmap from which to read the CA bundle. +
 The referenced secret or configmap must be created in the same namespace where Pinniped Concierge is installed. +
 | *`key`* __string__ | Key is the key name within the secret or configmap from which to read the CA bundle. +
@@ -528,6 +529,7 @@ ImpersonationProxyInfo describes the parameters for the impersonation proxy on t
 ==== ImpersonationProxyMode (string) 
 
 ImpersonationProxyMode enumerates the configuration modes for the impersonation proxy.
+Allowed values are "auto", "enabled", or "disabled".
 
 .Appears In:
 ****
@@ -564,6 +566,7 @@ This is not supported on all cloud providers. +
 ==== ImpersonationProxyServiceType (string) 
 
 ImpersonationProxyServiceType enumerates the types of service that can be provisioned for the impersonation proxy.
+Allowed values are "LoadBalancer", "ClusterIP", or "None".
 
 .Appears In:
 ****
@@ -953,6 +956,7 @@ the transform expressions. This is a union type, and Type is the discriminator f
 | Field | Description
 | *`name`* __string__ | Name determines the name of the constant. It must be a valid identifier name. +
 | *`type`* __string__ | Type determines the type of the constant, and indicates which other field should be non-empty. +
+Allowed values are "string" or "stringList". +
 | *`stringValue`* __string__ | StringValue should hold the value when Type is "string", and is otherwise ignored. +
 | *`stringListValue`* __string array__ | StringListValue should hold the value when Type is "stringList", and is otherwise ignored. +
 |===
@@ -1019,6 +1023,7 @@ FederationDomainTransformsExpression defines a transform expression.
 |===
 | Field | Description
 | *`type`* __string__ | Type determines the type of the expression. It must be one of the supported types. +
+Allowed values are "policy/v1", "username/v1", or "groups/v1". +
 | *`expression`* __string__ | Expression is a CEL expression that will be evaluated based on the Type during an authentication. +
 | *`message`* __string__ | Message is only used when Type is policy/v1. It defines an error message to be used when the policy rejects +
 an authentication attempt. When empty, a default message will be used. +
@@ -1685,6 +1690,7 @@ CertificateAuthorityDataSourceSpec provides a source for CA bundle used for clie
 | Field | Description
 | *`kind`* __string__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
 Secrets must be of type kubernetes.io/tls or Opaque. +
+Allowed values are "Secret" or "ConfigMap". +
 | *`name`* __string__ | Name is the resource name of the secret or configmap from which to read the CA bundle. +
 The referenced secret or configmap must be created in the same namespace where Pinniped Supervisor is installed. +
 | *`key`* __string__ | Key is the key name within the secret or configmap from which to read the CA bundle. +
@@ -1938,7 +1944,11 @@ GitHubIdentityProviderStatus is the status of an GitHub identity provider.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`policy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-29-apis-supervisor-idp-v1alpha1-githuballowedauthorganizationspolicy[$$GitHubAllowedAuthOrganizationsPolicy$$]__ | Policy must be set to "AllGitHubUsers" if allowed is empty. +
+| *`policy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-29-apis-supervisor-idp-v1alpha1-githuballowedauthorganizationspolicy[$$GitHubAllowedAuthOrganizationsPolicy$$]__ | Allowed values are "OnlyUsersFromAllowedOrganizations" or "AllGitHubUsers". +
+Defaults to "OnlyUsersFromAllowedOrganizations". +
+
+
+Must be set to "AllGitHubUsers" if the allowed field is empty. +
 
 
 This field only exists to ensure that Pinniped administrators are aware that an empty list of +

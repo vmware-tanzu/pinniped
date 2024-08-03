@@ -7,6 +7,7 @@ package v1alpha1
 type CertificateAuthorityDataSourceSpec struct {
 	// Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap.
 	// Secrets must be of type kubernetes.io/tls or Opaque.
+	// Allowed values are "Secret" or "ConfigMap".
 	// +kubebuilder:validation:Enum=Secret;ConfigMap
 	Kind string `json:"kind"`
 	// Name is the resource name of the secret or configmap from which to read the CA bundle.

@@ -163,51 +163,42 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 			indentedTLSYAML := strings.ReplaceAll(tc.tlsYAML, "\n", "\n    ")
 
 			t.Run("apply webhook authenticator", func(t *testing.T) {
-				webhookResourceName := "test-webhook-authenticator-" + testlib.RandHex(t, 7)
-				webhookYamlBytes := []byte(fmt.Sprintf(webhookAuthenticatorYamlTemplate,
-					env.APIGroupSuffix, webhookResourceName, env.TestWebhook.Endpoint, indentedTLSYAML))
+				resourceName := "test-webhook-authenticator-" + testlib.RandHex(t, 7)
+				yamlBytes := []byte(fmt.Sprintf(webhookAuthenticatorYamlTemplate,
+					env.APIGroupSuffix, resourceName, env.TestWebhook.Endpoint, indentedTLSYAML))
 
-				performKubectlApply(
-					t,
-					webhookYamlBytes,
+				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
+				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`webhookauthenticator.authentication.concierge.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"WebhookAuthenticator",
-					webhookResourceName,
+					resourceName,
 				)
 			})
 
 			t.Run("apply jwt authenticator", func(t *testing.T) {
 				_, supervisorIssuer := env.InferSupervisorIssuerURL(t)
 
-				jwtAuthenticatorResourceName := "test-jwt-authenticator-" + testlib.RandHex(t, 7)
-				jwtAuthenticatorYamlBytes := []byte(fmt.Sprintf(jwtAuthenticatorYamlTemplate,
-					env.APIGroupSuffix, jwtAuthenticatorResourceName, supervisorIssuer, indentedTLSYAML))
+				resourceName := "test-jwt-authenticator-" + testlib.RandHex(t, 7)
+				yamlBytes := []byte(fmt.Sprintf(jwtAuthenticatorYamlTemplate,
+					env.APIGroupSuffix, resourceName, supervisorIssuer, indentedTLSYAML))
 
-				performKubectlApply(
-					t,
-					jwtAuthenticatorYamlBytes,
+				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
+				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`jwtauthenticator.authentication.concierge.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"JWTAuthenticator",
-					jwtAuthenticatorResourceName,
+					resourceName,
 				)
 			})
 		})
 	}
 }
 
-func performKubectlApply(
-	t *testing.T,
-	yamlBytes []byte,
-	expectedSuccessPrefix string,
-	expectedErrorSnippets []string,
-	resourceType string,
-	resourceName string,
-) {
+func performKubectlApply(t *testing.T, resourceName string, yamlBytes []byte) (string, string, error) {
 	t.Helper()
 
-	yamlFilepath := filepath.Join(t.TempDir(), fmt.Sprintf("tls-spec-validation-%s.yaml", resourceName))
+	yamlFilepath := filepath.Join(t.TempDir(), fmt.Sprintf("test-perform-kubectl-apply-%s.yaml", resourceName))
 
 	require.NoError(t, os.WriteFile(yamlFilepath, yamlBytes, 0600))
 
@@ -227,17 +218,31 @@ func performKubectlApply(
 		require.NoError(t, exec.Command("kubectl", []string{"delete", "--ignore-not-found", "-f", yamlFilepath}...).Run())
 	})
 
-	if len(expectedErrorSnippets) > 0 {
-		actualErrorString := strings.TrimSuffix(stdErr.String(), "\n")
-		for i, snippet := range expectedErrorSnippets {
+	return stdOut.String(), stdErr.String(), err
+}
+
+func requireKubectlApplyResult(
+	t *testing.T,
+	kubectlStdOut string,
+	kubectlStdErr string,
+	kubectlErr error,
+	wantSuccessPrefix string,
+	wantErrorSnippets []string,
+	wantResourceType string,
+	wantResourceName string,
+) {
+	if len(wantErrorSnippets) > 0 {
+		require.Error(t, kubectlErr)
+		actualErrorString := strings.TrimSuffix(kubectlStdErr, "\n")
+		for i, snippet := range wantErrorSnippets {
 			if i == 0 {
-				snippet = fmt.Sprintf(snippet, resourceType, resourceName)
+				snippet = fmt.Sprintf(snippet, wantResourceType, wantResourceName)
 			}
 			require.Contains(t, actualErrorString, snippet)
 		}
-		return
+	} else {
+		require.Empty(t, kubectlStdErr)
+		require.Regexp(t, regexp.QuoteMeta(wantSuccessPrefix)+regexp.QuoteMeta(fmt.Sprintf("/%s created\n", wantResourceName)), kubectlStdOut)
+		require.NoError(t, kubectlErr)
 	}
-	require.Empty(t, stdErr.String())
-	require.Regexp(t, regexp.QuoteMeta(expectedSuccessPrefix)+regexp.QuoteMeta(fmt.Sprintf("/%s created\n", resourceName)), stdOut.String())
-	require.NoError(t, err)
 }

@@ -223,9 +223,8 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 				yamlBytes := []byte(fmt.Sprintf(oidcIDPTemplate,
 					env.APIGroupSuffix, resourceName, env.SupervisorUpstreamOIDC.Issuer, indentedTLSYAML))
 
-				performKubectlApply(
-					t,
-					yamlBytes,
+				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
+				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`oidcidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"OIDCIdentityProvider",
@@ -238,9 +237,8 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 				yamlBytes := []byte(fmt.Sprintf(ldapIDPTemplate,
 					env.APIGroupSuffix, resourceName, env.SupervisorUpstreamLDAP.Host, indentedTLSYAML))
 
-				performKubectlApply(
-					t,
-					yamlBytes,
+				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
+				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`ldapidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"LDAPIdentityProvider",
@@ -253,9 +251,8 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 				yamlBytes := []byte(fmt.Sprintf(activeDirectoryIDPTemplate,
 					env.APIGroupSuffix, resourceName, env.SupervisorUpstreamLDAP.Host, indentedTLSYAML))
 
-				performKubectlApply(
-					t,
-					yamlBytes,
+				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
+				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`activedirectoryidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
 					tc.expectedErrorSnippets,
 					"ActiveDirectoryIdentityProvider",
@@ -271,9 +268,8 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 				yamlBytes := []byte(fmt.Sprintf(githubIDPTemplate,
 					env.APIGroupSuffix, resourceName, indentedTLSYAMLForGitHub))
 
-				performKubectlApply(
-					t,
-					yamlBytes,
+				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
+				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`githubidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
 					tc.expectedGitHubErrorSnippets,
 					"GitHubIdentityProvider",

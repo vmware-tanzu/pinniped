@@ -164,6 +164,10 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 
 	unusedLocalhostPort := findRecentlyUnusedLocalhostPorts(t, 1)[0]
 
+	badCABundleConfigMap := testlib.CreateTestConfigMap(t, env.ConciergeNamespace, "ca-bundle", map[string]string{
+		"ca.crt": "This is not a real CA bundle",
+	})
+
 	tests := []struct {
 		name           string
 		spec           authenticationv1alpha1.JWTAuthenticatorSpec
@@ -321,6 +325,297 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 					},
 				},
 			),
+		},
+		{
+			name: "invalid when spec.tls supplies both certificateAuthorityData and certificateAuthorityDataSource",
+			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
+				Issuer:   env.CLIUpstreamOIDC.Issuer,
+				Audience: "foo",
+				Claims: authenticationv1alpha1.JWTTokenClaims{
+					Groups:   "",
+					Username: "",
+				},
+				TLS: &authenticationv1alpha1.TLSSpec{
+					CertificateAuthorityData: "pretend-this-is-a-certificate",
+					CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "ConfigMap",
+						Name: "does-not-matter",
+						Key:  "also-does-not-matter",
+					},
+				},
+			},
+			wantConditions: []metav1.Condition{
+				{
+					Type:    "AuthenticatorValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "DiscoveryURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "IssuerURLValid",
+					Status:  "True",
+					Reason:  "Success",
+					Message: "issuer is a valid URL",
+				}, {
+					Type:    "JWKSFetchValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "JWKSURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "Ready",
+					Status:  "False",
+					Reason:  "NotReady",
+					Message: "the JWTAuthenticator is not ready: see other conditions for details",
+				},
+				{
+					Type:    "TLSConfigurationValid",
+					Status:  "False",
+					Reason:  "InvalidTLSConfig",
+					Message: "spec.tls is invalid: both tls.certificateAuthorityDataSource and tls.certificateAuthorityData provided",
+				},
+			},
+			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
+		},
+		{
+			name: "invalid when spec.tls.certificateAuthorityDataSource refers to a configmap that does not exist",
+			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
+				Issuer:   env.CLIUpstreamOIDC.Issuer,
+				Audience: "foo",
+				Claims: authenticationv1alpha1.JWTTokenClaims{
+					Groups:   "",
+					Username: "",
+				},
+				TLS: &authenticationv1alpha1.TLSSpec{
+					CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "ConfigMap",
+						Name: "does-not-exist",
+						Key:  "does-not-matter",
+					},
+				},
+			},
+			wantConditions: []metav1.Condition{
+				{
+					Type:    "AuthenticatorValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "DiscoveryURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "IssuerURLValid",
+					Status:  "True",
+					Reason:  "Success",
+					Message: "issuer is a valid URL",
+				}, {
+					Type:    "JWKSFetchValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "JWKSURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "Ready",
+					Status:  "False",
+					Reason:  "NotReady",
+					Message: "the JWTAuthenticator is not ready: see other conditions for details",
+				},
+				{
+					Type:    "TLSConfigurationValid",
+					Status:  "False",
+					Reason:  "InvalidTLSConfig",
+					Message: "spec.tls.certificateAuthorityDataSource is invalid: failed to get configmap \"concierge/does-not-exist\": configmap \"does-not-exist\" not found",
+				},
+			},
+			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
+		},
+		{
+			name: "invalid when spec.tls.certificateAuthorityDataSource refers to a secret that does not exist",
+			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
+				Issuer:   env.CLIUpstreamOIDC.Issuer,
+				Audience: "foo",
+				Claims: authenticationv1alpha1.JWTTokenClaims{
+					Groups:   "",
+					Username: "",
+				},
+				TLS: &authenticationv1alpha1.TLSSpec{
+					CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "Secret",
+						Name: "does-not-exist",
+						Key:  "does-not-matter",
+					},
+				},
+			},
+			wantConditions: []metav1.Condition{
+				{
+					Type:    "AuthenticatorValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "DiscoveryURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "IssuerURLValid",
+					Status:  "True",
+					Reason:  "Success",
+					Message: "issuer is a valid URL",
+				}, {
+					Type:    "JWKSFetchValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "JWKSURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "Ready",
+					Status:  "False",
+					Reason:  "NotReady",
+					Message: "the JWTAuthenticator is not ready: see other conditions for details",
+				},
+				{
+					Type:    "TLSConfigurationValid",
+					Status:  "False",
+					Reason:  "InvalidTLSConfig",
+					Message: "spec.tls.certificateAuthorityDataSource is invalid: failed to get secret \"concierge/does-not-exist\": secret \"does-not-exist\" not found",
+				},
+			},
+			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
+		},
+		{
+			name: "invalid when spec.tls.certificateAuthorityDataSource refers to a configmap that does not have valid PEM bytes",
+			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
+				Issuer:   env.CLIUpstreamOIDC.Issuer,
+				Audience: "foo",
+				Claims: authenticationv1alpha1.JWTTokenClaims{
+					Groups:   "",
+					Username: "",
+				},
+				TLS: &authenticationv1alpha1.TLSSpec{
+					CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "ConfigMap",
+						Name: badCABundleConfigMap.Name,
+						Key:  "ca.crt",
+					},
+				},
+			},
+			wantConditions: []metav1.Condition{
+				{
+					Type:    "AuthenticatorValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "DiscoveryURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "IssuerURLValid",
+					Status:  "True",
+					Reason:  "Success",
+					Message: "issuer is a valid URL",
+				}, {
+					Type:    "JWKSFetchValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "JWKSURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "Ready",
+					Status:  "False",
+					Reason:  "NotReady",
+					Message: "the JWTAuthenticator is not ready: see other conditions for details",
+				},
+				{
+					Type:    "TLSConfigurationValid",
+					Status:  "False",
+					Reason:  "InvalidTLSConfig",
+					Message: fmt.Sprintf("spec.tls.certificateAuthorityDataSource is invalid: key \"ca.crt\" with 28 bytes of data in configmap \"concierge/%s\" is not a PEM-encoded certificate (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")", badCABundleConfigMap.Name),
+				},
+			},
+			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
+		},
+		{
+			name: "invalid when spec.tls.certificateAuthorityDataSource refers to a key in a configmap that does not exist",
+			spec: authenticationv1alpha1.JWTAuthenticatorSpec{
+				Issuer:   env.CLIUpstreamOIDC.Issuer,
+				Audience: "foo",
+				Claims: authenticationv1alpha1.JWTTokenClaims{
+					Groups:   "",
+					Username: "",
+				},
+				TLS: &authenticationv1alpha1.TLSSpec{
+					CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "ConfigMap",
+						Name: badCABundleConfigMap.Name,
+						Key:  "key-not-present",
+					},
+				},
+			},
+			wantConditions: []metav1.Condition{
+				{
+					Type:    "AuthenticatorValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "DiscoveryURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "IssuerURLValid",
+					Status:  "True",
+					Reason:  "Success",
+					Message: "issuer is a valid URL",
+				}, {
+					Type:    "JWKSFetchValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "JWKSURLValid",
+					Status:  "Unknown",
+					Reason:  "UnableToValidate",
+					Message: "unable to validate; see other conditions for details",
+				}, {
+					Type:    "Ready",
+					Status:  "False",
+					Reason:  "NotReady",
+					Message: "the JWTAuthenticator is not ready: see other conditions for details",
+				},
+				{
+					Type:    "TLSConfigurationValid",
+					Status:  "False",
+					Reason:  "InvalidTLSConfig",
+					Message: fmt.Sprintf("spec.tls.certificateAuthorityDataSource is invalid: key \"key-not-present\" not found in configmap \"concierge/%s\"", badCABundleConfigMap.Name),
+				},
+			},
+			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
 		},
 	}
 	for _, test := range tests {

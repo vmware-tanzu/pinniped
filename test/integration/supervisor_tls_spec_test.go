@@ -6,21 +6,31 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+
+	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/testlib"
 )
 
 // TestTLSSpecKubeBuilderValidationSupervisor_Parallel tests kubebuilder validation
 // on the TLSSpec in Pinniped supervisor CRDs using OIDCIdentityProvider as an example.
-func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
+func TestTLSSpecValidationSupervisor_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
+
+	ca, err := certauthority.New("pinniped-test", 24*time.Hour)
+	require.NoError(t, err)
+	indentedCAPEM := indentForHeredoc(string(ca.Bundle()))
 
 	oidcIDPTemplate := here.Doc(`
 		apiVersion: idp.supervisor.%s/v1alpha1
 		kind: OIDCIdentityProvider
 		metadata:
 			name: %s
+			namespace: %s
 		spec:
 			issuer: %s
 			authorizationConfig:
@@ -36,6 +46,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 		kind: LDAPIdentityProvider
 		metadata:
 			name: %s
+			namespace: %s
 		spec:
 			host: %s
 			bind:
@@ -53,6 +64,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 		kind: ActiveDirectoryIdentityProvider
 		metadata:
 			name: %s
+			namespace: %s
 		spec:
 			host: %s
 			bind:
@@ -65,6 +77,7 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 		kind: GitHubIdentityProvider
 		metadata:
 			name: %s
+			namespace: %s
 		spec:
 			allowAuthentication:
 				organizations:
@@ -76,136 +89,174 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 	`)
 
 	testCases := []struct {
-		name                        string
-		tlsYAML                     string
-		expectedErrorSnippets       []string
-		expectedGitHubErrorSnippets []string
+		name string
+
+		tlsYAML func(secretOrConfigmapName string) string
+
+		secretOrConfigmapKind     string
+		secretType                string
+		secretOrConfigmapDataYAML string
+
+		wantErrorSnippets            []string
+		wantGitHubErrorSnippets      []string
+		wantTLSValidConditionMessage string
 	}{
 		{
 			name: "should disallow certificate authority data source with missing name",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						key: bar
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`},
-			expectedGitHubErrorSnippets: []string{
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							key: bar
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`},
+			wantGitHubErrorSnippets: []string{
 				`The %s "%s" is invalid:`,
 				"spec.githubAPI.tls.certificateAuthorityDataSource.name: Required value",
 			},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for name",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						name: ""
-						key: bar
-			`),
-			expectedErrorSnippets:       []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`},
-			expectedGitHubErrorSnippets: []string{`The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`},
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: ""
+							key: bar
+				`)
+			},
+			wantErrorSnippets:       []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`},
+			wantGitHubErrorSnippets: []string{`The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`},
 		},
 		{
 			name: "should disallow certificate authority data source with missing key",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						name: foo
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`},
-			expectedGitHubErrorSnippets: []string{
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: foo
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`},
+			wantGitHubErrorSnippets: []string{
 				`The %s "%s" is invalid:`,
 				"spec.githubAPI.tls.certificateAuthorityDataSource.key: Required value",
 			},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for key",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						name: foo
-						key: ""
-			`),
-			expectedErrorSnippets:       []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`},
-			expectedGitHubErrorSnippets: []string{`The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`},
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: foo
+							key: ""
+				`)
+			},
+			wantErrorSnippets:       []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`},
+			wantGitHubErrorSnippets: []string{`The %s "%s" is invalid: spec.githubAPI.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.githubAPI.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`},
 		},
 		{
 			name: "should disallow certificate authority data source with missing kind",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`},
-			expectedGitHubErrorSnippets: []string{
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							name: foo
+							key: bar
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`},
+			wantGitHubErrorSnippets: []string{
 				`The %s "%s" is invalid:`,
 				"spec.githubAPI.tls.certificateAuthorityDataSource.kind: Required value",
 			},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for kind",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: ""
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`},
-			expectedGitHubErrorSnippets: []string{
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: ""
+							name: foo
+							key: bar
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`},
+			wantGitHubErrorSnippets: []string{
 				`The %s "%s" is invalid:`,
 				`spec.githubAPI.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`,
 			},
 		},
 		{
 			name: "should disallow certificate authority data source with invalid kind",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: sorcery
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`},
-			expectedGitHubErrorSnippets: []string{
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: sorcery
+							name: foo
+							key: bar
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`},
+			wantGitHubErrorSnippets: []string{
 				`The %s "%s" is invalid:`,
 				`spec.githubAPI.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`,
 			},
 		},
 		{
-			name: "should create a custom resource passing all validations using a Secret source",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets:       nil,
-			expectedGitHubErrorSnippets: nil,
+			name:                  "should create a custom resource passing all validations using a Secret source of type Opaque",
+			secretOrConfigmapKind: "Secret",
+			secretType:            string(corev1.SecretTypeOpaque),
+			secretOrConfigmapDataYAML: here.Docf(`
+				bar: |
+					%s
+			`, indentedCAPEM),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets:            nil,
+			wantGitHubErrorSnippets:      nil,
+			wantTLSValidConditionMessage: "spec.tls is valid: using configured CA bundle",
 		},
 		{
-			name: "should create a custom resource passing all validations using a ConfigMap source",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: ConfigMap
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets:       nil,
-			expectedGitHubErrorSnippets: nil,
+			name:                  "should create a custom resource passing all validations using a ConfigMap source",
+			secretOrConfigmapKind: "ConfigMap",
+			secretOrConfigmapDataYAML: here.Docf(`
+				bar: |
+					%s
+			`, indentedCAPEM),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: ConfigMap
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets:            nil,
+			wantTLSValidConditionMessage: `spec.tls is valid: using configured CA bundle`,
 		},
 		{
-			name:                        "should create a custom resource without any tls spec",
-			tlsYAML:                     "",
-			expectedErrorSnippets:       nil,
-			expectedGitHubErrorSnippets: nil,
+			name:                         "should create a custom resource without any tls spec",
+			tlsYAML:                      func(secretOrConfigmapName string) string { return "" },
+			wantErrorSnippets:            nil,
+			wantGitHubErrorSnippets:      nil,
+			wantTLSValidConditionMessage: "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image",
 		},
 	}
 
@@ -213,68 +264,139 @@ func TestTLSSpecKubeBuilderValidationSupervisor_Parallel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Further indent every line except for the first line by four spaces.
-			// Use four spaces because that's what here.Doc uses.
-			// Do not indent the first line because the template already indents it.
-			indentedTLSYAML := strings.ReplaceAll(tc.tlsYAML, "\n", "\n    ")
-
 			t.Run("apply OIDC IDP", func(t *testing.T) {
 				resourceName := "test-oidc-idp-" + testlib.RandHex(t, 7)
+
+				secretOrConfigmapResourceName := createSecretOrConfigMapFromData(t,
+					resourceName,
+					env.SupervisorNamespace,
+					tc.secretOrConfigmapKind,
+					tc.secretType,
+					tc.secretOrConfigmapDataYAML,
+				)
+
 				yamlBytes := []byte(fmt.Sprintf(oidcIDPTemplate,
-					env.APIGroupSuffix, resourceName, env.SupervisorUpstreamOIDC.Issuer, indentedTLSYAML))
+					env.APIGroupSuffix, resourceName, env.SupervisorNamespace, env.SupervisorUpstreamOIDC.Issuer,
+					indentForHeredoc(tc.tlsYAML(secretOrConfigmapResourceName))))
 
 				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
 				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`oidcidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
-					tc.expectedErrorSnippets,
+					tc.wantErrorSnippets,
 					"OIDCIdentityProvider",
 					resourceName,
 				)
+
+				if tc.wantErrorSnippets == nil {
+					requireTLSValidConditionMessageOnResource(t,
+						resourceName,
+						env.SupervisorNamespace,
+						"OIDCIdentityProvider",
+						tc.wantTLSValidConditionMessage,
+					)
+				}
 			})
 
 			t.Run("apply LDAP IDP", func(t *testing.T) {
 				resourceName := "test-ldap-idp-" + testlib.RandHex(t, 7)
+
+				secretOrConfigmapResourceName := createSecretOrConfigMapFromData(t,
+					resourceName,
+					env.SupervisorNamespace,
+					tc.secretOrConfigmapKind,
+					tc.secretType,
+					tc.secretOrConfigmapDataYAML,
+				)
+
 				yamlBytes := []byte(fmt.Sprintf(ldapIDPTemplate,
-					env.APIGroupSuffix, resourceName, env.SupervisorUpstreamLDAP.Host, indentedTLSYAML))
+					env.APIGroupSuffix, resourceName, env.SupervisorNamespace, env.SupervisorUpstreamLDAP.Host,
+					indentForHeredoc(tc.tlsYAML(secretOrConfigmapResourceName))))
 
 				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
 				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`ldapidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
-					tc.expectedErrorSnippets,
+					tc.wantErrorSnippets,
 					"LDAPIdentityProvider",
 					resourceName,
 				)
+
+				if tc.wantErrorSnippets == nil {
+					requireTLSValidConditionMessageOnResource(t,
+						resourceName,
+						env.SupervisorNamespace,
+						"LDAPIdentityProvider",
+						tc.wantTLSValidConditionMessage,
+					)
+				}
 			})
 
 			t.Run("apply ActiveDirectory IDP", func(t *testing.T) {
 				resourceName := "test-ad-idp-" + testlib.RandHex(t, 7)
+
+				secretOrConfigmapResourceName := createSecretOrConfigMapFromData(t,
+					resourceName,
+					env.SupervisorNamespace,
+					tc.secretOrConfigmapKind,
+					tc.secretType,
+					tc.secretOrConfigmapDataYAML,
+				)
+
 				yamlBytes := []byte(fmt.Sprintf(activeDirectoryIDPTemplate,
-					env.APIGroupSuffix, resourceName, env.SupervisorUpstreamLDAP.Host, indentedTLSYAML))
+					env.APIGroupSuffix, resourceName, env.SupervisorNamespace, env.SupervisorUpstreamLDAP.Host,
+					indentForHeredoc(tc.tlsYAML(secretOrConfigmapResourceName))))
 
 				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
 				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`activedirectoryidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
-					tc.expectedErrorSnippets,
+					tc.wantErrorSnippets,
 					"ActiveDirectoryIdentityProvider",
 					resourceName,
 				)
+
+				if tc.wantErrorSnippets == nil {
+					requireTLSValidConditionMessageOnResource(t,
+						resourceName,
+						env.SupervisorNamespace,
+						"ActiveDirectoryIdentityProvider",
+						tc.wantTLSValidConditionMessage,
+					)
+				}
 			})
 
 			t.Run("apply GitHub IDP", func(t *testing.T) {
-				// GitHub is nested deeper
-				indentedTLSYAMLForGitHub := strings.ReplaceAll(indentedTLSYAML, "\n", "\n    ")
-
 				resourceName := "test-github-idp-" + testlib.RandHex(t, 7)
+
+				secretOrConfigmapResourceName := createSecretOrConfigMapFromData(t,
+					resourceName,
+					env.SupervisorNamespace,
+					tc.secretOrConfigmapKind,
+					tc.secretType,
+					tc.secretOrConfigmapDataYAML,
+				)
+
+				// GitHub is nested deeper.
+				indentedTLSYAMLForGitHub := indentForHeredoc(indentForHeredoc(tc.tlsYAML(secretOrConfigmapResourceName)))
+
 				yamlBytes := []byte(fmt.Sprintf(githubIDPTemplate,
-					env.APIGroupSuffix, resourceName, indentedTLSYAMLForGitHub))
+					env.APIGroupSuffix, resourceName, env.SupervisorNamespace, indentedTLSYAMLForGitHub))
 
 				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
 				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`githubidentityprovider.idp.supervisor.%s`, env.APIGroupSuffix),
-					tc.expectedGitHubErrorSnippets,
+					tc.wantGitHubErrorSnippets,
 					"GitHubIdentityProvider",
 					resourceName,
 				)
+
+				if tc.wantGitHubErrorSnippets == nil {
+					requireTLSValidConditionMessageOnResource(t,
+						resourceName,
+						env.SupervisorNamespace,
+						"GitHubIdentityProvider",
+						// The tls spec location is different for GitHubIdentityProvider, so adjust the expectation.
+						strings.Replace(tc.wantTLSValidConditionMessage, "spec.tls is ", "spec.githubAPI.tls is ", 1),
+					)
+				}
 			})
 		})
 	}

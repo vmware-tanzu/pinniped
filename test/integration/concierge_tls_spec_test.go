@@ -12,17 +12,25 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/testlib"
 )
 
 // TestTLSSpecKubeBuilderValidationConcierge_Parallel tests kubebuilder validation on the TLSSpec
 // in Pinniped concierge CRDs for both WebhookAuthenticators and JWTAuthenticators.
-func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
+func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
+
+	ca, err := certauthority.New("pinniped-test", 24*time.Hour)
+	require.NoError(t, err)
+	indentedCAPEM := indentForHeredoc(string(ca.Bundle()))
 
 	webhookAuthenticatorYamlTemplate := here.Doc(`
 		apiVersion: authentication.concierge.%s/v1alpha1
@@ -46,110 +54,149 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 	`)
 
 	testCases := []struct {
-		name                  string
-		tlsYAML               string
-		expectedErrorSnippets []string
+		name string
+
+		tlsYAML func(secretOrConfigmapName string) string
+
+		secretOrConfigmapKind     string
+		secretType                string
+		secretOrConfigmapDataYAML string
+
+		wantErrorSnippets            []string
+		wantTLSValidConditionMessage string
 	}{
 		{
 			name: "should disallow certificate authority data source with missing name",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						key: bar
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`},
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							key: bar
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Required value`},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for name",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						name: ""
-						key: bar
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`},
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: ""
+							key: bar
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.name: Invalid value: "": spec.tls.certificateAuthorityDataSource.name in body should be at least 1 chars long`},
 		},
 		{
 			name: "should disallow certificate authority data source with missing key",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						name: foo
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`},
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: foo
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Required value`},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for key",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						name: foo
-						key: ""
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`},
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: foo
+							key: ""
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.key: Invalid value: "": spec.tls.certificateAuthorityDataSource.key in body should be at least 1 chars long`},
 		},
 		{
 			name: "should disallow certificate authority data source with missing kind",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`},
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							name: foo
+							key: bar
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Required value`},
 		},
 		{
 			name: "should disallow certificate authority data source with empty value for kind",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: ""
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`},
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: ""
+							name: foo
+							key: bar
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "": supported values: "Secret", "ConfigMap"`},
 		},
 		{
 			name: "should disallow certificate authority data source with invalid kind",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: sorcery
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`},
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: sorcery
+							name: foo
+							key: bar
+				`)
+			},
+			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`},
 		},
 		{
-			name: "should create a custom resource passing all validations using a Secret source",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: Secret
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets: nil,
+			name:                  "should create a custom resource passing all validations using a Secret source of type Opaque",
+			secretOrConfigmapKind: "Secret",
+			secretType:            string(corev1.SecretTypeOpaque),
+			secretOrConfigmapDataYAML: here.Docf(`
+				bar: |
+					%s
+			`, indentedCAPEM),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets:            nil,
+			wantTLSValidConditionMessage: `spec.tls is valid: using configured CA bundle`,
 		},
 		{
-			name: "should create a custom resource passing all validations using a ConfigMap source",
-			tlsYAML: here.Doc(`
-				tls:
-					certificateAuthorityDataSource:
-						kind: ConfigMap
-						name: foo
-						key: bar
-			`),
-			expectedErrorSnippets: nil,
+			name:                  "should create a custom resource passing all validations using a ConfigMap source",
+			secretOrConfigmapKind: "ConfigMap",
+			secretOrConfigmapDataYAML: here.Docf(`
+				bar: |
+					%s
+			`, indentedCAPEM),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: ConfigMap
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets:            nil,
+			wantTLSValidConditionMessage: `spec.tls is valid: using configured CA bundle`,
 		},
 		{
-			name:                  "should create a custom resource without any tls spec",
-			tlsYAML:               "",
-			expectedErrorSnippets: nil,
+			name:                         "should create a custom resource without any tls spec",
+			tlsYAML:                      func(secretOrConfigmapName string) string { return "" },
+			wantErrorSnippets:            nil,
+			wantTLSValidConditionMessage: "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image",
 		},
 	}
 
@@ -157,42 +204,214 @@ func TestTLSSpecKubeBuilderValidationConcierge_Parallel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Further indent every line except for the first line by four spaces.
-			// Use four spaces because that's what here.Doc uses.
-			// Do not indent the first line because the template already indents it.
-			indentedTLSYAML := strings.ReplaceAll(tc.tlsYAML, "\n", "\n    ")
-
 			t.Run("apply webhook authenticator", func(t *testing.T) {
 				resourceName := "test-webhook-authenticator-" + testlib.RandHex(t, 7)
+
+				secretOrConfigmapResourceName := createSecretOrConfigMapFromData(t,
+					resourceName,
+					env.ConciergeNamespace,
+					tc.secretOrConfigmapKind,
+					tc.secretType,
+					tc.secretOrConfigmapDataYAML,
+				)
+
 				yamlBytes := []byte(fmt.Sprintf(webhookAuthenticatorYamlTemplate,
-					env.APIGroupSuffix, resourceName, env.TestWebhook.Endpoint, indentedTLSYAML))
+					env.APIGroupSuffix, resourceName, env.TestWebhook.Endpoint,
+					indentForHeredoc(tc.tlsYAML(secretOrConfigmapResourceName))))
 
 				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
 				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`webhookauthenticator.authentication.concierge.%s`, env.APIGroupSuffix),
-					tc.expectedErrorSnippets,
+					tc.wantErrorSnippets,
 					"WebhookAuthenticator",
 					resourceName,
 				)
+
+				if tc.wantErrorSnippets == nil {
+					requireTLSValidConditionMessageOnResource(t,
+						resourceName,
+						env.ConciergeNamespace,
+						"WebhookAuthenticator",
+						tc.wantTLSValidConditionMessage,
+					)
+				}
 			})
 
 			t.Run("apply jwt authenticator", func(t *testing.T) {
 				_, supervisorIssuer := env.InferSupervisorIssuerURL(t)
 
 				resourceName := "test-jwt-authenticator-" + testlib.RandHex(t, 7)
+
+				secretOrConfigmapResourceName := createSecretOrConfigMapFromData(t,
+					resourceName,
+					env.ConciergeNamespace,
+					tc.secretOrConfigmapKind,
+					tc.secretType,
+					tc.secretOrConfigmapDataYAML,
+				)
+
 				yamlBytes := []byte(fmt.Sprintf(jwtAuthenticatorYamlTemplate,
-					env.APIGroupSuffix, resourceName, supervisorIssuer, indentedTLSYAML))
+					env.APIGroupSuffix, resourceName, supervisorIssuer,
+					indentForHeredoc(tc.tlsYAML(secretOrConfigmapResourceName))))
 
 				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)
 				requireKubectlApplyResult(t, stdOut, stdErr, err,
 					fmt.Sprintf(`jwtauthenticator.authentication.concierge.%s`, env.APIGroupSuffix),
-					tc.expectedErrorSnippets,
+					tc.wantErrorSnippets,
 					"JWTAuthenticator",
 					resourceName,
 				)
+
+				if tc.wantErrorSnippets == nil {
+					requireTLSValidConditionMessageOnResource(t,
+						resourceName,
+						env.ConciergeNamespace,
+						"JWTAuthenticator",
+						tc.wantTLSValidConditionMessage,
+					)
+				}
 			})
 		})
 	}
+}
+
+func indentForHeredoc(s string) string {
+	// Further indent every line except for the first line by four spaces.
+	// Use four spaces because that's what here.Doc uses.
+	// Do not indent the first line because the template already indents it.
+	return strings.ReplaceAll(s, "\n", "\n    ")
+}
+
+func requireTLSValidConditionMessageOnResource(t *testing.T, resourceName string, namespace string, resourceType string, wantMessage string) {
+	t.Helper()
+
+	require.NotEmpty(t, resourceName, "bad test setup: empty resourceName")
+	require.NotEmpty(t, resourceType, "bad test setup: empty resourceType")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	t.Cleanup(cancel)
+
+	conciergeAuthClient := testlib.NewConciergeClientset(t).AuthenticationV1alpha1()
+	supervisorIDPClient := testlib.NewSupervisorClientset(t).IDPV1alpha1()
+
+	switch resourceType {
+	case "JWTAuthenticator":
+		testlib.RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+			got, err := conciergeAuthClient.JWTAuthenticators().Get(ctx, resourceName, metav1.GetOptions{})
+			requireEventually.NoError(err)
+			requireConditionHasMessage(requireEventually, got.Status.Conditions, "TLSConfigurationValid", wantMessage)
+		}, 10*time.Second, 1*time.Second, "expected resource %s to have condition message %q", resourceName, wantMessage)
+	case "WebhookAuthenticator":
+		testlib.RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+			got, err := conciergeAuthClient.WebhookAuthenticators().Get(ctx, resourceName, metav1.GetOptions{})
+			requireEventually.NoError(err)
+			requireConditionHasMessage(requireEventually, got.Status.Conditions, "TLSConfigurationValid", wantMessage)
+		}, 10*time.Second, 1*time.Second, "expected resource %s to have condition message %q", resourceName, wantMessage)
+	case "OIDCIdentityProvider":
+		require.NotEmpty(t, namespace, "bad test setup: empty namespace")
+		testlib.RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+			got, err := supervisorIDPClient.OIDCIdentityProviders(namespace).Get(ctx, resourceName, metav1.GetOptions{})
+			requireEventually.NoError(err)
+			requireConditionHasMessage(requireEventually, got.Status.Conditions, "TLSConfigurationValid", wantMessage)
+		}, 10*time.Second, 1*time.Second, "expected resource %s to have condition message %q", resourceName, wantMessage)
+	case "LDAPIdentityProvider":
+		require.NotEmpty(t, namespace, "bad test setup: empty namespace")
+		testlib.RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+			got, err := supervisorIDPClient.LDAPIdentityProviders(namespace).Get(ctx, resourceName, metav1.GetOptions{})
+			requireEventually.NoError(err)
+			requireConditionHasMessage(requireEventually, got.Status.Conditions, "TLSConfigurationValid", wantMessage)
+		}, 10*time.Second, 1*time.Second, "expected resource %s to have condition message %q", resourceName, wantMessage)
+	case "ActiveDirectoryIdentityProvider":
+		require.NotEmpty(t, namespace, "bad test setup: empty namespace")
+		testlib.RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+			got, err := supervisorIDPClient.ActiveDirectoryIdentityProviders(namespace).Get(ctx, resourceName, metav1.GetOptions{})
+			requireEventually.NoError(err)
+			requireConditionHasMessage(requireEventually, got.Status.Conditions, "TLSConfigurationValid", wantMessage)
+		}, 10*time.Second, 1*time.Second, "expected resource %s to have condition message %q", resourceName, wantMessage)
+	case "GitHubIdentityProvider":
+		require.NotEmpty(t, namespace, "bad test setup: empty namespace")
+		testlib.RequireEventuallyf(t, func(requireEventually *require.Assertions) {
+			got, err := supervisorIDPClient.GitHubIdentityProviders(namespace).Get(ctx, resourceName, metav1.GetOptions{})
+			requireEventually.NoError(err)
+			requireConditionHasMessage(requireEventually, got.Status.Conditions, "TLSConfigurationValid", wantMessage)
+		}, 10*time.Second, 1*time.Second, "expected resource %s to have condition message %q", resourceName, wantMessage)
+	default:
+		require.Failf(t, "unexpected resource type", "type %q", resourceType)
+	}
+}
+
+func requireConditionHasMessage(assertions *require.Assertions, actualConditions []metav1.Condition, conditionType string, wantMessage string) {
+	assertions.NotEmpty(actualConditions, "wanted to have conditions but was empty")
+	for _, c := range actualConditions {
+		if c.Type == conditionType {
+			assertions.Equal(wantMessage, c.Message)
+			return
+		}
+	}
+	assertions.Failf("did not find condition with expected type",
+		"type %q, actual conditions: %#v", conditionType, actualConditions)
+}
+
+func createSecretOrConfigMapFromData(
+	t *testing.T,
+	resourceNameSuffix string,
+	namespace string,
+	kind string,
+	secretType string,
+	dataYAML string,
+) string {
+	t.Helper()
+
+	if kind == "" {
+		// Nothing to create.
+		return ""
+	}
+
+	require.NotEmpty(t, resourceNameSuffix, "bad test setup: empty resourceNameSuffix")
+	require.NotEmpty(t, namespace, "bad test setup: empty namespace")
+
+	var resourceYAML string
+	lowerKind := strings.ToLower(kind)
+	resourceName := lowerKind + "-" + resourceNameSuffix
+
+	// Further indent every line except for the first line by four spaces.
+	// Use four spaces because that's what here.Doc uses.
+	// Do not indent the first line because the template already indents it.
+	indentedDataYAML := strings.ReplaceAll(dataYAML, "\n", "\n    ")
+
+	switch lowerKind {
+	case "secret":
+		require.NotEmpty(t, secretType, "bad test setup: empty secret type")
+		resourceYAML = here.Docf(`
+			apiVersion: v1
+			kind: Secret
+			metadata:
+				name: %s
+				namespace: %s
+			type: %s
+			stringData:
+				%s
+		`, resourceName, namespace, secretType, indentedDataYAML)
+	case "configmap":
+		resourceYAML = here.Docf(`
+			apiVersion: v1
+			kind: ConfigMap
+			metadata:
+				name: %s
+				namespace: %s
+			data:
+				%s
+		`, resourceName, namespace, indentedDataYAML)
+	default:
+		require.Failf(t, "unexpected kind in test setup", "kind was %q", kind)
+	}
+
+	stdOut, stdErr, err := performKubectlApply(t, resourceName, []byte(resourceYAML))
+	require.NoErrorf(t, err,
+		"expected kubectl apply to succeed but got: %s\nstdout: %s\nstderr: %s\nyaml:\n%s",
+		err, stdOut, stdErr, resourceYAML)
+
+	return resourceName
 }
 
 func performKubectlApply(t *testing.T, resourceName string, yamlBytes []byte) (string, string, error) {
@@ -231,6 +450,8 @@ func requireKubectlApplyResult(
 	wantResourceType string,
 	wantResourceName string,
 ) {
+	t.Helper()
+
 	if len(wantErrorSnippets) > 0 {
 		require.Error(t, kubectlErr)
 		actualErrorString := strings.TrimSuffix(kubectlStdErr, "\n")

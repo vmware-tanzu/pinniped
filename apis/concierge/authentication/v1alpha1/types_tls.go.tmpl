@@ -3,12 +3,26 @@
 
 package v1alpha1
 
+// CertificateAuthorityDataSourceKind enumerates the sources for CA Bundles.
+//
+// +kubebuilder:validation:Enum=Secret;ConfigMap
+type CertificateAuthorityDataSourceKind string
+
+const (
+	// CertificateAuthorityDataSourceKindConfigMap uses a Kubernetes configmap to source CA Bundles.
+	CertificateAuthorityDataSourceKindConfigMap = CertificateAuthorityDataSourceKind("ConfigMap")
+
+	// CertificateAuthorityDataSourceKindSecret uses a Kubernetes secret to source CA Bundles.
+	// Secrets used to source CA Bundles must be of type kubernetes.io/tls or Opaque.
+	CertificateAuthorityDataSourceKindSecret = CertificateAuthorityDataSourceKind("Secret")
+)
+
 // CertificateAuthorityDataSourceSpec provides a source for CA bundle used for client-side TLS verification.
 type CertificateAuthorityDataSourceSpec struct {
 	// Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap.
-	// Secrets must be of type kubernetes.io/tls or Opaque.
 	// Allowed values are "Secret" or "ConfigMap".
-	// +kubebuilder:validation:Enum=Secret;ConfigMap
+	// "ConfigMap" uses a Kubernetes configmap to source CA Bundles.
+	// "Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles.
 	Kind string `json:"kind"`
 	// Name is the resource name of the secret or configmap from which to read the CA bundle.
 	// The referenced secret or configmap must be created in the same namespace where Pinniped Concierge is installed.

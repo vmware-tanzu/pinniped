@@ -5,6 +5,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -63,7 +64,7 @@ func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 		secretOrConfigmapDataYAML string
 
 		wantErrorSnippets            []string
-		wantTLSValidConditionMessage string
+		wantTLSValidConditionMessage func(namespace string, secretOrConfigmapName string) string
 	}{
 		{
 			name: "should disallow certificate authority data source with missing name",
@@ -154,6 +155,243 @@ func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 			wantErrorSnippets: []string{`The %s "%s" is invalid: spec.tls.certificateAuthorityDataSource.kind: Unsupported value: "sorcery": supported values: "Secret", "ConfigMap"`},
 		},
 		{
+			name: "should get error condition when using both fields of the tls spec",
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityData: "some CA data"
+						certificateAuthorityDataSource:
+							kind: ConfigMap
+							name: foo
+							key: bar
+				`)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return "spec.tls is invalid: both tls.certificateAuthorityDataSource and tls.certificateAuthorityData provided"
+			},
+		},
+		{
+			name: "should get error condition when certificateAuthorityData is not base64 data",
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityData: "this is not base64 encoded"
+				`)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return `spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 4`
+			},
+		},
+		{
+			name: "should get error condition when certificateAuthorityData does not contain PEM data",
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityData: "%s"
+				`, base64.StdEncoding.EncodeToString([]byte("this is not PEM data")))
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return `spec.tls.certificateAuthorityData is invalid: no base64-encoded PEM certificates found in 28 bytes of data (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`
+			},
+		},
+		{
+			name: "should get error condition when using a ConfigMap source and the ConfigMap does not exist",
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: ConfigMap
+							name: this-cm-does-not-exist
+							key: bar
+				`)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return fmt.Sprintf(
+					`spec.tls.certificateAuthorityDataSource is invalid: failed to get configmap "%s/this-cm-does-not-exist": configmap "this-cm-does-not-exist" not found`,
+					namespace)
+			},
+		},
+		{
+			name: "should get error condition when using a Secret source and the Secret does not exist",
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Doc(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: this-secret-does-not-exist
+							key: bar
+				`)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return fmt.Sprintf(
+					`spec.tls.certificateAuthorityDataSource is invalid: failed to get secret "%s/this-secret-does-not-exist": secret "this-secret-does-not-exist" not found`,
+					namespace)
+			},
+		},
+		{
+			name:                  "should get error condition when using a Secret source and the Secret is the wrong type",
+			secretOrConfigmapKind: "Secret",
+			secretType:            "wrong-type",
+			secretOrConfigmapDataYAML: here.Doc(`
+				bar: "does not matter for this test"
+			`),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return fmt.Sprintf(
+					`spec.tls.certificateAuthorityDataSource is invalid: secret "%s/%s" of type "wrong-type" cannot be used as a certificate authority data source`,
+					namespace, secretOrConfigmapName)
+			},
+		},
+		{
+			name:                  "should get error condition when using a Secret source and the key does not exist",
+			secretOrConfigmapKind: "Secret",
+			secretType:            string(corev1.SecretTypeOpaque),
+			secretOrConfigmapDataYAML: here.Doc(`
+				foo: "foo is the wrong key"
+			`),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return fmt.Sprintf(
+					`spec.tls.certificateAuthorityDataSource is invalid: key "bar" not found in secret "%s/%s"`,
+					namespace, secretOrConfigmapName)
+			},
+		},
+		{
+			name:                  "should get error condition when using a ConfigMap source and the key does not exist",
+			secretOrConfigmapKind: "ConfigMap",
+			secretOrConfigmapDataYAML: here.Doc(`
+				foo: "foo is the wrong key"
+			`),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: ConfigMap
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return fmt.Sprintf(
+					`spec.tls.certificateAuthorityDataSource is invalid: key "bar" not found in configmap "%s/%s"`,
+					namespace, secretOrConfigmapName)
+			},
+		},
+		{
+			name:                  "should get error condition when using a Secret source and the key has an empty value",
+			secretOrConfigmapKind: "Secret",
+			secretType:            string(corev1.SecretTypeOpaque),
+			secretOrConfigmapDataYAML: here.Doc(`
+				bar: ""
+			`),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return fmt.Sprintf(
+					`spec.tls.certificateAuthorityDataSource is invalid: key "bar" has empty value in secret "%s/%s"`,
+					namespace, secretOrConfigmapName)
+			},
+		},
+		{
+			name:                  "should get error condition when using a ConfigMap source and the key has an empty value",
+			secretOrConfigmapKind: "ConfigMap",
+			secretOrConfigmapDataYAML: here.Doc(`
+				bar: ""
+			`),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: ConfigMap
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return fmt.Sprintf(
+					`spec.tls.certificateAuthorityDataSource is invalid: key "bar" has empty value in configmap "%s/%s"`,
+					namespace, secretOrConfigmapName)
+			},
+		},
+		{
+			name:                  "should get error condition when using a Secret source and the Secret contains data which is not in PEM format",
+			secretOrConfigmapKind: "Secret",
+			secretType:            string(corev1.SecretTypeOpaque),
+			secretOrConfigmapDataYAML: here.Doc(`
+				bar: "this is not a PEM cert"
+			`),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return fmt.Sprintf(
+					`spec.tls.certificateAuthorityDataSource is invalid: key "bar" with 22 bytes of data in secret "%s/%s" is not a PEM-encoded certificate (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`,
+					namespace, secretOrConfigmapName)
+			},
+		},
+		{
+			name:                  "should get error condition when using a ConfigMap source and the ConfigMap contains data which is not in PEM format",
+			secretOrConfigmapKind: "ConfigMap",
+			secretOrConfigmapDataYAML: here.Doc(`
+				bar: "this is not a PEM cert"
+			`),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: ConfigMap
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return fmt.Sprintf(
+					`spec.tls.certificateAuthorityDataSource is invalid: key "bar" with 22 bytes of data in configmap "%s/%s" is not a PEM-encoded certificate (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`,
+					namespace, secretOrConfigmapName)
+			},
+		},
+		{
 			name:                  "should create a custom resource passing all validations using a Secret source of type Opaque",
 			secretOrConfigmapKind: "Secret",
 			secretType:            string(corev1.SecretTypeOpaque),
@@ -170,8 +408,34 @@ func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 							key: bar
 				`, secretOrConfigmapName)
 			},
-			wantErrorSnippets:            nil,
-			wantTLSValidConditionMessage: `spec.tls is valid: using configured CA bundle`,
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return `spec.tls is valid: using configured CA bundle`
+			},
+		},
+		{
+			name:                  "should create a custom resource passing all validations using a Secret source of type tls",
+			secretOrConfigmapKind: "Secret",
+			secretType:            string(corev1.SecretTypeTLS),
+			secretOrConfigmapDataYAML: here.Docf(`
+				tls.crt: foo
+				tls.key: foo
+				bar: |
+					%s
+			`, indentedCAPEM),
+			tlsYAML: func(secretOrConfigmapName string) string {
+				return here.Docf(`
+					tls:
+						certificateAuthorityDataSource:
+							kind: Secret
+							name: %s
+							key: bar
+				`, secretOrConfigmapName)
+			},
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return `spec.tls is valid: using configured CA bundle`
+			},
 		},
 		{
 			name:                  "should create a custom resource passing all validations using a ConfigMap source",
@@ -189,14 +453,18 @@ func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 							key: bar
 				`, secretOrConfigmapName)
 			},
-			wantErrorSnippets:            nil,
-			wantTLSValidConditionMessage: `spec.tls is valid: using configured CA bundle`,
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return `spec.tls is valid: using configured CA bundle`
+			},
 		},
 		{
-			name:                         "should create a custom resource without any tls spec",
-			tlsYAML:                      func(secretOrConfigmapName string) string { return "" },
-			wantErrorSnippets:            nil,
-			wantTLSValidConditionMessage: "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image",
+			name:              "should create a custom resource without any tls spec",
+			tlsYAML:           func(secretOrConfigmapName string) string { return "" },
+			wantErrorSnippets: nil,
+			wantTLSValidConditionMessage: func(namespace string, secretOrConfigmapName string) string {
+				return "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"
+			},
 		},
 	}
 
@@ -232,7 +500,7 @@ func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 						resourceName,
 						env.ConciergeNamespace,
 						"WebhookAuthenticator",
-						tc.wantTLSValidConditionMessage,
+						tc.wantTLSValidConditionMessage(env.ConciergeNamespace, secretOrConfigmapResourceName),
 					)
 				}
 			})
@@ -267,7 +535,7 @@ func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 						resourceName,
 						env.ConciergeNamespace,
 						"JWTAuthenticator",
-						tc.wantTLSValidConditionMessage,
+						tc.wantTLSValidConditionMessage(env.ConciergeNamespace, secretOrConfigmapResourceName),
 					)
 				}
 			})

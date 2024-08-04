@@ -185,11 +185,9 @@ spec:
                       kind:
                         description: |-
                           Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap.
-                          Secrets must be of type kubernetes.io/tls or Opaque.
                           Allowed values are "Secret" or "ConfigMap".
-                        enum:
-                        - Secret
-                        - ConfigMap
+                          "ConfigMap" uses a Kubernetes configmap to source CA Bundles.
+                          "Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles.
                         type: string
                       name:
                         description: |-

@@ -23,6 +23,8 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authenticatio
 
 
 
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec"]
 ==== CertificateAuthorityDataSourceSpec 
 
@@ -37,8 +39,9 @@ CertificateAuthorityDataSourceSpec provides a source for CA bundle used for clie
 |===
 | Field | Description
 | *`kind`* __string__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
-Secrets must be of type kubernetes.io/tls or Opaque. +
 Allowed values are "Secret" or "ConfigMap". +
+"ConfigMap" uses a Kubernetes configmap to source CA Bundles. +
+"Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles. +
 | *`name`* __string__ | Name is the resource name of the secret or configmap from which to read the CA bundle. +
 The referenced secret or configmap must be created in the same namespace where Pinniped Concierge is installed. +
 | *`key`* __string__ | Key is the key name within the secret or configmap from which to read the CA bundle. +
@@ -1675,6 +1678,8 @@ Optional, when empty this defaults to "objectGUID". +
 |===
 
 
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec"]
 ==== CertificateAuthorityDataSourceSpec 
 
@@ -1689,8 +1694,9 @@ CertificateAuthorityDataSourceSpec provides a source for CA bundle used for clie
 |===
 | Field | Description
 | *`kind`* __string__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
-Secrets must be of type kubernetes.io/tls or Opaque. +
 Allowed values are "Secret" or "ConfigMap". +
+"ConfigMap" uses a Kubernetes configmap to source CA Bundles. +
+"Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles. +
 | *`name`* __string__ | Name is the resource name of the secret or configmap from which to read the CA bundle. +
 The referenced secret or configmap must be created in the same namespace where Pinniped Supervisor is installed. +
 | *`key`* __string__ | Key is the key name within the secret or configmap from which to read the CA bundle. +

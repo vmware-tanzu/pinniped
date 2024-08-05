@@ -392,7 +392,7 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 					Type:    "GitHubConnectionValid",
 					Status:  metav1.ConditionTrue,
 					Reason:  "Success",
-					Message: `spec.githubAPI.host ("github.com:443") is reachable and TLS verification succeeds`,
+					Message: `dialed "api.github.com:443" for spec.githubAPI.host ("github.com"): host is reachable and TLS verification succeeds`,
 				},
 				{
 					Type:    "HostValid",
@@ -428,7 +428,7 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 				{
 					Spec: idpv1alpha1.GitHubIdentityProviderSpec{
 						GitHubAPI: idpv1alpha1.GitHubAPIConfig{
-							Host: ptr.To("github.com"),
+							Host: ptr.To("api.github.com"),
 						},
 						AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{
 							Organizations: idpv1alpha1.GitHubOrganizationsSpec{
@@ -461,13 +461,13 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 					Type:    "GitHubConnectionValid",
 					Status:  metav1.ConditionTrue,
 					Reason:  "Success",
-					Message: `spec.githubAPI.host ("github.com:443") is reachable and TLS verification succeeds`,
+					Message: `dialed "api.github.com:443" for spec.githubAPI.host ("api.github.com"): host is reachable and TLS verification succeeds`,
 				},
 				{
 					Type:    "HostValid",
 					Status:  metav1.ConditionTrue,
 					Reason:  "Success",
-					Message: `spec.githubAPI.host ("github.com") is valid`,
+					Message: `spec.githubAPI.host ("api.github.com") is valid`,
 				},
 				{
 					Type:    "OrganizationsPolicyValid",
@@ -668,7 +668,7 @@ func TestGitHubIDPSecretInOtherNamespace_Parallel(t *testing.T) {
 			Type:    "GitHubConnectionValid",
 			Status:  metav1.ConditionTrue,
 			Reason:  "Success",
-			Message: `spec.githubAPI.host ("github.com:443") is reachable and TLS verification succeeds`,
+			Message: `dialed "api.github.com:443" for spec.githubAPI.host ("github.com"): host is reachable and TLS verification succeeds`,
 		},
 		{
 			Type:    "HostValid",

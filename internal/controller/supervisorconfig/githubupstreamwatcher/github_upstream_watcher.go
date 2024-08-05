@@ -62,8 +62,8 @@ const (
 	reasonInvalid     = "Invalid"
 	reasonInvalidHost = "InvalidHost"
 
-	defaultHost       = "github.com"
-	defaultApiBaseURL = "https://api.github.com"
+	apiDotGithubDotCom = "api.github.com"
+	githubDotCom       = "github.com"
 )
 
 // UpstreamGitHubIdentityProviderICache is a thread safe cache that holds a list of validated upstream GitHub IDP configurations.
@@ -320,7 +320,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	organizationPolicyCondition := validateOrganizationsPolicy(&upstream.Spec.AllowAuthentication.Organizations)
 	conditions = append(conditions, organizationPolicyCondition)
 
-	hostCondition, hostPort := validateHost(upstream.Spec.GitHubAPI)
+	hostCondition, apiHostPort := validateHost(upstream.Spec.GitHubAPI.Host)
 	conditions = append(conditions, hostCondition)
 
 	tlsConfigCondition, caBundle := tlsconfigutil.ValidateTLSConfig(
@@ -331,8 +331,9 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 		c.configMapInformer)
 	conditions = append(conditions, tlsConfigCondition)
 
-	githubConnectionCondition, hostURL, httpClient, githubConnectionErr := c.validateGitHubConnection(
-		hostPort,
+	githubConnectionCondition, httpClient, githubConnectionErr := c.validateGitHubConnection(
+		apiHostPort,
+		upstream.Spec.GitHubAPI.Host,
 		caBundle,
 		hostCondition.Status == metav1.ConditionTrue,
 		tlsConfigCondition.Status == metav1.ConditionTrue,
@@ -358,11 +359,13 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 		return nil, utilerrors.NewAggregate(applicationErrors)
 	}
 
+	oauthBaseURL := oauthBaseUrl(apiHostPort)
+
 	provider := upstreamgithub.New(
 		upstreamgithub.ProviderConfig{
 			Name:               upstream.Name,
 			ResourceUID:        upstream.UID,
-			APIBaseURL:         apiBaseUrl(*upstream.Spec.GitHubAPI.Host, hostURL),
+			APIBaseURL:         apiBaseUrl(apiHostPort),
 			GroupNameAttribute: groupNameAttribute,
 			UsernameAttribute:  usernameAttribute,
 			OAuth2Config: &oauth2.Config{
@@ -370,9 +373,9 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 				ClientSecret: clientSecret,
 				// See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
 				Endpoint: oauth2.Endpoint{
-					AuthURL:       fmt.Sprintf("%s/login/oauth/authorize", hostURL),
+					AuthURL:       fmt.Sprintf("%s/authorize", oauthBaseURL),
 					DeviceAuthURL: "", // we do not use device code flow
-					TokenURL:      fmt.Sprintf("%s/login/oauth/access_token", hostURL),
+					TokenURL:      fmt.Sprintf("%s/access_token", oauthBaseURL),
 					AuthStyle:     oauth2.AuthStyleInParams,
 				},
 				RedirectURL: "", // this will be different for each FederationDomain, so we do not set it here
@@ -385,14 +388,36 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	return provider, utilerrors.NewAggregate(applicationErrors)
 }
 
-func apiBaseUrl(upstreamSpecHost string, hostURL string) string {
-	if upstreamSpecHost != defaultHost {
-		return fmt.Sprintf("%s/api/v3", hostURL)
+func apiBaseUrl(apiHostPort *endpointaddr.HostPort) string {
+	endpoint := hostPortForHTTPS(apiHostPort)
+
+	if strings.ToLower(apiHostPort.Host) == apiDotGithubDotCom {
+		return fmt.Sprintf("https://%s", endpoint)
 	}
-	return defaultApiBaseURL
+	// URL for GitHub Enterprise Server's API.
+	return fmt.Sprintf("https://%s/api/v3", endpoint)
 }
 
-func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Condition, *endpointaddr.HostPort) {
+func oauthBaseUrl(apiHostPort *endpointaddr.HostPort) string {
+	var oauthHost string
+	if strings.ToLower(apiHostPort.Host) == apiDotGithubDotCom {
+		oauthHost = githubDotCom
+	} else {
+		// Base OAuth URL for GitHub Enterprise Server.
+		oauthHost = hostPortForHTTPS(apiHostPort)
+	}
+	return fmt.Sprintf("https://%s/login/oauth", oauthHost)
+}
+
+func hostPortForHTTPS(apiHostPort *endpointaddr.HostPort) string {
+	if apiHostPort.Port == 443 {
+		// Remove the port specification from the host, because 443 is the default for HTTPS.
+		return apiHostPort.Host
+	}
+	return apiHostPort.Endpoint()
+}
+
+func validateHost(specifiedHost *string) (*metav1.Condition, *endpointaddr.HostPort) {
 	buildInvalidHost := func(host, reason string) *metav1.Condition {
 		return &metav1.Condition{
 			Type:    HostValid,
@@ -403,63 +428,72 @@ func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Conditio
 	}
 
 	// Should not happen due to CRD defaulting
-	if gitHubAPIConfig.Host == nil || len(*gitHubAPIConfig.Host) < 1 {
+	if specifiedHost == nil || len(*specifiedHost) < 1 {
 		return buildInvalidHost("", "must not be empty"), nil
 	}
 
-	host := *gitHubAPIConfig.Host
-	hostPort, addressParseErr := endpointaddr.Parse(host, 443)
+	// First parse exactly what the user specified.
+	hostPort, addressParseErr := endpointaddr.Parse(*specifiedHost, 443)
 	if addressParseErr != nil {
 		// addressParseErr is not recoverable. It requires user interaction, so do not return the error.
-		return buildInvalidHost(host, addressParseErr.Error()), nil
+		return buildInvalidHost(*specifiedHost, addressParseErr.Error()), nil
+	}
+
+	// As a special case, if the user specified "github.com" or "api.github.com" with any port number,
+	// then actually use "api.github.com" with the same port number. Use lowercased host internally for readability.
+	if strings.ToLower(hostPort.Host) == githubDotCom || strings.ToLower(hostPort.Host) == apiDotGithubDotCom {
+		hostPort.Host = apiDotGithubDotCom
 	}
 
 	return &metav1.Condition{
 		Type:    HostValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  conditionsutil.ReasonSuccess,
-		Message: fmt.Sprintf("spec.githubAPI.host (%q) is valid", host),
+		Message: fmt.Sprintf("spec.githubAPI.host (%q) is valid", *specifiedHost),
 	}, &hostPort
 }
 
 func (c *gitHubWatcherController) validateGitHubConnection(
-	hostPort *endpointaddr.HostPort,
+	apiHostPort *endpointaddr.HostPort,
+	specifiedHost *string,
 	caBundle *tlsconfigutil.CABundle,
 	hostConditionOk, tlsConfigConditionOk bool,
-) (*metav1.Condition, string, *http.Client, error) {
+) (*metav1.Condition, *http.Client, error) {
 	if !hostConditionOk || !tlsConfigConditionOk {
 		return &metav1.Condition{
 			Type:    GitHubConnectionValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: "unable to validate; see other conditions for details",
-		}, "", nil, nil
+		}, nil, nil
 	}
 
-	address := hostPort.Endpoint()
+	apiAddress := apiHostPort.Endpoint()
 
-	if !c.validatedCache.IsValid(address, caBundle.Hash()) {
-		conn, tlsDialErr := c.dialFunc("tcp", address, ptls.Default(caBundle.CertPool()))
+	if !c.validatedCache.IsValid(apiAddress, caBundle.Hash()) {
+		conn, tlsDialErr := c.dialFunc("tcp", apiAddress, ptls.Default(caBundle.CertPool()))
 		if tlsDialErr != nil {
 			return &metav1.Condition{
-				Type:    GitHubConnectionValid,
-				Status:  metav1.ConditionFalse,
-				Reason:  conditionsutil.ReasonUnableToDialServer,
-				Message: fmt.Sprintf("cannot dial server spec.githubAPI.host (%q): %s", address, buildDialErrorMessage(tlsDialErr)),
-			}, "", nil, tlsDialErr
+				Type:   GitHubConnectionValid,
+				Status: metav1.ConditionFalse,
+				Reason: conditionsutil.ReasonUnableToDialServer,
+				Message: fmt.Sprintf("cannot dial %q for spec.githubAPI.host (%q): %s",
+					apiAddress, *specifiedHost, buildDialErrorMessage(tlsDialErr)),
+			}, nil, tlsDialErr
 		}
 		// Any error should be ignored. We have performed a successful Dial, so no need to requeue this Sync.
 		_ = conn.Close()
 	}
 
-	c.validatedCache.MarkAsValidated(address, caBundle.Hash())
+	c.validatedCache.MarkAsValidated(apiAddress, caBundle.Hash())
 
 	return &metav1.Condition{
-		Type:    GitHubConnectionValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  conditionsutil.ReasonSuccess,
-		Message: fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", address),
-	}, fmt.Sprintf("https://%s", address), phttp.Default(caBundle.CertPool()), nil
+		Type:   GitHubConnectionValid,
+		Status: metav1.ConditionTrue,
+		Reason: conditionsutil.ReasonSuccess,
+		Message: fmt.Sprintf("dialed %q for spec.githubAPI.host (%q): host is reachable and TLS verification succeeds",
+			apiAddress, *specifiedHost),
+	}, phttp.Default(caBundle.CertPool()), nil
 }
 
 // buildDialErrorMessage standardizes DNS error messages that appear differently on different platforms, so that tests and log grepping is uniform.

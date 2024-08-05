@@ -23,6 +23,16 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authenticatio
 
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcekind"]
+==== CertificateAuthorityDataSourceKind (string) 
+
+CertificateAuthorityDataSourceKind enumerates the sources for CA Bundles.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]
+****
+
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec"]
@@ -38,7 +48,7 @@ CertificateAuthorityDataSourceSpec provides a source for CA bundle used for clie
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`kind`* __string__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
+| *`kind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcekind[$$CertificateAuthorityDataSourceKind$$]__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
 Allowed values are "Secret" or "ConfigMap". +
 "ConfigMap" uses a Kubernetes configmap to source CA Bundles. +
 "Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles. +
@@ -1678,6 +1688,16 @@ Optional, when empty this defaults to "objectGUID". +
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcekind"]
+==== CertificateAuthorityDataSourceKind (string) 
+
+CertificateAuthorityDataSourceKind enumerates the sources for CA Bundles.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]
+****
+
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec"]
@@ -1693,7 +1713,7 @@ CertificateAuthorityDataSourceSpec provides a source for CA bundle used for clie
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`kind`* __string__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
+| *`kind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcekind[$$CertificateAuthorityDataSourceKind$$]__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
 Allowed values are "Secret" or "ConfigMap". +
 "ConfigMap" uses a Kubernetes configmap to source CA Bundles. +
 "Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles. +

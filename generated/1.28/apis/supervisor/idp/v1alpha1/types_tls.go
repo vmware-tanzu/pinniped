@@ -23,7 +23,7 @@ type CertificateAuthorityDataSourceSpec struct {
 	// Allowed values are "Secret" or "ConfigMap".
 	// "ConfigMap" uses a Kubernetes configmap to source CA Bundles.
 	// "Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles.
-	Kind string `json:"kind"`
+	Kind CertificateAuthorityDataSourceKind `json:"kind"`
 	// Name is the resource name of the secret or configmap from which to read the CA bundle.
 	// The referenced secret or configmap must be created in the same namespace where Pinniped Supervisor is installed.
 	// +kubebuilder:validation:MinLength=1

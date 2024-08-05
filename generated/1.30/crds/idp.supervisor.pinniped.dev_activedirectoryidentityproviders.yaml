@@ -188,6 +188,9 @@ spec:
                           Allowed values are "Secret" or "ConfigMap".
                           "ConfigMap" uses a Kubernetes configmap to source CA Bundles.
                           "Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles.
+                        enum:
+                        - Secret
+                        - ConfigMap
                         type: string
                       name:
                         description: |-

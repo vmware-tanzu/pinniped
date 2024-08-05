@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -49,6 +49,7 @@ type CredentialIssuerSpec struct {
 }
 
 // ImpersonationProxyMode enumerates the configuration modes for the impersonation proxy.
+// Allowed values are "auto", "enabled", or "disabled".
 //
 // +kubebuilder:validation:Enum=auto;enabled;disabled
 type ImpersonationProxyMode string
@@ -65,6 +66,7 @@ const (
 )
 
 // ImpersonationProxyServiceType enumerates the types of service that can be provisioned for the impersonation proxy.
+// Allowed values are "LoadBalancer", "ClusterIP", or "None".
 //
 // +kubebuilder:validation:Enum=LoadBalancer;ClusterIP;None
 type ImpersonationProxyServiceType string

@@ -5,10 +5,13 @@ package integration
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -16,8 +19,137 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
+func TestConciergeWebhookAuthenticatorWithExternalCABundleStatusIsUpdatedWhenExternalBundleIsUpdated_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+
+	client := testlib.NewKubernetesClientset(t)
+
+	tests := []struct {
+		name                      string
+		caBundleSourceSpecKind    authenticationv1alpha1.CertificateAuthorityDataSourceKind
+		createResourceForCABundle func(t *testing.T, caBundle string) string
+		updateCABundle            func(t *testing.T, resourceName, caBundle string)
+	}{
+		{
+			name:                   "for a CA bundle from a ConfigMap",
+			caBundleSourceSpecKind: authenticationv1alpha1.CertificateAuthorityDataSourceKindConfigMap,
+			createResourceForCABundle: func(t *testing.T, caBundle string) string {
+				createdResource := testlib.CreateTestConfigMap(t, env.ConciergeNamespace, "ca-bundle", map[string]string{
+					"ca.crt": caBundle,
+				})
+				return createdResource.Name
+			},
+			updateCABundle: func(t *testing.T, resourceName, caBundle string) {
+				configMap, err := client.CoreV1().ConfigMaps(env.ConciergeNamespace).Get(ctx, resourceName, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				configMap.Data["ca.crt"] = caBundle
+
+				_, err = client.CoreV1().ConfigMaps(env.ConciergeNamespace).Update(ctx, configMap, metav1.UpdateOptions{})
+				require.NoError(t, err)
+			},
+		},
+		{
+			name:                   "for a CA bundle from a Secret",
+			caBundleSourceSpecKind: authenticationv1alpha1.CertificateAuthorityDataSourceKindSecret,
+			createResourceForCABundle: func(t *testing.T, caBundle string) string {
+				createdResource := testlib.CreateTestSecret(t, env.ConciergeNamespace, "ca-bundle", corev1.SecretTypeOpaque, map[string]string{
+					"ca.crt": caBundle,
+				})
+				return createdResource.Name
+			},
+			updateCABundle: func(t *testing.T, resourceName, caBundle string) {
+				secret, err := client.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, resourceName, metav1.GetOptions{})
+				require.NoError(t, err)
+
+				secret.Data["ca.crt"] = []byte(caBundle)
+
+				_, err = client.CoreV1().Secrets(env.ConciergeNamespace).Update(ctx, secret, metav1.UpdateOptions{})
+				require.NoError(t, err)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Run several times because there is always a chance that the test could pass because the controller
+			// will resync every 3 minutes even if it does not pay attention to changes in ConfigMaps and Secrets.
+			for i := range 3 {
+				t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+					t.Parallel()
+
+					caBundlePEM, err := base64.StdEncoding.DecodeString(env.TestWebhook.TLS.CertificateAuthorityData)
+					require.NoError(t, err)
+
+					caBundleResourceName := test.createResourceForCABundle(t, string(caBundlePEM))
+
+					authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &authenticationv1alpha1.WebhookAuthenticatorSpec{
+						Endpoint: env.TestWebhook.Endpoint,
+						TLS: &authenticationv1alpha1.TLSSpec{
+							CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
+								Kind: test.caBundleSourceSpecKind,
+								Name: caBundleResourceName,
+								Key:  "ca.crt",
+							},
+						},
+					}, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
+
+					t.Logf("created webhookauthenticator %s with CA bundle source %s %s",
+						authenticator.Name, test.caBundleSourceSpecKind, caBundleResourceName)
+
+					test.updateCABundle(t, caBundleResourceName, "this is not a valid CA bundle value")
+					testlib.WaitForWebhookAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.WebhookAuthenticatorPhaseError)
+
+					test.updateCABundle(t, caBundleResourceName, string(caBundlePEM))
+					testlib.WaitForWebhookAuthenticatorStatusPhase(ctx, t, authenticator.Name, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
+				})
+			}
+		})
+	}
+}
+
+func TestConciergeWebhookAuthenticatorStatusShouldBeOverwrittenByControllerAfterAnyManualEdits_Parallel(t *testing.T) {
+	env := testlib.IntegrationEnv(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	t.Cleanup(cancel)
+
+	conciergeClient := testlib.NewConciergeClientset(t)
+
+	// Run several times because there is always a chance that the test could pass because the controller
+	// will resync every 3 minutes even if it does not pay attention to changes in status.
+	for i := range 3 {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			t.Parallel()
+
+			authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &env.TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
+
+			updatedAuthenticator, err := conciergeClient.AuthenticationV1alpha1().WebhookAuthenticators().Get(ctx, authenticator.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+
+			updatedAuthenticator.Status.Phase = "Pending"
+			originalFirstConditionMessage := updatedAuthenticator.Status.Conditions[0].Message
+			updatedAuthenticator.Status.Conditions[0].Message = "this is a manually edited message that should go away"
+			_, err = conciergeClient.AuthenticationV1alpha1().WebhookAuthenticators().UpdateStatus(ctx, updatedAuthenticator, metav1.UpdateOptions{})
+			require.NoError(t, err)
+
+			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+				gotAuthenticator, err := conciergeClient.AuthenticationV1alpha1().WebhookAuthenticators().Get(ctx, authenticator.Name, metav1.GetOptions{})
+				requireEventually.NoError(err)
+				requireEventually.Equal(authenticationv1alpha1.WebhookAuthenticatorPhaseReady, gotAuthenticator.Status.Phase,
+					"the controller should have changed the phase back to Ready")
+				requireEventually.Equal(originalFirstConditionMessage, gotAuthenticator.Status.Conditions[0].Message,
+					"the controller should have changed the message back to the correct value but it didn't")
+			}, 30*time.Second, 250*time.Millisecond)
+		})
+	}
+}
+
 func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
-	testEnv := testlib.IntegrationEnv(t)
+	env := testlib.IntegrationEnv(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)
 
@@ -31,9 +163,9 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		run             func(t *testing.T)
 	}{
 		{
-			name: "Basic test to see if the WebhookAuthenticator wakes up or not.",
+			name: "basic test to see if the WebhookAuthenticator wakes up or not",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
-				return &testlib.IntegrationEnv(t).TestWebhook
+				return &env.TestWebhook
 			},
 			initialPhase:    authenticationv1alpha1.WebhookAuthenticatorPhaseReady,
 			finalConditions: allSuccessfulWebhookAuthenticatorConditions(),
@@ -42,7 +174,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 			name: "valid spec with invalid CA in TLS config will result in a WebhookAuthenticator that is not ready",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				caBundleString := "invalid base64-encoded data"
-				webhookSpec := testEnv.TestWebhook.DeepCopy()
+				webhookSpec := env.TestWebhook.DeepCopy()
 				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleString,
 				}
@@ -65,8 +197,8 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 					}, {
 						Type:    "TLSConfigurationValid",
 						Status:  "False",
-						Reason:  "InvalidTLSConfiguration",
-						Message: "invalid TLS configuration: illegal base64 data at input byte 7",
+						Reason:  "InvalidTLSConfig",
+						Message: "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7",
 					}, {
 						Type:    "WebhookConnectionValid",
 						Status:  "Unknown",
@@ -79,7 +211,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		{
 			name: "valid spec with valid CA in TLS config but does not match issuer server will result in a WebhookAuthenticator that is not ready",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
-				webhookSpec := testEnv.TestWebhook.DeepCopy()
+				webhookSpec := env.TestWebhook.DeepCopy()
 				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleSomePivotalCA,
 				}
@@ -111,7 +243,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		{
 			name: "invalid with unresponsive endpoint will result in a WebhookAuthenticator that is not ready",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
-				webhookSpec := testEnv.TestWebhook.DeepCopy()
+				webhookSpec := env.TestWebhook.DeepCopy()
 				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleSomePivotalCA,
 				}
@@ -218,7 +350,7 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 		{
 			name: "valid authenticator can have empty TLS CertificateAuthorityData",
 			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
-				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "jwtauthenticator"),
+				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "webhookauthenticator"),
 				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "https://localhost/webhook-isnt-actually-here",
 					TLS: &authenticationv1alpha1.TLSSpec{
@@ -231,7 +363,7 @@ func TestConciergeWebhookAuthenticatorCRDValidations_Parallel(t *testing.T) {
 			// since the CRD validations do not assess fitness of the value provided
 			name: "valid authenticator can have TLS CertificateAuthorityData string that is an invalid certificate",
 			webhookAuthenticator: &authenticationv1alpha1.WebhookAuthenticator{
-				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "jwtauthenticator"),
+				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "webhookauthenticator"),
 				Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
 					Endpoint: "https://localhost/webhook-isnt-actually-here",
 					TLS: &authenticationv1alpha1.TLSSpec{
@@ -289,7 +421,7 @@ func allSuccessfulWebhookAuthenticatorConditions() []metav1.Condition {
 			Type:    "TLSConfigurationValid",
 			Status:  "True",
 			Reason:  "Success",
-			Message: "successfully parsed specified CA bundle",
+			Message: "spec.tls is valid: using configured CA bundle",
 		},
 		{
 			Type:    "WebhookConnectionValid",

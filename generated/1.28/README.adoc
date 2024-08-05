@@ -23,6 +23,43 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authenticatio
 
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcekind"]
+==== CertificateAuthorityDataSourceKind (string) 
+
+CertificateAuthorityDataSourceKind enumerates the sources for CA Bundles.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]
+****
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec"]
+==== CertificateAuthorityDataSourceSpec 
+
+CertificateAuthorityDataSourceSpec provides a source for CA bundle used for client-side TLS verification.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`kind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcekind[$$CertificateAuthorityDataSourceKind$$]__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
+Allowed values are "Secret" or "ConfigMap". +
+"ConfigMap" uses a Kubernetes configmap to source CA Bundles. +
+"Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles. +
+| *`name`* __string__ | Name is the resource name of the secret or configmap from which to read the CA bundle. +
+The referenced secret or configmap must be created in the same namespace where Pinniped Concierge is installed. +
+| *`key`* __string__ | Key is the key name within the secret or configmap from which to read the CA bundle. +
+The value found at this key in the secret or configmap must not be empty, and must be a valid PEM-encoded +
+certificate bundle. +
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-jwtauthenticator"]
 ==== JWTAuthenticator 
 
@@ -125,7 +162,7 @@ username from the JWT token. When not specified, it will default to "username". 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-tlsspec"]
 ==== TLSSpec 
 
-Configuration for configuring TLS on various authenticators.
+TLSSpec provides TLS configuration on various authenticators.
 
 .Appears In:
 ****
@@ -137,6 +174,8 @@ Configuration for configuring TLS on various authenticators.
 |===
 | Field | Description
 | *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted. +
+| *`certificateAuthorityDataSource`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]__ | Reference to a CA bundle in a secret or a configmap. +
+Any changes to the CA bundle in the secret or configmap will be dynamically reloaded. +
 |===
 
 
@@ -503,6 +542,7 @@ ImpersonationProxyInfo describes the parameters for the impersonation proxy on t
 ==== ImpersonationProxyMode (string) 
 
 ImpersonationProxyMode enumerates the configuration modes for the impersonation proxy.
+Allowed values are "auto", "enabled", or "disabled".
 
 .Appears In:
 ****
@@ -539,6 +579,7 @@ This is not supported on all cloud providers. +
 ==== ImpersonationProxyServiceType (string) 
 
 ImpersonationProxyServiceType enumerates the types of service that can be provisioned for the impersonation proxy.
+Allowed values are "LoadBalancer", "ClusterIP", or "None".
 
 .Appears In:
 ****
@@ -928,6 +969,7 @@ the transform expressions. This is a union type, and Type is the discriminator f
 | Field | Description
 | *`name`* __string__ | Name determines the name of the constant. It must be a valid identifier name. +
 | *`type`* __string__ | Type determines the type of the constant, and indicates which other field should be non-empty. +
+Allowed values are "string" or "stringList". +
 | *`stringValue`* __string__ | StringValue should hold the value when Type is "string", and is otherwise ignored. +
 | *`stringListValue`* __string array__ | StringListValue should hold the value when Type is "stringList", and is otherwise ignored. +
 |===
@@ -994,6 +1036,7 @@ FederationDomainTransformsExpression defines a transform expression.
 |===
 | Field | Description
 | *`type`* __string__ | Type determines the type of the expression. It must be one of the supported types. +
+Allowed values are "policy/v1", "username/v1", or "groups/v1". +
 | *`expression`* __string__ | Expression is a CEL expression that will be evaluated based on the Type during an authentication. +
 | *`message`* __string__ | Message is only used when Type is policy/v1. It defines an error message to be used when the policy rejects +
 an authentication attempt. When empty, a default message will be used. +
@@ -1645,6 +1688,43 @@ Optional, when empty this defaults to "objectGUID". +
 |===
 
 
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcekind"]
+==== CertificateAuthorityDataSourceKind (string) 
+
+CertificateAuthorityDataSourceKind enumerates the sources for CA Bundles.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]
+****
+
+
+
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec"]
+==== CertificateAuthorityDataSourceSpec 
+
+CertificateAuthorityDataSourceSpec provides a source for CA bundle used for client-side TLS verification.
+
+.Appears In:
+****
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]
+****
+
+[cols="25a,75a", options="header"]
+|===
+| Field | Description
+| *`kind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcekind[$$CertificateAuthorityDataSourceKind$$]__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
+Allowed values are "Secret" or "ConfigMap". +
+"ConfigMap" uses a Kubernetes configmap to source CA Bundles. +
+"Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles. +
+| *`name`* __string__ | Name is the resource name of the secret or configmap from which to read the CA bundle. +
+The referenced secret or configmap must be created in the same namespace where Pinniped Supervisor is installed. +
+| *`key`* __string__ | Key is the key name within the secret or configmap from which to read the CA bundle. +
+The value found at this key in the secret or configmap must not be empty, and must be a valid PEM-encoded +
+certificate bundle. +
+|===
+
+
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-githubapiconfig"]
 ==== GitHubAPIConfig 
 
@@ -1890,7 +1970,11 @@ GitHubIdentityProviderStatus is the status of an GitHub identity provider.
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`policy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-githuballowedauthorganizationspolicy[$$GitHubAllowedAuthOrganizationsPolicy$$]__ | Policy must be set to "AllGitHubUsers" if allowed is empty. +
+| *`policy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-githuballowedauthorganizationspolicy[$$GitHubAllowedAuthOrganizationsPolicy$$]__ | Allowed values are "OnlyUsersFromAllowedOrganizations" or "AllGitHubUsers". +
+Defaults to "OnlyUsersFromAllowedOrganizations". +
+
+
+Must be set to "AllGitHubUsers" if the allowed field is empty. +
 
 
 This field only exists to ensure that Pinniped administrators are aware that an empty list of +
@@ -2401,6 +2485,8 @@ TLSSpec provides TLS configuration for identity provider integration.
 |===
 | Field | Description
 | *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted. +
+| *`certificateAuthorityDataSource`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-28-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]__ | Reference to a CA bundle in a secret or a configmap. +
+Any changes to the CA bundle in the secret or configmap will be dynamically reloaded. +
 |===
 
 

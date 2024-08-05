@@ -167,7 +167,10 @@ type GitHubClientSpec struct {
 }
 
 type GitHubOrganizationsSpec struct {
-	// Policy must be set to "AllGitHubUsers" if allowed is empty.
+	// Allowed values are "OnlyUsersFromAllowedOrganizations" or "AllGitHubUsers".
+	// Defaults to "OnlyUsersFromAllowedOrganizations".
+	//
+	// Must be set to "AllGitHubUsers" if the allowed field is empty.
 	//
 	// This field only exists to ensure that Pinniped administrators are aware that an empty list of
 	// allowedOrganizations means all GitHub users are allowed to log in.

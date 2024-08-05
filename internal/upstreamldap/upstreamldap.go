@@ -74,7 +74,7 @@ const (
 	TLS      = LDAPConnectionProtocol("TLS")
 )
 
-// ProviderConfig includes all of the settings for connection and searching for users and groups in
+// ProviderConfig includes all the settings for connection and searching for users and groups in
 // the upstream LDAP IDP. It also provides methods for testing the connection and performing logins.
 // The nested structs are not pointer fields to enable deep copy on function params and return values.
 type ProviderConfig struct {
@@ -372,7 +372,7 @@ func (p *Provider) tlsConfig() (*tls.Config, error) {
 	return ptls.DefaultLDAP(rootCAs), nil
 }
 
-// GetName returns a name for this upstream provider.
+// GetResourceName returns a name for this upstream provider.
 func (p *Provider) GetResourceName() string {
 	return p.c.Name
 }

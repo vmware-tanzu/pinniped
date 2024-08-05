@@ -6,6 +6,7 @@ package oidcupstreamwatcher
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -15,11 +16,13 @@ import (
 	"testing"
 	"time"
 
+	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	expiringcache "k8s.io/apimachinery/pkg/util/cache"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
@@ -28,9 +31,11 @@ import (
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	supervisorinformers "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -49,7 +54,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 		wantDelete bool
 	}{
 		{
-			name: "a secret of the right type",
+			name: "should return true for a secret of the type secrets.pinniped.dev/oidc-client",
 			secret: &corev1.Secret{
 				Type:       "secrets.pinniped.dev/oidc-client",
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
@@ -59,14 +64,34 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			wantDelete: true,
 		},
 		{
-			name: "a secret of the wrong type",
+			name: "should return true for a secret of the type Opaque",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeOpaque,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return true for a secret of the type TLS",
+			secret: &corev1.Secret{
+				Type:       corev1.SecretTypeTLS,
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return false for a secret of the wrong type",
 			secret: &corev1.Secret{
 				Type:       "secrets.pinniped.dev/not-the-oidc-client-type",
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
 		},
 		{
-			name: "resource of wrong data type",
+			name: "should return false for resource of wrong data type",
 			secret: &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
 			},
@@ -85,6 +110,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
 			var log bytes.Buffer
@@ -95,8 +121,10 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				nil,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				logger,
 				withInformer.WithInformer,
+				expiringcache.NewExpiring(),
 			)
 
 			unrelated := corev1.Secret{}
@@ -105,6 +133,66 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.secret))
 			require.Equal(t, test.wantUpdate, filter.Update(test.secret, &unrelated))
 			require.Equal(t, test.wantDelete, filter.Delete(test.secret))
+		})
+	}
+}
+
+func TestOIDCUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		cm         metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name: "any configmap",
+			cm: &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fakePinnipedClient := supervisorfake.NewSimpleClientset()
+			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
+			fakeKubeClient := fake.NewSimpleClientset()
+			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
+			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
+			cache.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{
+				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
+			})
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
+			withInformer := testutil.NewObservableWithInformerOption()
+
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			New(
+				cache,
+				nil,
+				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
+				secretInformer,
+				configMapInformer,
+				logger,
+				withInformer.WithInformer,
+				expiringcache.NewExpiring(),
+			)
+
+			unrelated := corev1.ConfigMap{}
+			filter := withInformer.GetFilterForInformer(configMapInformer)
+			require.Equal(t, test.wantAdd, filter.Add(test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(&unrelated, test.cm))
+			require.Equal(t, test.wantUpdate, filter.Update(test.cm, &unrelated))
+			require.Equal(t, test.wantDelete, filter.Delete(test.cm))
 		})
 	}
 }
@@ -155,7 +243,8 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 	tests := []struct {
 		name                   string
 		inputUpstreams         []runtime.Object
-		inputSecrets           []runtime.Object
+		inputResources         []runtime.Object
+		inputValidatorCache    func(*testing.T) map[oidcDiscoveryCacheKey]*oidcDiscoveryCacheValue
 		wantErr                string
 		wantLogs               []string
 		wantResultingCache     []*oidctestutil.TestUpstreamOIDCIdentityProvider
@@ -165,7 +254,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			name: "no upstreams",
 		},
 		{
-			name: "missing secret",
+			name: "missing client Secret",
 			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
@@ -174,11 +263,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{},
-			wantErr:      controllerlib.ErrSyntheticRequeue.Error(),
+			inputResources: []runtime.Object{},
+			wantErr:        controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"False","reason":"SecretNotFound","message":"secret \"test-client-secret\" not found"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","reason":"SecretNotFound","message":"secret \"test-client-secret\" not found","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -189,26 +279,18 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "SecretNotFound",
-							Message:            `secret "test-client-secret" not found`,
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "discovered issuer configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: now, Reason: "SecretNotFound",
+							Message: `secret "test-client-secret" not found`},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration"},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
 		},
 		{
-			name: "secret has wrong type",
+			name: "client Secret has wrong type",
 			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName},
 				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
@@ -217,7 +299,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "some-other-type",
 				Data:       testValidSecretData,
@@ -226,6 +308,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"False","reason":"SecretWrongType","message":"referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","reason":"SecretWrongType","message":"referenced Secret \"test-client-secret\" has wrong type \"some-other-type\" (should be \"secrets.pinniped.dev/oidc-client\")","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -236,20 +319,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "SecretWrongType",
-							Message:            `referenced Secret "test-client-secret" has wrong type "some-other-type" (should be "secrets.pinniped.dev/oidc-client")`,
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "discovered issuer configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: now, Reason: "SecretWrongType",
+							Message: `referenced Secret "test-client-secret" has wrong type "some-other-type" (should be "secrets.pinniped.dev/oidc-client")`},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration"},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -264,7 +339,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 			}},
@@ -272,6 +347,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"False","reason":"SecretMissingKeys","message":"referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","reason":"SecretMissingKeys","message":"referenced Secret \"test-client-secret\" is missing required keys [\"clientID\" \"clientSecret\"]","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -282,20 +358,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "SecretMissingKeys",
-							Message:            `referenced Secret "test-client-secret" is missing required keys ["clientID" "clientSecret"]`,
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "discovered issuer configuration",
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: now, Reason: "SecretMissingKeys",
+							Message: `referenced Secret "test-client-secret" is missing required keys ["clientID" "clientSecret"]`},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration"},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -312,7 +380,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -320,9 +388,11 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
-				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidTLSConfig","message":"spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"False","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
-				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidTLSConfig","message":"spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7","error":"OIDCIdentityProvider has a failing condition"}`,
+				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7","error":"OIDCIdentityProvider has a failing condition"}`,
+				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
@@ -331,20 +401,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidTLSConfig",
-							Message:            `spec.certificateAuthorityData is invalid: illegal base64 data at input byte 7`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidTLSConfig",
+							Message: `spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7`},
+						{Type: "TLSConfigurationValid", Status: "False", LastTransitionTime: now, Reason: "InvalidTLSConfig",
+							Message: "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7"},
 					},
 				},
 			}},
@@ -361,7 +423,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -369,9 +431,11 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantErr: controllerlib.ErrSyntheticRequeue.Error(),
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
-				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidTLSConfig","message":"spec.certificateAuthorityData is invalid: no certificates found"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: no base64-encoded PEM certificates found in 28 bytes of data (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"False","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: no base64-encoded PEM certificates found in 28 bytes of data (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
-				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidTLSConfig","message":"spec.certificateAuthorityData is invalid: no certificates found","error":"OIDCIdentityProvider has a failing condition"}`,
+				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: no base64-encoded PEM certificates found in 28 bytes of data (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")","error":"OIDCIdentityProvider has a failing condition"}`,
+				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","reason":"InvalidTLSConfig","message":"spec.tls.certificateAuthorityData is invalid: no base64-encoded PEM certificates found in 28 bytes of data (PEM certificates must begin with \"-----BEGIN CERTIFICATE-----\")","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{},
 			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
@@ -380,20 +444,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidTLSConfig",
-							Message:            `spec.certificateAuthorityData is invalid: no certificates found`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidTLSConfig",
+							Message: `spec.tls.certificateAuthorityData is invalid: no base64-encoded PEM certificates found in 28 bytes of data (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`},
+						{Type: "TLSConfigurationValid", Status: "False", LastTransitionTime: now, Reason: "InvalidTLSConfig",
+							Message: `spec.tls.certificateAuthorityData is invalid: no base64-encoded PEM certificates found in 28 bytes of data (PEM certificates must begin with "-----BEGIN CERTIFICATE-----")`},
 					},
 				},
 			}},
@@ -407,7 +463,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -416,6 +472,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"failed to parse issuer URL: parse \"%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\": invalid URL escape \"%in\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"failed to parse issuer URL: parse \"%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\": invalid URL escape \"%in\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -426,20 +483,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message:            `failed to parse issuer URL: parse "%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": invalid URL escape "%in"`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `failed to parse issuer URL: parse "%invalid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": invalid URL escape "%in"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"},
 					},
 				},
 			}},
@@ -453,7 +502,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -462,6 +511,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have \"https\" scheme, not \"http\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have \"https\" scheme, not \"http\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -472,20 +522,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message:            `issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have "https" scheme, not "http"`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `issuer URL '` + strings.Replace(testIssuerURL, "https", "http", 1) + `' must have "https" scheme, not "http"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"},
 					},
 				},
 			}},
@@ -499,7 +541,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -508,6 +550,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"issuer URL '` + testIssuerURL + `?sub=foo' cannot contain query or fragment component"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"issuer URL '` + testIssuerURL + `?sub=foo' cannot contain query or fragment component","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -518,20 +561,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message:            `issuer URL '` + testIssuerURL + "?sub=foo" + `' cannot contain query or fragment component`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `issuer URL '` + testIssuerURL + "?sub=foo" + `' cannot contain query or fragment component`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"},
 					},
 				},
 			}},
@@ -545,7 +580,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -554,6 +589,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"issuer URL '` + testIssuerURL + `#fragment' cannot contain query or fragment component"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"issuer URL '` + testIssuerURL + `#fragment' cannot contain query or fragment component","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -564,20 +600,12 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message:            `issuer URL '` + testIssuerURL + "#fragment" + `' cannot contain query or fragment component`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `issuer URL '` + testIssuerURL + "#fragment" + `' cannot contain query or fragment component`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"},
 					},
 				},
 			}},
@@ -592,7 +620,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -602,6 +630,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateIssuer","message":"failed to perform OIDC discovery","namespace":"test-namespace","name":"test-name","issuer":"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","error":"Get \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": tls: failed to verify certificate: x509: certificate signed by unknown authority"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\":\nGet \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": tls: failed to verify certificate: x509: certificate signed by unknown authority"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\":\nGet \"` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration\": tls: failed to verify certificate: x509: certificate signed by unknown authority","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -612,21 +641,13 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":
-Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":` + "\n" +
+								`Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nanananananananannanananan-batman-nanananananananananananananana-batman-lalalalalalalalalal-batman-weeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -641,7 +662,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -650,6 +671,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"failed to parse authorization endpoint URL: parse \"%\": invalid URL escape \"%\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -660,20 +682,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `failed to parse authorization endpoint URL: parse "%": invalid URL escape "%"`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `failed to parse authorization endpoint URL: parse "%": invalid URL escape "%"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -688,7 +702,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -697,6 +711,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"failed to parse revocation endpoint URL: parse \"%\": invalid URL escape \"%\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"failed to parse revocation endpoint URL: parse \"%\": invalid URL escape \"%\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -707,20 +722,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `failed to parse revocation endpoint URL: parse "%": invalid URL escape "%"`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `failed to parse revocation endpoint URL: parse "%": invalid URL escape "%"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -735,7 +742,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -744,6 +751,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"authorization endpoint URL 'http://example.com/authorize' must have \"https\" scheme, not \"http\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"authorization endpoint URL 'http://example.com/authorize' must have \"https\" scheme, not \"http\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -754,20 +762,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `authorization endpoint URL 'http://example.com/authorize' must have "https" scheme, not "http"`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `authorization endpoint URL 'http://example.com/authorize' must have "https" scheme, not "http"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -782,7 +782,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -791,6 +791,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"revocation endpoint URL 'http://example.com/revoke' must have \"https\" scheme, not \"http\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"revocation endpoint URL 'http://example.com/revoke' must have \"https\" scheme, not \"http\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -801,20 +802,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `revocation endpoint URL 'http://example.com/revoke' must have "https" scheme, not "http"`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `revocation endpoint URL 'http://example.com/revoke' must have "https" scheme, not "http"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -829,7 +822,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -838,6 +831,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"token endpoint URL 'http://example.com/token' must have \"https\" scheme, not \"http\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"token endpoint URL 'http://example.com/token' must have \"https\" scheme, not \"http\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -848,20 +842,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `token endpoint URL 'http://example.com/token' must have "https" scheme, not "http"`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `token endpoint URL 'http://example.com/token' must have "https" scheme, not "http"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -876,7 +862,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -885,6 +871,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"token endpoint URL '' must have \"https\" scheme, not \"\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"token endpoint URL '' must have \"https\" scheme, not \"\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -895,20 +882,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `token endpoint URL '' must have "https" scheme, not ""`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `token endpoint URL '' must have "https" scheme, not ""`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -923,7 +902,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -932,6 +911,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"InvalidResponse","message":"authorization endpoint URL '' must have \"https\" scheme, not \"\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"InvalidResponse","message":"authorization endpoint URL '' must have \"https\" scheme, not \"\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -942,20 +922,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "InvalidResponse",
-							Message:            `authorization endpoint URL '' must have "https" scheme, not ""`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "InvalidResponse",
+							Message: `authorization endpoint URL '' must have "https" scheme, not ""`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -977,12 +949,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Error",
 					Conditions: []metav1.Condition{
-						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: earlier, Reason: "SomeError1", Message: "some previous error 1"},
-						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: earlier, Reason: "SomeError2", Message: "some previous error 2"},
+						{Type: "ClientCredentialsSecretValid", Status: "False", LastTransitionTime: earlier, Reason: "SomeError1",
+							Message: "some previous error 1"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: earlier, Reason: "SomeError2",
+							Message: "some previous error 2"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -990,6 +964,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1013,8 +988,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration"},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -1033,12 +1012,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1046,6 +1027,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1068,9 +1050,240 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
-						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle", ObservedGeneration: 1234},
+					},
+				},
+			}},
+		},
+		{
+			name: "valid upstream which already exists in the OIDC discovery validation cache, should skip performing OIDC discovery again and just use cached discovery results",
+			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: testIssuerURL + "/this-path-does-not-exist",
+					TLS:    &idpv1alpha1.TLSSpec{CertificateAuthorityData: testIssuerCABase64},
+					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
+					Claims: idpv1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+				},
+				Status: idpv1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					// Was previously validated, so already has conditions.
+					Conditions: []metav1.Condition{
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle", ObservedGeneration: 1234},
+					},
+				},
+			}},
+			inputResources: []runtime.Object{&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+				Type:       "secrets.pinniped.dev/oidc-client",
+				Data:       testValidSecretData,
+			}},
+			inputValidatorCache: func(t *testing.T) map[oidcDiscoveryCacheKey]*oidcDiscoveryCacheValue {
+				// Create a working OIDC discovery validator cache entry for the working issuer and CA bundle.
+				certPool := x509.NewCertPool()
+				require.True(t, certPool.AppendCertsFromPEM([]byte(testIssuerCA)))
+				httpClient := phttp.Default(certPool)
+				httpClient.Timeout = time.Minute // same timeout as in the production code
+				testCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				t.Cleanup(cancel)
+				// Really do OIDC discovery, so we can put the real result into the cache.
+				discoveredProvider, err := coreosoidc.NewProvider(coreosoidc.ClientContext(testCtx, httpClient), testIssuerURL)
+				require.NoError(t, err)
+				cacheValue := &oidcDiscoveryCacheValue{
+					provider: discoveredProvider,
+					client:   httpClient,
+				}
+				// Create the cache key to use with the above entry, and cache it at the issuer value that was
+				// configured in the OIDCIdentityProvider. If the production code tries to perform OIDC discovery
+				// on that URL, it will fail with a 404. But if the production code correctly reads the pre-cached
+				// discovery result from this cache, then it should skip discovery and use the value from this cache
+				// without encountering any errors.
+				cacheKey := oidcDiscoveryCacheKey{
+					issuer:       testIssuerURL + "/this-path-does-not-exist",
+					caBundleHash: tlsconfigutil.NewCABundleHash([]byte(testIssuerCA)),
+				}
+				// Put it into the initial cache for this test.
+				return map[oidcDiscoveryCacheKey]*oidcDiscoveryCacheValue{
+					cacheKey: cacheValue,
+				}
+			},
+			wantLogs: []string{},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
+					Scopes:                   testDefaultExpectedScopes,
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       false,
+					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
+					ResourceUID:              testUID,
+				},
+			},
+			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: idpv1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					// Conditions are unchanged.
+					Conditions: []metav1.Condition{
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle", ObservedGeneration: 1234},
+					},
+				},
+			}},
+		},
+		{
+			name: "valid upstream with CA bundle read from a Secret",
+			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: testIssuerURL,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+							Kind: "Secret",
+							Name: "ca-bundle-secret",
+							Key:  "ca.crt",
+						},
+					},
+					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
+					Claims: idpv1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+				},
+			}},
+			inputResources: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+					Type:       "secrets.pinniped.dev/oidc-client",
+					Data:       testValidSecretData,
+				},
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "ca-bundle-secret"},
+					Type:       corev1.SecretTypeOpaque,
+					Data:       map[string][]byte{"ca.crt": []byte(testIssuerCA)},
+				},
+			},
+			wantLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
+			},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
+					Scopes:                   testDefaultExpectedScopes,
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       false,
+					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
+					ResourceUID:              testUID,
+				},
+			},
+			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: idpv1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []metav1.Condition{
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle", ObservedGeneration: 1234},
+					},
+				},
+			}},
+		},
+		{
+			name: "valid upstream with CA bundle read from a ConfigMap",
+			inputUpstreams: []runtime.Object{&idpv1alpha1.OIDCIdentityProvider{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Spec: idpv1alpha1.OIDCIdentityProviderSpec{
+					Issuer: testIssuerURL,
+					TLS: &idpv1alpha1.TLSSpec{
+						CertificateAuthorityDataSource: &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+							Kind: "ConfigMap",
+							Name: "ca-bundle-configmap",
+							Key:  "ca.crt",
+						},
+					},
+					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
+					Claims: idpv1alpha1.OIDCClaims{Groups: testGroupsClaim, Username: testUsernameClaim},
+				},
+			}},
+			inputResources: []runtime.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
+					Type:       "secrets.pinniped.dev/oidc-client",
+					Data:       testValidSecretData,
+				},
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "ca-bundle-configmap"},
+					Data:       map[string]string{"ca.crt": testIssuerCA},
+				},
+			},
+			wantLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
+			},
+			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
+				{
+					Name:                     testName,
+					ClientID:                 testClientID,
+					AuthorizationURL:         *testIssuerAuthorizeURL,
+					RevocationURL:            testIssuerRevocationURL,
+					Scopes:                   testDefaultExpectedScopes,
+					UsernameClaim:            testUsernameClaim,
+					GroupsClaim:              testGroupsClaim,
+					AllowPasswordGrant:       false,
+					AdditionalAuthcodeParams: map[string]string{},
+					AdditionalClaimMappings:  nil, // Does not default to empty map
+					ResourceUID:              testUID,
+				},
+			},
+			wantResultingUpstreams: []idpv1alpha1.OIDCIdentityProvider{{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testName, Generation: 1234, UID: testUID},
+				Status: idpv1alpha1.OIDCIdentityProviderStatus{
+					Phase: "Ready",
+					Conditions: []metav1.Condition{
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1089,12 +1302,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1102,6 +1317,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1124,9 +1340,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
-						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1148,12 +1369,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1161,6 +1384,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1183,9 +1407,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
-						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1215,12 +1444,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidConditionEarlier,
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials"},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration"},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration"},
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1228,6 +1459,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 			},
 			wantResultingCache: []*oidctestutil.TestUpstreamOIDCIdentityProvider{
@@ -1252,9 +1484,14 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				Status: idpv1alpha1.OIDCIdentityProviderStatus{
 					Phase: "Ready",
 					Conditions: []metav1.Condition{
-						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "AdditionalAuthorizeParametersValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "additionalAuthorizeParameters parameter names are allowed", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: earlier, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1283,7 +1520,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1292,6 +1529,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 			wantLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"True","reason":"Success","message":"discovered issuer configuration"}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"False","reason":"DisallowedParameterName","message":"the following additionalAuthorizeParameters are not allowed: response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","reason":"DisallowedParameterName","message":"the following additionalAuthorizeParameters are not allowed: response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -1304,8 +1542,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 						{Type: "AdditionalAuthorizeParametersValid", Status: "False", LastTransitionTime: now, Reason: "DisallowedParameterName",
 							Message: "the following additionalAuthorizeParameters are not allowed: " +
 								"response_type,scope,client_id,state,nonce,code_challenge,code_challenge_method,redirect_uri,hd", ObservedGeneration: 1234},
-						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "loaded client credentials", ObservedGeneration: 1234},
-						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success", Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials", ObservedGeneration: 1234},
+						{Type: "OIDCDiscoverySucceeded", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "discovered issuer configuration", ObservedGeneration: 1234},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle", ObservedGeneration: 1234},
 					},
 				},
 			}},
@@ -1320,7 +1562,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1330,6 +1572,7 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateIssuer","message":"failed to perform OIDC discovery","namespace":"test-namespace","name":"test-name","issuer":"` + testIssuerURL + `/ends-with-slash","error":"oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\""}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/ends-with-slash\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/ends-with-slash\" got \"` + testIssuerURL + `/ends-with-slash/\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -1340,21 +1583,12 @@ Get "` + testIssuerURL + `/valid-url-that-is-really-really-long-nananananananana
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/ends-with-slash":
-oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/ends-with-slash" got "` + testIssuerURL + `/ends-with-slash/"`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/ends-with-slash":` + "\n" + `oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/ends-with-slash" got "` + testIssuerURL + `/ends-with-slash/"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -1369,7 +1603,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 					Client: idpv1alpha1.OIDCClient{SecretName: testSecretName},
 				},
 			}},
-			inputSecrets: []runtime.Object{&corev1.Secret{
+			inputResources: []runtime.Object{&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: testSecretName},
 				Type:       "secrets.pinniped.dev/oidc-client",
 				Data:       testValidSecretData,
@@ -1379,6 +1613,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateIssuer","message":"failed to perform OIDC discovery","namespace":"test-namespace","name":"test-name","issuer":"` + testIssuerURL + `/","error":"oidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\""}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"ClientCredentialsSecretValid","status":"True","reason":"Success","message":"loaded client credentials"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","status":"False","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\""}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"TLSConfigurationValid","status":"True","reason":"Success","message":"spec.tls is valid: using configured CA bundle"}`,
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"conditionsutil/conditions_util.go:<line>$conditionsutil.MergeConditions","message":"updated condition","namespace":"test-namespace","name":"test-name","type":"AdditionalAuthorizeParametersValid","status":"True","reason":"Success","message":"additionalAuthorizeParameters parameter names are allowed"}`,
 				`{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","logger":"oidc-upstream-observer","caller":"oidcupstreamwatcher/oidc_upstream_watcher.go:<line>$oidcupstreamwatcher.(*oidcWatcherController).validateUpstream","message":"found failing condition","namespace":"test-namespace","name":"test-name","type":"OIDCDiscoverySucceeded","reason":"Unreachable","message":"failed to perform OIDC discovery against \"` + testIssuerURL + `/\":\noidc: issuer did not match the issuer returned by provider, expected \"` + testIssuerURL + `/\" got \"` + testIssuerURL + `\"","error":"OIDCIdentityProvider has a failing condition"}`,
 			},
@@ -1389,21 +1624,13 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						happyAdditionalAuthorizeParametersValidCondition,
-						{
-							Type:               "ClientCredentialsSecretValid",
-							Status:             "True",
-							LastTransitionTime: now,
-							Reason:             "Success",
-							Message:            "loaded client credentials",
-						},
-						{
-							Type:               "OIDCDiscoverySucceeded",
-							Status:             "False",
-							LastTransitionTime: now,
-							Reason:             "Unreachable",
-							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/":
-oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/" got "` + testIssuerURL + `"`,
-						},
+						{Type: "ClientCredentialsSecretValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "loaded client credentials"},
+						{Type: "OIDCDiscoverySucceeded", Status: "False", LastTransitionTime: now, Reason: "Unreachable",
+							Message: `failed to perform OIDC discovery against "` + testIssuerURL + `/":` + "\n" +
+								`oidc: issuer did not match the issuer returned by provider, expected "` + testIssuerURL + `/" got "` + testIssuerURL + `"`},
+						{Type: "TLSConfigurationValid", Status: "True", LastTransitionTime: now, Reason: "Success",
+							Message: "spec.tls is valid: using configured CA bundle"},
 					},
 				},
 			}},
@@ -1414,7 +1641,7 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			t.Parallel()
 			fakePinnipedClient := supervisorfake.NewSimpleClientset(tt.inputUpstreams...)
 			pinnipedInformers := supervisorinformers.NewSharedInformerFactory(fakePinnipedClient, 0)
-			fakeKubeClient := fake.NewSimpleClientset(tt.inputSecrets...)
+			fakeKubeClient := fake.NewSimpleClientset(tt.inputResources...)
 			kubeInformers := informers.NewSharedInformerFactory(fakeKubeClient, 0)
 			cache := dynamicupstreamprovider.NewDynamicUpstreamIDPProvider()
 			cache.SetOIDCIdentityProviders([]upstreamprovider.UpstreamOIDCIdentityProviderI{
@@ -1424,13 +1651,24 @@ oidc: issuer did not match the issuer returned by provider, expected "` + testIs
 			var log bytes.Buffer
 			logger := plog.TestLogger(t, &log)
 
+			validatorCache := expiringcache.NewExpiring()
+			if tt.inputValidatorCache != nil {
+				oidcValidatorCache := &ttlProviderCache{cache: validatorCache}
+				// add to the underlying validatorCache using oidcValidatorCache which wraps it
+				for key, value := range tt.inputValidatorCache(t) {
+					oidcValidatorCache.putProvider(key, value)
+				}
+			}
+
 			controller := New(
 				cache,
 				fakePinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
 				logger,
 				controllerlib.WithInformer,
+				validatorCache,
 			)
 
 			ctx, cancel := context.WithCancel(context.Background())

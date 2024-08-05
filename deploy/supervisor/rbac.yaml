@@ -16,6 +16,9 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [create, get, list, patch, update, watch, delete]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, list, watch]
   - apiGroups:
       - #@ pinnipedDevAPIGroupWithPrefix("config.supervisor")
     resources: [federationdomains]

@@ -37,7 +37,10 @@ spec:
   # HTTPS endpoint to be called as a webhook
   endpoint: https://my-webhook.example.com/any/path
   tls:
-    # base64-encoded PEM CA bundle (optional)
+    # Base64-encoded PEM CA bundle for connections to webhook (optional).
+    # Alternatively, the CA bundle can be specified in a Secret or
+    # ConfigMap that will be dynamically watched by Pinniped for
+    # changes to the CA bundle (see API docs for details).
     certificateAuthorityData: "LS0tLS1CRUdJTi[...]"
 ```
 

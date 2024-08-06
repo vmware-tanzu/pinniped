@@ -4,8 +4,8 @@ module go.pinniped.dev/generated/1.29/apis
 go 1.21
 
 require (
-	k8s.io/api v0.29.6
-	k8s.io/apimachinery v0.29.6
+	k8s.io/api v0.29.7
+	k8s.io/apimachinery v0.29.7
 )
 
 require (

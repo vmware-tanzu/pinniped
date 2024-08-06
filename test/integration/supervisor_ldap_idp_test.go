@@ -37,6 +37,14 @@ func TestLDAPIDPPhaseAndConditions_Parallel(t *testing.T) {
 		},
 	)
 
+	wantCABundleMessage := func(caBundleConfigured bool) string {
+		if caBundleConfigured {
+			return "spec.tls is valid: using configured CA bundle"
+		} else {
+			return "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image"
+		}
+	}
+
 	happySpec := idpv1alpha1.LDAPIdentityProviderSpec{
 		Host: env.SupervisorUpstreamLDAP.Host,
 		Bind: idpv1alpha1.LDAPIdentityProviderBind{
@@ -94,7 +102,7 @@ func TestLDAPIDPPhaseAndConditions_Parallel(t *testing.T) {
 					Type:    "TLSConfigurationValid",
 					Status:  "True",
 					Reason:  "Success",
-					Message: "spec.tls is valid: using configured CA bundle",
+					Message: wantCABundleMessage(len(happySpec.TLS.CertificateAuthorityData) != 0),
 				},
 			},
 		},
@@ -152,7 +160,7 @@ func TestLDAPIDPPhaseAndConditions_Parallel(t *testing.T) {
 					Type:    "TLSConfigurationValid",
 					Status:  "True",
 					Reason:  "Success",
-					Message: "spec.tls is valid: using configured CA bundle",
+					Message: wantCABundleMessage(len(happySpec.TLS.CertificateAuthorityData) != 0),
 				},
 			},
 		},

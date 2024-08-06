@@ -118,6 +118,15 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) GroupSearch() upstreamwatchers.
 	return &activeDirectoryUpstreamGenericLDAPGroupSearch{s.activeDirectoryIdentityProvider.Spec.GroupSearch}
 }
 
+func (s *activeDirectoryUpstreamGenericLDAPSpec) UnknownSearchBaseCondition() *metav1.Condition {
+	return &metav1.Condition{
+		Type:    upstreamwatchers.TypeSearchBaseFound,
+		Status:  metav1.ConditionUnknown,
+		Reason:  conditionsutil.ReasonUnableToValidate,
+		Message: conditionsutil.MessageUnableToValidate,
+	}
+}
+
 func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx context.Context, config *upstreamldap.ProviderConfig) *metav1.Condition {
 	config.GroupSearch.Base = s.activeDirectoryIdentityProvider.Spec.GroupSearch.Base
 	config.UserSearch.Base = s.activeDirectoryIdentityProvider.Spec.UserSearch.Base

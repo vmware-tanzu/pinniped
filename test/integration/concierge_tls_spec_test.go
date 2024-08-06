@@ -24,8 +24,8 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-// TestTLSSpecKubeBuilderValidationConcierge_Parallel tests kubebuilder validation on the TLSSpec
-// in Pinniped concierge CRDs for both WebhookAuthenticators and JWTAuthenticators.
+// TestTLSSpecValidationConcierge_Parallel tests kubebuilder and status condition validation
+// on the TLSSpec in Pinniped concierge WebhookAuthenticator and JWTAuthenticator CRDs.
 func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 

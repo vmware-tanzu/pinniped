@@ -99,7 +99,6 @@ type UpstreamGenericLDAPIDP interface {
 	Name() string
 	Namespace() string
 	Generation() int64
-	Status() UpstreamGenericLDAPStatus
 }
 
 type UpstreamGenericLDAPSpec interface {

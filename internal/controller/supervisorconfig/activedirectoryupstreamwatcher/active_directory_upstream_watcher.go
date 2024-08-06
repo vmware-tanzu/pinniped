@@ -94,10 +94,6 @@ func (g *activeDirectoryUpstreamGenericLDAPImpl) Generation() int64 {
 	return g.activeDirectoryIdentityProvider.Generation
 }
 
-func (g *activeDirectoryUpstreamGenericLDAPImpl) Status() upstreamwatchers.UpstreamGenericLDAPStatus {
-	return &activeDirectoryUpstreamGenericLDAPStatus{g.activeDirectoryIdentityProvider}
-}
-
 type activeDirectoryUpstreamGenericLDAPSpec struct {
 	activeDirectoryIdentityProvider idpv1alpha1.ActiveDirectoryIdentityProvider
 }

@@ -50,10 +50,6 @@ func (g *ldapUpstreamGenericLDAPImpl) Generation() int64 {
 	return g.ldapIdentityProvider.Generation
 }
 
-func (g *ldapUpstreamGenericLDAPImpl) Status() upstreamwatchers.UpstreamGenericLDAPStatus {
-	return &ldapUpstreamGenericLDAPStatus{g.ldapIdentityProvider}
-}
-
 type ldapUpstreamGenericLDAPSpec struct {
 	ldapIdentityProvider idpv1alpha1.LDAPIdentityProvider
 }
@@ -126,10 +122,6 @@ func (g *ldapUpstreamGenericLDAPGroupSearch) GroupNameAttribute() string {
 
 type ldapUpstreamGenericLDAPStatus struct {
 	ldapIdentityProvider idpv1alpha1.LDAPIdentityProvider
-}
-
-func (s *ldapUpstreamGenericLDAPStatus) Conditions() []metav1.Condition {
-	return s.ldapIdentityProvider.Status.Conditions
 }
 
 // UpstreamLDAPIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.

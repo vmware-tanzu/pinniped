@@ -19,34 +19,51 @@ import (
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
-	"go.pinniped.dev/internal/mocks/mocktokenauthenticator"
+	"go.pinniped.dev/internal/mocks/mockcachevalue"
 )
 
 func TestCache(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(func() {
+		ctrl.Finish()
+	})
 
 	cache := New()
 	require.NotNil(t, cache)
 
 	key1 := Key{Name: "authenticator-one"}
-	mockToken1 := mocktokenauthenticator.NewMockToken(ctrl)
-	cache.Store(key1, mockToken1)
-	require.Equal(t, mockToken1, cache.Get(key1))
+	mockValue1 := mockcachevalue.NewMockValue(ctrl)
+	require.Nil(t, cache.Get(key1))
+	cache.Store(key1, mockValue1)
+	require.Equal(t, mockValue1, cache.Get(key1))
 	require.Equal(t, 1, len(cache.Keys()))
 
 	key2 := Key{Name: "authenticator-two"}
-	mockToken2 := mocktokenauthenticator.NewMockToken(ctrl)
-	cache.Store(key2, mockToken2)
-	require.Equal(t, mockToken2, cache.Get(key2))
+	mockValue2 := mockcachevalue.NewMockValue(ctrl)
+	cache.Store(key2, mockValue2)
+	require.Equal(t, mockValue2, cache.Get(key2))
 	require.Equal(t, 2, len(cache.Keys()))
+
+	// Assert that Close() has not been called yet, and it should be called by the end of the test.
+	mockValue1.EXPECT().Close().Times(1)
+	mockValue2.EXPECT().Close().Times(1)
 
 	for _, key := range cache.Keys() {
 		cache.Delete(key)
 	}
 	require.Zero(t, len(cache.Keys()))
+
+	key3 := Key{Name: "authenticator-three"}
+	mockValue3 := mockcachevalue.NewMockValue(ctrl)
+	cache.Store(key3, mockValue3)
+	require.Equal(t, mockValue3, cache.Get(key3))
+	require.Equal(t, 1, len(cache.Keys()))
+	mockValue4 := mockcachevalue.NewMockValue(ctrl)
+	// Assert that Close() has not been called yet, and it should be called by the end of the test.
+	mockValue3.EXPECT().Close().Times(1)
+	cache.Store(key3, mockValue4) // overwrite
 
 	// Fill the cache back up with a fixed set of keys, but inserted in shuffled order.
 	keysInExpectedOrder := []Key{
@@ -92,7 +109,7 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 	mockCache := func(t *testing.T, res *authenticator.Response, authenticated bool, err error) *Cache {
 		ctrl := gomock.NewController(t)
 		t.Cleanup(ctrl.Finish)
-		m := mocktokenauthenticator.NewMockToken(ctrl)
+		m := mockcachevalue.NewMockValue(ctrl)
 		m.EXPECT().AuthenticateToken(audienceFreeContext{}, validRequest.Spec.Token).Return(res, authenticated, err)
 		c := New()
 		c.Store(validRequestKey, m)
@@ -137,7 +154,7 @@ func TestAuthenticateTokenCredentialRequest(t *testing.T) {
 	t.Run("context is cancelled", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		t.Cleanup(ctrl.Finish)
-		m := mocktokenauthenticator.NewMockToken(ctrl)
+		m := mockcachevalue.NewMockValue(ctrl)
 		m.EXPECT().AuthenticateToken(gomock.Any(), validRequest.Spec.Token).DoAndReturn(
 			func(ctx context.Context, token string) (*authenticator.Response, bool, error) {
 				select {

@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/cache"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
@@ -154,6 +155,7 @@ func prepareControllers(
 	federationDomainInformer := pinnipedInformers.Config().V1alpha1().FederationDomains()
 	oidcClientInformer := pinnipedInformers.Config().V1alpha1().OIDCClients()
 	secretInformer := kubeInformers.Core().V1().Secrets()
+	configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 
 	// Create controller manager.
 	controllerManager := controllerlib.
@@ -303,8 +305,10 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().OIDCIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				plog.New(),
 				controllerlib.WithInformer,
+				cache.NewExpiring(),
 			),
 			singletonWorker).
 		WithController(
@@ -313,6 +317,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().LDAPIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker).
@@ -322,6 +327,7 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().ActiveDirectoryIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				controllerlib.WithInformer,
 			),
 			singletonWorker).
@@ -332,10 +338,12 @@ func prepareControllers(
 				pinnipedClient,
 				pinnipedInformers.IDP().V1alpha1().GitHubIdentityProviders(),
 				secretInformer,
+				configMapInformer,
 				plog.New(),
 				controllerlib.WithInformer,
 				clock.RealClock{},
 				tls.Dial,
+				cache.NewExpiring(),
 			),
 			singletonWorker).
 		WithController(

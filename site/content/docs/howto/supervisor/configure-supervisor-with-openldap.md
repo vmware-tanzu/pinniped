@@ -210,6 +210,9 @@ spec:
 
   # Specify the CA certificate of the LDAP server as a
   # base64-encoded PEM bundle.
+  # Alternatively, the CA bundle can be specified in a Secret or
+  # ConfigMap that will be dynamically watched by Pinniped for
+  # changes to the CA bundle (see API docs for details).
   tls:
     certificateAuthorityData: $(cat ca.pem | base64)
 

@@ -7,13 +7,13 @@ package githubupstreamwatcher
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"golang.org/x/oauth2"
 	corev1 "k8s.io/api/core/v1"
@@ -21,6 +21,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/cache"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/utils/clock"
@@ -31,6 +32,7 @@ import (
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controller/conditionsutil"
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
@@ -57,6 +59,9 @@ const (
 	GitHubConnectionValid        string = "GitHubConnectionValid"
 	ClaimsValid                  string = "ClaimsValid"
 
+	reasonInvalid     = "Invalid"
+	reasonInvalidHost = "InvalidHost"
+
 	defaultHost       = "github.com"
 	defaultApiBaseURL = "https://api.github.com"
 )
@@ -66,6 +71,43 @@ type UpstreamGitHubIdentityProviderICache interface {
 	SetGitHubIdentityProviders([]upstreamprovider.UpstreamGithubIdentityProviderI)
 }
 
+type GitHubValidatedAPICacheI interface {
+	MarkAsValidated(address string, caBundleHash tlsconfigutil.CABundleHash)
+	IsValid(address string, caBundleHash tlsconfigutil.CABundleHash) bool
+}
+
+type GitHubValidatedAPICache struct {
+	cache *cache.Expiring
+}
+
+type GitHubValidatedAPICacheKey struct {
+	address      string
+	caBundleHash tlsconfigutil.CABundleHash
+}
+
+func (g *GitHubValidatedAPICache) MarkAsValidated(address string, caBundleHash tlsconfigutil.CABundleHash) {
+	key := GitHubValidatedAPICacheKey{
+		address:      address,
+		caBundleHash: caBundleHash,
+	}
+	// Existence in the cache means it has been validated.
+	// The TTL in the cache is not important, it's just a "really long time".
+	g.cache.Set(key, nil, 365*24*time.Hour)
+}
+
+func (g *GitHubValidatedAPICache) IsValid(address string, caBundleHash tlsconfigutil.CABundleHash) bool {
+	key := GitHubValidatedAPICacheKey{
+		address:      address,
+		caBundleHash: caBundleHash,
+	}
+	_, ok := g.cache.Get(key)
+	return ok
+}
+
+func NewGitHubValidatedAPICache(cache *cache.Expiring) GitHubValidatedAPICacheI {
+	return &GitHubValidatedAPICache{cache: cache}
+}
+
 type gitHubWatcherController struct {
 	namespace                      string
 	cache                          UpstreamGitHubIdentityProviderICache
@@ -73,8 +115,10 @@ type gitHubWatcherController struct {
 	client                         supervisorclientset.Interface
 	gitHubIdentityProviderInformer idpinformers.GitHubIdentityProviderInformer
 	secretInformer                 corev1informers.SecretInformer
+	configMapInformer              corev1informers.ConfigMapInformer
 	clock                          clock.Clock
 	dialFunc                       func(network, addr string, config *tls.Config) (*tls.Conn, error)
+	validatedCache                 GitHubValidatedAPICacheI
 }
 
 // New instantiates a new controllerlib.Controller which will populate the provided UpstreamGitHubIdentityProviderICache.
@@ -84,10 +128,12 @@ func New(
 	client supervisorclientset.Interface,
 	gitHubIdentityProviderInformer idpinformers.GitHubIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
 	dialFunc func(network, addr string, config *tls.Config) (*tls.Conn, error),
+	validatedCache *cache.Expiring,
 ) controllerlib.Controller {
 	c := gitHubWatcherController{
 		namespace:                      namespace,
@@ -96,23 +142,34 @@ func New(
 		log:                            log.WithName(controllerName),
 		gitHubIdentityProviderInformer: gitHubIdentityProviderInformer,
 		secretInformer:                 secretInformer,
+		configMapInformer:              configMapInformer,
 		clock:                          clock,
 		dialFunc:                       dialFunc,
+		validatedCache:                 NewGitHubValidatedAPICache(validatedCache),
 	}
 
 	return controllerlib.New(
 		controllerlib.Config{Name: controllerName, Syncer: &c},
 		withInformer(
 			gitHubIdentityProviderInformer,
-			pinnipedcontroller.SimpleFilter(func(obj metav1.Object) bool {
-				gitHubIDP, ok := obj.(*idpv1alpha1.GitHubIdentityProvider)
-				return ok && gitHubIDP.Namespace == namespace
-			}, pinnipedcontroller.SingletonQueue()),
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnySecretOfTypeFilter(gitHubClientSecretType, pinnipedcontroller.SingletonQueue(), namespace),
+			pinnipedcontroller.MatchAnySecretOfTypesFilter(
+				[]corev1.SecretType{
+					gitHubClientSecretType,
+					corev1.SecretTypeOpaque,
+					corev1.SecretTypeTLS,
+				},
+				pinnipedcontroller.SingletonQueue(),
+			),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			configMapInformer,
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -201,7 +258,7 @@ func (c *gitHubWatcherController) validateClientSecret(secretName string) (*meta
 	return &metav1.Condition{
 		Type:    ClientCredentialsSecretValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: fmt.Sprintf("clientID and clientSecret have been read from spec.client.SecretName (%q)", secretName),
 	}, clientID, clientSecret, nil
 }
@@ -219,7 +276,7 @@ func validateOrganizationsPolicy(organizationsSpec *idpv1alpha1.GitHubOrganizati
 		return &metav1.Condition{
 			Type:    OrganizationsPolicyValid,
 			Status:  metav1.ConditionTrue,
-			Reason:  upstreamwatchers.ReasonSuccess,
+			Reason:  conditionsutil.ReasonSuccess,
 			Message: fmt.Sprintf("spec.allowAuthentication.organizations.policy (%q) is valid", policy),
 		}
 	}
@@ -228,7 +285,7 @@ func validateOrganizationsPolicy(organizationsSpec *idpv1alpha1.GitHubOrganizati
 		return &metav1.Condition{
 			Type:    OrganizationsPolicyValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  "Invalid",
+			Reason:  reasonInvalid,
 			Message: "spec.allowAuthentication.organizations.policy must be 'OnlyUsersFromAllowedOrganizations' when spec.allowAuthentication.organizations.allowed has organizations listed",
 		}
 	}
@@ -236,7 +293,7 @@ func validateOrganizationsPolicy(organizationsSpec *idpv1alpha1.GitHubOrganizati
 	return &metav1.Condition{
 		Type:    OrganizationsPolicyValid,
 		Status:  metav1.ConditionFalse,
-		Reason:  "Invalid",
+		Reason:  reasonInvalid,
 		Message: "spec.allowAuthentication.organizations.policy must be 'AllGitHubUsers' when spec.allowAuthentication.organizations.allowed is empty",
 	}
 }
@@ -266,13 +323,19 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	hostCondition, hostPort := validateHost(upstream.Spec.GitHubAPI)
 	conditions = append(conditions, hostCondition)
 
-	tlsConfigCondition, certPool := c.validateTLSConfiguration(upstream.Spec.GitHubAPI.TLS)
+	tlsConfigCondition, caBundle := tlsconfigutil.ValidateTLSConfig(
+		tlsconfigutil.TLSSpecForSupervisor(upstream.Spec.GitHubAPI.TLS),
+		"spec.githubAPI.tls",
+		c.namespace,
+		c.secretInformer,
+		c.configMapInformer)
 	conditions = append(conditions, tlsConfigCondition)
 
 	githubConnectionCondition, hostURL, httpClient, githubConnectionErr := c.validateGitHubConnection(
 		hostPort,
-		certPool,
-		hostCondition.Status == metav1.ConditionTrue && tlsConfigCondition.Status == metav1.ConditionTrue,
+		caBundle,
+		hostCondition.Status == metav1.ConditionTrue,
+		tlsConfigCondition.Status == metav1.ConditionTrue,
 	)
 	if githubConnectionErr != nil {
 		applicationErrors = append(applicationErrors, githubConnectionErr)
@@ -334,7 +397,7 @@ func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Conditio
 		return &metav1.Condition{
 			Type:    HostValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  "InvalidHost",
+			Reason:  reasonInvalidHost,
 			Message: fmt.Sprintf("spec.githubAPI.host (%q) is not valid: %s", host, reason),
 		}
 	}
@@ -354,62 +417,49 @@ func validateHost(gitHubAPIConfig idpv1alpha1.GitHubAPIConfig) (*metav1.Conditio
 	return &metav1.Condition{
 		Type:    HostValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: fmt.Sprintf("spec.githubAPI.host (%q) is valid", host),
 	}, &hostPort
 }
 
-func (c *gitHubWatcherController) validateTLSConfiguration(tlsSpec *idpv1alpha1.TLSSpec) (*metav1.Condition, *x509.CertPool) {
-	certPool, _, buildCertPoolErr := pinnipedcontroller.BuildCertPoolIDP(tlsSpec)
-	if buildCertPoolErr != nil {
-		// buildCertPoolErr is not recoverable with a resync.
-		// It requires user interaction, so do not return the error.
-		return &metav1.Condition{
-			Type:    TLSConfigurationValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  "InvalidTLSConfig",
-			Message: fmt.Sprintf("spec.githubAPI.tls.certificateAuthorityData is not valid: %s", buildCertPoolErr),
-		}, nil
-	}
-
-	return &metav1.Condition{
-		Type:    TLSConfigurationValid,
-		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
-		Message: "spec.githubAPI.tls.certificateAuthorityData is valid",
-	}, certPool
-}
-
 func (c *gitHubWatcherController) validateGitHubConnection(
 	hostPort *endpointaddr.HostPort,
-	certPool *x509.CertPool,
-	validSoFar bool,
+	caBundle *tlsconfigutil.CABundle,
+	hostConditionOk, tlsConfigConditionOk bool,
 ) (*metav1.Condition, string, *http.Client, error) {
-	if !validSoFar {
+	if !hostConditionOk || !tlsConfigConditionOk {
 		return &metav1.Condition{
 			Type:    GitHubConnectionValid,
 			Status:  metav1.ConditionUnknown,
-			Reason:  "UnableToValidate",
+			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: "unable to validate; see other conditions for details",
 		}, "", nil, nil
 	}
 
-	conn, tlsDialErr := c.dialFunc("tcp", hostPort.Endpoint(), ptls.Default(certPool))
-	if tlsDialErr != nil {
-		return &metav1.Condition{
-			Type:    GitHubConnectionValid,
-			Status:  metav1.ConditionFalse,
-			Reason:  "UnableToDialServer",
-			Message: fmt.Sprintf("cannot dial server spec.githubAPI.host (%q): %s", hostPort.Endpoint(), buildDialErrorMessage(tlsDialErr)),
-		}, "", nil, tlsDialErr
+	address := hostPort.Endpoint()
+
+	if !c.validatedCache.IsValid(address, caBundle.Hash()) {
+		conn, tlsDialErr := c.dialFunc("tcp", address, ptls.Default(caBundle.CertPool()))
+		if tlsDialErr != nil {
+			return &metav1.Condition{
+				Type:    GitHubConnectionValid,
+				Status:  metav1.ConditionFalse,
+				Reason:  conditionsutil.ReasonUnableToDialServer,
+				Message: fmt.Sprintf("cannot dial server spec.githubAPI.host (%q): %s", address, buildDialErrorMessage(tlsDialErr)),
+			}, "", nil, tlsDialErr
+		}
+		// Any error should be ignored. We have performed a successful Dial, so no need to requeue this Sync.
+		_ = conn.Close()
 	}
+
+	c.validatedCache.MarkAsValidated(address, caBundle.Hash())
 
 	return &metav1.Condition{
 		Type:    GitHubConnectionValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
-		Message: fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", hostPort.Endpoint()),
-	}, fmt.Sprintf("https://%s", hostPort.Endpoint()), phttp.Default(certPool), conn.Close()
+		Reason:  conditionsutil.ReasonSuccess,
+		Message: fmt.Sprintf("spec.githubAPI.host (%q) is reachable and TLS verification succeeds", address),
+	}, fmt.Sprintf("https://%s", address), phttp.Default(caBundle.CertPool()), nil
 }
 
 // buildDialErrorMessage standardizes DNS error messages that appear differently on different platforms, so that tests and log grepping is uniform.
@@ -432,7 +482,7 @@ func validateUserAndGroupAttributes(upstream *idpv1alpha1.GitHubIdentityProvider
 		return &metav1.Condition{
 			Type:    ClaimsValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  "Invalid",
+			Reason:  reasonInvalid,
 			Message: message,
 		}
 	}
@@ -471,7 +521,7 @@ func validateUserAndGroupAttributes(upstream *idpv1alpha1.GitHubIdentityProvider
 	return &metav1.Condition{
 		Type:    ClaimsValid,
 		Status:  metav1.ConditionTrue,
-		Reason:  upstreamwatchers.ReasonSuccess,
+		Reason:  conditionsutil.ReasonSuccess,
 		Message: "spec.claims are valid",
 	}, groupNameAttribute, usernameAttribute
 }

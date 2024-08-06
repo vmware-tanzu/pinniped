@@ -235,9 +235,13 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 		// authenticators up to date.
 		WithController(
 			webhookcachefiller.New(
+				c.ServerInstallationInfo.Namespace,
 				c.AuthenticatorCache,
 				client.PinnipedConcierge,
 				informers.pinniped.Authentication().V1alpha1().WebhookAuthenticators(),
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
+				informers.installationNamespaceK8s.Core().V1().ConfigMaps(),
+				controllerlib.WithInformer,
 				clock.RealClock{},
 				plog.New(),
 			),
@@ -245,9 +249,13 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 		).
 		WithController(
 			jwtcachefiller.New(
+				c.ServerInstallationInfo.Namespace,
 				c.AuthenticatorCache,
 				client.PinnipedConcierge,
 				informers.pinniped.Authentication().V1alpha1().JWTAuthenticators(),
+				informers.installationNamespaceK8s.Core().V1().Secrets(),
+				informers.installationNamespaceK8s.Core().V1().ConfigMaps(),
+				controllerlib.WithInformer,
 				clock.RealClock{},
 				plog.New(),
 			),

@@ -453,6 +453,27 @@ func RandHex(t *testing.T, numBytes int) string {
 	return hex.EncodeToString(RandBytes(t, numBytes))
 }
 
+func CreateTestConfigMap(t *testing.T, namespace string, baseName string, stringData map[string]string) *corev1.ConfigMap {
+	t.Helper()
+	client := NewKubernetesClientset(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	created, err := client.CoreV1().ConfigMaps(namespace).Create(ctx, &corev1.ConfigMap{
+		ObjectMeta: TestObjectMeta(t, baseName),
+		Data:       stringData,
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		t.Logf("cleaning up test Configmap %s/%s", created.Namespace, created.Name)
+		err := client.CoreV1().ConfigMaps(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+	})
+	t.Logf("created test ConfigMap %s/%s", created.Namespace, created.Name)
+	return created
+}
+
 func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {
 	t.Helper()
 	client := NewKubernetesClientset(t)
@@ -471,7 +492,7 @@ func CreateTestSecret(t *testing.T, namespace string, baseName string, secretTyp
 		err := client.CoreV1().Secrets(namespace).Delete(context.Background(), created.Name, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
-	t.Logf("created test Secret %s", created.Name)
+	t.Logf("created test Secret %s/%s", created.Namespace, created.Name)
 	return created
 }
 

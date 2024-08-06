@@ -221,6 +221,9 @@ spec:
       # This field is usually only used for GitHub Enterprise Server.
       # Specify the CA certificate of the server as a
       # base64-encoded PEM bundle.
+      # Alternatively, the CA bundle can be specified in a Secret or
+      # ConfigMap that will be dynamically watched by Pinniped for
+      # changes to the CA bundle (see API docs for details).
       certificateAuthorityData: LS0tLS1CRUdJTiBDRVJUSUZJQ0FU....
 
   client:

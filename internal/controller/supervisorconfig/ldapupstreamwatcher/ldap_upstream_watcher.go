@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -143,6 +144,7 @@ type ldapWatcherController struct {
 	client                       supervisorclientset.Interface
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer
 	secretInformer               corev1informers.SecretInformer
+	configMapInformer            corev1informers.ConfigMapInformer
 }
 
 // New instantiates a new controllerlib.Controller which will populate the provided UpstreamLDAPIdentityProviderICache.
@@ -151,6 +153,7 @@ func New(
 	client supervisorclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	return newInternal(
@@ -162,6 +165,7 @@ func New(
 		client,
 		ldapIdentityProviderInformer,
 		secretInformer,
+		configMapInformer,
 		withInformer,
 	)
 }
@@ -174,6 +178,7 @@ func newInternal(
 	client supervisorclientset.Interface,
 	ldapIdentityProviderInformer idpinformers.LDAPIdentityProviderInformer,
 	secretInformer corev1informers.SecretInformer,
+	configMapInformer corev1informers.ConfigMapInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 ) controllerlib.Controller {
 	c := ldapWatcherController{
@@ -183,6 +188,7 @@ func newInternal(
 		client:                       client,
 		ldapIdentityProviderInformer: ldapIdentityProviderInformer,
 		secretInformer:               secretInformer,
+		configMapInformer:            configMapInformer,
 	}
 	return controllerlib.New(
 		controllerlib.Config{Name: ldapControllerName, Syncer: &c},
@@ -193,7 +199,17 @@ func newInternal(
 		),
 		withInformer(
 			secretInformer,
-			pinnipedcontroller.MatchAnySecretOfTypeFilter(upstreamwatchers.LDAPBindAccountSecretType, pinnipedcontroller.SingletonQueue()),
+			pinnipedcontroller.MatchAnySecretOfTypesFilter(
+				[]corev1.SecretType{
+					upstreamwatchers.LDAPBindAccountSecretType,
+					corev1.SecretTypeOpaque,
+					corev1.SecretTypeTLS,
+				}, pinnipedcontroller.SingletonQueue()),
+			controllerlib.InformerOption{},
+		),
+		withInformer(
+			configMapInformer,
+			pinnipedcontroller.MatchAnythingFilter(pinnipedcontroller.SingletonQueue()),
 			controllerlib.InformerOption{},
 		),
 	)
@@ -249,7 +265,7 @@ func (c *ldapWatcherController) validateUpstream(ctx context.Context, upstream *
 		Dialer: c.ldapDialer,
 	}
 
-	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &ldapUpstreamGenericLDAPImpl{*upstream}, c.secretInformer, c.validatedSettingsCache, config)
+	conditions := upstreamwatchers.ValidateGenericLDAP(ctx, &ldapUpstreamGenericLDAPImpl{*upstream}, c.secretInformer, c.configMapInformer, c.validatedSettingsCache, config)
 
 	c.updateStatus(ctx, upstream, conditions.Conditions())
 

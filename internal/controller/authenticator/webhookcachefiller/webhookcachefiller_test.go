@@ -16,15 +16,20 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	authenticationv1beta1 "k8s.io/api/authentication/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/authentication/authenticator"
+	k8sinformers "k8s.io/client-go/informers"
+	kubeinformers "k8s.io/client-go/informers"
+	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
@@ -34,11 +39,12 @@ import (
 	conciergeinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/controller/authenticator/authncache"
+	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crypto/ptls"
+	"go.pinniped.dev/internal/mocks/mockcachevalue"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
-	"go.pinniped.dev/internal/testutil/conciergetestutil"
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
@@ -118,12 +124,14 @@ func TestController(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = fmt.Fprint(w, "404 nothing here")
 	}))
-	hostGoodDefaultServingCertServer, _ := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	hostGoodDefaultServingCertServer, hostGoodDefaultServingCertServerCAPEM := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	}), func(s *httptest.Server) {
 		tlsserver.AssertEveryTLSHello(t, s, ptls.Default) // assert on every hello because we are only expecting dials
 	})
-
+	hostGoodDefaultServingCertServerTLSSpec := &authenticationv1alpha1.TLSSpec{
+		CertificateAuthorityData: base64.StdEncoding.EncodeToString(hostGoodDefaultServingCertServerCAPEM),
+	}
 	goodWebhookDefaultServingCertEndpoint := hostGoodDefaultServingCertServer.URL
 	goodWebhookDefaultServingCertEndpointBut404 := goodWebhookDefaultServingCertEndpoint + "/nothing/here"
 
@@ -142,7 +150,46 @@ func TestController(t *testing.T) {
 
 	goodWebhookAuthenticatorSpecWithCA := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodWebhookDefaultServingCertEndpoint,
-		TLS:      conciergetestutil.TLSSpecFromTLSConfig(hostGoodDefaultServingCertServer.TLS),
+		TLS:      hostGoodDefaultServingCertServerTLSSpec,
+	}
+	goodWebhookAuthenticatorSpecWithCAFromSecret := authenticationv1alpha1.WebhookAuthenticatorSpec{
+		Endpoint: goodWebhookDefaultServingCertEndpoint,
+		TLS: &authenticationv1alpha1.TLSSpec{
+			CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
+				Kind: "Secret",
+				Name: "secret-with-ca",
+				Key:  "ca.crt",
+			},
+		},
+	}
+	someSecretWithCA := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "secret-with-ca",
+			Namespace: "concierge",
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"ca.crt": hostGoodDefaultServingCertServerCAPEM,
+		},
+	}
+	goodWebhookAuthenticatorSpecWithCAFromConfigMap := authenticationv1alpha1.WebhookAuthenticatorSpec{
+		Endpoint: goodWebhookDefaultServingCertEndpoint,
+		TLS: &authenticationv1alpha1.TLSSpec{
+			CertificateAuthorityDataSource: &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
+				Kind: "ConfigMap",
+				Name: "configmap-with-ca",
+				Key:  "ca.crt",
+			},
+		},
+	}
+	someConfigMapWithCA := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "configmap-with-ca",
+			Namespace: "concierge",
+		},
+		Data: map[string]string{
+			"ca.crt": string(hostGoodDefaultServingCertServerCAPEM),
+		},
 	}
 	localWithExampleDotComWeebhookAuthenticatorSpec := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		// CA for example.com, TLS serving cert for example.com, but endpoint is still localhost
@@ -158,7 +205,7 @@ func TestController(t *testing.T) {
 	}
 	goodWebhookAuthenticatorSpecWith404Endpoint := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodWebhookDefaultServingCertEndpointBut404,
-		TLS:      conciergetestutil.TLSSpecFromTLSConfig(hostGoodDefaultServingCertServer.TLS),
+		TLS:      hostGoodDefaultServingCertServerTLSSpec,
 	}
 	badWebhookAuthenticatorSpecInvalidTLS := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodWebhookDefaultServingCertEndpoint,
@@ -221,7 +268,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "successfully parsed specified CA bundle",
+			Message:            "spec.tls is valid: using configured CA bundle",
 		}
 	}
 	happyTLSConfigurationValidNoCA := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -231,7 +278,7 @@ func TestController(t *testing.T) {
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
 			Reason:             "Success",
-			Message:            "no CA bundle specified",
+			Message:            "spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image",
 		}
 	}
 	sadTLSConfigurationValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
@@ -240,8 +287,8 @@ func TestController(t *testing.T) {
 			Status:             "False",
 			ObservedGeneration: observedGeneration,
 			LastTransitionTime: time,
-			Reason:             "InvalidTLSConfiguration",
-			Message:            "invalid TLS configuration: illegal base64 data at input byte 7",
+			Reason:             "InvalidTLSConfig",
+			Message:            "spec.tls.certificateAuthorityData is invalid: illegal base64 data at input byte 7",
 		}
 	}
 
@@ -360,27 +407,22 @@ func TestController(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		cache    func(*testing.T, *authncache.Cache)
-		syncKey  controllerlib.Key
-		webhooks []runtime.Object
+		name                  string
+		cache                 func(*testing.T, *authncache.Cache)
+		webhookAuthenticators []runtime.Object
+		secretsAndConfigMaps  []runtime.Object
 		// for modifying the clients to hack in arbitrary api responses
-		configClient     func(*conciergefake.Clientset)
-		wantSyncLoopErr  testutil.RequireErrorStringFunc
-		wantLogs         []map[string]any
-		wantActions      func() []coretesting.Action
-		wantCacheEntries int
+		configClient func(*conciergefake.Clientset)
+		wantSyncErr  testutil.RequireErrorStringFunc
+		wantLogLines []string
+		wantActions  func() []coretesting.Action
+		// random comment so lines above don't have huge indents
+		wantNamesOfWebhookAuthenticatorsInCache []string
 	}{
 		{
-			name:    "Sync: WebhookAuthenticator not found will abort sync loop, no status conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "Sync() found that the WebhookAuthenticator does not exist yet or was deleted",
-				},
+			name: "Sync: No WebhookAuthenticators found results in no errors and no status conditions",
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).Sync","message":"No WebhookAuthenticators found"}`,
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -388,12 +430,11 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
 				}
 			},
-			wantCacheEntries: 0,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
-			name:    "Sync: valid and unchanged WebhookAuthenticator: loop will preserve existing status conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "Sync: valid and unchanged WebhookAuthenticator: loop will preserve existing status conditions",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -405,17 +446,9 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"choosing to not update the webhookauthenticator status since there is no update to make","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -423,25 +456,14 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name: "Sync: valid and unchanged WebhookAuthenticator which was already cached: skips any updates to status or cache",
-			cache: func(t *testing.T, cache *authncache.Cache) {
-				cache.Store(
-					authncache.Key{
-						Name:     "test-name",
-						Kind:     "WebhookAuthenticator",
-						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
-					},
-					&cachedWebhookAuthenticator{spec: &goodWebhookAuthenticatorSpecWithCA},
-				)
-			},
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "Sync: multiple valid and multiple invalid WebhookAuthenticators",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
+						Name: "existing-webhook-authenticator",
 					},
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
@@ -449,74 +471,39 @@ func TestController(t *testing.T) {
 						Phase:      "Ready",
 					},
 				},
-			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "actual webhook authenticator and desired webhook authenticator are the same",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
-			},
-			wantActions: func() []coretesting.Action {
-				return []coretesting.Action{
-					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
-				}
-			},
-			wantCacheEntries: 1,
-		},
-		{
-			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions.",
-			cache: func(t *testing.T, cache *authncache.Cache) {
-				cache.Store(
-					authncache.Key{
-						Name:     "test-name",
-						Kind:     "WebhookAuthenticator",
-						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
-					},
-					// Only entries of type cachedWebhookAuthenticator are ever put into the cache, so this should never really happen.
-					// This test is to provide coverage on the production code which reads from the cache and casts those entries to
-					// the appropriate data type.
-					struct{ authenticator.Token }{},
-				)
-			},
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
+						Name: "new-webhook-authenticator",
 					},
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 				},
-			},
-			wantLogs: []map[string]any{
-				{
-					"level":      "info",
-					"timestamp":  "2099-08-08T13:57:36.123456Z",
-					"logger":     "webhookcachefiller-controller",
-					"message":    "wrong webhook authenticator type in cache",
-					"actualType": "struct { authenticator.Token }",
-				},
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]any{
-						"name": "test-name",
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "invalid-webhook-authenticator",
 					},
+					Spec: badWebhookAuthenticatorSpecInvalidTLS,
 				},
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-invalid-webhook-authenticator",
+					},
+					Spec: badWebhookAuthenticatorSpecInvalidTLS,
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"another-invalid-webhook-authenticator","endpoint":"%s","removedFromCache":false}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"another-invalid-webhook-authenticator","endpoint":"%s","phase":"Error"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"choosing to not update the webhookauthenticator status since there is no update to make","webhookAuthenticator":"existing-webhook-authenticator","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"existing-webhook-authenticator","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"invalid-webhook-authenticator","endpoint":"%s","removedFromCache":false}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"invalid-webhook-authenticator","endpoint":"%s","phase":"Error"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"new-webhook-authenticator","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"new-webhook-authenticator","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+				updateValidStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
+						Name: "new-webhook-authenticator",
 					},
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
@@ -524,215 +511,87 @@ func TestController(t *testing.T) {
 						Phase:      "Ready",
 					},
 				})
-				updateStatusAction.Subresource = "status"
-				return []coretesting.Action{
-					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
-					updateStatusAction,
-				}
-			},
-			wantCacheEntries: 1,
-		},
-		{
-			name: "Sync: changed WebhookAuthenticator: loop will update timestamps only on relevant statuses",
-			cache: func(t *testing.T, cache *authncache.Cache) {
-				cache.Store(
-					authncache.Key{
-						Name:     "test-name",
-						Kind:     "WebhookAuthenticator",
-						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
-					},
-					&cachedWebhookAuthenticator{spec: &goodWebhookAuthenticatorSpecWith404Endpoint},
-				)
-			},
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
-				&authenticationv1alpha1.WebhookAuthenticator{
+				updateValidStatusAction.Subresource = "status"
+				updateInvalidStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:       "test-name",
-						Generation: 1234,
+						Name: "invalid-webhook-authenticator",
 					},
-					Spec: goodWebhookAuthenticatorSpecWithCA,
-					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
-						Conditions: conditionstestutil.Replace(
-							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 1233),
-							[]metav1.Condition{
-								sadReadyCondition(frozenTimeInThePast, 1232),
-								happyEndpointURLValid(frozenTimeInThePast, 1231),
-							},
-						),
-						Phase: "Ready",
-					},
-				},
-			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
-			},
-			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "test-name",
-						Generation: 1234,
-					},
-					Spec: goodWebhookAuthenticatorSpecWithCA,
-					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
-						Conditions: conditionstestutil.Replace(
-							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 1234),
-							[]metav1.Condition{
-								happyEndpointURLValid(frozenTimeInThePast, 1234),
-							},
-						),
-						Phase: "Ready",
-					},
-				})
-				updateStatusAction.Subresource = "status"
-				return []coretesting.Action{
-					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
-					updateStatusAction,
-				}
-			},
-			wantCacheEntries: 1,
-		},
-		{
-			name:    "Sync: valid WebhookAuthenticator with CA: will complete sync loop successfully with success conditions and ready phase",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
-				&authenticationv1alpha1.WebhookAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
-					},
-					Spec: goodWebhookAuthenticatorSpecWithCA,
-				},
-			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
-			},
-			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
-					},
-					Spec: goodWebhookAuthenticatorSpecWithCA,
-					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
-						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
-						Phase:      "Ready",
-					},
-				})
-				updateStatusAction.Subresource = "status"
-				return []coretesting.Action{
-					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
-					updateStatusAction,
-				}
-			},
-			wantCacheEntries: 1,
-		},
-		{
-			name:    "Sync: valid WebhookAuthenticator with IPV6 and CA: will complete sync loop successfully with success conditions and ready phase",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
-				&authenticationv1alpha1.WebhookAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
-					},
-					Spec: func() authenticationv1alpha1.WebhookAuthenticatorSpec {
-						ipv6 := goodWebhookAuthenticatorSpecWithCA.DeepCopy()
-						ipv6.Endpoint = hostLocalIPv6Server.URL
-						ipv6.TLS = ptr.To(authenticationv1alpha1.TLSSpec{
-							CertificateAuthorityData: base64.StdEncoding.EncodeToString(ipv6CA),
-						})
-						return *ipv6
-					}(),
-				},
-			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  hostLocalIPv6Server.URL,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
-			},
-			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
-					},
-					Spec: func() authenticationv1alpha1.WebhookAuthenticatorSpec {
-						ipv6 := goodWebhookAuthenticatorSpecWithCA.DeepCopy()
-						ipv6.Endpoint = hostLocalIPv6Server.URL
-						ipv6.TLS = ptr.To(authenticationv1alpha1.TLSSpec{
-							CertificateAuthorityData: base64.StdEncoding.EncodeToString(ipv6CA),
-						})
-						return *ipv6
-					}(),
-					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
-						Conditions: allHappyConditionsSuccess(hostLocalIPv6Server.URL, frozenMetav1Now, 0),
-						Phase:      "Ready",
-					},
-				})
-				updateStatusAction.Subresource = "status"
-				return []coretesting.Action{
-					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
-					updateStatusAction,
-				}
-			},
-			wantCacheEntries: 1,
-		},
-		{
-			name:    "Sync: valid WebhookAuthenticator without CA: loop will fail to cache the authenticator, will write failed and unknown status conditions, and will enqueue resync",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
-				&authenticationv1alpha1.WebhookAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
-					},
-					Spec: goodWebhookAuthenticatorSpecWithoutCA,
-				},
-			},
-			wantActions: func() []coretesting.Action {
-				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-name",
-					},
-					Spec: goodWebhookAuthenticatorSpecWithoutCA,
+					Spec: badWebhookAuthenticatorSpecInvalidTLS,
 					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
 						Conditions: conditionstestutil.Replace(
 							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
 							[]metav1.Condition{
-								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
-								sadWebhookConnectionValid(frozenMetav1Now, 0),
-								sadReadyCondition(frozenMetav1Now, 0),
+								sadTLSConfigurationValid(frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
 								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
 							},
 						),
 						Phase: "Error",
 					},
 				})
+				updateInvalidStatusAction.Subresource = "status"
+				updateValidStatusAction.Subresource = "status"
+				updateAnotherInvalidStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "another-invalid-webhook-authenticator",
+					},
+					Spec: badWebhookAuthenticatorSpecInvalidTLS,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadTLSConfigurationValid(frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateAnotherInvalidStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateAnotherInvalidStatusAction,
+					updateInvalidStatusAction,
+					updateValidStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{
+				"existing-webhook-authenticator",
+				"new-webhook-authenticator",
+			},
+		},
+		{
+			name: "Sync: valid WebhookAuthenticator with CA from Secret: loop will complete successfully and update status conditions",
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCAFromSecret,
+				},
+			},
+			secretsAndConfigMaps: []runtime.Object{
+				someSecretWithCA,
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCAFromSecret,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
@@ -740,19 +599,119 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority`),
-			wantCacheEntries: 0,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "validateTLS: WebhookAuthenticator with invalid CA will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "Sync: valid WebhookAuthenticator with CA from ConfigMap: loop will complete successfully and update status conditions",
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCAFromConfigMap,
+				},
+			},
+			secretsAndConfigMaps: []runtime.Object{
+				someConfigMapWithCA,
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCAFromConfigMap,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
+		},
+		{
+			name: "Sync: valid WebhookAuthenticator with external and changed CA bundle: loop will complete successfully and update status conditions",
+			cache: func(t *testing.T, cache *authncache.Cache) {
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "WebhookAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, goodWebhookAuthenticatorSpecWithCAFromConfigMap, "some-stale-ca-bundle-pem-content-from-secret"),
+				)
+			},
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCAFromConfigMap,
+				},
+			},
+			secretsAndConfigMaps: []runtime.Object{
+				someConfigMapWithCA,
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":true}`, goodWebhookDefaultServingCertEndpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCAFromConfigMap,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
+		},
+		{
+			name: "previously valid cached authenticator (which did not specify a CA bundle) changes and becomes invalid due to any problem with the CA bundle: loop will fail sync, will write failed and unknown status conditions, and will remove authenticator from cache",
+			cache: func(t *testing.T, cache *authncache.Cache) {
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "WebhookAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					// Force an invalid spec into the cache, which is not very realistic, but it simulates a case
+					// where the CA bundle goes from being cached as empty to being an error during validation,
+					// without causing any changes in the spec. This test wants to prove that the rest of the
+					// validations get run and the resource is update, just in case that can happen somehow.
+					newCacheValue(t, badWebhookAuthenticatorSpecInvalidTLS, ""),
+				)
+			},
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: badWebhookAuthenticatorSpecInvalidTLS,
 				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":true}`, badWebhookAuthenticatorSpecInvalidTLS.Endpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Error"}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -780,22 +739,460 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 0,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
-			name: "previously valid cached authenticator's spec changes and becomes invalid (e.g. spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, and will remove authenticator from cache",
+			name: "Sync: valid and unchanged WebhookAuthenticator which was already cached: skips any updates to status or cache",
 			cache: func(t *testing.T, cache *authncache.Cache) {
+				oldCA, err := base64.StdEncoding.DecodeString(goodWebhookAuthenticatorSpecWithCA.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
 				cache.Store(
 					authncache.Key{
 						Name:     "test-name",
 						Kind:     "WebhookAuthenticator",
 						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
 					},
-					&cachedWebhookAuthenticator{spec: &goodWebhookAuthenticatorSpecWithCA},
+					newCacheValue(t, goodWebhookAuthenticatorSpecWithCA, string(oldCA)),
 				)
 			},
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations","webhookAuthenticator":"test-name","endpoint":"%s"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"choosing to not update the webhookauthenticator status since there is no update to make","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
+		},
+		{
+			name: "Sync: authenticator update when cached authenticator is the wrong data type, which should never really happen: loop will complete successfully and update status conditions",
+			cache: func(t *testing.T, cache *authncache.Cache) {
+				ctrl := gomock.NewController(t)
+				t.Cleanup(func() {
+					ctrl.Finish()
+				})
+				mockCacheValue := mockcachevalue.NewMockValue(ctrl)
+				mockCacheValue.EXPECT().Close().Times(1)
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "WebhookAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					// Only entries of type cachedWebhookAuthenticator are ever put into the cache, so this should never really happen.
+					// This test is to provide coverage on the production code which reads from the cache and casts those entries to
+					// the appropriate data type.
+					mockCacheValue,
+				)
+			},
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).cacheValueAsWebhookAuthenticator","message":"wrong webhook authenticator type in cache","webhookAuthenticator":"test-name","endpoint":"%s","actualType":"*mockcachevalue.MockValue"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
+		},
+		{
+			name: "Sync: changed WebhookAuthenticator: loop will update timestamps only on relevant statuses",
+			cache: func(t *testing.T, cache *authncache.Cache) {
+				oldCA, err := base64.StdEncoding.DecodeString(goodWebhookAuthenticatorSpecWith404Endpoint.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "WebhookAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, goodWebhookAuthenticatorSpecWith404Endpoint, string(oldCA)),
+				)
+			},
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test-name",
+						Generation: 1234,
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 1233),
+							[]metav1.Condition{
+								sadReadyCondition(frozenTimeInThePast, 1232),
+								happyEndpointURLValid(frozenTimeInThePast, 1231),
+							},
+						),
+						Phase: "Ready",
+					},
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":true}`, goodWebhookDefaultServingCertEndpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test-name",
+						Generation: 1234,
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 1234),
+							[]metav1.Condition{
+								happyEndpointURLValid(frozenTimeInThePast, 1234),
+							},
+						),
+						Phase: "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
+		},
+		{
+			name: "Sync: previously cached authenticator gets new valid spec fields, but status update fails: loop will leave it in the cache",
+			cache: func(t *testing.T, cache *authncache.Cache) {
+				oldCA, err := base64.StdEncoding.DecodeString(goodWebhookAuthenticatorSpecWith404Endpoint.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "WebhookAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, goodWebhookAuthenticatorSpecWith404Endpoint, string(oldCA)),
+				)
+			},
+			configClient: func(client *conciergefake.Clientset) {
+				client.PrependReactor(
+					"update",
+					"webhookauthenticators",
+					func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, errors.New("some update error")
+					},
+				)
+			},
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test-name",
+						Generation: 1234,
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+				},
+			},
+			wantLogLines: nil, // wants no logs
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test-name",
+						Generation: 1234,
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 1234),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantSyncErr:                             testutil.WantExactErrorString("error for WebhookAuthenticator test-name: some update error"),
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"}, // keeps the old entry in the cache
+		},
+		{
+			name: "Sync: previously cached valid authenticator with unchanged endpoint URL and CA bundle hash has invalid status conditions in informer cache, as can happen on subsequent sync soon after multiple quick status updates (when the informer cache finally catches up): should update status in current sync",
+			cache: func(t *testing.T, cache *authncache.Cache) {
+				oldCA, err := base64.StdEncoding.DecodeString(goodWebhookAuthenticatorSpecWithCA.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "WebhookAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, goodWebhookAuthenticatorSpecWithCA, string(oldCA)),
+				)
+			},
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test-name",
+						Generation: 1234,
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadTLSConfigurationValid(frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations","webhookAuthenticator":"test-name","endpoint":"%s"}`, goodWebhookAuthenticatorSpecWithCA.Endpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookAuthenticatorSpecWithCA.Endpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test-name",
+						Generation: 1234,
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{ // updates the status to ready
+						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 1234),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"}, // keeps the old entry in the cache
+		},
+		{
+			name: "Sync: valid WebhookAuthenticator with CA: will complete sync loop successfully with success conditions and ready phase",
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
+		},
+		{
+			name: "Sync: valid WebhookAuthenticator with IPV6 and CA: will complete sync loop successfully with success conditions and ready phase",
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: func() authenticationv1alpha1.WebhookAuthenticatorSpec {
+						ipv6 := goodWebhookAuthenticatorSpecWithCA.DeepCopy()
+						ipv6.Endpoint = hostLocalIPv6Server.URL
+						ipv6.TLS = ptr.To(authenticationv1alpha1.TLSSpec{
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(ipv6CA),
+						})
+						return *ipv6
+					}(),
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, hostLocalIPv6Server.URL),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, hostLocalIPv6Server.URL),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: func() authenticationv1alpha1.WebhookAuthenticatorSpec {
+						ipv6 := goodWebhookAuthenticatorSpecWithCA.DeepCopy()
+						ipv6.Endpoint = hostLocalIPv6Server.URL
+						ipv6.TLS = ptr.To(authenticationv1alpha1.TLSSpec{
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(ipv6CA),
+						})
+						return *ipv6
+					}(),
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: allHappyConditionsSuccess(hostLocalIPv6Server.URL, frozenMetav1Now, 0),
+						Phase:      "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
+		},
+		{
+			name: "Sync: valid WebhookAuthenticator without CA: loop will fail to cache the authenticator, will write failed and unknown status conditions, and will enqueue resync",
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithoutCA,
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":false}`, goodWebhookAuthenticatorSpecWithoutCA.Endpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Error"}`, goodWebhookAuthenticatorSpecWithoutCA.Endpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithoutCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
+								sadWebhookConnectionValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority`),
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
+		},
+		{
+			name: "validateTLS: WebhookAuthenticator with invalid CA will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: badWebhookAuthenticatorSpecInvalidTLS,
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":false}`, badWebhookAuthenticatorSpecInvalidTLS.Endpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Error"}`, badWebhookAuthenticatorSpecInvalidTLS.Endpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: badWebhookAuthenticatorSpecInvalidTLS,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadTLSConfigurationValid(frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
+		},
+		{
+			name: "previously valid cached authenticator's spec changes and becomes invalid (e.g. spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, and will remove authenticator from cache",
+			cache: func(t *testing.T, cache *authncache.Cache) {
+				oldCA, err := base64.StdEncoding.DecodeString(goodWebhookAuthenticatorSpecWithCA.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "WebhookAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, goodWebhookAuthenticatorSpecWithCA, string(oldCA)),
+				)
+			},
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -804,6 +1201,10 @@ func TestController(t *testing.T) {
 						Endpoint: badEndpointInvalidURL,
 					},
 				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":true}`, badEndpointInvalidURL),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Error"}`, badEndpointInvalidURL),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -834,12 +1235,32 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 0, // removed from cache
+			wantNamesOfWebhookAuthenticatorsInCache: []string{}, // removed from cache
 		},
 		{
-			name:    "validateEndpoint: parsing error (spec.endpoint URL is invalid) will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "previously valid cached authenticator's spec changes and becomes invalid (e.g. spec.issuer URL is invalid): loop will fail sync, will write failed and unknown status conditions, and will remove authenticator from cache even though the status update failed",
+			cache: func(t *testing.T, cache *authncache.Cache) {
+				oldCA, err := base64.StdEncoding.DecodeString(goodWebhookAuthenticatorSpecWithCA.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "WebhookAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, goodWebhookAuthenticatorSpecWithCA, string(oldCA)),
+				)
+			},
+			configClient: func(client *conciergefake.Clientset) {
+				client.PrependReactor(
+					"update",
+					"webhookauthenticators",
+					func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, errors.New("some update error")
+					},
+				)
+			},
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -848,6 +1269,9 @@ func TestController(t *testing.T) {
 						Endpoint: badEndpointInvalidURL,
 					},
 				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":true}`, badEndpointInvalidURL),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -878,12 +1302,59 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 0,
+			wantSyncErr:                             testutil.WantExactErrorString("error for WebhookAuthenticator test-name: some update error"),
+			wantNamesOfWebhookAuthenticatorsInCache: []string{}, // removed from cache
 		},
 		{
-			name:    "validateEndpoint: parsing error (spec.endpoint URL has invalid scheme, requires https) will fail sync loop, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateEndpoint: parsing error (spec.endpoint URL is invalid) will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
+						Endpoint: badEndpointInvalidURL,
+					},
+				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":false}`, badEndpointInvalidURL),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Error"}`, badEndpointInvalidURL),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: authenticationv1alpha1.WebhookAuthenticatorSpec{
+						Endpoint: badEndpointInvalidURL,
+					},
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyTLSConfigurationValidNoCA(frozenMetav1Now, 0),
+								sadEndpointURLValid("https://.café   .com/café/café/café/coffee", frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
+		},
+		{
+			name: "validateEndpoint: parsing error (spec.endpoint URL has invalid scheme, requires https) will fail sync loop, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -892,6 +1363,10 @@ func TestController(t *testing.T) {
 						Endpoint: badEndpointNoHTTPS,
 					},
 				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":false}`, badEndpointNoHTTPS),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Error"}`, badEndpointNoHTTPS),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -922,12 +1397,11 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 0,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
-			name:    "validateEndpoint: should error if endpoint cannot be parsed",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateEndpoint: should error if endpoint cannot be parsed",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -939,6 +1413,10 @@ func TestController(t *testing.T) {
 						},
 					},
 				},
+			},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"https://[0:0:0:0:0:0:0:1]:69999/some/fake/path","removedFromCache":false}`,
+				`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"https://[0:0:0:0:0:0:0:1]:69999/some/fake/path","phase":"Error"}`,
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -971,12 +1449,11 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 0,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
-			name:    "validateConnection: CA does not validate serving certificate for host, the dialer will error, will fail sync loop, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateConnection: CA does not validate serving certificate for host, the dialer will error, will fail sync loop, will write failed and unknown status conditions, but will not enqueue a resync due to user config error",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -984,7 +1461,11 @@ func TestController(t *testing.T) {
 					Spec: badWebhookAuthenticatorSpecGoodEndpointButUnknownCA,
 				},
 			},
-			wantSyncLoopErr: testutil.WantExactErrorString("cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority"),
+			wantSyncErr: testutil.WantExactErrorString("error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: certificate signed by unknown authority"),
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":false}`, badWebhookAuthenticatorSpecGoodEndpointButUnknownCA.Endpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Error"}`, badWebhookAuthenticatorSpecGoodEndpointButUnknownCA.Endpoint),
+			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1010,15 +1491,14 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 0,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
-		// No unit test for system roots.  We don't test the JWTAuthenticator's use of system roots either.
+		// No unit test for system roots.  We don't test the WebhookAuthenticator's use of system roots either.
 		// We would have to find a way to mock out roots by adding a dummy cert in order to test this
 		// { name: "validateConnection: TLS bundle not provided should use system roots to validate server cert signed by a well-known CA",},
 		{
-			name:    "validateConnection: 404 endpoint on a valid server will still validate server certificate, will complete sync loop successfully with success conditions and ready phase",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateConnection: 404 endpoint on a valid server will still validate server certificate, will complete sync loop successfully with success conditions and ready phase",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -1026,17 +1506,9 @@ func TestController(t *testing.T) {
 					Spec: goodWebhookAuthenticatorSpecWith404Endpoint,
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpointBut404,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpointBut404),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpointBut404),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1056,12 +1528,11 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "validateConnection: localhost hostname instead of 127.0.0.1 should still dial correctly as dialer should handle hostnames as well as IPv4",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateConnection: localhost hostname instead of 127.0.0.1 should still dial correctly as dialer should handle hostnames as well as IPv4",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -1079,17 +1550,9 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  fmt.Sprintf("https://localhost:%s", localhostURL.Port()),
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"choosing to not update the webhookauthenticator status since there is no update to make","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, fmt.Sprintf("https://localhost:%s", localhostURL.Port())),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, fmt.Sprintf("https://localhost:%s", localhostURL.Port())),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -1097,12 +1560,11 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "validateConnection: IPv6 address with port: should call dialer func with correct arguments",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateConnection: IPv6 address with port: should call dialer func with correct arguments",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -1114,6 +1576,10 @@ func TestController(t *testing.T) {
 						},
 					},
 				},
+			},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"https://[0:0:0:0:0:0:0:1]:4242/some/fake/path","removedFromCache":false}`,
+				`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"https://[0:0:0:0:0:0:0:1]:4242/some/fake/path","phase":"Error"}`,
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1145,13 +1611,12 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: dial tcp [::1]:4242: connect: connection refused`),
-			wantCacheEntries: 0,
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: dial tcp [::1]:4242: connect: connection refused`),
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
-			name:    "validateConnection: IPv6 address without port: should call dialer func with correct arguments",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateConnection: IPv6 address without port: should call dialer func with correct arguments",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -1163,6 +1628,10 @@ func TestController(t *testing.T) {
 						},
 					},
 				},
+			},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"https://[0:0:0:0:0:0:0:1]/some/fake/path","removedFromCache":false}`,
+				`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"https://[0:0:0:0:0:0:0:1]/some/fake/path","phase":"Error"}`,
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1194,13 +1663,12 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: dial tcp [::1]:443: connect: connection refused`),
-			wantCacheEntries: 0,
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: dial tcp [::1]:443: connect: connection refused`),
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
-			name:    "validateConnection: localhost as IP address 127.0.0.1 should still dial correctly as dialer should handle hostnames as well as IPv4 and IPv6 addresses",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateConnection: localhost as IP address 127.0.0.1 should still dial correctly as dialer should handle hostnames as well as IPv4 and IPv6 addresses",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -1217,17 +1685,9 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  hostAs127001WebhookServer.URL,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"choosing to not update the webhookauthenticator status since there is no update to make","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, hostAs127001WebhookServer.URL),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, hostAs127001WebhookServer.URL),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -1235,12 +1695,11 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "validateConnection: CA for example.com, serving cert for example.com, but endpoint 127.0.0.1 will fail to validate certificate and will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateConnection: CA for example.com, serving cert for example.com, but endpoint 127.0.0.1 will fail to validate certificate and will fail sync loop and will report failed and unknown conditions and Error phase, but will not enqueue a resync due to user config error",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -1251,6 +1710,10 @@ func TestController(t *testing.T) {
 						Phase:      "Ready",
 					},
 				},
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":false}`, localWithExampleDotComWeebhookAuthenticatorSpec.Endpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Error"}`, localWithExampleDotComWeebhookAuthenticatorSpec.Endpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1277,13 +1740,12 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 0,
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: tls: failed to verify certificate: x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs`),
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: tls: failed to verify certificate: x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs`),
 		},
 		{
-			name:    "validateConnection: IPv6 address without port or brackets: should succeed since IPv6 brackets are optional without port",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "validateConnection: IPv6 address without port or brackets: should succeed since IPv6 brackets are optional without port",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -1295,6 +1757,10 @@ func TestController(t *testing.T) {
 						},
 					},
 				},
+			},
+			wantLogLines: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"https://0:0:0:0:0:0:0:1/some/fake/path","removedFromCache":false}`,
+				`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"https://0:0:0:0:0:0:0:1/some/fake/path","phase":"Error"}`,
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1326,13 +1792,12 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString(`cannot dial server: dial tcp [::1]:443: connect: connection refused`),
-			wantCacheEntries: 0,
+			wantSyncErr:                             testutil.WantExactErrorString(`error for WebhookAuthenticator test-name: cannot dial server: dial tcp [::1]:443: connect: connection refused`),
+			wantNamesOfWebhookAuthenticatorsInCache: []string{},
 		},
 		{
-			name:    "updateStatus: called with matching original and updated conditions: will not make request to update conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "updateStatus: called with matching original and updated conditions: will not make request to update conditions",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -1344,17 +1809,9 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"choosing to not update the webhookauthenticator status since there is no update to make","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
@@ -1362,12 +1819,11 @@ func TestController(t *testing.T) {
 					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "updateStatus: called with different original and updated conditions: will make request to update conditions",
-			syncKey: controllerlib.Key{Name: "test-name"},
-			webhooks: []runtime.Object{
+			name: "updateStatus: called with different original and updated conditions: will make request to update conditions",
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
@@ -1384,17 +1840,9 @@ func TestController(t *testing.T) {
 					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
 			},
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
@@ -1414,11 +1862,10 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantCacheEntries: 1,
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
 		},
 		{
-			name:    "updateStatus: when update request fails: error will enqueue a resync",
-			syncKey: controllerlib.Key{Name: "test-name"},
+			name: "updateStatus: given a valid WebhookAuthenticator spec, when update request fails: error will enqueue a resync and the authenticator will not be added to the cache",
 			configClient: func(client *conciergefake.Clientset) {
 				client.PrependReactor(
 					"update",
@@ -1428,35 +1875,15 @@ func TestController(t *testing.T) {
 					},
 				)
 			},
-			webhooks: []runtime.Object{
+			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "test-name",
 					},
 					Spec: goodWebhookAuthenticatorSpecWithCA,
-					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
-						Conditions: conditionstestutil.Replace(
-							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
-							[]metav1.Condition{
-								sadReadyCondition(frozenMetav1Now, 0),
-							},
-						),
-						Phase: "SomethingBeforeUpdating",
-					},
 				},
 			},
-			wantLogs: []map[string]any{
-				{
-					"level":     "info",
-					"timestamp": "2099-08-08T13:57:36.123456Z",
-					"logger":    "webhookcachefiller-controller",
-					"message":   "added new webhook authenticator",
-					"endpoint":  goodWebhookDefaultServingCertEndpoint,
-					"webhook": map[string]any{
-						"name": "test-name",
-					},
-				},
-			},
+			wantLogLines: nil, // wants no logs
 			wantActions: func() []coretesting.Action {
 				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1475,19 +1902,20 @@ func TestController(t *testing.T) {
 					updateStatusAction,
 				}
 			},
-			wantSyncLoopErr:  testutil.WantExactErrorString("some update error"),
-			wantCacheEntries: 1,
+			wantSyncErr:                             testutil.WantExactErrorString("error for WebhookAuthenticator test-name: some update error"),
+			wantNamesOfWebhookAuthenticatorsInCache: []string{}, // even though the authenticator was valid, do not cache it because the status update failed
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			pinnipedAPIClient := conciergefake.NewSimpleClientset(tt.webhooks...)
+			pinnipedAPIClient := conciergefake.NewSimpleClientset(tt.webhookAuthenticators...)
 			if tt.configClient != nil {
 				tt.configClient(pinnipedAPIClient)
 			}
-			informers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
+			pinnipedInformers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
+			kubeInformers := kubeinformers.NewSharedInformerFactory(kubernetesfake.NewSimpleClientset(tt.secretsAndConfigMaps...), 0)
 			cache := authncache.New()
 
 			var log bytes.Buffer
@@ -1498,50 +1926,45 @@ func TestController(t *testing.T) {
 			}
 
 			controller := New(
+				"concierge", // namespace for controller
 				cache,
 				pinnipedAPIClient,
-				informers.Authentication().V1alpha1().WebhookAuthenticators(),
+				pinnipedInformers.Authentication().V1alpha1().WebhookAuthenticators(),
+				kubeInformers.Core().V1().Secrets(),
+				kubeInformers.Core().V1().ConfigMaps(),
+				controllerlib.WithInformer,
 				frozenClock,
 				logger)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			informers.Start(ctx.Done())
+			pinnipedInformers.Start(ctx.Done())
+			kubeInformers.Start(ctx.Done())
 			controllerlib.TestRunSynchronously(t, controller)
 
-			syncCtx := controllerlib.Context{Context: ctx, Key: tt.syncKey}
+			syncCtx := controllerlib.Context{Context: ctx}
 
-			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantSyncLoopErr != nil {
-				testutil.RequireErrorStringFromErr(t, err, tt.wantSyncLoopErr)
+			if err := controllerlib.TestSync(t, controller, syncCtx); tt.wantSyncErr != nil {
+				testutil.RequireErrorStringFromErr(t, err, tt.wantSyncErr)
 			} else {
 				require.NoError(t, err)
-			}
-			actualLogLines := testutil.SplitByNewline(log.String())
-			require.Equal(t, len(tt.wantLogs), len(actualLogLines), "log line count should be correct")
-
-			for logLineNum, logLine := range actualLogLines {
-				require.NotNil(t, tt.wantLogs[logLineNum], "expected log line should never be empty")
-				var lineStruct map[string]any
-				err := json.Unmarshal([]byte(logLine), &lineStruct)
-				require.NoError(t, err)
-				require.Equal(t, tt.wantLogs[logLineNum]["level"], lineStruct["level"], fmt.Sprintf("log line (%d) log level should be correct (in: %s)", logLineNum, lineStruct))
-
-				require.Equal(t, tt.wantLogs[logLineNum]["timestamp"], lineStruct["timestamp"], fmt.Sprintf("log line (%d) timestamp should be correct (in: %s)", logLineNum, lineStruct))
-				require.Equal(t, lineStruct["logger"], tt.wantLogs[logLineNum]["logger"], fmt.Sprintf("log line (%d) logger should be correct", logLineNum))
-				require.NotEmpty(t, lineStruct["caller"], fmt.Sprintf("log line (%d) caller should not be empty", logLineNum))
-				require.Equal(t, tt.wantLogs[logLineNum]["message"], lineStruct["message"], fmt.Sprintf("log line (%d) message should be correct", logLineNum))
-				if lineStruct["webhook"] != nil {
-					require.Equal(t, tt.wantLogs[logLineNum]["webhook"], lineStruct["webhook"], fmt.Sprintf("log line (%d) webhook should be correct", logLineNum))
-				}
-				if lineStruct["endpoint"] != nil {
-					require.Equal(t, tt.wantLogs[logLineNum]["endpoint"], lineStruct["endpoint"], fmt.Sprintf("log line (%d) endpoint should be correct", logLineNum))
-				}
 			}
 
 			require.NotEmpty(t, tt.wantActions, "wantActions is required for test %s", tt.name)
 			require.Equal(t, tt.wantActions(), pinnipedAPIClient.Actions())
-			require.Equal(t, tt.wantCacheEntries, len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", tt.wantCacheEntries, len(cache.Keys()), cache.Keys()))
+			require.Equal(t, len(tt.wantNamesOfWebhookAuthenticatorsInCache), len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", len(tt.wantNamesOfWebhookAuthenticatorsInCache), len(cache.Keys()), cache.Keys()))
+
+			actualLog, _ := strings.CutSuffix(log.String(), "\n")
+			actualLogLines := strings.Split(actualLog, "\n")
+			var webhookLogLines []string
+			for _, line := range actualLogLines {
+				if strings.Contains(line, "webhookcachefiller/webhookcachefiller.go") {
+					webhookLogLines = append(webhookLogLines, line)
+				}
+			}
+
+			require.Equal(t, tt.wantLogLines, webhookLogLines)
 		})
 	}
 }
@@ -1668,6 +2091,161 @@ func TestNewWebhookAuthenticator(t *testing.T) {
 				require.Equal(t, "fake-username-from-server", authResp.User.GetName())
 				require.Equal(t, []string{"fake-group-from-server-1", "fake-group-from-server-2"}, authResp.User.GetGroups())
 			}
+		})
+	}
+}
+
+func newCacheValue(t *testing.T, spec authenticationv1alpha1.WebhookAuthenticatorSpec, caBundle string) authncache.Value {
+	t.Helper()
+
+	return &cachedWebhookAuthenticator{
+		endpoint:     spec.Endpoint,
+		caBundleHash: tlsconfigutil.NewCABundleHash([]byte(caBundle)),
+	}
+}
+
+func TestControllerFilterSecret(t *testing.T) {
+	tests := []struct {
+		name       string
+		secret     metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name: "should return true for a secret of the type Opaque",
+			secret: &corev1.Secret{
+				Type: corev1.SecretTypeOpaque,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "some-name",
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return true for a secret of the type TLS",
+			secret: &corev1.Secret{
+				Type: corev1.SecretTypeTLS,
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "some-name",
+				},
+			},
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+		{
+			name: "should return false for a secret of the wrong type",
+			secret: &corev1.Secret{
+				Type: "other-type",
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "some-name",
+				},
+			},
+		},
+		{
+			name: "should return false for a resource of wrong data type",
+			secret: &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
+			frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
+
+			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0)
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
+			pinnipedAPIClient := conciergefake.NewSimpleClientset()
+			pinnipedInformers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
+			observableInformers := testutil.NewObservableWithInformerOption()
+
+			_ = New(
+				"concierge", // namespace for controller
+				authncache.New(),
+				pinnipedAPIClient,
+				pinnipedInformers.Authentication().V1alpha1().WebhookAuthenticators(),
+				secretInformer,
+				configMapInformer,
+				observableInformers.WithInformer,
+				frozenClock,
+				logger)
+
+			unrelated := &corev1.Secret{}
+			filter := observableInformers.GetFilterForInformer(secretInformer)
+			require.Equal(t, tt.wantAdd, filter.Add(tt.secret))
+			require.Equal(t, tt.wantUpdate, filter.Update(unrelated, tt.secret))
+			require.Equal(t, tt.wantUpdate, filter.Update(tt.secret, unrelated))
+			require.Equal(t, tt.wantDelete, filter.Delete(tt.secret))
+		})
+	}
+}
+
+func TestControllerFilterConfigMap(t *testing.T) {
+	namespace := "some-namespace"
+	goodCM := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+		},
+	}
+
+	tests := []struct {
+		name       string
+		cm         metav1.Object
+		wantAdd    bool
+		wantUpdate bool
+		wantDelete bool
+	}{
+		{
+			name:       "a configMap in the right namespace",
+			cm:         goodCM,
+			wantAdd:    true,
+			wantUpdate: true,
+			wantDelete: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
+			nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
+			frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
+
+			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0)
+			secretInformer := kubeInformers.Core().V1().Secrets()
+			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
+			pinnipedAPIClient := conciergefake.NewSimpleClientset()
+			pinnipedInformers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
+			observableInformers := testutil.NewObservableWithInformerOption()
+
+			_ = New(
+				"concierge", // namespace for the controller
+				authncache.New(),
+				pinnipedAPIClient,
+				pinnipedInformers.Authentication().V1alpha1().WebhookAuthenticators(),
+				secretInformer,
+				configMapInformer,
+				observableInformers.WithInformer,
+				frozenClock,
+				logger)
+
+			unrelated := &corev1.ConfigMap{}
+			filter := observableInformers.GetFilterForInformer(configMapInformer)
+			require.Equal(t, tt.wantAdd, filter.Add(tt.cm))
+			require.Equal(t, tt.wantUpdate, filter.Update(unrelated, tt.cm))
+			require.Equal(t, tt.wantUpdate, filter.Update(tt.cm, unrelated))
+			require.Equal(t, tt.wantDelete, filter.Delete(tt.cm))
 		})
 	}
 }

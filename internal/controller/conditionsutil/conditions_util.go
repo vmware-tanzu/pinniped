@@ -12,6 +12,15 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+// Some common reasons shared by conditions of various resources.
+const (
+	ReasonSuccess            = "Success"
+	ReasonNotReady           = "NotReady"
+	ReasonUnableToValidate   = "UnableToValidate"
+	ReasonUnableToDialServer = "UnableToDialServer"
+	ReasonInvalidIssuerURL   = "InvalidIssuerURL"
+)
+
 // MergeConditions merges conditions into conditionsToUpdate.
 // Note that LastTransitionTime refers to the time when the status changed,
 // but ObservedGeneration should be the current generation for all conditions, since Pinniped should always check every condition.

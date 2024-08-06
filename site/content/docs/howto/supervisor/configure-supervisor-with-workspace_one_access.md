@@ -70,6 +70,12 @@ spec:
   # actual issuer of your Workspace ONE Access environment.  Note that
   # the Workspace ONE Access issuer ends with the string "/SAAS/auth".
   issuer: https://ws1.my-company.com/SAAS/auth
+  tls:
+     # Base64-encoded PEM CA bundle for connections to WS1 (optional).
+     # Alternatively, the CA bundle can be specified in a Secret or
+     # ConfigMap that will be dynamically watched by Pinniped for
+     # changes to the CA bundle (see API docs for details).
+     certificateAuthorityData: "LS0tLS1CRUdJTi[...]"
 
   # Specify how to form authorization requests to Workspace ONE Access.
   authorizationConfig:
@@ -138,7 +144,7 @@ remaining claims are always available.
     "Test Group"
   ],
   "iss": "https://ws1.my-company.com/SAAS/auth",
-  "sub": "my-username@WS1-ENV-NAME",
+  "sub": "my-username@WS1-ENV-NAME"
 }
 ```
 

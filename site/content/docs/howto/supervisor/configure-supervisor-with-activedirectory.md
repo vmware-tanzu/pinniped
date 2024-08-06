@@ -97,6 +97,12 @@ spec:
 
   # Specify the host of the Active Directory server.
   host: "activedirectory.example.com:636"
+  tls:
+    # Base64-encoded PEM CA bundle for connections to AD (optional).
+    # Alternatively, the CA bundle can be specified in a Secret or
+    # ConfigMap that will be dynamically watched by Pinniped for
+    # changes to the CA bundle (see API docs for details).
+    certificateAuthorityData: "LS0tLS1CRUdJTi[...]"
 
   # Specify how to search for the username when an end-user tries to log in
   # using their username and password.

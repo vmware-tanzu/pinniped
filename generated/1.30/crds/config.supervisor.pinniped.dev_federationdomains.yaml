@@ -143,8 +143,9 @@ spec:
                                   Type is "string", and is otherwise ignored.
                                 type: string
                               type:
-                                description: Type determines the type of the constant,
-                                  and indicates which other field should be non-empty.
+                                description: |-
+                                  Type determines the type of the constant, and indicates which other field should be non-empty.
+                                  Allowed values are "string" or "stringList".
                                 enum:
                                 - string
                                 - stringList
@@ -262,8 +263,9 @@ spec:
                                   an authentication attempt. When empty, a default message will be used.
                                 type: string
                               type:
-                                description: Type determines the type of the expression.
-                                  It must be one of the supported types.
+                                description: |-
+                                  Type determines the type of the expression. It must be one of the supported types.
+                                  Allowed values are "policy/v1", "username/v1", or "groups/v1".
                                 enum:
                                 - policy/v1
                                 - username/v1

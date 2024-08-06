@@ -158,6 +158,9 @@ spec:
 
   # Specify the CA bundle for the GitLab server as base64-encoded PEM
   # data. For example, the output of `cat my-ca-bundle.pem | base64`.
+  # Alternatively, the CA bundle can be specified in a Secret or
+  # ConfigMap that will be dynamically watched by Pinniped for
+  # changes to the CA bundle (see API docs for details).
   # 
   # This is only necessary if your instance uses a custom CA.
   tls:

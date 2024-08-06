@@ -86,6 +86,12 @@ metadata:
 spec:
   # Specify the upstream issuer URL (no trailing slash).
   issuer: https://<dex-dns-record>
+  tls:
+    # Base64-encoded PEM CA bundle for connections to Dex (optional).
+    # Alternatively, the CA bundle can be specified in a Secret or
+    # ConfigMap that will be dynamically watched by Pinniped for
+    # changes to the CA bundle (see API docs for details).
+    certificateAuthorityData: "LS0tLS1CRUdJTi[...]"
 
   # Specify how to form authorization requests to Dex.
   authorizationConfig:

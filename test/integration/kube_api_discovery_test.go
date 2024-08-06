@@ -452,7 +452,7 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 		}
 
 		// manually update this value whenever you add additional fields to an API resource and then run the generator
-		totalExpectedAPIFields := 289
+		totalExpectedAPIFields := 313
 
 		// Because we are parsing text from `kubectl explain` and because the format of that text can change
 		// over time, make a rudimentary assertion that this test exercised the whole tree of all fields of all
@@ -552,7 +552,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 		addSuffix("webhookauthenticators.authentication.concierge"): {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
 				{Name: "Endpoint", Type: "string", JSONPath: ".spec.endpoint"},
-				// Note that WebhookAuthenticators have a status type, but no controller currently sets the status, so we don't show it.
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},
@@ -560,7 +560,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 			"v1alpha1": []apiextensionsv1.CustomResourceColumnDefinition{
 				{Name: "Issuer", Type: "string", JSONPath: ".spec.issuer"},
 				{Name: "Audience", Type: "string", JSONPath: ".spec.audience"},
-				// Note that JWTAuthenticators have a status type, but no controller currently sets the status, so we don't show it.
+				{Name: "Status", Type: "string", JSONPath: ".status.phase"},
 				{Name: "Age", Type: "date", JSONPath: ".metadata.creationTimestamp"},
 			},
 		},

@@ -178,6 +178,29 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		testlib.SkipTestWhenActiveDirectoryIsUnavailable(t, env)
 	}
 
+	skipExternalCABundleOIDCTestsWhenCABundleIsEmpty := func(t *testing.T) {
+		t.Helper()
+		if len(env.SupervisorUpstreamOIDC.CABundle) == 0 {
+			t.Skip("skipping external CA bundle test because env.SupervisorUpstreamOIDC.CABundle is empty")
+		}
+	}
+
+	skipExternalCABundleLDAPTestsWhenCABundleIsEmpty := func(t *testing.T) {
+		t.Helper()
+		skipLDAPTests(t)
+		if len(env.SupervisorUpstreamLDAP.CABundle) == 0 {
+			t.Skip("skipping external CA bundle test because env.SupervisorUpstreamLDAP.CABundle is empty")
+		}
+	}
+
+	skipExternalCABundleActiveDirectoryTestsWhenCABundleIsEmpty := func(t *testing.T) {
+		t.Helper()
+		skipActiveDirectoryTests(t)
+		if len(env.SupervisorUpstreamActiveDirectory.CABundle) == 0 {
+			t.Skip("skipping external CA bundle test because env.SupervisorUpstreamActiveDirectory.CABundle is empty")
+		}
+	}
+
 	basicOIDCIdentityProviderSpec := func() idpv1alpha1.OIDCIdentityProviderSpec {
 		return idpv1alpha1.OIDCIdentityProviderSpec{
 			Issuer: env.SupervisorUpstreamOIDC.Issuer,
@@ -216,12 +239,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 
 		adIDP := testlib.CreateTestActiveDirectoryIdentityProvider(t, spec, idpv1alpha1.ActiveDirectoryPhaseReady)
 
-		expectedMsg := fmt.Sprintf(
+		expectedActiveDirectoryConnectionValidMessage := fmt.Sprintf(
 			`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 			spec.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 			secret.Name, secret.ResourceVersion,
 		)
-		requireSuccessfulActiveDirectoryIdentityProviderConditions(t, adIDP, expectedMsg)
+		requireSuccessfulActiveDirectoryIdentityProviderConditions(t,
+			adIDP, expectedActiveDirectoryConnectionValidMessage, env.SupervisorUpstreamActiveDirectory.CABundle != "")
 
 		return adIDP, secret
 	}
@@ -269,12 +293,13 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 
 		ldapIDP := testlib.CreateTestLDAPIdentityProvider(t, spec, idpv1alpha1.LDAPPhaseReady)
 
-		expectedMsg := fmt.Sprintf(
+		expectedLDAPConnectionValidMessage := fmt.Sprintf(
 			`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 			spec.Host, env.SupervisorUpstreamLDAP.BindUsername,
 			secret.Name, secret.ResourceVersion,
 		)
-		requireSuccessfulLDAPIdentityProviderConditions(t, ldapIDP, expectedMsg)
+		requireSuccessfulLDAPIdentityProviderConditions(t,
+			ldapIDP, expectedLDAPConnectionValidMessage, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
 
 		return ldapIDP, secret
 	}
@@ -301,7 +326,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 		regexp.QuoteMeta("&sub="+base64.RawURLEncoding.EncodeToString([]byte(env.SupervisorUpstreamLDAP.TestUserUniqueIDAttributeValue))) +
 		"$"
 
-	// The downstream ID token Subject should be in the the same format as LDAP above, but with AD-specific values.
+	// The downstream ID token Subject should be in the same format as LDAP above, but with AD-specific values.
 	expectedIDTokenSubjectRegexForUpstreamAD := "^" +
 		regexp.QuoteMeta("ldaps://"+env.SupervisorUpstreamActiveDirectory.Host+"?base="+url.QueryEscape(env.SupervisorUpstreamActiveDirectory.DefaultNamingContextSearchBase)) +
 		regexp.QuoteMeta("&idpName=test-upstream-ad-idp-") + `[\w]+` +
@@ -338,6 +363,121 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
 		},
+		{
+			name:      "oidc IDP using secrets of type opaque to source ca bundle with default username and groups claim settings",
+			maybeSkip: skipExternalCABundleOIDCTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idpSpec := basicOIDCIdentityProviderSpec()
+				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeOpaque,
+					map[string]string{
+						"ca.crt": string(caData),
+					})
+				idpSpec.TLS.CertificateAuthorityData = ""
+				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+					Kind: "Secret",
+					Name: caSecret.Name,
+					Key:  "ca.crt",
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, idpSpec, idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				pinnipedSessionData := pinnipedSession.Custom
+				pinnipedSessionData.OIDC.UpstreamIssuer = "wrong-issuer"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+		},
+		{
+			name:      "oidc IDP using secrets of type TLS to source ca bundle with default username and groups claim settings",
+			maybeSkip: skipExternalCABundleOIDCTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idpSpec := basicOIDCIdentityProviderSpec()
+				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeTLS,
+					map[string]string{
+						"ca.crt":  string(caData),
+						"tls.crt": "",
+						"tls.key": "",
+					})
+				idpSpec.TLS.CertificateAuthorityData = ""
+				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+					Kind: "Secret",
+					Name: caSecret.Name,
+					Key:  "ca.crt",
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, idpSpec, idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				pinnipedSessionData := pinnipedSession.Custom
+				pinnipedSessionData.OIDC.UpstreamIssuer = "wrong-issuer"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+		},
+		{
+			name:      "oidc IDP using configmaps to source ca bundle with default username and groups claim settings",
+			maybeSkip: skipExternalCABundleOIDCTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idpSpec := basicOIDCIdentityProviderSpec()
+				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				caConfigMap := testlib.CreateTestConfigMap(t, env.SupervisorNamespace, "ca-cert", map[string]string{
+					"ca.crt": string(caData),
+				})
+				idpSpec.TLS.CertificateAuthorityData = ""
+				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+					Kind: "ConfigMap",
+					Name: caConfigMap.Name,
+					Key:  "ca.crt",
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, idpSpec, idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				pinnipedSessionData := pinnipedSession.Custom
+				pinnipedSessionData.OIDC.UpstreamIssuer = "wrong-issuer"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+		},
+
+		{
+			name:      "oidc IDP using secrets of type opaque to source ca bundle with default username and groups claim settings",
+			maybeSkip: skipExternalCABundleOIDCTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idpSpec := basicOIDCIdentityProviderSpec()
+				caData, err := base64.StdEncoding.DecodeString(idpSpec.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeOpaque,
+					map[string]string{
+						"ca.crt": string(caData),
+					})
+				idpSpec.TLS.CertificateAuthorityData = ""
+				idpSpec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+					Kind: "Secret",
+					Name: caSecret.Name,
+					Key:  "ca.crt",
+				}
+				return testlib.CreateTestOIDCIdentityProvider(t, idpSpec, idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization: requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				pinnipedSessionData := pinnipedSession.Custom
+				pinnipedSessionData.OIDC.UpstreamIssuer = "wrong-issuer"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+		},
+
 		{
 			name:      "oidc with custom username and groups claim settings",
 			maybeSkip: skipNever,
@@ -501,6 +641,155 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			maybeSkip: skipLDAPTests,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createLDAPIdentityProvider(t, nil)
+				return idp.Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Subject = "not-right"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name:      "ldap IDP using secrets of type opaque to source ca bundle and with email as username and groups names as DNs and using an LDAP provider which supports TLS",
+			maybeSkip: skipExternalCABundleLDAPTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
+					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeOpaque,
+						map[string]string{
+							"ca.crt": env.SupervisorUpstreamLDAP.CABundle,
+						})
+					spec.TLS.CertificateAuthorityData = ""
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "Secret",
+						Name: caSecret.Name,
+						Key:  "ca.crt",
+					}
+				})
+				return idp.Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Subject = "not-right"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name:      "ldap IDP using secrets of type TLS to source ca bundle and with email as username and groups names as DNs and using an LDAP provider which supports TLS",
+			maybeSkip: skipExternalCABundleLDAPTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
+					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeTLS,
+						map[string]string{
+							"ca.crt":  env.SupervisorUpstreamLDAP.CABundle,
+							"tls.crt": "",
+							"tls.key": "",
+						})
+					spec.TLS.CertificateAuthorityData = ""
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "Secret",
+						Name: caSecret.Name,
+						Key:  "ca.crt",
+					}
+				})
+				return idp.Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamLDAP.TestUserMailAttributeValue, // username to present to server during login
+					env.SupervisorUpstreamLDAP.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession, _, _ string) []string {
+				// Even if we update this group to the some names that did not come from the LDAP server,
+				// we expect that it will return to the real groups from the LDAP server after we refresh.
+				initialGroupMembership := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Custom.UpstreamGroups = initialGroupMembership         // upstream group names in session
+				sessionData.Fosite.Claims.Extra["groups"] = initialGroupMembership // downstream group names in session
+				return env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeLDAP, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.LDAP.UserDN)
+				fositeSessionData := pinnipedSession.Fosite
+				fositeSessionData.Claims.Subject = "not-right"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamLDAP,
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamLDAP.TestUserMailAttributeValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
+		},
+		{
+			name:      "ldap IDP using configmaps to source ca bundle and with email as username and groups names as DNs and using an LDAP provider which supports TLS",
+			maybeSkip: skipExternalCABundleLDAPTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createLDAPIdentityProvider(t, func(spec *idpv1alpha1.LDAPIdentityProviderSpec) {
+					caConfigMap := testlib.CreateTestConfigMap(t, env.SupervisorNamespace, "ca-cert",
+						map[string]string{
+							"ca.crt": env.SupervisorUpstreamLDAP.CABundle,
+						})
+					spec.TLS.CertificateAuthorityData = ""
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "ConfigMap",
+						Name: caConfigMap.Name,
+						Key:  "ca.crt",
+					}
+				})
 				return idp.Name
 			},
 			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
@@ -837,7 +1126,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				updatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Update(ctx, secret, metav1.UpdateOptions{})
 				require.NoError(t, err)
 
-				expectedMsg := fmt.Sprintf(
+				expectedLDAPConnectionValidMessage := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
 					updatedSecret.Name, updatedSecret.ResourceVersion,
@@ -848,7 +1137,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t,
+						requireEventually, idp, expectedLDAPConnectionValidMessage, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -903,7 +1193,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					},
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
-				expectedMsg := fmt.Sprintf(
+				expectedLDAPConnectionValidMessage := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamLDAP.Host, env.SupervisorUpstreamLDAP.BindUsername,
 					recreatedSecret.Name, recreatedSecret.ResourceVersion,
@@ -914,7 +1204,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().LDAPIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulLDAPIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
+					requireEventuallySuccessfulLDAPIdentityProviderConditions(t,
+						requireEventually, idp, expectedLDAPConnectionValidMessage, len(env.SupervisorUpstreamLDAP.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -945,6 +1236,128 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 			maybeSkip: skipActiveDirectoryTests,
 			createIDP: func(t *testing.T) string {
 				idp, _ := createActiveDirectoryIdentityProvider(t, nil)
+				return idp.Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				customSessionData.Username = "not-the-same"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamAD,
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
+		},
+		{
+			name:      "active directory IDP using secret of type opaque to source ca bundle with all default options",
+			maybeSkip: skipExternalCABundleActiveDirectoryTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createActiveDirectoryIdentityProvider(t, func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec) {
+					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeOpaque,
+						map[string]string{
+							"ca.crt": env.SupervisorUpstreamActiveDirectory.CABundle,
+						})
+					spec.TLS.CertificateAuthorityData = ""
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "Secret",
+						Name: caSecret.Name,
+						Key:  "ca.crt",
+					}
+				})
+				return idp.Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				customSessionData.Username = "not-the-same"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamAD,
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
+		},
+		{
+			name:      "active directory IDP using secret of type TLS to source ca bundle with all default options",
+			maybeSkip: skipExternalCABundleActiveDirectoryTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createActiveDirectoryIdentityProvider(t, func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec) {
+					caSecret := testlib.CreateTestSecret(t, env.SupervisorNamespace, "ca-cert", corev1.SecretTypeTLS,
+						map[string]string{
+							"ca.crt":  env.SupervisorUpstreamActiveDirectory.CABundle,
+							"tls.crt": "",
+							"tls.key": "",
+						})
+					spec.TLS.CertificateAuthorityData = ""
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "Secret",
+						Name: caSecret.Name,
+						Key:  "ca.crt",
+					}
+				})
+				return idp.Name
+			},
+			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
+				requestAuthorizationUsingCLIPasswordFlow(t,
+					downstreamAuthorizeURL,
+					env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue, // username to present to server during login
+					env.SupervisorUpstreamActiveDirectory.TestUserPassword,           // password to present to server during login
+					httpClient,
+					false,
+				)
+			},
+			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
+				customSessionData := pinnipedSession.Custom
+				require.Equal(t, psession.ProviderTypeActiveDirectory, customSessionData.ProviderType)
+				require.NotEmpty(t, customSessionData.ActiveDirectory.UserDN)
+				customSessionData.Username = "not-the-same"
+			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamAD,
+			// the ID token Username should have been pulled from the requested UserSearch.Attributes.Username attribute
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string {
+				return "^" + regexp.QuoteMeta(env.SupervisorUpstreamActiveDirectory.TestUserPrincipalNameValue) + "$"
+			},
+			wantDownstreamIDTokenGroups: env.SupervisorUpstreamActiveDirectory.TestUserIndirectGroupsSAMAccountPlusDomainNames,
+		},
+		{
+			name:      "active directory IDP using configmaps to source ca bundle with all default options",
+			maybeSkip: skipExternalCABundleActiveDirectoryTestsWhenCABundleIsEmpty,
+			createIDP: func(t *testing.T) string {
+				idp, _ := createActiveDirectoryIdentityProvider(t, func(spec *idpv1alpha1.ActiveDirectoryIdentityProviderSpec) {
+					caConfigMap := testlib.CreateTestConfigMap(t, env.SupervisorNamespace, "ca-cert",
+						map[string]string{
+							"ca.crt": env.SupervisorUpstreamActiveDirectory.CABundle,
+						})
+					spec.TLS.CertificateAuthorityData = ""
+					spec.TLS.CertificateAuthorityDataSource = &idpv1alpha1.CertificateAuthorityDataSourceSpec{
+						Kind: "ConfigMap",
+						Name: caConfigMap.Name,
+						Key:  "ca.crt",
+					}
+				})
 				return idp.Name
 			},
 			requestAuthorization: func(t *testing.T, _, downstreamAuthorizeURL, _, _, _ string, httpClient *http.Client) {
@@ -1072,7 +1485,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				updatedSecret, err := client.CoreV1().Secrets(env.SupervisorNamespace).Update(ctx, secret, metav1.UpdateOptions{})
 				require.NoError(t, err)
 
-				expectedMsg := fmt.Sprintf(
+				expectedActiveDirectoryConnectionValidMessage := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 					updatedSecret.Name, updatedSecret.ResourceVersion,
@@ -1083,7 +1496,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t,
+						requireEventually, idp, expectedActiveDirectoryConnectionValidMessage, len(env.SupervisorUpstreamActiveDirectory.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -1139,7 +1553,7 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				}, metav1.CreateOptions{})
 				require.NoError(t, err)
 
-				expectedMsg := fmt.Sprintf(
+				expectedActiveDirectoryConnectionValidMessage := fmt.Sprintf(
 					`successfully able to connect to "%s" and bind as user "%s" [validated with Secret "%s" at version "%s"]`,
 					env.SupervisorUpstreamActiveDirectory.Host, env.SupervisorUpstreamActiveDirectory.BindUsername,
 					recreatedSecret.Name, recreatedSecret.ResourceVersion,
@@ -1150,7 +1564,8 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 					defer cancel()
 					idp, err = supervisorClient.IDPV1alpha1().ActiveDirectoryIdentityProviders(env.SupervisorNamespace).Get(ctx, idp.Name, metav1.GetOptions{})
 					requireEventually.NoError(err)
-					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t, requireEventually, idp, expectedMsg)
+					requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t,
+						requireEventually, idp, expectedActiveDirectoryConnectionValidMessage, len(env.SupervisorUpstreamActiveDirectory.CABundle) != 0)
 				}, time.Minute, 500*time.Millisecond)
 				return idp.Name
 			},
@@ -2403,48 +2818,53 @@ func wantGroupsInAdditionalClaimsIfGroupsExist(additionalClaims map[string]any, 
 	return additionalClaims
 }
 
-func requireSuccessfulLDAPIdentityProviderConditions(t *testing.T, ldapIDP *idpv1alpha1.LDAPIdentityProvider, expectedLDAPConnectionValidMessage string) {
-	require.Len(t, ldapIDP.Status.Conditions, 3)
+func requireSuccessfulLDAPIdentityProviderConditions(
+	t *testing.T,
+	ldapIDP *idpv1alpha1.LDAPIdentityProvider,
+	expectedLDAPConnectionValidMessage string,
+	caBundleConfigured bool,
+) {
+	requireEventuallySuccessfulLDAPIdentityProviderConditions(t,
+		require.New(t), ldapIDP, expectedLDAPConnectionValidMessage, caBundleConfigured)
+}
 
-	conditionsSummary := [][]string{}
-	for _, condition := range ldapIDP.Status.Conditions {
-		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
-		t.Logf("Saw LDAPIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
-			condition.Type, string(condition.Status), condition.Reason, condition.Message)
-		switch condition.Type {
-		case "BindSecretValid":
-			require.Equal(t, "loaded bind secret", condition.Message)
-		case "TLSConfigurationValid":
-			require.Equal(t, "loaded TLS configuration", condition.Message)
-		case "LDAPConnectionValid":
-			require.Equal(t, expectedLDAPConnectionValidMessage, condition.Message)
-		}
-	}
+func requireSuccessfulActiveDirectoryIdentityProviderConditions(
+	t *testing.T,
+	adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider,
+	expectedActiveDirectoryConnectionValidMessage string,
+	caBundleConfigured bool,
+) {
+	requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t,
+		require.New(t), adIDP, expectedActiveDirectoryConnectionValidMessage, caBundleConfigured)
+}
 
-	require.ElementsMatch(t, [][]string{
+func requireEventuallySuccessfulLDAPIdentityProviderConditions(
+	t *testing.T,
+	assertions *require.Assertions,
+	ldapIDP *idpv1alpha1.LDAPIdentityProvider,
+	expectedLDAPConnectionValidMessage string,
+	caBundleConfigured bool,
+) {
+	t.Helper()
+	assertions.Len(ldapIDP.Status.Conditions, 3)
+
+	assertions.ElementsMatch([][]string{
 		{"BindSecretValid", "True", "Success"},
 		{"TLSConfigurationValid", "True", "Success"},
 		{"LDAPConnectionValid", "True", "Success"},
-	}, conditionsSummary)
+	}, conditionsSummaryFromActualConditions(t,
+		assertions, ldapIDP.Status.Conditions, caBundleConfigured, expectedLDAPConnectionValidMessage))
 }
 
-func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider, expectedActiveDirectoryConnectionValidMessage string) {
-	require.Len(t, adIDP.Status.Conditions, 4)
-
-	conditionsSummary := [][]string{}
-	for _, condition := range adIDP.Status.Conditions {
-		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
-		t.Logf("Saw ActiveDirectoryIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
-			condition.Type, string(condition.Status), condition.Reason, condition.Message)
-		switch condition.Type {
-		case "BindSecretValid":
-			require.Equal(t, "loaded bind secret", condition.Message)
-		case "TLSConfigurationValid":
-			require.Equal(t, "loaded TLS configuration", condition.Message)
-		case "LDAPConnectionValid":
-			require.Equal(t, expectedActiveDirectoryConnectionValidMessage, condition.Message)
-		}
-	}
+func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(
+	t *testing.T,
+	assertions *require.Assertions,
+	adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider,
+	expectedActiveDirectoryConnectionValidMessage string,
+	caBundleConfigured bool,
+) {
+	t.Helper()
+	assertions.Len(adIDP.Status.Conditions, 4)
 
 	expectedUserSearchReason := ""
 	if adIDP.Spec.UserSearch.Base == "" || adIDP.Spec.GroupSearch.Base == "" {
@@ -2453,72 +2873,41 @@ func requireSuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, ad
 		expectedUserSearchReason = "UsingConfigurationFromSpec"
 	}
 
-	require.ElementsMatch(t, [][]string{
+	assertions.ElementsMatch([][]string{
 		{"BindSecretValid", "True", "Success"},
 		{"TLSConfigurationValid", "True", "Success"},
 		{"LDAPConnectionValid", "True", "Success"},
 		{"SearchBaseFound", "True", expectedUserSearchReason},
-	}, conditionsSummary)
+	}, conditionsSummaryFromActualConditions(t,
+		assertions, adIDP.Status.Conditions, caBundleConfigured, expectedActiveDirectoryConnectionValidMessage))
 }
 
-func requireEventuallySuccessfulLDAPIdentityProviderConditions(t *testing.T, requireEventually *require.Assertions, ldapIDP *idpv1alpha1.LDAPIdentityProvider, expectedLDAPConnectionValidMessage string) {
-	t.Helper()
-	requireEventually.Len(ldapIDP.Status.Conditions, 3)
-
+func conditionsSummaryFromActualConditions(
+	t *testing.T,
+	assertions *require.Assertions,
+	conditions []metav1.Condition,
+	caBundleConfigured bool,
+	expectedLDAPConnectionValidMessage string,
+) [][]string {
 	conditionsSummary := [][]string{}
-	for _, condition := range ldapIDP.Status.Conditions {
+	for _, condition := range conditions {
 		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
-		t.Logf("Saw ActiveDirectoryIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
+		t.Logf("Saw identity provider with Status.Condition Type=%s Status=%s Reason=%s Message=%s",
 			condition.Type, string(condition.Status), condition.Reason, condition.Message)
 		switch condition.Type {
 		case "BindSecretValid":
-			requireEventually.Equal("loaded bind secret", condition.Message)
+			assertions.Equal("loaded bind secret", condition.Message)
 		case "TLSConfigurationValid":
-			requireEventually.Equal("loaded TLS configuration", condition.Message)
+			if caBundleConfigured {
+				assertions.Equal("spec.tls is valid: using configured CA bundle", condition.Message)
+			} else {
+				assertions.Equal("spec.tls is valid: no TLS configuration provided: using default root CA bundle from container image", condition.Message)
+			}
 		case "LDAPConnectionValid":
-			requireEventually.Equal(expectedLDAPConnectionValidMessage, condition.Message)
+			assertions.Equal(expectedLDAPConnectionValidMessage, condition.Message)
 		}
 	}
-
-	requireEventually.ElementsMatch([][]string{
-		{"BindSecretValid", "True", "Success"},
-		{"TLSConfigurationValid", "True", "Success"},
-		{"LDAPConnectionValid", "True", "Success"},
-	}, conditionsSummary)
-}
-
-func requireEventuallySuccessfulActiveDirectoryIdentityProviderConditions(t *testing.T, requireEventually *require.Assertions, adIDP *idpv1alpha1.ActiveDirectoryIdentityProvider, expectedActiveDirectoryConnectionValidMessage string) {
-	t.Helper()
-	requireEventually.Len(adIDP.Status.Conditions, 4)
-
-	conditionsSummary := [][]string{}
-	for _, condition := range adIDP.Status.Conditions {
-		conditionsSummary = append(conditionsSummary, []string{condition.Type, string(condition.Status), condition.Reason})
-		t.Logf("Saw ActiveDirectoryIdentityProvider Status.Condition Type=%s Status=%s Reason=%s Message=%s",
-			condition.Type, string(condition.Status), condition.Reason, condition.Message)
-		switch condition.Type {
-		case "BindSecretValid":
-			requireEventually.Equal("loaded bind secret", condition.Message)
-		case "TLSConfigurationValid":
-			requireEventually.Equal("loaded TLS configuration", condition.Message)
-		case "LDAPConnectionValid":
-			requireEventually.Equal(expectedActiveDirectoryConnectionValidMessage, condition.Message)
-		}
-	}
-
-	expectedUserSearchReason := ""
-	if adIDP.Spec.UserSearch.Base == "" || adIDP.Spec.GroupSearch.Base == "" {
-		expectedUserSearchReason = "Success"
-	} else {
-		expectedUserSearchReason = "UsingConfigurationFromSpec"
-	}
-
-	requireEventually.ElementsMatch([][]string{
-		{"BindSecretValid", "True", "Success"},
-		{"TLSConfigurationValid", "True", "Success"},
-		{"LDAPConnectionValid", "True", "Success"},
-		{"SearchBaseFound", "True", expectedUserSearchReason},
-	}, conditionsSummary)
+	return conditionsSummary
 }
 
 func testSupervisorLogin(
@@ -2549,12 +2938,7 @@ func testSupervisorLogin(
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 
-	// Infer the downstream issuer URL from the callback associated with the upstream test client registration.
-	issuerURL, err := url.Parse(env.SupervisorUpstreamOIDC.CallbackURL)
-	require.NoError(t, err)
-	require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
-	issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")
-	t.Logf("testing with downstream issuer URL %s", issuerURL.String())
+	issuerURL, _ := env.InferSupervisorIssuerURL(t)
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")

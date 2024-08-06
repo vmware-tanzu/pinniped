@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package v1alpha1
@@ -55,6 +55,7 @@ type FederationDomainTransformsConstant struct {
 	Name string `json:"name"`
 
 	// Type determines the type of the constant, and indicates which other field should be non-empty.
+	// Allowed values are "string" or "stringList".
 	// +kubebuilder:validation:Enum=string;stringList
 	Type string `json:"type"`
 
@@ -70,6 +71,7 @@ type FederationDomainTransformsConstant struct {
 // FederationDomainTransformsExpression defines a transform expression.
 type FederationDomainTransformsExpression struct {
 	// Type determines the type of the expression. It must be one of the supported types.
+	// Allowed values are "policy/v1", "username/v1", or "groups/v1".
 	// +kubebuilder:validation:Enum=policy/v1;username/v1;groups/v1
 	Type string `json:"type"`
 

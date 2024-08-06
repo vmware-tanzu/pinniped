@@ -53,9 +53,10 @@ type GitHubIdentityProviderStatus struct {
 type GitHubAPIConfig struct {
 	// Host is required only for GitHub Enterprise Server.
 	// Defaults to using GitHub's public API ("github.com").
+	// For convenience, specifying "github.com" is equivalent to specifying "api.github.com".
 	// Do not specify a protocol or scheme since "https://" will always be used.
 	// Port is optional. Do not specify a path, query, fragment, or userinfo.
-	// Only domain name or IP address, subdomains (optional), and port (optional).
+	// Only specify domain name or IP address, subdomains (optional), and port (optional).
 	// IPv4 and IPv6 are supported. If using an IPv6 address with a port, you must enclose the IPv6 address
 	// in square brackets. Example: "[::1]:443".
 	//
@@ -65,6 +66,9 @@ type GitHubAPIConfig struct {
 	Host *string `json:"host"`
 
 	// TLS configuration for GitHub Enterprise Server.
+	// Note that this field should not be needed when using GitHub's public API ("github.com").
+	// However, if you choose to specify this field when using GitHub's public API, you must
+	// specify a CA bundle that will verify connections to "api.github.com".
 	//
 	// +optional
 	TLS *TLSSpec `json:"tls,omitempty"`

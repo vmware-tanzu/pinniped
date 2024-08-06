@@ -263,24 +263,12 @@ func (c *oidcWatcherController) validateUpstream(ctx controllerlib.Context, upst
 		})
 	}
 
-	c.updateStatus(ctx.Context, upstream, conditions)
+	hadErrorCondition := c.updateStatus(ctx.Context, upstream, conditions)
 
-	valid := true
-	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
-	for _, condition := range conditions {
-		if condition.Status == metav1.ConditionFalse {
-			valid = false
-			log.WithValues(
-				"type", condition.Type,
-				"reason", condition.Reason,
-				"message", condition.Message,
-			).Error("found failing condition", errOIDCFailureStatus)
-		}
+	if hadErrorCondition {
+		return nil
 	}
-	if valid {
-		return &result
-	}
-	return nil
+	return &result
 }
 
 // validateSecret validates the .spec.client.secretName field and returns the appropriate ClientCredentialsSecretValid condition.
@@ -345,9 +333,9 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 		return []*metav1.Condition{
 			{
 				Type:    typeOIDCDiscoverySucceeded,
-				Status:  metav1.ConditionFalse,
-				Reason:  tlsconfigutil.ReasonInvalidTLSConfig,
-				Message: tlsCondition.Message,
+				Status:  metav1.ConditionUnknown,
+				Reason:  conditionsutil.ReasonUnableToValidate,
+				Message: "unable to validate; see other conditions for details",
 			},
 			tlsCondition,
 		}
@@ -468,7 +456,11 @@ func (c *oidcWatcherController) validateIssuer(ctx context.Context, upstream *id
 	}
 }
 
-func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *idpv1alpha1.OIDCIdentityProvider, conditions []*metav1.Condition) {
+func (c *oidcWatcherController) updateStatus(
+	ctx context.Context,
+	upstream *idpv1alpha1.OIDCIdentityProvider,
+	conditions []*metav1.Condition,
+) bool {
 	log := c.log.WithValues("namespace", upstream.Namespace, "name", upstream.Name)
 	updated := upstream.DeepCopy()
 
@@ -480,7 +472,7 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *idpv
 	}
 
 	if equality.Semantic.DeepEqual(upstream, updated) {
-		return
+		return hadErrorCondition
 	}
 
 	_, err := c.client.
@@ -490,6 +482,8 @@ func (c *oidcWatcherController) updateStatus(ctx context.Context, upstream *idpv
 	if err != nil {
 		log.Error("failed to update status", err)
 	}
+
+	return hadErrorCondition
 }
 
 func defaultClientShortTimeout(rootCAs *x509.CertPool) *http.Client {

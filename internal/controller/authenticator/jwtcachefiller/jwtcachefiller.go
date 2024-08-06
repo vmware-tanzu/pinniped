@@ -64,8 +64,6 @@ const (
 	reasonInvalidAuthenticator                      = "InvalidAuthenticator"
 	reasonInvalidCouldNotFetchJWKS                  = "InvalidCouldNotFetchJWKS"
 
-	msgUnableToValidate = "unable to validate; see other conditions for details"
-
 	// These default values come from the way that the Supervisor issues and signs tokens. We make these
 	// the defaults for a JWTAuthenticator so that they can easily integrate with the Supervisor.
 	defaultUsernameClaim = oidcapi.IDTokenClaimUsername
@@ -462,7 +460,7 @@ func (c *jwtCacheFillerController) validateProviderDiscovery(ctx context.Context
 			Type:    typeDiscoveryValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  conditionsutil.ReasonUnableToValidate,
-			Message: msgUnableToValidate,
+			Message: conditionsutil.MessageUnableToValidate,
 		})
 		return nil, nil, conditions, nil
 	}
@@ -500,7 +498,7 @@ func (c *jwtCacheFillerController) validateProviderJWKSURL(provider *coreosoidc.
 			Type:    typeJWKSURLValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  conditionsutil.ReasonUnableToValidate,
-			Message: msgUnableToValidate,
+			Message: conditionsutil.MessageUnableToValidate,
 		})
 		return "", conditions, nil
 	}
@@ -567,7 +565,7 @@ func (c *jwtCacheFillerController) validateJWKSFetch(ctx context.Context, jwksUR
 			Type:    typeJWKSFetchValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  conditionsutil.ReasonUnableToValidate,
-			Message: msgUnableToValidate,
+			Message: conditionsutil.MessageUnableToValidate,
 		})
 		return nil, conditions, nil
 	}
@@ -646,7 +644,7 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(
 			Type:    typeAuthenticatorValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  conditionsutil.ReasonUnableToValidate,
-			Message: msgUnableToValidate,
+			Message: conditionsutil.MessageUnableToValidate,
 		})
 		return nil, conditions, nil
 	}

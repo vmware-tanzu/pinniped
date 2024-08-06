@@ -229,9 +229,9 @@ type GradatedConditions struct {
 }
 
 func (g *GradatedConditions) Conditions() []*metav1.Condition {
-	conditions := []*metav1.Condition{}
-	for _, gc := range g.gradatedConditions {
-		conditions = append(conditions, gc.condition)
+	conditions := make([]*metav1.Condition, len(g.gradatedConditions))
+	for i, gc := range g.gradatedConditions {
+		conditions[i] = gc.condition
 	}
 	return conditions
 }
@@ -263,9 +263,18 @@ func ValidateGenericLDAP(
 	if secretValidCondition.Status == metav1.ConditionTrue && tlsValidCondition.Status == metav1.ConditionTrue {
 		ldapConnectionValidCondition, searchBaseFoundCondition = validateAndSetLDAPServerConnectivityAndSearchBase(ctx, validatedSettingsCache, upstream, config, currentSecretVersion)
 		conditions.Append(ldapConnectionValidCondition, false)
+		// TODO: For AD, hould we add a condition of type SearchBaseFoundCondition when we can't validate the bind secret or TLS config???
 		if searchBaseFoundCondition != nil { // currently, only used for AD, so may be nil
 			conditions.Append(searchBaseFoundCondition, true)
 		}
+	} else {
+		connectionUnknownCondition := &metav1.Condition{
+			Type:    typeLDAPConnectionValid,
+			Status:  metav1.ConditionUnknown,
+			Reason:  conditionsutil.ReasonUnableToValidate,
+			Message: conditionsutil.MessageUnableToValidate,
+		}
+		conditions.Append(connectionUnknownCondition, true)
 	}
 	return conditions
 }

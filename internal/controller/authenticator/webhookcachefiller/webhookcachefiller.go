@@ -54,8 +54,6 @@ const (
 	reasonUnableToInstantiateWebhook = "UnableToInstantiateWebhook"
 	reasonInvalidEndpointURL         = "InvalidEndpointURL"
 	reasonInvalidEndpointURLScheme   = "InvalidEndpointURLScheme"
-
-	msgUnableToValidate = "unable to validate; see other conditions for details"
 )
 
 type cachedWebhookAuthenticator struct {
@@ -344,7 +342,7 @@ func newWebhookAuthenticator(
 			Type:    typeAuthenticatorValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  conditionsutil.ReasonUnableToValidate,
-			Message: msgUnableToValidate,
+			Message: conditionsutil.MessageUnableToValidate,
 		})
 		return nil, conditions, nil
 	}
@@ -425,7 +423,7 @@ func (c *webhookCacheFillerController) validateConnection(
 			Type:    typeWebhookConnectionValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  conditionsutil.ReasonUnableToValidate,
-			Message: msgUnableToValidate,
+			Message: conditionsutil.MessageUnableToValidate,
 		})
 		return conditions, nil
 	}

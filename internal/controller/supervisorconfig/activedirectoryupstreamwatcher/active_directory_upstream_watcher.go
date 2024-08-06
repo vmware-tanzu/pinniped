@@ -212,14 +212,6 @@ func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) GroupNameAttribute() str
 	return g.groupSearch.Attributes.GroupName
 }
 
-type activeDirectoryUpstreamGenericLDAPStatus struct {
-	activeDirectoryIdentityProvider idpv1alpha1.ActiveDirectoryIdentityProvider
-}
-
-func (s *activeDirectoryUpstreamGenericLDAPStatus) Conditions() []metav1.Condition {
-	return s.activeDirectoryIdentityProvider.Status.Conditions
-}
-
 // UpstreamActiveDirectoryIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.
 type UpstreamActiveDirectoryIdentityProviderICache interface {
 	SetActiveDirectoryIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI)

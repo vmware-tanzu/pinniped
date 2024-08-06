@@ -120,10 +120,6 @@ func (g *ldapUpstreamGenericLDAPGroupSearch) GroupNameAttribute() string {
 	return g.groupSearch.Attributes.GroupName
 }
 
-type ldapUpstreamGenericLDAPStatus struct {
-	ldapIdentityProvider idpv1alpha1.LDAPIdentityProvider
-}
-
 // UpstreamLDAPIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.
 type UpstreamLDAPIdentityProviderICache interface {
 	SetLDAPIdentityProviders([]upstreamprovider.UpstreamLDAPIdentityProviderI)

@@ -17,8 +17,8 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-// TestTLSSpecKubeBuilderValidationSupervisor_Parallel tests kubebuilder validation
-// on the TLSSpec in Pinniped supervisor CRDs using OIDCIdentityProvider as an example.
+// TestTLSSpecValidationSupervisor_Parallel tests kubebuilder and status condition validation
+// on the TLSSpec in Pinniped supervisor IdentityProvider CRDs.
 func TestTLSSpecValidationSupervisor_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 

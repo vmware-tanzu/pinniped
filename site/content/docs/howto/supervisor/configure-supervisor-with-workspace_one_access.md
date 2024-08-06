@@ -68,7 +68,7 @@ spec:
 
   # Specify the issuer URL (no trailing slash). Change this to be the
   # actual issuer of your Workspace ONE Access environment.  Note that
-  # the Workspace ONE Access issuer ends with the string "/SAAS/auth."
+  # the Workspace ONE Access issuer ends with the string "/SAAS/auth".
   issuer: https://ws1.my-company.com/SAAS/auth
   tls:
      # Base64-encoded PEM CA bundle for connections to WS1 (optional).

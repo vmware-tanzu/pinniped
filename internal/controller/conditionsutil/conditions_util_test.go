@@ -21,13 +21,13 @@ func TestMergeIDPConditions(t *testing.T) {
 	testTime := metav1.Now()
 
 	tests := []struct {
-		name               string
-		newConditions      []*metav1.Condition
-		conditionsToUpdate *[]metav1.Condition
-		observedGeneration int64
-		wantResult         bool
-		wantLogSnippets    []string
-		wantConditions     []metav1.Condition
+		name                       string
+		newConditions              []*metav1.Condition
+		existingConditionsToUpdate *[]metav1.Condition
+		observedGeneration         int64
+		wantResult                 bool
+		wantLogSnippets            []string
+		wantConditions             []metav1.Condition
 	}{
 		{
 			name: "Adding a new condition with status=True returns false",
@@ -39,8 +39,8 @@ func TestMergeIDPConditions(t *testing.T) {
 					Message: "new message",
 				},
 			},
-			observedGeneration: int64(999),
-			conditionsToUpdate: &[]metav1.Condition{},
+			observedGeneration:         int64(999),
+			existingConditionsToUpdate: &[]metav1.Condition{},
 			wantLogSnippets: []string{
 				`"message":"updated condition","type":"NewType","status":"True"`,
 			},
@@ -78,7 +78,7 @@ func TestMergeIDPConditions(t *testing.T) {
 					Message: "new message",
 				},
 			},
-			conditionsToUpdate: &[]metav1.Condition{
+			existingConditionsToUpdate: &[]metav1.Condition{
 				{
 					Type:               "UnchangedType",
 					Status:             metav1.ConditionTrue,
@@ -140,7 +140,7 @@ func TestMergeIDPConditions(t *testing.T) {
 					Message: "unchanged message",
 				},
 			},
-			conditionsToUpdate: &[]metav1.Condition{
+			existingConditionsToUpdate: &[]metav1.Condition{
 				{
 					Type:               "UnchangedType",
 					Status:             metav1.ConditionFalse,
@@ -165,26 +165,26 @@ func TestMergeIDPConditions(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			var log bytes.Buffer
 			logger := plog.TestLogger(t, &log)
 
 			result := MergeConditions(
-				tt.newConditions,
-				tt.conditionsToUpdate,
-				tt.observedGeneration,
+				test.newConditions,
+				test.existingConditionsToUpdate,
+				test.observedGeneration,
 				testTime,
 				logger,
 			)
 
 			logString := log.String()
-			require.Equal(t, len(tt.wantLogSnippets), strings.Count(logString, "\n"))
-			for _, wantLog := range tt.wantLogSnippets {
+			require.Equal(t, len(test.wantLogSnippets), strings.Count(logString, "\n"))
+			for _, wantLog := range test.wantLogSnippets {
 				require.Contains(t, logString, wantLog)
 			}
-			require.Equal(t, tt.wantResult, result)
-			require.Equal(t, tt.wantConditions, *tt.conditionsToUpdate)
+			require.Equal(t, test.wantResult, result)
+			require.Equal(t, test.wantConditions, *test.existingConditionsToUpdate)
 		})
 	}
 }

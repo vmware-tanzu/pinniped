@@ -29,17 +29,17 @@ const (
 // since Pinniped should always check every condition.
 // It returns true if any resulting condition has non-true status.
 func MergeConditions(
-	conditions []*metav1.Condition,
-	conditionsToUpdate *[]metav1.Condition,
+	newConditions []*metav1.Condition,
+	existingConditionsToUpdate *[]metav1.Condition,
 	observedGeneration int64,
 	lastTransitionTime metav1.Time,
 	log plog.MinLogger,
 ) bool {
-	for i := range conditions {
-		cond := conditions[i].DeepCopy()
+	for i := range newConditions {
+		cond := newConditions[i].DeepCopy()
 		cond.LastTransitionTime = lastTransitionTime
 		cond.ObservedGeneration = observedGeneration
-		if mergeCondition(conditionsToUpdate, cond) {
+		if mergeCondition(existingConditionsToUpdate, cond) {
 			log.Info("updated condition",
 				"type", cond.Type,
 				"status", cond.Status,
@@ -47,39 +47,39 @@ func MergeConditions(
 				"message", cond.Message)
 		}
 	}
-	sort.SliceStable(*conditionsToUpdate, func(i, j int) bool {
-		return (*conditionsToUpdate)[i].Type < (*conditionsToUpdate)[j].Type
+	sort.SliceStable(*existingConditionsToUpdate, func(i, j int) bool {
+		return (*existingConditionsToUpdate)[i].Type < (*existingConditionsToUpdate)[j].Type
 	})
-	return HadErrorCondition(conditions)
+	return HadErrorCondition(newConditions)
 }
 
 // mergeCondition merges a new metav1.Condition into a slice of existing conditions. It returns true
-// if the condition has meaningfully changed.
-func mergeCondition(existing *[]metav1.Condition, new *metav1.Condition) bool {
+// if something other than the LastTransitionTime has been updated.
+func mergeCondition(existingConditionsToUpdate *[]metav1.Condition, newCondition *metav1.Condition) bool {
 	// Find any existing condition with a matching type.
 	var old *metav1.Condition
-	for i := range *existing {
-		if (*existing)[i].Type == new.Type {
-			old = &(*existing)[i]
+	for i := range *existingConditionsToUpdate {
+		if (*existingConditionsToUpdate)[i].Type == newCondition.Type {
+			old = &(*existingConditionsToUpdate)[i]
 			continue
 		}
 	}
 
 	// If there is no existing condition of this type, append this one and we're done.
 	if old == nil {
-		*existing = append(*existing, *new)
+		*existingConditionsToUpdate = append(*existingConditionsToUpdate, *newCondition)
 		return true
 	}
 
 	// Set the LastTransitionTime depending on whether the status has changed.
-	new = new.DeepCopy()
-	if old.Status == new.Status {
-		new.LastTransitionTime = old.LastTransitionTime
+	newCondition = newCondition.DeepCopy()
+	if old.Status == newCondition.Status {
+		newCondition.LastTransitionTime = old.LastTransitionTime
 	}
 
 	// If anything has actually changed, update the entry and return true.
-	if !equality.Semantic.DeepEqual(old, new) {
-		*old = *new
+	if !equality.Semantic.DeepEqual(old, newCondition) {
+		*old = *newCondition
 		return true
 	}
 

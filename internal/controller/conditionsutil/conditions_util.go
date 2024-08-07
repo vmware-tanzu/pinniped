@@ -4,6 +4,7 @@
 package conditionsutil
 
 import (
+	"slices"
 	"sort"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -57,18 +58,17 @@ func MergeConditions(
 // if something other than the LastTransitionTime has been updated.
 func mergeCondition(existingConditionsToUpdate *[]metav1.Condition, newCondition *metav1.Condition) bool {
 	// Find any existing condition with a matching type.
-	var existingCondition *metav1.Condition
-	for i := range *existingConditionsToUpdate {
-		if (*existingConditionsToUpdate)[i].Type == newCondition.Type {
-			existingCondition = &(*existingConditionsToUpdate)[i]
-			continue
-		}
-	}
+	index := slices.IndexFunc(*existingConditionsToUpdate, func(condition metav1.Condition) bool {
+		return newCondition.Type == condition.Type
+	})
 
-	// If there is no existing condition of this type, append this one and we're done.
-	if existingCondition == nil {
+	var existingCondition *metav1.Condition
+	if index < 0 {
+		// If there is no existing condition of this type, append this one and we're done.
 		*existingConditionsToUpdate = append(*existingConditionsToUpdate, *newCondition)
 		return true
+	} else {
+		existingCondition = &(*existingConditionsToUpdate)[index]
 	}
 
 	// Set the LastTransitionTime depending on whether the status has changed.
@@ -88,10 +88,7 @@ func mergeCondition(existingConditionsToUpdate *[]metav1.Condition, newCondition
 }
 
 func HadErrorCondition(conditions []*metav1.Condition) bool {
-	for _, c := range conditions {
-		if c.Status != metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(conditions, func(condition *metav1.Condition) bool {
+		return condition.Status != metav1.ConditionTrue
+	})
 }

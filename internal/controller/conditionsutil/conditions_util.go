@@ -67,11 +67,12 @@ func mergeCondition(existingConditionsToUpdate *[]metav1.Condition, newCondition
 		// If there is no existing condition of this type, append this one and we're done.
 		*existingConditionsToUpdate = append(*existingConditionsToUpdate, *newCondition)
 		return true
-	} else {
-		existingCondition = &(*existingConditionsToUpdate)[index]
 	}
 
-	// Set the LastTransitionTime depending on whether the status has changed.
+	// Get a pointer to the existing condition
+	existingCondition = &(*existingConditionsToUpdate)[index]
+
+	// If the status has not changed, preserve the original lastTransitionTime
 	if newCondition.Status == existingCondition.Status {
 		newCondition.LastTransitionTime = existingCondition.LastTransitionTime
 	}

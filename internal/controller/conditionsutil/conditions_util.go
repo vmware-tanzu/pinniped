@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sort"
 
-	"k8s.io/apimachinery/pkg/api/equality"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/plog"
@@ -77,14 +77,9 @@ func mergeCondition(existingConditionsToUpdate *[]metav1.Condition, newCondition
 		newCondition.LastTransitionTime = existingCondition.LastTransitionTime
 	}
 
-	// If anything has actually changed, update the entry and return true.
-	if !equality.Semantic.DeepEqual(existingCondition, newCondition) {
-		*existingCondition = *newCondition
-		return true
-	}
-
-	// Otherwise the entry is already up-to-date.
-	return false
+	changed := !apiequality.Semantic.DeepEqual(existingCondition, newCondition)
+	*existingCondition = *newCondition
+	return changed
 }
 
 func HadErrorCondition(conditions []*metav1.Condition) bool {

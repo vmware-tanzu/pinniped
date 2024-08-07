@@ -188,3 +188,77 @@ func TestMergeIDPConditions(t *testing.T) {
 		})
 	}
 }
+
+func TestHadErrorCondition(t *testing.T) {
+	tests := []struct {
+		name       string
+		conditions []*metav1.Condition
+		wantResult bool
+	}{
+		{
+			name: "Returns false when all conditions have status true",
+			conditions: []*metav1.Condition{
+				{
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Status: metav1.ConditionTrue,
+				},
+			},
+			wantResult: false,
+		},
+		{
+			name:       "Returns false when input is nil",
+			conditions: nil,
+			wantResult: false,
+		},
+		{
+			name:       "Returns false when input is empty",
+			conditions: []*metav1.Condition{},
+			wantResult: false,
+		},
+		{
+			name: "Returns true when any condition has status unknown",
+			conditions: []*metav1.Condition{
+				{
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Status: metav1.ConditionUnknown,
+				},
+			},
+			wantResult: true,
+		},
+		{
+			name: "Returns true when any condition has status false",
+			conditions: []*metav1.Condition{
+				{
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Status: metav1.ConditionFalse,
+				},
+			},
+			wantResult: true,
+		},
+		{
+			name: "Returns true when any condition has invalid status",
+			conditions: []*metav1.Condition{
+				{
+					Status: metav1.ConditionTrue,
+				},
+				{
+					Status: "not a valid status",
+				},
+			},
+			wantResult: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := HadErrorCondition(test.conditions)
+			require.Equal(t, test.wantResult, actual)
+		})
+	}
+}

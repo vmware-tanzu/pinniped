@@ -172,10 +172,10 @@ func TestMergeIDPConditions(t *testing.T) {
 
 			result := MergeConditions(
 				tt.newConditions,
-				tt.observedGeneration,
 				tt.conditionsToUpdate,
-				logger,
+				tt.observedGeneration,
 				testTime,
+				logger,
 			)
 
 			logString := log.String()

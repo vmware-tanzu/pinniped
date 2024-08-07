@@ -24,22 +24,27 @@ const (
 )
 
 // MergeConditions merges conditions into conditionsToUpdate.
-// Note that LastTransitionTime refers to the time when the status changed,
-// but ObservedGeneration should be the current generation for all conditions, since Pinniped should always check every condition.
+// Note that lastTransitionTime refers to the time when the status changed,
+// but observedGeneration should be the current generation for all conditions,
+// since Pinniped should always check every condition.
 // It returns true if any resulting condition has non-true status.
 func MergeConditions(
 	conditions []*metav1.Condition,
-	observedGeneration int64,
 	conditionsToUpdate *[]metav1.Condition,
-	log plog.MinLogger,
+	observedGeneration int64,
 	lastTransitionTime metav1.Time,
+	log plog.MinLogger,
 ) bool {
 	for i := range conditions {
 		cond := conditions[i].DeepCopy()
 		cond.LastTransitionTime = lastTransitionTime
 		cond.ObservedGeneration = observedGeneration
 		if mergeCondition(conditionsToUpdate, cond) {
-			log.Info("updated condition", "type", cond.Type, "status", cond.Status, "reason", cond.Reason, "message", cond.Message)
+			log.Info("updated condition",
+				"type", cond.Type,
+				"status", cond.Status,
+				"reason", cond.Reason,
+				"message", cond.Message)
 		}
 	}
 	sort.SliceStable(*conditionsToUpdate, func(i, j int) bool {

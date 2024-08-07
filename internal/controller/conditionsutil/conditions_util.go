@@ -37,15 +37,15 @@ func MergeConditions(
 	log plog.MinLogger,
 ) bool {
 	for i := range newConditions {
-		cond := newConditions[i].DeepCopy()
-		cond.LastTransitionTime = lastTransitionTime
-		cond.ObservedGeneration = observedGeneration
-		if mergeCondition(existingConditionsToUpdate, cond) {
+		newCondition := newConditions[i].DeepCopy()
+		newCondition.LastTransitionTime = lastTransitionTime
+		newCondition.ObservedGeneration = observedGeneration
+		if mergeCondition(existingConditionsToUpdate, newCondition) {
 			log.Info("updated condition",
-				"type", cond.Type,
-				"status", cond.Status,
-				"reason", cond.Reason,
-				"message", cond.Message)
+				"type", newCondition.Type,
+				"status", newCondition.Status,
+				"reason", newCondition.Reason,
+				"message", newCondition.Message)
 		}
 	}
 	sort.SliceStable(*existingConditionsToUpdate, func(i, j int) bool {
@@ -72,8 +72,7 @@ func mergeCondition(existingConditionsToUpdate *[]metav1.Condition, newCondition
 	}
 
 	// Set the LastTransitionTime depending on whether the status has changed.
-	newCondition = newCondition.DeepCopy()
-	if existingCondition.Status == newCondition.Status {
+	if newCondition.Status == existingCondition.Status {
 		newCondition.LastTransitionTime = existingCondition.LastTransitionTime
 	}
 

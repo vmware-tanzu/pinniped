@@ -2,7 +2,7 @@
 title: "Pinniped v0.33.0: Externally-managed CA bundles for Pinniped's custom resources"
 slug: externally-managed-ca-bundles
 date: 2024-08-07
-author: Joshua T. Casey
+author: Joshua T. Casey and Ryan Richard
 image: https://images.unsplash.com/photo-1508137089752-c6ff1992dd7d?q=80&w=3008&auto=format&fit=crop&ixlib=rb-4.0.3
 excerpt: "With the release of v0.33.0, Pinniped enables externally-managed CA bundles for all custom resources"
 tags: ['Joshua T. Casey', 'Ashish Amarnanth', 'Ryan Richard', 'release']
@@ -24,13 +24,73 @@ Concierge and Supervisor will monitor these `ConfigMap` or `Secret` objects, and
 This means that manual updates to custom resources is no longer required, to ensure almost no downtime if the
 certificate needs to be rotated.
 
-## Example using `local-user-authenticator` as a service and `trust-manager` to manage the CA bundles
+## Example
 
-*NOTE*: The `local-user-authenticator` is not production-ready. It's used here only for demonstration purposes.
+Here is an example of how you would previously configure a CA bundle for an `ActiveDirectoryIdentityProvider`.
 
-We can install Pinniped's `local-user-authenticator` to act as a test user store, and configure the Concierge to rely on it as
-a source of identity. During installation, `local-user-authenticator` will generate its own self-signed CA bundle that we
+```yaml
+apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+kind: ActiveDirectoryIdentityProvider
+metadata:
+  name: my-active-directory-idp
+  namespace: pinniped-supervisor
+spec:
+  host: "activedirectory.example.com:636"
+  bind:
+    secretName: "active-directory-bind-account"
+  tls:
+    # This would contain your base64 encoded CA bundle.
+    certificateAuthorityData: LS0tLS1CRUdJTiBDR...
+```
+
+And here is an example of how you can alternatively configure the CA bundle using this new feature,
+with the new `certificateAuthorityDataSource` configuration option.
+
+```yaml
+apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+kind: ActiveDirectoryIdentityProvider
+metadata:
+  name: my-active-directory-idp
+  namespace: pinniped-supervisor
+spec:
+  host: "activedirectory.example.com:636"
+  bind:
+    secretName: "active-directory-bind-account"
+  tls:
+    # This is the new feature! Instead of embedding your CA
+    # bundle here, you can refer to a Secret or ConfigMap.
+    certificateAuthorityDataSource:
+      kind: ConfigMap
+      name: my-ca-bundle-config-map
+      key: ca.crt
+```
+
+In the above example, the ConfigMap must be in the `pinniped-supervisor` namespace.
+Its content will be dynamically loaded, and will be automatically watched for any updates,
+which will also be dynamically reloaded.
+
+This gives you the advantage of being able to more easily update your CA bundles using any automation tools
+that can update ConfigMaps or Secrets.
+
+The same feature has been added to all Concierge authenticator resource types (`WebhookAuthenticator` and `JWTAuthenticator`)
+and all Supervisor identity provider resource types
+(`OIDCIdentityProvider`, `GitHubIdentityProvider`, `ActiveDirectoryIdentityProvider`, and `LDAPIdentityProvider`).
+
+## Demo using `local-user-authenticator` as a service and `trust-manager` to manage the CA bundles
+
+This demo will show using the new `certificateAuthorityDataSource` feature on a `WebhookAuthenticator`.
+In order to demo that, we need a webhook provider and a CA bundle.
+We can install Pinniped's `local-user-authenticator` to act as webhook provider and source of identities,
+and then configure the Concierge `WebhookAuthenticator` to use it.
+During installation, `local-user-authenticator` will generate its own self-signed CA bundle that we
 must provide to Concierge in the `WebhookAuthenticator` custom resource.
+
+*NOTE*: The `local-user-authenticator` is not production-ready. It's used here only for demonstration purposes
+because it is easy to install and configure as an identity provider for a `WebhookAuthenticator`.
+
+We will use `trust-manager` to distribute the CA bundle from the `local-user-authenticator` namespace
+to the `pinniped-concierge` namespace. Usually, `trust-manager` is used to distribute certificates generated
+by `cert-manager`, but in this demo we don't need the added complexity that would come from also using `cert-manager`.
 
 ### Setup and creating a cluster
 

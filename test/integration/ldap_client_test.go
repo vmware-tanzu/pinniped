@@ -49,10 +49,10 @@ func TestLDAPSearch_Parallel(t *testing.T) {
 	ldapsLocalhostPort := localhostPorts[1]
 	unusedLocalhostPort := localhostPorts[2]
 
-	// Expose the the test LDAP server's TLS port on the localhost.
+	// Expose the test LDAP server's TLS port on the localhost.
 	startKubectlPortForward(ctx, t, ldapsLocalhostPort, "ldaps", "ldap", env.ToolsNamespace)
 
-	// Expose the the test LDAP server's StartTLS port on the localhost.
+	// Expose the test LDAP server's StartTLS port on the localhost.
 	startKubectlPortForward(ctx, t, ldapLocalhostPort, "ldap", "ldap", env.ToolsNamespace)
 
 	providerConfig := func(editFunc func(p *upstreamldap.ProviderConfig)) *upstreamldap.ProviderConfig {
@@ -853,11 +853,11 @@ func startKubectlPortForward(ctx context.Context, t *testing.T, hostPort, remote
 func findRecentlyUnusedLocalhostPorts(t *testing.T, howManyPorts int) []string {
 	t.Helper()
 
-	listeners := []net.Listener{}
-	for range howManyPorts {
-		unusedPortGrabbingListener, err := net.Listen("tcp", "127.0.0.1:0")
+	listeners := make([]net.Listener, howManyPorts)
+	for i := range howManyPorts {
+		var err error
+		listeners[i], err = net.Listen("tcp", "127.0.0.1:0")
 		require.NoError(t, err)
-		listeners = append(listeners, unusedPortGrabbingListener)
 	}
 
 	ports := make([]string, len(listeners))

@@ -363,6 +363,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			ObservedGeneration: gen,
 		}
 	}
+
 	ldapConnectionValidTrueCondition := func(gen int64, secretVersion string) metav1.Condition {
 		return metav1.Condition{
 			Type:               "LDAPConnectionValid",
@@ -380,9 +381,21 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 		c.LastTransitionTime = metav1.Time{}
 		return c
 	}
+	ldapConnectionValidUnknownCondition := func(gen int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "LDAPConnectionValid",
+			Status:             "Unknown",
+			LastTransitionTime: now,
+			Reason:             "UnableToValidate",
+			Message:            "unable to validate; see other conditions for details",
+			ObservedGeneration: gen,
+		}
+	}
+
 	condPtr := func(c metav1.Condition) *metav1.Condition {
 		return &c
 	}
+
 	tlsConfigurationValidLoadedTrueCondition := func(gen int64, msg string) metav1.Condition {
 		return metav1.Condition{
 			Type:               "TLSConfigurationValid",
@@ -393,6 +406,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 			ObservedGeneration: gen,
 		}
 	}
+
 	allConditionsTrue := func(gen int64, secretVersion string) []metav1.Condition {
 		return []metav1.Condition{
 			bindSecretValidTrueCondition(gen),
@@ -588,6 +602,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`secret "%s" not found`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
+						ldapConnectionValidUnknownCondition(1234),
 						tlsConfigurationValidLoadedTrueCondition(1234, "using configured CA bundle"),
 					},
 				},
@@ -616,6 +631,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`referenced Secret "%s" has wrong type "some-other-type" (should be "kubernetes.io/basic-auth")`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
+						ldapConnectionValidUnknownCondition(1234),
 						tlsConfigurationValidLoadedTrueCondition(1234, "using configured CA bundle"),
 					},
 				},
@@ -643,6 +659,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 							Message:            fmt.Sprintf(`referenced Secret "%s" is missing required keys ["username" "password"]`, testBindSecretName),
 							ObservedGeneration: 1234,
 						},
+						ldapConnectionValidUnknownCondition(1234),
 						tlsConfigurationValidLoadedTrueCondition(1234, "using configured CA bundle"),
 					},
 				},
@@ -662,6 +679,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
+						ldapConnectionValidUnknownCondition(1234),
 						{
 							Type:               "TLSConfigurationValid",
 							Status:             "False",
@@ -688,6 +706,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 					Phase: "Error",
 					Conditions: []metav1.Condition{
 						bindSecretValidTrueCondition(1234),
+						ldapConnectionValidUnknownCondition(1234),
 						{
 							Type:               "TLSConfigurationValid",
 							Status:             "False",
@@ -981,6 +1000,7 @@ func TestLDAPUpstreamWatcherControllerSync(t *testing.T) {
 								Message:            fmt.Sprintf(`secret "%s" not found`, "non-existent-secret"),
 								ObservedGeneration: 42,
 							},
+							ldapConnectionValidUnknownCondition(42),
 							tlsConfigurationValidLoadedTrueCondition(42, "using configured CA bundle"),
 						},
 					},

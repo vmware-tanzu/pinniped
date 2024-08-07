@@ -99,7 +99,6 @@ type UpstreamGenericLDAPIDP interface {
 	Name() string
 	Namespace() string
 	Generation() int64
-	Status() UpstreamGenericLDAPStatus
 }
 
 type UpstreamGenericLDAPSpec interface {
@@ -109,6 +108,7 @@ type UpstreamGenericLDAPSpec interface {
 	UserSearch() UpstreamGenericLDAPUserSearch
 	GroupSearch() UpstreamGenericLDAPGroupSearch
 	DetectAndSetSearchBase(ctx context.Context, config *upstreamldap.ProviderConfig) *metav1.Condition
+	UnknownSearchBaseCondition() *metav1.Condition
 }
 
 type UpstreamGenericLDAPUserSearch interface {
@@ -230,9 +230,9 @@ type GradatedConditions struct {
 }
 
 func (g *GradatedConditions) Conditions() []*metav1.Condition {
-	conditions := []*metav1.Condition{}
-	for _, gc := range g.gradatedConditions {
-		conditions = append(conditions, gc.condition)
+	conditions := make([]*metav1.Condition, len(g.gradatedConditions))
+	for i, gc := range g.gradatedConditions {
+		conditions[i] = gc.condition
 	}
 	return conditions
 }
@@ -262,12 +262,23 @@ func ValidateGenericLDAP(
 	var ldapConnectionValidCondition, searchBaseFoundCondition *metav1.Condition
 	// No point in trying to connect to the server if the config was already determined to be invalid.
 	if secretValidCondition.Status == metav1.ConditionTrue && tlsValidCondition.Status == metav1.ConditionTrue {
-		ldapConnectionValidCondition, searchBaseFoundCondition = validateAndSetLDAPServerConnectivityAndSearchBase(ctx, validatedSettingsCache, upstream, config, currentSecretVersion)
-		conditions.Append(ldapConnectionValidCondition, false)
-		if searchBaseFoundCondition != nil { // currently, only used for AD, so may be nil
-			conditions.Append(searchBaseFoundCondition, true)
+		ldapConnectionValidCondition, searchBaseFoundCondition = validateAndSetLDAPServerConnectivityAndSearchBase(
+			ctx, validatedSettingsCache, upstream, config, currentSecretVersion)
+	} else {
+		ldapConnectionValidCondition = &metav1.Condition{
+			Type:    typeLDAPConnectionValid,
+			Status:  metav1.ConditionUnknown,
+			Reason:  conditionsutil.ReasonUnableToValidate,
+			Message: conditionsutil.MessageUnableToValidate,
 		}
+		searchBaseFoundCondition = upstream.Spec().UnknownSearchBaseCondition()
 	}
+	// Append the conditions calculated by the if/else above.
+	conditions.Append(ldapConnectionValidCondition, false)
+	if searchBaseFoundCondition != nil { // currently, only used for AD, so may be nil
+		conditions.Append(searchBaseFoundCondition, true)
+	}
+
 	return conditions
 }
 

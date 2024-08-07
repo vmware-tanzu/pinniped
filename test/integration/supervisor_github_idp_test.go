@@ -24,7 +24,7 @@ import (
 	"go.pinniped.dev/test/testlib"
 )
 
-const generateNamePrefix = "integration-test-github-idp-"
+const generateGitHubNamePrefix = "integration-test-github-idp-"
 
 func TestGitHubIDPStaticValidationOnCreate_Parallel(t *testing.T) {
 	adminClient := testlib.NewKubernetesClientset(t)
@@ -37,7 +37,7 @@ func TestGitHubIDPStaticValidationOnCreate_Parallel(t *testing.T) {
 
 	ns, err := namespaceClient.Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: generateNamePrefix,
+			GenerateName: generateGitHubNamePrefix,
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -240,7 +240,7 @@ func TestGitHubIDPStaticValidationOnCreate_Parallel(t *testing.T) {
 
 			input := &idpv1alpha1.GitHubIdentityProvider{
 				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: generateNamePrefix,
+					GenerateName: generateGitHubNamePrefix,
 				},
 				Spec: tt.inputSpec,
 			}
@@ -268,7 +268,7 @@ func TestGitHubIDPSetsDefaultsWithKubectl_Parallel(t *testing.T) {
 
 	ns, err := namespaceClient.Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: generateNamePrefix,
+			GenerateName: generateGitHubNamePrefix,
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -278,7 +278,7 @@ func TestGitHubIDPSetsDefaultsWithKubectl_Parallel(t *testing.T) {
 	})
 	t.Logf("Created namespace %s", ns.Name)
 
-	idpName := generateNamePrefix + testlib.RandHex(t, 16)
+	idpName := generateGitHubNamePrefix + testlib.RandHex(t, 16)
 
 	githubIDPYaml := []byte(here.Doc(fmt.Sprintf(`
 	---
@@ -336,8 +336,8 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 	secretsClient := kubernetesClient.CoreV1().Secrets(supervisorNamespace)
 	gitHubIDPClient := testlib.NewSupervisorClientset(t).IDPV1alpha1().GitHubIdentityProviders(supervisorNamespace)
 
-	happySecretName := generateNamePrefix + testlib.RandHex(t, 16)
-	invalidSecretName := generateNamePrefix + testlib.RandHex(t, 16)
+	happySecretName := generateGitHubNamePrefix + testlib.RandHex(t, 16)
+	invalidSecretName := generateGitHubNamePrefix + testlib.RandHex(t, 16)
 
 	tests := []struct {
 		name           string
@@ -490,7 +490,7 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 
 			var secretName string
 			for _, secret := range tt.secrets {
-				secret.GenerateName = generateNamePrefix
+				secret.GenerateName = generateGitHubNamePrefix
 
 				created, err := secretsClient.Create(ctx, secret, metav1.CreateOptions{})
 				require.NoError(t, err)
@@ -505,7 +505,7 @@ func TestGitHubIDPPhaseAndConditions_Parallel(t *testing.T) {
 
 			for _, idp := range tt.idps {
 				idp.Name = ""
-				idp.GenerateName = generateNamePrefix
+				idp.GenerateName = generateGitHubNamePrefix
 				idp.Spec.Client.SecretName = secretName
 
 				created, err := gitHubIDPClient.Create(ctx, idp, metav1.CreateOptions{})
@@ -532,7 +532,7 @@ func TestGitHubIDPInWrongNamespace_Parallel(t *testing.T) {
 	namespaceClient := kubernetesClient.CoreV1().Namespaces()
 	otherNamespace, err := namespaceClient.Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: generateNamePrefix,
+			GenerateName: generateGitHubNamePrefix,
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -545,7 +545,7 @@ func TestGitHubIDPInWrongNamespace_Parallel(t *testing.T) {
 
 	idp := &idpv1alpha1.GitHubIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: generateNamePrefix,
+			GenerateName: generateGitHubNamePrefix,
 			Namespace:    otherNamespace.Name,
 		},
 		Spec: idpv1alpha1.GitHubIdentityProviderSpec{
@@ -592,7 +592,7 @@ func TestGitHubIDPSecretInOtherNamespace_Parallel(t *testing.T) {
 	namespaceClient := kubernetesClient.CoreV1().Namespaces()
 	otherNamespace, err := namespaceClient.Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: generateNamePrefix,
+			GenerateName: generateGitHubNamePrefix,
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -605,7 +605,7 @@ func TestGitHubIDPSecretInOtherNamespace_Parallel(t *testing.T) {
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: generateNamePrefix,
+			GenerateName: generateGitHubNamePrefix,
 			Namespace:    otherNamespace.Name,
 		},
 		Type: "secrets.pinniped.dev/github-client",
@@ -621,7 +621,7 @@ func TestGitHubIDPSecretInOtherNamespace_Parallel(t *testing.T) {
 
 	idp := &idpv1alpha1.GitHubIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: generateNamePrefix,
+			GenerateName: generateGitHubNamePrefix,
 			Namespace:    supervisorNamespace,
 		},
 		Spec: idpv1alpha1.GitHubIdentityProviderSpec{
@@ -701,7 +701,7 @@ func TestGitHubIDPTooManyOrganizationsStaticValidationOnCreate_Parallel(t *testi
 
 	ns, err := namespaceClient.Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: generateNamePrefix,
+			GenerateName: generateGitHubNamePrefix,
 		},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
@@ -714,7 +714,7 @@ func TestGitHubIDPTooManyOrganizationsStaticValidationOnCreate_Parallel(t *testi
 
 	input := &idpv1alpha1.GitHubIdentityProvider{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: generateNamePrefix,
+			GenerateName: generateGitHubNamePrefix,
 		},
 		Spec: idpv1alpha1.GitHubIdentityProviderSpec{
 			AllowAuthentication: idpv1alpha1.GitHubAllowAuthenticationSpec{

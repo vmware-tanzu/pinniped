@@ -94,10 +94,6 @@ func (g *activeDirectoryUpstreamGenericLDAPImpl) Generation() int64 {
 	return g.activeDirectoryIdentityProvider.Generation
 }
 
-func (g *activeDirectoryUpstreamGenericLDAPImpl) Status() upstreamwatchers.UpstreamGenericLDAPStatus {
-	return &activeDirectoryUpstreamGenericLDAPStatus{g.activeDirectoryIdentityProvider}
-}
-
 type activeDirectoryUpstreamGenericLDAPSpec struct {
 	activeDirectoryIdentityProvider idpv1alpha1.ActiveDirectoryIdentityProvider
 }
@@ -120,6 +116,15 @@ func (s *activeDirectoryUpstreamGenericLDAPSpec) UserSearch() upstreamwatchers.U
 
 func (s *activeDirectoryUpstreamGenericLDAPSpec) GroupSearch() upstreamwatchers.UpstreamGenericLDAPGroupSearch {
 	return &activeDirectoryUpstreamGenericLDAPGroupSearch{s.activeDirectoryIdentityProvider.Spec.GroupSearch}
+}
+
+func (s *activeDirectoryUpstreamGenericLDAPSpec) UnknownSearchBaseCondition() *metav1.Condition {
+	return &metav1.Condition{
+		Type:    upstreamwatchers.TypeSearchBaseFound,
+		Status:  metav1.ConditionUnknown,
+		Reason:  conditionsutil.ReasonUnableToValidate,
+		Message: conditionsutil.MessageUnableToValidate,
+	}
 }
 
 func (s *activeDirectoryUpstreamGenericLDAPSpec) DetectAndSetSearchBase(ctx context.Context, config *upstreamldap.ProviderConfig) *metav1.Condition {
@@ -214,14 +219,6 @@ func (g *activeDirectoryUpstreamGenericLDAPGroupSearch) GroupNameAttribute() str
 		return defaultActiveDirectoryGroupNameAttributeName
 	}
 	return g.groupSearch.Attributes.GroupName
-}
-
-type activeDirectoryUpstreamGenericLDAPStatus struct {
-	activeDirectoryIdentityProvider idpv1alpha1.ActiveDirectoryIdentityProvider
-}
-
-func (s *activeDirectoryUpstreamGenericLDAPStatus) Conditions() []metav1.Condition {
-	return s.activeDirectoryIdentityProvider.Status.Conditions
 }
 
 // UpstreamActiveDirectoryIdentityProviderICache is a thread safe cache that holds a list of validated upstream LDAP IDP configurations.

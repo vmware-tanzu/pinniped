@@ -464,7 +464,7 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 			Type:    GitHubConnectionValid,
 			Status:  metav1.ConditionUnknown,
 			Reason:  conditionsutil.ReasonUnableToValidate,
-			Message: "unable to validate; see other conditions for details",
+			Message: conditionsutil.MessageUnableToValidate,
 		}, nil, nil
 	}
 

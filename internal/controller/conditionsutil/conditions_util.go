@@ -57,29 +57,29 @@ func MergeConditions(
 // if something other than the LastTransitionTime has been updated.
 func mergeCondition(existingConditionsToUpdate *[]metav1.Condition, newCondition *metav1.Condition) bool {
 	// Find any existing condition with a matching type.
-	var old *metav1.Condition
+	var existingCondition *metav1.Condition
 	for i := range *existingConditionsToUpdate {
 		if (*existingConditionsToUpdate)[i].Type == newCondition.Type {
-			old = &(*existingConditionsToUpdate)[i]
+			existingCondition = &(*existingConditionsToUpdate)[i]
 			continue
 		}
 	}
 
 	// If there is no existing condition of this type, append this one and we're done.
-	if old == nil {
+	if existingCondition == nil {
 		*existingConditionsToUpdate = append(*existingConditionsToUpdate, *newCondition)
 		return true
 	}
 
 	// Set the LastTransitionTime depending on whether the status has changed.
 	newCondition = newCondition.DeepCopy()
-	if old.Status == newCondition.Status {
-		newCondition.LastTransitionTime = old.LastTransitionTime
+	if existingCondition.Status == newCondition.Status {
+		newCondition.LastTransitionTime = existingCondition.LastTransitionTime
 	}
 
 	// If anything has actually changed, update the entry and return true.
-	if !equality.Semantic.DeepEqual(old, newCondition) {
-		*old = *newCondition
+	if !equality.Semantic.DeepEqual(existingCondition, newCondition) {
+		*existingCondition = *newCondition
 		return true
 	}
 

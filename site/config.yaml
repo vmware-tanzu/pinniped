@@ -7,7 +7,7 @@ params:
   github_url: "https://github.com/vmware-tanzu/pinniped"
   slack_url: "https://go.pinniped.dev/community/slack"
   community_url: "https://go.pinniped.dev/community"
-  latest_version: v0.32.0
+  latest_version: v0.33.0
   latest_codegen_version: 1.30
 pygmentsCodefences: true
 pygmentsStyle: "pygments"

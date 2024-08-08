@@ -24,7 +24,7 @@ const (
 	MessageUnableToValidate = "unable to validate; see other conditions for details"
 )
 
-// MergeConditions merges conditions into conditionsToUpdate.
+// MergeConditions merges newConditions into existingConditionsToUpdate.
 // Note that lastTransitionTime refers to the time when the status changed,
 // but observedGeneration should be the current generation for all conditions,
 // since Pinniped should always check every condition.

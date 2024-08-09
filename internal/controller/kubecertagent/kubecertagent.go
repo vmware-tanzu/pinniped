@@ -547,8 +547,22 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 							Command:         []string{"pinniped-concierge-kube-cert-agent", "sleep"},
 							VolumeMounts:    volumeMounts,
 							Env: []corev1.EnvVar{
-								{Name: "CERT_PATH", Value: getContainerArgByName(controllerManagerPod, "cluster-signing-cert-file", "/etc/kubernetes/ca/ca.pem")},
-								{Name: "KEY_PATH", Value: getContainerArgByName(controllerManagerPod, "cluster-signing-key-file", "/etc/kubernetes/ca/ca.key")},
+								{
+									Name: "CERT_PATH",
+									Value: getContainerArgByName(controllerManagerPod,
+										// See CLI flag docs at https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/
+										[]string{"cluster-signing-cert-file", "cluster-signing-kube-apiserver-client-cert-file"},
+										"/etc/kubernetes/ca/ca.pem",
+									),
+								},
+								{
+									Name: "KEY_PATH",
+									Value: getContainerArgByName(controllerManagerPod,
+										// See CLI flag docs at https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/
+										[]string{"cluster-signing-key-file", "cluster-signing-kube-apiserver-client-key-file"},
+										"/etc/kubernetes/ca/ca.key",
+									),
+								},
 							},
 							Resources: corev1.ResourceRequirements{
 								Limits: corev1.ResourceList{
@@ -603,15 +617,19 @@ func mergeLabelsAndAnnotations(existing metav1.ObjectMeta, desired metav1.Object
 	return *result
 }
 
-func getContainerArgByName(pod *corev1.Pod, name, fallbackValue string) string {
+func getContainerArgByName(pod *corev1.Pod, argsNames []string, fallbackValue string) string {
 	for _, container := range pod.Spec.Containers {
 		flagset := pflag.NewFlagSet("", pflag.ContinueOnError)
 		flagset.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
-		var val string
-		flagset.StringVar(&val, name, "", "")
+		parseResults := make([]string, len(argsNames))
+		for i, argName := range argsNames {
+			flagset.StringVar(&parseResults[i], argName, "", "")
+		}
 		_ = flagset.Parse(slices.Concat(container.Command, container.Args))
-		if val != "" {
-			return val
+		for _, parseResult := range parseResults {
+			if parseResult != "" {
+				return parseResult
+			}
 		}
 	}
 	return fallbackValue

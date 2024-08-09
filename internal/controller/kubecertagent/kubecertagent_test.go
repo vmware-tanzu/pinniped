@@ -180,6 +180,32 @@ func TestAgentController(t *testing.T) {
 	healthyAgentDeploymentWithHostNetwork := healthyAgentDeployment.DeepCopy()
 	healthyAgentDeploymentWithHostNetwork.Spec.Template.Spec.HostNetwork = true
 
+	// Make another kube-controller-manager pod that's similar, but has alternate CLI flags which we also support.
+	healthyKubeControllerManagerPodWithAlternateArgs := healthyKubeControllerManagerPod.DeepCopy()
+	healthyKubeControllerManagerPodWithAlternateArgs.Spec.Containers[0].Command = []string{
+		"kube-controller-manager",
+		"--some-flag",
+		"--cluster-signing-kube-apiserver-client-cert-file", "/path/to/signing.crt",
+		"--cluster-signing-kube-apiserver-client-key-file=/path/to/signing.key",
+		"some arguments here",
+		"--and-another-flag",
+	}
+
+	// Make another kube-controller-manager pod that's similar, but has both the standard and the alternate CLI flags,
+	// which shouldn't really happen in practice because the Kubernetes docs say that you cannot use both style of flags,
+	// but can be unit tested anyway.
+	healthyKubeControllerManagerPodWithStandardAndAlternateArgs := healthyKubeControllerManagerPod.DeepCopy()
+	healthyKubeControllerManagerPodWithStandardAndAlternateArgs.Spec.Containers[0].Command = []string{
+		"kube-controller-manager",
+		"--some-flag",
+		"--cluster-signing-kube-apiserver-client-cert-file", "/path/to/should-be-ignored.crt",
+		"--cluster-signing-kube-apiserver-client-key-file=/path/to/should-be-ignored.key",
+		"--cluster-signing-cert-file", "/path/to/signing.crt",
+		"--cluster-signing-key-file=/path/to/signing.key",
+		"some arguments here",
+		"--and-another-flag",
+	}
+
 	// Make another kube-controller-manager pod that's similar, but does not have the CLI flags we're expecting.
 	// We should handle this by falling back to default values for the cert and key paths.
 	healthyKubeControllerManagerPodWithoutArgs := healthyKubeControllerManagerPod.DeepCopy()
@@ -370,6 +396,104 @@ func TestAgentController(t *testing.T) {
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 				healthyKubeControllerManagerPod,
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-2",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				pendingAgentPod,
+			},
+			wantDistinctErrors: []string{
+				"could not find a healthy agent pod (1 candidate)",
+			},
+			alsoAllowUndesiredDistinctErrors: []string{
+				// due to the high amount of nondeterminism in this test, this error will sometimes also happen, but is not required to happen
+				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
+			},
+			wantDistinctLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+			},
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not find a healthy agent pod (1 candidate)",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "created new deployment based on alternate supported controller-manager CLI flags, no agent pods running yet",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-3",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				healthyKubeControllerManagerPodWithAlternateArgs,
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-2",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				pendingAgentPod,
+			},
+			wantDistinctErrors: []string{
+				"could not find a healthy agent pod (1 candidate)",
+			},
+			alsoAllowUndesiredDistinctErrors: []string{
+				// due to the high amount of nondeterminism in this test, this error will sometimes also happen, but is not required to happen
+				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
+			},
+			wantDistinctLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+			},
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not find a healthy agent pod (1 candidate)",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "created new deployment based on controller-manager which has both standard and alternate CLI flags (prefers the standard flags), no agent pods running yet",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-3",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				healthyKubeControllerManagerPodWithStandardAndAlternateArgs,
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace:         "kube-system",

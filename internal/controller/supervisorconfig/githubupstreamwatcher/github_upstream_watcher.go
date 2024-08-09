@@ -569,10 +569,10 @@ func (c *gitHubWatcherController) updateStatus(
 
 	hadErrorCondition := conditionsutil.MergeConditions(
 		conditions,
-		upstream.Generation,
 		&updated.Status.Conditions,
-		log,
+		upstream.Generation,
 		metav1.NewTime(c.clock.Now()),
+		log,
 	)
 
 	updated.Status.Phase = idpv1alpha1.GitHubPhaseReady

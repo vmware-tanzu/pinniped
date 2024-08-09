@@ -735,10 +735,10 @@ func (c *jwtCacheFillerController) updateStatus(
 
 	_ = conditionsutil.MergeConditions(
 		conditions,
-		original.Generation,
 		&updated.Status.Conditions,
-		logger,
+		original.Generation,
 		metav1.NewTime(c.clock.Now()),
+		logger,
 	)
 
 	if equality.Semantic.DeepEqual(original, updated) {

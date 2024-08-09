@@ -133,8 +133,13 @@ func (c *oidcClientWatcherController) updateStatus(
 ) error {
 	updated := upstream.DeepCopy()
 
-	hadErrorCondition := conditionsutil.MergeConditions(conditions,
-		upstream.Generation, &updated.Status.Conditions, plog.New(), metav1.Now())
+	hadErrorCondition := conditionsutil.MergeConditions(
+		conditions,
+		&updated.Status.Conditions,
+		upstream.Generation,
+		metav1.Now(),
+		plog.New(),
+	)
 
 	updated.Status.Phase = supervisorconfigv1alpha1.OIDCClientPhaseReady
 	if hadErrorCondition {

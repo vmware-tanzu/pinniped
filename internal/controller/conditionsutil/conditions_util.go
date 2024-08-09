@@ -4,9 +4,10 @@
 package conditionsutil
 
 import (
+	"slices"
 	"sort"
 
-	"k8s.io/apimachinery/pkg/api/equality"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/internal/plog"
@@ -23,70 +24,66 @@ const (
 	MessageUnableToValidate = "unable to validate; see other conditions for details"
 )
 
-// MergeConditions merges conditions into conditionsToUpdate.
-// Note that LastTransitionTime refers to the time when the status changed,
-// but ObservedGeneration should be the current generation for all conditions, since Pinniped should always check every condition.
+// MergeConditions merges newConditions into existingConditionsToUpdate.
+// Note that lastTransitionTime refers to the time when the status changed,
+// but observedGeneration should be the current generation for all conditions,
+// since Pinniped should always check every condition.
 // It returns true if any resulting condition has non-true status.
 func MergeConditions(
-	conditions []*metav1.Condition,
+	newConditions []*metav1.Condition,
+	existingConditionsToUpdate *[]metav1.Condition,
 	observedGeneration int64,
-	conditionsToUpdate *[]metav1.Condition,
-	log plog.MinLogger,
 	lastTransitionTime metav1.Time,
+	log plog.MinLogger,
 ) bool {
-	for i := range conditions {
-		cond := conditions[i].DeepCopy()
-		cond.LastTransitionTime = lastTransitionTime
-		cond.ObservedGeneration = observedGeneration
-		if mergeCondition(conditionsToUpdate, cond) {
-			log.Info("updated condition", "type", cond.Type, "status", cond.Status, "reason", cond.Reason, "message", cond.Message)
+	for i := range newConditions {
+		newCondition := newConditions[i].DeepCopy()
+		newCondition.LastTransitionTime = lastTransitionTime
+		newCondition.ObservedGeneration = observedGeneration
+		if mergeCondition(existingConditionsToUpdate, newCondition) {
+			log.Info("updated condition",
+				"type", newCondition.Type,
+				"status", newCondition.Status,
+				"reason", newCondition.Reason,
+				"message", newCondition.Message)
 		}
 	}
-	sort.SliceStable(*conditionsToUpdate, func(i, j int) bool {
-		return (*conditionsToUpdate)[i].Type < (*conditionsToUpdate)[j].Type
+	sort.SliceStable(*existingConditionsToUpdate, func(i, j int) bool {
+		return (*existingConditionsToUpdate)[i].Type < (*existingConditionsToUpdate)[j].Type
 	})
-	return HadErrorCondition(conditions)
+	return HadErrorCondition(newConditions)
 }
 
 // mergeCondition merges a new metav1.Condition into a slice of existing conditions. It returns true
-// if the condition has meaningfully changed.
-func mergeCondition(existing *[]metav1.Condition, new *metav1.Condition) bool {
+// if something other than the LastTransitionTime has been updated.
+func mergeCondition(existingConditionsToUpdate *[]metav1.Condition, newCondition *metav1.Condition) bool {
 	// Find any existing condition with a matching type.
-	var old *metav1.Condition
-	for i := range *existing {
-		if (*existing)[i].Type == new.Type {
-			old = &(*existing)[i]
-			continue
-		}
-	}
+	index := slices.IndexFunc(*existingConditionsToUpdate, func(condition metav1.Condition) bool {
+		return newCondition.Type == condition.Type
+	})
 
-	// If there is no existing condition of this type, append this one and we're done.
-	if old == nil {
-		*existing = append(*existing, *new)
+	var existingCondition *metav1.Condition
+	if index < 0 {
+		// If there is no existing condition of this type, append this one and we're done.
+		*existingConditionsToUpdate = append(*existingConditionsToUpdate, *newCondition)
 		return true
 	}
 
-	// Set the LastTransitionTime depending on whether the status has changed.
-	new = new.DeepCopy()
-	if old.Status == new.Status {
-		new.LastTransitionTime = old.LastTransitionTime
+	// Get a pointer to the existing condition
+	existingCondition = &(*existingConditionsToUpdate)[index]
+
+	// If the status has not changed, preserve the original lastTransitionTime
+	if newCondition.Status == existingCondition.Status {
+		newCondition.LastTransitionTime = existingCondition.LastTransitionTime
 	}
 
-	// If anything has actually changed, update the entry and return true.
-	if !equality.Semantic.DeepEqual(old, new) {
-		*old = *new
-		return true
-	}
-
-	// Otherwise the entry is already up-to-date.
-	return false
+	changed := !apiequality.Semantic.DeepEqual(existingCondition, newCondition)
+	*existingCondition = *newCondition
+	return changed
 }
 
 func HadErrorCondition(conditions []*metav1.Condition) bool {
-	for _, c := range conditions {
-		if c.Status != metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(conditions, func(condition *metav1.Condition) bool {
+		return condition.Status != metav1.ConditionTrue
+	})
 }

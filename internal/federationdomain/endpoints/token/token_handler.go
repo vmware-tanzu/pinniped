@@ -30,11 +30,23 @@ import (
 	"go.pinniped.dev/internal/psession"
 )
 
+//nolint:gochecknoglobals // please treat this as a readonly const, do not mutate
+var paramsSafeToLog = sets.New[string](
+	// Standard params from https://openid.net/specs/openid-connect-core-1_0.html for authcde and refresh grants.
+	// Redacting code, client_secret, refresh_token, and PKCE code_verifier params.
+	"grant_type", "client_id", "redirect_uri", "scope",
+	// Token exchange params from https://datatracker.ietf.org/doc/html/rfc8693.
+	// Redact subject_token and actor_token.
+	// We don't allow all of these, but they should be safe to log.
+	"audience", "resource", "scope", "requested_token_type", "actor_token_type", "subject_token_type",
+)
+
 func NewHandler(
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	oauthHelper fosite.OAuth2Provider,
 	overrideAccessTokenLifespan timeouts.OverrideLifespan,
 	overrideIDTokenLifespan timeouts.OverrideLifespan,
+	auditLogger plog.AuditLogger,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		session := psession.NewPinnipedSession()
@@ -45,13 +57,17 @@ func NewHandler(
 			return nil
 		}
 
+		// Note that r.PostForm and accessRequest were populated by NewAccessRequest().
+		auditLogger.Audit(plog.AuditEventHTTPRequestParameters, r.Context(), accessRequest,
+			"params", plog.SanitizeParams(r.PostForm, paramsSafeToLog))
+
 		// Check if we are performing a refresh grant.
 		if accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeRefreshToken) {
 			// The above call to NewAccessRequest has loaded the session from storage into the accessRequest variable.
 			// The session, requested scopes, and requested audience from the original authorize request was retrieved
 			// from the Kube storage layer and added to the accessRequest. Additionally, the audience and scopes may
 			// have already been granted on the accessRequest.
-			err = upstreamRefresh(r.Context(), accessRequest, idpLister)
+			err = upstreamRefresh(r.Context(), accessRequest, idpLister, auditLogger)
 			if err != nil {
 				plog.Info("upstream refresh error", oidc.FositeErrorForLog(err)...)
 				oauthHelper.WriteAccessError(r.Context(), w, accessRequest, err)
@@ -128,6 +144,7 @@ func upstreamRefresh(
 	ctx context.Context,
 	accessRequest fosite.AccessRequester,
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
+	auditLogger plog.AuditLogger,
 ) error {
 	session := accessRequest.GetSession().(*psession.PinnipedSession)
 
@@ -136,6 +153,7 @@ func upstreamRefresh(
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 	providerName := customSessionData.ProviderName
+	providerType := customSessionData.ProviderType
 	providerUID := customSessionData.ProviderUID
 	if providerUID == "" || providerName == "" {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
@@ -188,6 +206,10 @@ func upstreamRefresh(
 		return err
 	}
 
+	auditLogger.Audit(plog.AuditEventIdentityRefreshedFromUpstreamIDP, ctx, accessRequest,
+		"upstreamUsername", refreshedIdentity.UpstreamUsername,
+		"upstreamGroups", refreshedIdentity.UpstreamGroups)
+
 	// If the idp wants to update the session with new information from the refresh, then update it.
 	if refreshedIdentity.IDPSpecificSessionData != nil {
 		idp.ApplyIDPSpecificSessionDataToSession(session.Custom, refreshedIdentity.IDPSpecificSessionData)
@@ -203,16 +225,24 @@ func upstreamRefresh(
 		refreshedIdentity.UpstreamGroups = oldUntransformedGroups
 	}
 
-	refreshedTransformedGroups, err := applyIdentityTransformationsDuringRefresh(ctx,
+	refreshedTransformedUsername, refreshedTransformedGroups, err := applyIdentityTransformationsDuringRefresh(ctx,
 		idp.GetTransforms(),
-		oldTransformedUsername, // this function validates that the old and new transformed usernames match
 		refreshedIdentity.UpstreamUsername,
 		refreshedIdentity.UpstreamGroups,
-		session.Custom.ProviderName,
-		session.Custom.ProviderType,
+		providerName,
+		providerType,
 	)
 	if err != nil {
+		auditLogger.Audit(plog.AuditEventAuthenticationRejectedByTransforms, ctx, accessRequest,
+			"err", err)
 		return err
+	}
+
+	if oldTransformedUsername != refreshedTransformedUsername {
+		return errUpstreamRefreshError().WithHintf(
+			"Upstream refresh failed.").
+			WithTrace(errors.New("username in upstream refresh does not match previous value")).
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
 	}
 
 	if !skipGroups {
@@ -220,6 +250,11 @@ func upstreamRefresh(
 		// Replace the old value for the downstream groups in the user's session with the new value.
 		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = refreshedTransformedGroups
 	}
+
+	auditLogger.Audit(plog.AuditEventSessionRefreshed, ctx, accessRequest,
+		"username", oldTransformedUsername, // not allowed to change above so must be the same as old
+		"groups", refreshedTransformedGroups,
+		"subject", previousIdentity.DownstreamSubject)
 
 	return nil
 }
@@ -255,38 +290,30 @@ func validateSessionHasUsername(session *psession.PinnipedSession) error {
 }
 
 // applyIdentityTransformationsDuringRefresh is similar to downstreamsession.applyIdentityTransformations
-// but with validation that the username has not changed, and with slightly different error messaging.
+// but with slightly different error messaging.
 func applyIdentityTransformationsDuringRefresh(
 	ctx context.Context,
 	transforms *idtransform.TransformationPipeline,
-	oldTransformedUsername string,
 	upstreamUsername string,
 	upstreamGroups []string,
 	providerName string,
 	providerType psession.ProviderType,
-) ([]string, error) {
+) (string, []string, error) {
 	transformationResult, err := transforms.Evaluate(ctx, upstreamUsername, upstreamGroups)
 	if err != nil {
-		return nil, errUpstreamRefreshError().WithHintf(
+		return "", nil, errUpstreamRefreshError().WithHintf(
 			"Upstream refresh error while applying configured identity transformations.").
 			WithTrace(err).
 			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
 	}
 
 	if !transformationResult.AuthenticationAllowed {
-		return nil, errUpstreamRefreshError().WithHintf(
+		return "", nil, errUpstreamRefreshError().WithHintf(
 			"Upstream refresh rejected by configured identity policy: %s.", transformationResult.RejectedAuthenticationMessage).
 			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
 	}
 
-	if oldTransformedUsername != transformationResult.Username {
-		return nil, errUpstreamRefreshError().WithHintf(
-			"Upstream refresh failed.").
-			WithTrace(errors.New("username in upstream refresh does not match previous value")).
-			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
-	}
-
-	return transformationResult.Groups, nil
+	return transformationResult.Username, transformationResult.Groups, nil
 }
 
 func validateAndGetDownstreamGroupsFromSession(session *psession.PinnipedSession) ([]string, error) {

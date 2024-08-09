@@ -46,16 +46,9 @@ type tokenExchangeHandler struct {
 var _ fosite.TokenEndpointHandler = (*tokenExchangeHandler)(nil)
 
 func (t *tokenExchangeHandler) HandleTokenEndpointRequest(ctx context.Context, requester fosite.AccessRequester) error {
+	// Skip this request if it's for a different grant type.
 	if !t.CanHandleTokenEndpointRequest(ctx, requester) {
 		return errors.WithStack(fosite.ErrUnknownRequest)
-	}
-	return nil
-}
-
-func (t *tokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context, requester fosite.AccessRequester, responder fosite.AccessResponder) error {
-	// Skip this request if it's for a different grant type.
-	if err := t.HandleTokenEndpointRequest(ctx, requester); err != nil {
-		return errors.WithStack(err)
 	}
 
 	// Validate the basic RFC8693 parameters we support.
@@ -64,7 +57,7 @@ func (t *tokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errors.WithStack(err)
 	}
 
-	// Validate the incoming access token and lookup the information about the original authorize request.
+	// Validate the incoming access token and lookup the information about the original authorize request from storage.
 	originalRequester, err := t.validateAccessToken(ctx, requester, params.subjectAccessToken)
 	if err != nil {
 		return errors.WithStack(err)
@@ -95,8 +88,28 @@ func (t *tokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 		return errors.WithStack(err)
 	}
 
+	// Copy the original session ID from storage.
+	requester.SetID(originalRequester.GetID())
+	// Copy the original session details from storage, which will be used by PopulateTokenEndpointResponse() to mint a token.
+	requester.SetSession(originalRequester.GetSession().Clone())
+	// Maybe not needed, but just to be safe, copy these too, similar to how flow_refresh.go copies them.
+	requester.SetRequestedScopes(originalRequester.GetRequestedScopes())
+	requester.SetRequestedAudience(originalRequester.GetRequestedAudience())
+
+	return nil
+}
+
+func (t *tokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context, requester fosite.AccessRequester, responder fosite.AccessResponder) error {
+	// Skip this request if it's for a different grant type.
+	if !t.CanHandleTokenEndpointRequest(ctx, requester) {
+		return errors.WithStack(fosite.ErrUnknownRequest)
+	}
+
+	// Get the requested audience parameter again, which was already validated by HandleTokenEndpointRequest() above.
+	requestedNewAudience := requester.GetRequestForm().Get("audience")
+
 	// Use the original authorize request information, along with the requested audience, to mint a new JWT.
-	responseToken, err := t.mintJWT(ctx, originalRequester, params.requestedAudience)
+	responseToken, err := t.mintJWT(ctx, requester, requestedNewAudience)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -108,15 +121,15 @@ func (t *tokenExchangeHandler) PopulateTokenEndpointResponse(ctx context.Context
 	return nil
 }
 
-func (t *tokenExchangeHandler) mintJWT(ctx context.Context, requester fosite.Requester, audience string) (string, error) {
-	downscoped := fosite.NewAccessRequest(requester.GetSession())
-	downscoped.Client.(*fosite.DefaultClient).ID = audience
+func (t *tokenExchangeHandler) mintJWT(ctx context.Context, requester fosite.Requester, newAudience string) (string, error) {
+	requestWithNewAudience := fosite.NewAccessRequest(requester.GetSession())
+	requestWithNewAudience.Client.(*fosite.DefaultClient).ID = newAudience
 
 	// Note: if we wanted to support clients with custom token lifespans, then we would need to call
 	// fosite.GetEffectiveLifespan() to determine the lifespan here.
 	idTokenLifespan := t.fositeConfig.GetIDTokenLifespan(ctx)
 
-	return t.idTokenStrategy.GenerateIDToken(ctx, idTokenLifespan, downscoped)
+	return t.idTokenStrategy.GenerateIDToken(ctx, idTokenLifespan, requestWithNewAudience)
 }
 
 func (t *tokenExchangeHandler) validateSession(requester fosite.Requester) error {

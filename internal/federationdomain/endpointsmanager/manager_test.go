@@ -26,6 +26,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/idtransform"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/secret"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -83,7 +84,7 @@ func TestManager(t *testing.T) {
 		requireDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedIssuer string) {
 			recorder := httptest.NewRecorder()
 
-			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.WellKnownEndpointPath+requestURLSuffix))
+			subject.HandlerChain().ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.WellKnownEndpointPath+requestURLSuffix))
 
 			r.False(fallbackHandlerWasCalled)
 
@@ -101,7 +102,7 @@ func TestManager(t *testing.T) {
 		requirePinnipedIDPsDiscoveryRequestToBeHandled := func(requestIssuer, requestURLSuffix string, expectedIDPNames []string, expectedIDPTypes string, expectedFlows []string) {
 			recorder := httptest.NewRecorder()
 
-			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.PinnipedIDPsPathV1Alpha1+requestURLSuffix))
+			subject.HandlerChain().ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.PinnipedIDPsPathV1Alpha1+requestURLSuffix))
 
 			r.False(fallbackHandlerWasCalled)
 
@@ -145,7 +146,7 @@ func TestManager(t *testing.T) {
 				"response_type": []string{"bat"},
 			}
 
-			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.ChooseIDPEndpointPath+"?"+requiredParams.Encode()))
+			subject.HandlerChain().ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.ChooseIDPEndpointPath+"?"+requiredParams.Encode()))
 
 			r.False(fallbackHandlerWasCalled)
 
@@ -164,7 +165,7 @@ func TestManager(t *testing.T) {
 		requireAuthorizationRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedRedirectLocationPrefix string) (string, string) {
 			recorder := httptest.NewRecorder()
 
-			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.AuthorizationEndpointPath+requestURLSuffix))
+			subject.HandlerChain().ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.AuthorizationEndpointPath+requestURLSuffix))
 
 			r.False(fallbackHandlerWasCalled)
 
@@ -202,7 +203,7 @@ func TestManager(t *testing.T) {
 				Name:  "__Host-pinniped-csrf",
 				Value: csrfCookieValue,
 			})
-			subject.ServeHTTP(recorder, getRequest)
+			subject.HandlerChain().ServeHTTP(recorder, getRequest)
 
 			r.False(fallbackHandlerWasCalled)
 
@@ -242,7 +243,7 @@ func TestManager(t *testing.T) {
 				"code_verifier": []string{downstreamPKCECodeVerifier},
 				"grant_type":    []string{"authorization_code"},
 			}.Encode()
-			subject.ServeHTTP(recorder, newPostRequest(requestIssuer+oidc.TokenEndpointPath, tokenRequestBody))
+			subject.HandlerChain().ServeHTTP(recorder, newPostRequest(requestIssuer+oidc.TokenEndpointPath, tokenRequestBody))
 
 			r.False(fallbackHandlerWasCalled)
 
@@ -272,7 +273,7 @@ func TestManager(t *testing.T) {
 		requireJWKSRequestToBeHandled := func(requestIssuer, requestURLSuffix, expectedJWKKeyID string) *jose.JSONWebKeySet {
 			recorder := httptest.NewRecorder()
 
-			subject.ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.JWKSEndpointPath+requestURLSuffix))
+			subject.HandlerChain().ServeHTTP(recorder, newGetRequest(requestIssuer+oidc.JWKSEndpointPath+requestURLSuffix))
 
 			r.False(fallbackHandlerWasCalled)
 
@@ -358,13 +359,13 @@ func TestManager(t *testing.T) {
 			cache.SetStateEncoderHashKey(issuer2, []byte("some-state-encoder-hash-key-2"))
 			cache.SetStateEncoderBlockKey(issuer2, []byte("16-bytes-STATE02"))
 
-			subject = NewManager(nextHandler, dynamicJWKSProvider, idpLister, &cache, secretsClient, oidcClientsClient)
+			subject = NewManager(nextHandler, dynamicJWKSProvider, idpLister, &cache, secretsClient, oidcClientsClient, plog.New())
 		})
 
 		when("given no providers via SetFederationDomains()", func() {
 			it("sends all requests to the nextHandler", func() {
 				r.False(fallbackHandlerWasCalled)
-				subject.ServeHTTP(httptest.NewRecorder(), newGetRequest("/anything"))
+				subject.HandlerChain().ServeHTTP(httptest.NewRecorder(), newGetRequest("/anything"))
 				r.True(fallbackHandlerWasCalled)
 			})
 		})
@@ -507,19 +508,19 @@ func TestManager(t *testing.T) {
 			it("sends all non-matching host requests to the nextHandler", func() {
 				r.False(fallbackHandlerWasCalled)
 				wrongHostURL := strings.ReplaceAll(issuer1+oidc.WellKnownEndpointPath, "example.com", "wrong-host.com")
-				subject.ServeHTTP(httptest.NewRecorder(), newGetRequest(wrongHostURL))
+				subject.HandlerChain().ServeHTTP(httptest.NewRecorder(), newGetRequest(wrongHostURL))
 				r.True(fallbackHandlerWasCalled)
 			})
 
 			it("sends all non-matching path requests to the nextHandler", func() {
 				r.False(fallbackHandlerWasCalled)
-				subject.ServeHTTP(httptest.NewRecorder(), newGetRequest("https://example.com/path-does-not-match-any-provider"))
+				subject.HandlerChain().ServeHTTP(httptest.NewRecorder(), newGetRequest("https://example.com/path-does-not-match-any-provider"))
 				r.True(fallbackHandlerWasCalled)
 			})
 
 			it("sends requests which match the issuer prefix but do not match any of that provider's known paths to the nextHandler", func() {
 				r.False(fallbackHandlerWasCalled)
-				subject.ServeHTTP(httptest.NewRecorder(), newGetRequest(issuer1+"/unhandled-sub-path"))
+				subject.HandlerChain().ServeHTTP(httptest.NewRecorder(), newGetRequest(issuer1+"/unhandled-sub-path"))
 				r.True(fallbackHandlerWasCalled)
 			})
 

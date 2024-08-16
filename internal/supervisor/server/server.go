@@ -167,6 +167,7 @@ func prepareControllers(
 				kubeClient,
 				secretInformer,
 				controllerlib.WithInformer,
+				plog.New(),
 			),
 			singletonWorker,
 		).
@@ -483,6 +484,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		&secretCache,
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace), // writes to kube storage are allowed for non-leaders
 		client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
+		plog.New(),
 	)
 
 	// Get the "real" name of the client secret supervisor API group (i.e., the API group name with the
@@ -544,7 +546,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		}
 
 		defer func() { _ = httpListener.Close() }()
-		startServer(ctx, shutdown, httpListener, oidProvidersManager)
+		startServer(ctx, shutdown, httpListener, oidProvidersManager.HandlerChain())
 		plog.Debug("supervisor http listener started", "address", httpListener.Addr().String())
 	}
 
@@ -601,7 +603,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		}
 
 		defer func() { _ = httpsListener.Close() }()
-		startServer(ctx, shutdown, httpsListener, oidProvidersManager)
+		startServer(ctx, shutdown, httpsListener, oidProvidersManager.HandlerChain())
 		plog.Debug("supervisor https listener started", "address", httpsListener.Addr().String())
 	}
 

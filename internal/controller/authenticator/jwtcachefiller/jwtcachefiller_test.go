@@ -2300,11 +2300,12 @@ func TestController(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			if !assert.ElementsMatch(t, tt.wantActions(), pinnipedAPIClient.Actions()) {
+			scrubbedActions := testutil.ScrubListOptionsForActions(t, pinnipedAPIClient.Actions())
+			if !assert.ElementsMatch(t, tt.wantActions(), scrubbedActions) {
 				// cmp.Diff is superior to require.ElementsMatch in terms of readability here.
 				// require.ElementsMatch will handle pointers better than require.Equal, but
 				// the timestamps are still incredibly verbose.
-				require.Fail(t, cmp.Diff(tt.wantActions(), pinnipedAPIClient.Actions()), "actions should be exactly the expected number of actions and also contain the correct resources")
+				require.Fail(t, cmp.Diff(tt.wantActions(), scrubbedActions), "actions should be exactly the expected number of actions and also contain the correct resources")
 			}
 
 			require.Equal(t, len(tt.wantNamesOfJWTAuthenticatorsInCache), len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", len(tt.wantNamesOfJWTAuthenticatorsInCache), len(cache.Keys()), cache.Keys()))

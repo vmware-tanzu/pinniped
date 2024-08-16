@@ -1952,7 +1952,7 @@ func TestController(t *testing.T) {
 			}
 
 			require.NotEmpty(t, tt.wantActions, "wantActions is required for test %s", tt.name)
-			require.Equal(t, tt.wantActions(), pinnipedAPIClient.Actions())
+			require.Equal(t, tt.wantActions(), testutil.ScrubListOptionsForActions(t, pinnipedAPIClient.Actions()))
 			require.Equal(t, len(tt.wantNamesOfWebhookAuthenticatorsInCache), len(cache.Keys()), fmt.Sprintf("expected cache entries is incorrect. wanted:%d, got: %d, keys: %v", len(tt.wantNamesOfWebhookAuthenticatorsInCache), len(cache.Keys()), cache.Keys()))
 
 			actualLog, _ := strings.CutSuffix(log.String(), "\n")

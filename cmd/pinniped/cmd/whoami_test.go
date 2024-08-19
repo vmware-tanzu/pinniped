@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -21,9 +22,25 @@ import (
 )
 
 func TestWhoami(t *testing.T) {
+	helpOutputFormatString := here.Doc(`
+		Print information about the current user
+
+		Usage:
+		  whoami [flags]
+
+		Flags:
+			  --api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
+		  -h, --help                        help for whoami
+			  --kubeconfig string           Path to kubeconfig file%s
+			  --kubeconfig-context string   Kubeconfig context name (default: current active context)
+		  -o, --output string               Output format (e.g., 'yaml', 'json', 'text') (default "text")
+			  --timeout duration            Timeout for the WhoAmI API request (default: 0, meaning no timeout)
+	`)
+
 	tests := []struct {
 		name                   string
 		args                   []string
+		env                    map[string]string
 		groupsOverride         []string
 		gettingClientsetErr    error
 		callingAPIErr          error
@@ -31,22 +48,17 @@ func TestWhoami(t *testing.T) {
 		wantStdout, wantStderr string
 	}{
 		{
-			name: "help flag",
-			args: []string{"--help"},
-			wantStdout: here.Doc(`
-				Print information about the current user
-
-				Usage:
-				  whoami [flags]
-
-				Flags:
-				      --api-group-suffix string     Concierge API group suffix (default "pinniped.dev")
-				  -h, --help                        help for whoami
-				      --kubeconfig string           Path to kubeconfig file
-				      --kubeconfig-context string   Kubeconfig context name (default: current active context)
-				  -o, --output string               Output format (e.g., 'yaml', 'json', 'text') (default "text")
-				      --timeout duration            Timeout for the WhoAmI API request (default: 0, meaning no timeout)
-			`),
+			name:       "help flag passed",
+			args:       []string{"--help"},
+			wantStdout: fmt.Sprintf(helpOutputFormatString, ""),
+		},
+		{
+			name: "help flag passed with KUBECONFIG env var set",
+			env: map[string]string{
+				"KUBECONFIG": "/path/to/kubeconfig",
+			},
+			args:       []string{"--help"},
+			wantStdout: fmt.Sprintf(helpOutputFormatString, ` (default "/path/to/kubeconfig")`),
 		},
 		{
 			name: "text output",
@@ -306,7 +318,12 @@ func TestWhoami(t *testing.T) {
 				})
 				return clientset, nil
 			}
-			cmd := newWhoamiCommand(getClientset)
+			cmd := newWhoamiCommand(whoamiDeps{
+				getenv: func(key string) string {
+					return test.env[key]
+				},
+				getClientset: getClientset,
+			})
 
 			stdout, stderr := bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
 			cmd.SetOut(stdout)

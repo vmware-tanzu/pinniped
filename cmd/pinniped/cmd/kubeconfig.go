@@ -36,6 +36,7 @@ import (
 )
 
 type kubeconfigDeps struct {
+	getenv        func(key string) string
 	getPathToSelf func() (string, error)
 	getClientset  getConciergeClientsetFunc
 	log           plog.MinLogger
@@ -43,6 +44,7 @@ type kubeconfigDeps struct {
 
 func kubeconfigRealDeps() kubeconfigDeps {
 	return kubeconfigDeps{
+		getenv:        os.Getenv,
 		getPathToSelf: os.Executable,
 		getClientset:  getRealConciergeClientset,
 		log:           plog.New(),
@@ -156,7 +158,7 @@ func kubeconfigCommand(deps kubeconfigDeps) *cobra.Command {
 		),
 	)
 	f.StringVar(&flags.oidc.upstreamIDPFlow, "upstream-identity-provider-flow", "", fmt.Sprintf("The type of client flow to use with the upstream identity provider during login with a Supervisor (e.g. '%s', '%s')", idpdiscoveryv1alpha1.IDPFlowCLIPassword, idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode))
-	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
+	f.StringVar(&flags.kubeconfigPath, "kubeconfig", deps.getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
 	f.BoolVar(&flags.skipValidate, "skip-validation", false, "Skip final validation of the kubeconfig (default: false)")
 	f.DurationVar(&flags.timeout, "timeout", 10*time.Minute, "Timeout for autodiscovery and validation")

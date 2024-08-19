@@ -745,7 +745,6 @@ func validateKubeconfig(ctx context.Context, flags getKubeconfigParams, kubeconf
 func countCACerts(pemData []byte) int {
 	pool := x509.NewCertPool()
 	pool.AppendCertsFromPEM(pemData)
-	//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 	return len(pool.Subjects())
 }
 

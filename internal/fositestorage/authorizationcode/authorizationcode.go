@@ -189,7 +189,7 @@ type errSerializationFailureWithCause struct {
 }
 
 func (e *errSerializationFailureWithCause) Is(err error) bool {
-	return stderrors.Is(fosite.ErrSerializationFailure, err)
+	return stderrors.Is(err, fosite.ErrSerializationFailure)
 }
 
 func (e *errSerializationFailureWithCause) Unwrap() error {

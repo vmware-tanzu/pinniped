@@ -16,12 +16,12 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	utilversion "k8s.io/apiserver/pkg/util/version"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	configv1alpha1clientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/plog"
-	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/registry/clientsecretrequest"
 )
 
@@ -61,9 +61,8 @@ func (c *Config) Complete() CompletedConfig {
 		&c.ExtraConfig,
 	}
 
-	versionInfo := pversion.Get()
-	completedCfg.GenericConfig.Version = &versionInfo
-
+	// TODO: use a real version
+	completedCfg.GenericConfig.EffectiveVersion = utilversion.NewEffectiveVersion("1.2.3")
 	return CompletedConfig{completedConfig: &completedCfg}
 }
 

@@ -37,6 +37,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	utilversion "k8s.io/apiserver/pkg/util/version"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -836,6 +837,8 @@ func TestImpersonator(t *testing.T) {
 
 			// Allow standard REST verbs to be authorized so that tests pass without invasive changes
 			recConfig := func(config *genericapiserver.RecommendedConfig) {
+				// TODO: is it ok to use a placeholder version for a test?
+				config.EffectiveVersion = utilversion.NewEffectiveVersion("1.2.3")
 				authz := config.Authorization.Authorizer.(*comparableAuthorizer)
 				delegate := authz.AuthorizerFunc
 				authz.AuthorizerFunc = func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {

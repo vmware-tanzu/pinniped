@@ -17,20 +17,21 @@ func ScrubListOptionsForActions(t *testing.T, actions []coretesting.Action) []co
 
 	scrubbedActions := make([]coretesting.Action, 0, len(actions))
 	for _, action := range actions {
-		if action.GetVerb() == "watch" {
+		switch action.GetVerb() {
+		case "watch":
 			watchAction, ok := action.(coretesting.WatchActionImpl)
 			require.True(t, ok)
 			watchAction.ListOptions.AllowWatchBookmarks = false
 			watchAction.ListOptions.TimeoutSeconds = nil
 			scrubbedActions = append(scrubbedActions, watchAction)
-		} else if action.GetVerb() == "list" {
+		case "list":
 			listAction, ok := action.(coretesting.ListActionImpl)
 			require.True(t, ok)
 			listAction.ListOptions.ResourceVersion = ""
 			listAction.ListOptions.TimeoutSeconds = nil
 			listAction.ListOptions.Limit = 0
 			scrubbedActions = append(scrubbedActions, listAction)
-		} else {
+		default:
 			scrubbedActions = append(scrubbedActions, action)
 		}
 	}

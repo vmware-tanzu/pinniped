@@ -176,7 +176,7 @@ func newInternal(
 		// See sanity checks at the end of this function.
 		serverConfig.LoopbackClientConfig.BearerToken = ""
 
-		// match KAS exactly since our long running operations are just a proxy to it
+		// match KAS exactly since our long-running operations are just a proxy to it
 		// this must be kept in sync with github.com/kubernetes/kubernetes/cmd/kube-apiserver/app/server.go
 		// this is nothing to stress about - it has not changed since the beginning of Kube:
 		// v1.6 no-op move away from regex to request info https://github.com/kubernetes/kubernetes/pull/38119

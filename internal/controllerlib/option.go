@@ -31,9 +31,12 @@ func WithInitialEvent(key Key) Option {
 	})
 }
 
-func WithRateLimiter(limiter workqueue.RateLimiter) Option {
+func WithRateLimiter(limiter workqueue.TypedRateLimiter[any]) Option {
 	return func(c *controller) {
-		c.queue = workqueue.NewNamedRateLimitingQueue(limiter, c.Name())
+		cfg := workqueue.TypedRateLimitingQueueConfig[any]{
+			Name: c.Name(),
+		}
+		c.queue = workqueue.NewTypedRateLimitingQueueWithConfig(limiter, cfg)
 		c.queueWrapper = &queueWrapper{queue: c.queue}
 	}
 }

@@ -61,7 +61,7 @@ import (
 
 // FactoryFunc is a function which can create an impersonator server.
 // It returns a function which will start the impersonator server.
-// That start function takes a stopCh which can be used to stop the server.
+// That start function takes a context which can be cancelled to stop the server.
 // Once a server has been stopped, don't start it again using the start function.
 // Instead, call the factory function again to get a new start function.
 type FactoryFunc func(
@@ -69,16 +69,18 @@ type FactoryFunc func(
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
 	impersonationProxyTokenCache tokenclient.ExpiringSingletonTokenCacheGet,
-) (func(stopCh <-chan struct{}) error, error)
+) (func(ctx context.Context) error, error)
 
 func New(
 	port int,
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
 	impersonationProxyTokenCache tokenclient.ExpiringSingletonTokenCacheGet,
-) (func(stopCh <-chan struct{}) error, error) {
+) (func(ctx context.Context) error, error) {
 	return newInternal(port, dynamicCertProvider, impersonationProxySignerCA, kubeclient.Secure, impersonationProxyTokenCache, nil, nil, nil)
 }
+
+var _ FactoryFunc = New
 
 //nolint:funlen // It is definitely too complicated. New calls newInternal, which makes another function.
 func newInternal(
@@ -90,7 +92,7 @@ func newInternal(
 	baseConfig *rest.Config, // for unit testing, should always be nil in production
 	recOpts func(*genericoptions.RecommendedOptions), // for unit testing, should always be nil in production
 	recConfig func(*genericapiserver.RecommendedConfig), // for unit testing, should always be nil in production
-) (func(stopCh <-chan struct{}) error, error) {
+) (func(ctx context.Context) error, error) {
 	var listener net.Listener
 	var err error
 
@@ -101,7 +103,7 @@ func newInternal(
 		}
 	}
 
-	constructServer := func() (func(stopCh <-chan struct{}) error, error) {
+	constructServer := func() (func(ctx context.Context) error, error) {
 		// Bare minimum server side scheme to allow for status messages to be encoded.
 		scheme := runtime.NewScheme()
 		metav1.AddToGroupVersion(scheme, metav1.Unversioned)
@@ -339,7 +341,7 @@ func newInternal(
 			return nil, fmt.Errorf("invalid mutation of impersonation authorizer detected: %#v", preparedRun.Authorizer)
 		}
 
-		return preparedRun.Run, nil
+		return preparedRun.RunWithContext, nil
 	}
 
 	result, err := constructServer()

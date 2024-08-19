@@ -876,16 +876,16 @@ func TestImpersonator(t *testing.T) {
 			require.NotNil(t, runner)
 
 			// Start the impersonator.
-			stopCh := make(chan struct{})
+			runnerCtx, runnerCancel := context.WithCancel(context.Background())
 			errCh := make(chan error)
 			go func() {
-				stopErr := runner(stopCh)
+				stopErr := runner(runnerCtx)
 				errCh <- stopErr
 			}()
 
 			// Stop the impersonator server at the end of the test, even if it fails.
 			t.Cleanup(func() {
-				close(stopCh)
+				runnerCancel()
 				exitErr := <-errCh
 				require.NoError(t, exitErr)
 			})

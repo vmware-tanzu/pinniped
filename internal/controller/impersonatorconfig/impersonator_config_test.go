@@ -316,7 +316,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			dynamicCertProvider dynamiccert.Private,
 			impersonationProxySignerCAProvider dynamiccert.Public,
 			expiringSingletonTokenCacheGet tokenclient.ExpiringSingletonTokenCacheGet,
-		) (func(stopCh <-chan struct{}) error, error) {
+		) (func(ctx context.Context) error, error) {
 			impersonatorFuncWasCalled++
 			r.Equal(8444, port)
 			r.NotNil(dynamicCertProvider)
@@ -376,7 +376,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 			// This fake server is enough like the real impersonation proxy server for this unit test because it
 			// uses the supplied providers to serve TLS. The goal of this unit test is to make sure that the server
 			// was started/stopped/configured correctly, not to test the actual impersonation behavior.
-			return func(stopCh <-chan struct{}) error {
+			return func(ctx context.Context) error {
 				if impersonatorFuncReturnedFuncError != nil {
 					return impersonatorFuncReturnedFuncError
 				}
@@ -406,7 +406,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				if testHTTPServerInterruptCh == nil {
 					// Wait in the foreground for the stopCh to be closed, and kill the server when that happens.
 					// This is similar to the behavior of the real impersonation server.
-					<-stopCh
+					<-ctx.Done()
 				} else {
 					// The test supplied an interrupt channel because it wants to test unexpected termination
 					// of the server, so wait for that channel to close instead of waiting for the one that

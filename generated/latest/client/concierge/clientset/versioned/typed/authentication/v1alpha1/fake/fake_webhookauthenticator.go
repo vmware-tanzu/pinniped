@@ -27,20 +27,22 @@ var webhookauthenticatorsKind = v1alpha1.SchemeGroupVersion.WithKind("WebhookAut
 
 // Get takes name of the webhookAuthenticator, and returns the corresponding webhookAuthenticator object, and an error if there is any.
 func (c *FakeWebhookAuthenticators) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.WebhookAuthenticator, err error) {
+	emptyResult := &v1alpha1.WebhookAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(webhookauthenticatorsResource, name), &v1alpha1.WebhookAuthenticator{})
+		Invokes(testing.NewRootGetActionWithOptions(webhookauthenticatorsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.WebhookAuthenticator), err
 }
 
 // List takes label and field selectors, and returns the list of WebhookAuthenticators that match those selectors.
 func (c *FakeWebhookAuthenticators) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.WebhookAuthenticatorList, err error) {
+	emptyResult := &v1alpha1.WebhookAuthenticatorList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(webhookauthenticatorsResource, webhookauthenticatorsKind, opts), &v1alpha1.WebhookAuthenticatorList{})
+		Invokes(testing.NewRootListActionWithOptions(webhookauthenticatorsResource, webhookauthenticatorsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,36 +61,39 @@ func (c *FakeWebhookAuthenticators) List(ctx context.Context, opts v1.ListOption
 // Watch returns a watch.Interface that watches the requested webhookAuthenticators.
 func (c *FakeWebhookAuthenticators) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(webhookauthenticatorsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(webhookauthenticatorsResource, opts))
 }
 
 // Create takes the representation of a webhookAuthenticator and creates it.  Returns the server's representation of the webhookAuthenticator, and an error, if there is any.
 func (c *FakeWebhookAuthenticators) Create(ctx context.Context, webhookAuthenticator *v1alpha1.WebhookAuthenticator, opts v1.CreateOptions) (result *v1alpha1.WebhookAuthenticator, err error) {
+	emptyResult := &v1alpha1.WebhookAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(webhookauthenticatorsResource, webhookAuthenticator), &v1alpha1.WebhookAuthenticator{})
+		Invokes(testing.NewRootCreateActionWithOptions(webhookauthenticatorsResource, webhookAuthenticator, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.WebhookAuthenticator), err
 }
 
 // Update takes the representation of a webhookAuthenticator and updates it. Returns the server's representation of the webhookAuthenticator, and an error, if there is any.
 func (c *FakeWebhookAuthenticators) Update(ctx context.Context, webhookAuthenticator *v1alpha1.WebhookAuthenticator, opts v1.UpdateOptions) (result *v1alpha1.WebhookAuthenticator, err error) {
+	emptyResult := &v1alpha1.WebhookAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(webhookauthenticatorsResource, webhookAuthenticator), &v1alpha1.WebhookAuthenticator{})
+		Invokes(testing.NewRootUpdateActionWithOptions(webhookauthenticatorsResource, webhookAuthenticator, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.WebhookAuthenticator), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeWebhookAuthenticators) UpdateStatus(ctx context.Context, webhookAuthenticator *v1alpha1.WebhookAuthenticator, opts v1.UpdateOptions) (*v1alpha1.WebhookAuthenticator, error) {
+func (c *FakeWebhookAuthenticators) UpdateStatus(ctx context.Context, webhookAuthenticator *v1alpha1.WebhookAuthenticator, opts v1.UpdateOptions) (result *v1alpha1.WebhookAuthenticator, err error) {
+	emptyResult := &v1alpha1.WebhookAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(webhookauthenticatorsResource, "status", webhookAuthenticator), &v1alpha1.WebhookAuthenticator{})
+		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(webhookauthenticatorsResource, "status", webhookAuthenticator, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.WebhookAuthenticator), err
 }
@@ -102,7 +107,7 @@ func (c *FakeWebhookAuthenticators) Delete(ctx context.Context, name string, opt
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeWebhookAuthenticators) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(webhookauthenticatorsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(webhookauthenticatorsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.WebhookAuthenticatorList{})
 	return err
@@ -110,10 +115,11 @@ func (c *FakeWebhookAuthenticators) DeleteCollection(ctx context.Context, opts v
 
 // Patch applies the patch and returns the patched webhookAuthenticator.
 func (c *FakeWebhookAuthenticators) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.WebhookAuthenticator, err error) {
+	emptyResult := &v1alpha1.WebhookAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(webhookauthenticatorsResource, name, pt, data, subresources...), &v1alpha1.WebhookAuthenticator{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(webhookauthenticatorsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.WebhookAuthenticator), err
 }

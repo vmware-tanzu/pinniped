@@ -25,11 +25,12 @@ var oidcclientsecretrequestsKind = v1alpha1.SchemeGroupVersion.WithKind("OIDCCli
 
 // Create takes the representation of a oIDCClientSecretRequest and creates it.  Returns the server's representation of the oIDCClientSecretRequest, and an error, if there is any.
 func (c *FakeOIDCClientSecretRequests) Create(ctx context.Context, oIDCClientSecretRequest *v1alpha1.OIDCClientSecretRequest, opts v1.CreateOptions) (result *v1alpha1.OIDCClientSecretRequest, err error) {
+	emptyResult := &v1alpha1.OIDCClientSecretRequest{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(oidcclientsecretrequestsResource, c.ns, oIDCClientSecretRequest), &v1alpha1.OIDCClientSecretRequest{})
+		Invokes(testing.NewCreateActionWithOptions(oidcclientsecretrequestsResource, c.ns, oIDCClientSecretRequest, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.OIDCClientSecretRequest), err
 }

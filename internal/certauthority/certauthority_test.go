@@ -208,8 +208,10 @@ func TestPool(t *testing.T) {
 	ca, err := New("test", 1*time.Hour)
 	require.NoError(t, err)
 
-	pool := ca.Pool()
-	require.Len(t, pool.Subjects(), 1)
+	expectedPool := x509.NewCertPool()
+	expectedPool.AppendCertsFromPEM(ca.Bundle())
+
+	require.True(t, expectedPool.Equal(ca.Pool()))
 }
 
 type errSigner struct {

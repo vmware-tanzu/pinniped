@@ -209,7 +209,6 @@ func TestPool(t *testing.T) {
 	require.NoError(t, err)
 
 	pool := ca.Pool()
-	//nolint:staticcheck // since we're not using .Subjects() to access the system pool
 	require.Len(t, pool.Subjects(), 1)
 }
 

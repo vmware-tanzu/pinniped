@@ -24,9 +24,21 @@ import (
 	"go.pinniped.dev/internal/here"
 )
 
+type whoamiDeps struct {
+	getenv       func(key string) string
+	getClientset getConciergeClientsetFunc
+}
+
+func whoamiRealDeps() whoamiDeps {
+	return whoamiDeps{
+		getenv:       os.Getenv,
+		getClientset: getRealConciergeClientset,
+	}
+}
+
 //nolint:gochecknoinits
 func init() {
-	rootCmd.AddCommand(newWhoamiCommand(getRealConciergeClientset))
+	rootCmd.AddCommand(newWhoamiCommand(whoamiRealDeps()))
 }
 
 type whoamiFlags struct {
@@ -44,7 +56,7 @@ type clusterInfo struct {
 	url  string
 }
 
-func newWhoamiCommand(getClientset getConciergeClientsetFunc) *cobra.Command {
+func newWhoamiCommand(deps whoamiDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Args:         cobra.NoArgs, // do not accept positional arguments for this command
 		Use:          "whoami",
@@ -56,21 +68,21 @@ func newWhoamiCommand(getClientset getConciergeClientsetFunc) *cobra.Command {
 	// flags
 	f := cmd.Flags()
 	f.StringVarP(&flags.outputFormat, "output", "o", "text", "Output format (e.g., 'yaml', 'json', 'text')")
-	f.StringVar(&flags.kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file")
+	f.StringVar(&flags.kubeconfigPath, "kubeconfig", deps.getenv("KUBECONFIG"), "Path to kubeconfig file")
 	f.StringVar(&flags.kubeconfigContextOverride, "kubeconfig-context", "", "Kubeconfig context name (default: current active context)")
 	f.StringVar(&flags.apiGroupSuffix, "api-group-suffix", groupsuffix.PinnipedDefaultSuffix, "Concierge API group suffix")
 	f.DurationVar(&flags.timeout, "timeout", 0, "Timeout for the WhoAmI API request (default: 0, meaning no timeout)")
 
 	cmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		return runWhoami(cmd.OutOrStdout(), getClientset, flags)
+		return runWhoami(cmd.OutOrStdout(), deps, flags)
 	}
 
 	return cmd
 }
 
-func runWhoami(output io.Writer, getClientset getConciergeClientsetFunc, flags *whoamiFlags) error {
+func runWhoami(output io.Writer, deps whoamiDeps, flags *whoamiFlags) error {
 	clientConfig := newClientConfig(flags.kubeconfigPath, flags.kubeconfigContextOverride)
-	clientset, err := getClientset(clientConfig, flags.apiGroupSuffix)
+	clientset, err := deps.getClientset(clientConfig, flags.apiGroupSuffix)
 	if err != nil {
 		return fmt.Errorf("could not configure Kubernetes client: %w", err)
 	}

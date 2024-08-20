@@ -7,6 +7,7 @@ package clientsecretrequest
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -241,7 +242,7 @@ func (r *REST) validateRequest(
 	if !ok {
 		msg := "no namespace information found in request context"
 		traceValidationFailure(tracer, msg)
-		return nil, apierrors.NewInternalError(fmt.Errorf(msg))
+		return nil, apierrors.NewInternalError(errors.New(msg))
 	}
 	if err := rest.EnsureObjectNamespaceMatchesRequestNamespace(requestNamespace, clientSecretRequest); err != nil {
 		traceValidationFailure(tracer, err.Error())

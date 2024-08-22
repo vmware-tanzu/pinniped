@@ -45,6 +45,7 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/pkg/server/filters"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	utilversion "k8s.io/apiserver/pkg/util/version"
 	auditfake "k8s.io/apiserver/plugin/pkg/audit/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
@@ -55,6 +56,7 @@ import (
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/tokenclient"
 	"go.pinniped.dev/internal/valuelesscontext"
 )
@@ -323,6 +325,7 @@ func newInternal(
 			recConfig(serverConfig)
 		}
 
+		serverConfig.EffectiveVersion = utilversion.NewEffectiveVersion(pversion.Get().String())
 		completedConfig := serverConfig.Complete()
 		impersonationProxyServer, err := completedConfig.New("impersonation-proxy", genericapiserver.NewEmptyDelegate())
 		if err != nil {

@@ -22,6 +22,7 @@ import (
 	configv1alpha1clientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/registry/clientsecretrequest"
 )
 
@@ -56,13 +57,14 @@ type CompletedConfig struct {
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
 func (c *Config) Complete() CompletedConfig {
+	// Be sure to set this before calling c.GenericConfig.Complete()
+	c.GenericConfig.EffectiveVersion = utilversion.NewEffectiveVersion(pversion.Get().String())
+
 	completedCfg := completedConfig{
 		c.GenericConfig.Complete(),
 		&c.ExtraConfig,
 	}
 
-	// TODO: use a real version
-	completedCfg.GenericConfig.EffectiveVersion = utilversion.NewEffectiveVersion("1.2.3")
 	return CompletedConfig{completedConfig: &completedCfg}
 }
 

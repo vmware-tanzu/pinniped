@@ -62,7 +62,7 @@ func NewHandler(
 
 		identity, loginExtras, err := idp.LoginFromCallback(r.Context(), authcode(r), state.PKCECode, state.Nonce, redirectURI)
 		if err != nil {
-			plog.InfoErr("unable to complete login from callback", err,
+			plog.WarningErr("unable to complete login from callback", err,
 				"identityProviderDisplayName", idp.GetDisplayName(),
 				"identityProviderResourceName", idp.GetProvider().GetResourceName(),
 				"supervisorCallbackURL", redirectURI)
@@ -76,7 +76,7 @@ func NewHandler(
 			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
 		})
 		if err != nil {
-			plog.InfoErr("unable to create a Pinniped session", err,
+			plog.WarningErr("unable to create a Pinniped session", err,
 				"identityProviderDisplayName", idp.GetDisplayName(),
 				"identityProviderResourceName", idp.GetProvider().GetResourceName(),
 				"supervisorCallbackURL", redirectURI)

@@ -57,7 +57,7 @@ require (
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/migueleliasweb/go-github-mock v1.0.1
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/ory/fosite v0.47.1-0.20240822130008-abe824a9e906
+	github.com/ory/fosite v0.47.1-0.20240827101524-8631deb35b30
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/spec v1.4.0
@@ -79,10 +79,10 @@ require (
 	k8s.io/apiserver v0.31.0
 	k8s.io/client-go v0.31.0
 	k8s.io/component-base v0.31.0
-	k8s.io/gengo v0.0.0-20240815230951-44b8d154562d
+	k8s.io/gengo v0.0.0-20240826214909-a7b603a56eb7
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.31.0
-	k8s.io/kube-openapi v0.0.0-20240822171749-76de80e0abd9
+	k8s.io/kube-openapi v0.0.0-20240827152857-f7e401e7b4c2
 	k8s.io/utils v0.0.0-20240821151609-f90d01438635
 	sigs.k8s.io/yaml v1.4.0
 )

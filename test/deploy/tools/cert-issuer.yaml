@@ -1,4 +1,4 @@
-#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -56,6 +56,9 @@ spec:
         image: #@ data.values.cfssl_image
         imagePullPolicy: IfNotPresent
         command: ["/bin/bash"]
+        env:
+        - name: DEX_ISSUER_HOSTNAME
+          value: #@ data.values.dex_issuer_hostname
         args:
         - -c
         - |
@@ -74,8 +77,8 @@ spec:
             -ca ca.pem -ca-key ca-key.pem \
             -config /tmp/cfssl-default.json \
             -profile www \
-            -cn "dex.tools.svc.cluster.local" \
-            -hostname "dex.tools.svc.cluster.local" \
+            -cn "${DEX_ISSUER_HOSTNAME}" \
+            -hostname "${DEX_ISSUER_HOSTNAME}" \
             /tmp/csr.json \
             | cfssljson -bare dex
 

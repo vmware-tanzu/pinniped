@@ -1,4 +1,4 @@
-#! Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@data/values
@@ -15,6 +15,11 @@ ports:
   #! External port where the proxy ends up exposed on localhost during tests. This value comes from
   #! our Kind configuration which maps 127.0.0.1:12346 to port 31235 on the Kind worker node.
   local: 12346
+
+
+#! dex_issuer_hostname can be used to provide Dex with a DNS record or IP address for its hostname,
+#! which is used to construct an issuer uri and create a certificate to serve TLS.
+dex_issuer_hostname: dex.tools.svc.cluster.local
 
 #! supervisor_redirect_uris is an array of redirect uris that dex will use for its pinniped-supervisor client.
 #! usage: --data-value-yaml "supervisor_redirect_uris=[some-redirect.com,some-other-redirect.com]"

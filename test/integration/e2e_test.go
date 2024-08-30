@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -71,12 +70,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 
-	issuerURL, _ := env.InferSupervisorIssuerURL(t)
-	isIssuerAnIPAddress := net.ParseIP(issuerURL.Hostname()) != nil
-	var issuerIPs []net.IP
-	if isIssuerAnIPAddress {
-		issuerIPs = append(issuerIPs, net.ParseIP(issuerURL.Hostname()))
-	}
+	supervisorIssuer := env.InferSupervisorIssuerURL(t)
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
@@ -89,12 +83,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	require.NoError(t, os.WriteFile(federationDomainCABundlePath, federationDomainCABundlePEM, 0600))
 
 	// Use the CA to issue a TLS server cert.
-	t.Logf("issuing test certificate")
-	federationDomainTLSServingCert, err := federationDomainSelfSignedCA.IssueServerCert(
-		[]string{issuerURL.Hostname()}, issuerIPs, 1*time.Hour)
-	require.NoError(t, err)
-	federationDomainTLSServingCertPEM, federationDomainTLSServingCertKeyPEM, err := certauthority.ToPEM(federationDomainTLSServingCert)
-	require.NoError(t, err)
+	certPEM, keyPEM := supervisorIssuer.IssuerServerCert(t, federationDomainSelfSignedCA)
 
 	supervisorClient := testlib.NewSupervisorClientset(t)
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
@@ -107,15 +96,15 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	)
 
 	var tlsSpecForFederationDomain *supervisorconfigv1alpha1.FederationDomainTLSSpec
-	if isIssuerAnIPAddress {
+	if supervisorIssuer.IsIPAddress() {
 		testlib.CreateTestSecretWithName(
 			t,
 			env.SupervisorNamespace,
 			env.DefaultTLSCertSecretName(),
 			corev1.SecretTypeTLS,
 			map[string]string{
-				"tls.crt": string(federationDomainTLSServingCertPEM),
-				"tls.key": string(federationDomainTLSServingCertKeyPEM),
+				"tls.crt": string(certPEM),
+				"tls.key": string(keyPEM),
 			},
 		)
 	} else {
@@ -125,8 +114,8 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"oidc-provider-tls",
 			corev1.SecretTypeTLS,
 			map[string]string{
-				"tls.crt": string(federationDomainTLSServingCertPEM),
-				"tls.key": string(federationDomainTLSServingCertKeyPEM),
+				"tls.crt": string(certPEM),
+				"tls.key": string(keyPEM),
 			},
 		)
 		tlsSpecForFederationDomain = &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: federationDomainTLSServingCertSecret.Name}
@@ -135,7 +124,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Create the downstream FederationDomain.
 	federationDomain := testlib.CreateTestFederationDomain(topSetupCtx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
-			Issuer: issuerURL.String(),
+			Issuer: supervisorIssuer.Issuer(),
 			TLS:    tlsSpecForFederationDomain,
 		},
 		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created

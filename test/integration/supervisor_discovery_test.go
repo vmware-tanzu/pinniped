@@ -53,16 +53,19 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 	defer cancel()
 
 	httpsAddress := env.SupervisorHTTPSAddress
-	var ips []net.IP
 	if host, _, err := net.SplitHostPort(httpsAddress); err == nil {
 		httpsAddress = host
 	}
-	if ip := net.ParseIP(httpsAddress); ip != nil {
-		ips = append(ips, ip)
-	}
 
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, env.DefaultTLSCertSecretName(), client, testlib.NewKubernetesClientset(t))
-	defaultCA := createTLSCertificateSecret(ctx, t, ns, httpsAddress, ips, env.DefaultTLSCertSecretName(), kubeClient)
+	defaultCA := createTLSCertificateSecret(
+		ctx,
+		t,
+		ns,
+		testlib.NewSupervisorIssuer(t, httpsAddress),
+		env.DefaultTLSCertSecretName(),
+		kubeClient,
+	)
 
 	tests := []struct {
 		Name     string
@@ -203,7 +206,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create the Secret.
-	ca1 := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1, kubeClient)
+	ca1 := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, hostname1), certSecretName1, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
@@ -224,7 +227,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create a Secret at the updated name.
-	ca1update := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1update, kubeClient)
+	ca1update := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, hostname1), certSecretName1update, kubeClient)
 
 	// Now that the Secret exists at the new name, we should be able to access the endpoints by hostname using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
@@ -244,7 +247,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// Create the Secret.
-	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, certSecretName2, kubeClient)
+	ca2 := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, hostname2), certSecretName2, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
@@ -284,10 +287,12 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	ips, err := testlib.LookupIP(ctx, hostname)
 	require.NoError(t, err)
 	require.NotEmpty(t, ips)
-	ipWithPort := ips[0].String() + ":" + port
+	ipAsHostname := ips[0].String()
+	ipWithPort := ipAsHostname + ":" + port
 
+	// Use different paths just in case the hostname is the IP address!
 	issuerUsingIPAddress := fmt.Sprintf("%s://%s/issuer1", scheme, ipWithPort)
-	issuerUsingHostname := fmt.Sprintf("%s://%s/issuer1", scheme, address)
+	issuerUsingHostname := fmt.Sprintf("%s://%s/issuer2", scheme, address)
 
 	// Create an FederationDomain without a spec.tls.secretName.
 	federationDomain1 := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{Issuer: issuerUsingIPAddress}, supervisorconfigv1alpha1.FederationDomainPhaseReady)
@@ -297,7 +302,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
-	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ips[0]}, env.DefaultTLSCertSecretName(), kubeClient)
+	defaultCA := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, ipAsHostname), env.DefaultTLSCertSecretName(), kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
@@ -312,7 +317,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// Create the Secret.
-	certCA := createTLSCertificateSecret(ctx, t, ns, hostname, nil, certSecretName, kubeClient)
+	certCA := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, hostname), certSecretName, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA from the SNI cert.
 	// Hostnames are case-insensitive, so the request should still work even if the case of the hostname is different
@@ -327,8 +332,7 @@ func createTLSCertificateSecret(
 	ctx context.Context,
 	t *testing.T,
 	namespace string,
-	hostname string,
-	ips []net.IP,
+	supervisorIssuer testlib.SupervisorIssuer,
 	secretName string,
 	kubeClient kubernetes.Interface,
 ) *certauthority.CA {
@@ -337,12 +341,9 @@ func createTLSCertificateSecret(
 	require.NoError(t, err)
 
 	// Using the CA, create a TLS server cert.
-	tlsCert, err := ca.IssueServerCert([]string{hostname}, ips, 1000*time.Hour)
-	require.NoError(t, err)
+	certPEM, keyPEM := supervisorIssuer.IssuerServerCert(t, ca)
 
 	// Write the serving cert to the SNI secret.
-	tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(tlsCert)
-	require.NoError(t, err)
 	secret := corev1.Secret{
 		Type:     corev1.SecretTypeTLS,
 		TypeMeta: metav1.TypeMeta{},
@@ -351,8 +352,8 @@ func createTLSCertificateSecret(
 			Namespace: namespace,
 		},
 		StringData: map[string]string{
-			"tls.crt": string(tlsCertChainPEM),
-			"tls.key": string(tlsPrivateKeyPEM),
+			"tls.crt": string(certPEM),
+			"tls.key": string(keyPEM),
 		},
 	}
 	_, err = kubeClient.CoreV1().Secrets(namespace).Create(ctx, &secret, metav1.CreateOptions{})

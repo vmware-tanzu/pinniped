@@ -2938,7 +2938,7 @@ func testSupervisorLogin(
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 	defer cancel()
 
-	issuerURL, _ := env.InferSupervisorIssuerURL(t)
+	supervisorIssuer := env.InferSupervisorIssuerURL(t)
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
@@ -2972,18 +2972,17 @@ func testSupervisorLogin(
 	oidcHTTPClientContext := coreosoidc.ClientContext(ctx, httpClient)
 
 	// Use the CA to issue a TLS server cert.
-	t.Logf("issuing test certificate")
-	tlsCert, err := ca.IssueServerCert([]string{issuerURL.Hostname()}, nil, 1*time.Hour)
-	require.NoError(t, err)
-	certPEM, keyPEM, err := certauthority.ToPEM(tlsCert)
-	require.NoError(t, err)
+	certPEM, keyPEM := supervisorIssuer.IssuerServerCert(t, ca)
 
 	// Write the serving cert to a secret.
 	certSecret := testlib.CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"oidc-provider-tls",
 		corev1.SecretTypeTLS,
-		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
+		map[string]string{
+			"tls.crt": string(certPEM),
+			"tls.key": string(keyPEM),
+		},
 	)
 
 	// Create upstream IDP and wait for it to become ready.
@@ -2999,7 +2998,7 @@ func testSupervisorLogin(
 	// Create the downstream FederationDomain and expect it to go into the appropriate status condition.
 	federationDomain := testlib.CreateTestFederationDomain(ctx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
-			Issuer:            issuerURL.String(),
+			Issuer:            supervisorIssuer.Issuer(),
 			TLS:               &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
 			IdentityProviders: fdIDPSpec,
 		},
@@ -3015,7 +3014,7 @@ func testSupervisorLogin(
 	requestJWKSEndpoint, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/jwks.json", issuerURL.String()),
+		fmt.Sprintf("%s/jwks.json", supervisorIssuer.Issuer()),
 		nil,
 	)
 	require.NoError(t, err)

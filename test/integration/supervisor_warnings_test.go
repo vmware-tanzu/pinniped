@@ -48,7 +48,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 	tempDir := t.TempDir()
 
-	issuerURL, _ := env.InferSupervisorIssuerURL(t)
+	supervisorIssuer := env.InferSupervisorIssuerURL(t)
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
@@ -62,24 +62,23 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 	require.NoError(t, os.WriteFile(testCABundlePath, testCABundlePEM, 0600))
 
 	// Use the CA to issue a TLS server cert.
-	t.Logf("issuing test certificate")
-	tlsCert, err := ca.IssueServerCert([]string{issuerURL.Hostname()}, nil, 1*time.Hour)
-	require.NoError(t, err)
-	certPEM, keyPEM, err := certauthority.ToPEM(tlsCert)
-	require.NoError(t, err)
+	certPEM, keyPEM := supervisorIssuer.IssuerServerCert(t, ca)
 
 	// Write the serving cert to a secret.
 	certSecret := testlib.CreateTestSecret(t,
 		env.SupervisorNamespace,
 		"oidc-provider-tls",
 		corev1.SecretTypeTLS,
-		map[string]string{"tls.crt": string(certPEM), "tls.key": string(keyPEM)},
+		map[string]string{
+			"tls.crt": string(certPEM),
+			"tls.key": string(keyPEM),
+		},
 	)
 
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
 	downstream := testlib.CreateTestFederationDomain(ctx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
-			Issuer: issuerURL.String(),
+			Issuer: supervisorIssuer.Issuer(),
 			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
 		},
 		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created

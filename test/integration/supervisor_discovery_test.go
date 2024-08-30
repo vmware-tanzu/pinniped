@@ -323,7 +323,15 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
 }
 
-func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, hostname string, ips []net.IP, secretName string, kubeClient kubernetes.Interface) *certauthority.CA {
+func createTLSCertificateSecret(
+	ctx context.Context,
+	t *testing.T,
+	namespace string,
+	hostname string,
+	ips []net.IP,
+	secretName string,
+	kubeClient kubernetes.Interface,
+) *certauthority.CA {
 	// Create a CA.
 	ca, err := certauthority.New("Acme Corp", 1000*time.Hour)
 	require.NoError(t, err)
@@ -340,14 +348,14 @@ func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
-			Namespace: ns,
+			Namespace: namespace,
 		},
 		StringData: map[string]string{
 			"tls.crt": string(tlsCertChainPEM),
 			"tls.key": string(tlsPrivateKeyPEM),
 		},
 	}
-	_, err = kubeClient.CoreV1().Secrets(ns).Create(ctx, &secret, metav1.CreateOptions{})
+	_, err = kubeClient.CoreV1().Secrets(namespace).Create(ctx, &secret, metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	// Delete the Secret when the test ends.
@@ -355,7 +363,7 @@ func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, ho
 		t.Helper()
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		err := kubeClient.CoreV1().Secrets(ns).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
+		err := kubeClient.CoreV1().Secrets(namespace).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
 		require.NoError(t, err)
 	})
 

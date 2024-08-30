@@ -61,8 +61,8 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 		ips = append(ips, ip)
 	}
 
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), client, testlib.NewKubernetesClientset(t))
-	defaultCA := createTLSCertificateSecret(ctx, t, ns, httpsAddress, ips, defaultTLSCertSecretName(env), kubeClient)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, env.DefaultTLSCertSecretName(), client, testlib.NewKubernetesClientset(t))
+	defaultCA := createTLSCertificateSecret(ctx, t, ns, httpsAddress, ips, env.DefaultTLSCertSecretName(), kubeClient)
 
 	tests := []struct {
 		Name     string
@@ -182,7 +182,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 		Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 	}, idpv1alpha1.PhaseError)
 
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, env.DefaultTLSCertSecretName(), pinnipedClient, kubeClient)
 
 	scheme := "https"
 	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
@@ -268,7 +268,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 		Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 	}, idpv1alpha1.PhaseError)
 
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, env.DefaultTLSCertSecretName(), pinnipedClient, kubeClient)
 
 	scheme := "https"
 	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
@@ -297,7 +297,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
-	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ips[0]}, defaultTLSCertSecretName(env), kubeClient)
+	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ips[0]}, env.DefaultTLSCertSecretName(), kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
@@ -321,10 +321,6 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 
 	// And we can still access the other issuer using the default cert.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
-}
-
-func defaultTLSCertSecretName(env *testlib.TestEnv) string {
-	return env.SupervisorAppName + "-default-tls-certificate"
 }
 
 func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, hostname string, ips []net.IP, secretName string, kubeClient kubernetes.Interface) *certauthority.CA {

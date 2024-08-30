@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -71,6 +72,11 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	pinnipedExe := testlib.PinnipedCLIPath(t)
 
 	issuerURL, _ := env.InferSupervisorIssuerURL(t)
+	isIssuerAnIPAddress := net.ParseIP(issuerURL.Hostname()) != nil
+	var issuerIPs []net.IP
+	if isIssuerAnIPAddress {
+		issuerIPs = append(issuerIPs, net.ParseIP(issuerURL.Hostname()))
+	}
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
@@ -85,24 +91,52 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	// Use the CA to issue a TLS server cert.
 	t.Logf("issuing test certificate")
 	federationDomainTLSServingCert, err := federationDomainSelfSignedCA.IssueServerCert(
-		[]string{issuerURL.Hostname()}, nil, 1*time.Hour)
+		[]string{issuerURL.Hostname()}, issuerIPs, 1*time.Hour)
 	require.NoError(t, err)
 	federationDomainTLSServingCertPEM, federationDomainTLSServingCertKeyPEM, err := certauthority.ToPEM(federationDomainTLSServingCert)
 	require.NoError(t, err)
 
-	// Write the serving cert to a secret.
-	federationDomainTLSServingCertSecret := testlib.CreateTestSecret(t,
+	supervisorClient := testlib.NewSupervisorClientset(t)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
+		topSetupCtx,
+		t,
 		env.SupervisorNamespace,
-		"oidc-provider-tls",
-		corev1.SecretTypeTLS,
-		map[string]string{"tls.crt": string(federationDomainTLSServingCertPEM), "tls.key": string(federationDomainTLSServingCertKeyPEM)},
+		env.DefaultTLSCertSecretName(),
+		supervisorClient,
+		testlib.NewKubernetesClientset(t),
 	)
 
-	// Create the downstream FederationDomain and expect it to go into the success status condition.
+	var tlsSpecForFederationDomain *supervisorconfigv1alpha1.FederationDomainTLSSpec
+	if isIssuerAnIPAddress {
+		testlib.CreateTestSecretWithName(
+			t,
+			env.SupervisorNamespace,
+			env.DefaultTLSCertSecretName(),
+			corev1.SecretTypeTLS,
+			map[string]string{
+				"tls.crt": string(federationDomainTLSServingCertPEM),
+				"tls.key": string(federationDomainTLSServingCertKeyPEM),
+			},
+		)
+	} else {
+		// Write the serving cert to a secret.
+		federationDomainTLSServingCertSecret := testlib.CreateTestSecret(t,
+			env.SupervisorNamespace,
+			"oidc-provider-tls",
+			corev1.SecretTypeTLS,
+			map[string]string{
+				"tls.crt": string(federationDomainTLSServingCertPEM),
+				"tls.key": string(federationDomainTLSServingCertKeyPEM),
+			},
+		)
+		tlsSpecForFederationDomain = &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: federationDomainTLSServingCertSecret.Name}
+	}
+
+	// Create the downstream FederationDomain.
 	federationDomain := testlib.CreateTestFederationDomain(topSetupCtx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer: issuerURL.String(),
-			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: federationDomainTLSServingCertSecret.Name},
+			TLS:    tlsSpecForFederationDomain,
 		},
 		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)
@@ -1416,7 +1450,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Update the FederationDomain to use the two IDPs.
-		federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
+		federationDomainsClient := supervisorClient.ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
 		gotFederationDomain, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 
@@ -1736,7 +1770,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		testlib.WaitForJWTAuthenticatorStatusPhase(testCtx, t, authenticator.Name, authenticationv1alpha1.JWTAuthenticatorPhaseReady)
 
 		// Update the FederationDomain to use the two IDPs.
-		federationDomainsClient := testlib.NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
+		federationDomainsClient := supervisorClient.ConfigV1alpha1().FederationDomains(env.SupervisorNamespace)
 		gotFederationDomain, err := federationDomainsClient.Get(testCtx, federationDomain.Name, metav1.GetOptions{})
 		require.NoError(t, err)
 

@@ -98,6 +98,10 @@ func (e *TestEnv) InferSupervisorIssuerURL(t *testing.T) (*url.URL, string) {
 	return issuerURL, issuerAsString
 }
 
+func (e *TestEnv) DefaultTLSCertSecretName() string {
+	return e.SupervisorAppName + "-default-tls-certificate"
+}
+
 type TestLDAPUpstream struct {
 	Host                                            string   `json:"host"`
 	Domain                                          string   `json:"domain"`
@@ -262,9 +266,6 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 
 	result.SupervisorHTTPSIngressAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")
 	result.SupervisorHTTPSAddress = needEnv(t, "PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS")
-	require.NotRegexp(t, "^[0-9]", result.SupervisorHTTPSAddress,
-		"PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS must be a hostname with an optional port and cannot be an IP address",
-	)
 	result.SupervisorHTTPSIngressCABundle = base64Decoded(t, os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_CA_BUNDLE"))
 
 	conciergeCustomLabelsYAML := needEnv(t, "PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS")

@@ -474,17 +474,13 @@ func CreateTestConfigMap(t *testing.T, namespace string, baseName string, string
 	return created
 }
 
-func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {
+func createTestSecret(t *testing.T, namespace string, secret *corev1.Secret) *corev1.Secret {
 	t.Helper()
 	client := NewKubernetesClientset(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	created, err := client.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
-		ObjectMeta: TestObjectMeta(t, baseName),
-		Type:       secretType,
-		StringData: stringData,
-	}, metav1.CreateOptions{})
+	created, err := client.CoreV1().Secrets(namespace).Create(ctx, secret, metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -494,6 +490,25 @@ func CreateTestSecret(t *testing.T, namespace string, baseName string, secretTyp
 	})
 	t.Logf("created test Secret %s/%s", created.Namespace, created.Name)
 	return created
+}
+
+func CreateTestSecret(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {
+	return createTestSecret(t, namespace, &corev1.Secret{
+		ObjectMeta: TestObjectMeta(t, baseName),
+		Type:       secretType,
+		StringData: stringData,
+	})
+}
+
+func CreateTestSecretWithName(t *testing.T, namespace string, name string, secretType corev1.SecretType, stringData map[string]string) *corev1.Secret {
+	secret := &corev1.Secret{
+		ObjectMeta: TestObjectMeta(t, ""),
+		Type:       secretType,
+		StringData: stringData,
+	}
+	secret.GenerateName = ""
+	secret.Name = name
+	return createTestSecret(t, namespace, secret)
 }
 
 func CreateTestSecretBytes(t *testing.T, namespace string, baseName string, secretType corev1.SecretType, data map[string][]byte) *corev1.Secret {

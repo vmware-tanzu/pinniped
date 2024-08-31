@@ -52,17 +52,12 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	httpsAddress := env.SupervisorHTTPSAddress
-	if host, _, err := net.SplitHostPort(httpsAddress); err == nil {
-		httpsAddress = host
-	}
-
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, env.DefaultTLSCertSecretName(), client, testlib.NewKubernetesClientset(t))
 	defaultCA := createTLSCertificateSecret(
 		ctx,
 		t,
 		ns,
-		testlib.NewSupervisorIssuer(t, httpsAddress),
+		testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress),
 		env.DefaultTLSCertSecretName(),
 		kubeClient,
 	)
@@ -87,6 +82,8 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 				// Both cases are not required, so when one is empty skip it.
 				t.Skip("no address defined")
 			}
+
+			addr, _ = strings.CutPrefix(addr, "https://")
 
 			// Create any IDP so that any FederationDomain created later by this test will see that exactly one IDP exists.
 			testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
@@ -188,9 +185,9 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, env.DefaultTLSCertSecretName(), pinnipedClient, kubeClient)
 
 	scheme := "https"
-	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
+	supervisorIssuer := testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress)
+	address := supervisorIssuer.Address() // hostname and port WITHOUT SCHEME for direct access to the supervisor's port 8443
 
-	hostname1 := strings.Split(address, ":")[0]
 	issuer1 := fmt.Sprintf("%s://%s/issuer1", scheme, address)
 	certSecretName1 := "integration-test-cert-1"
 
@@ -206,7 +203,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create the Secret.
-	ca1 := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, hostname1), certSecretName1, kubeClient)
+	ca1 := createTLSCertificateSecret(ctx, t, ns, supervisorIssuer, certSecretName1, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
@@ -227,7 +224,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create a Secret at the updated name.
-	ca1update := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, hostname1), certSecretName1update, kubeClient)
+	ca1update := createTLSCertificateSecret(ctx, t, ns, supervisorIssuer, certSecretName1update, kubeClient)
 
 	// Now that the Secret exists at the new name, we should be able to access the endpoints by hostname using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
@@ -247,7 +244,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// Create the Secret.
-	ca2 := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, hostname2), certSecretName2, kubeClient)
+	ca2 := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, issuer2), certSecretName2, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
@@ -274,15 +271,12 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, env.DefaultTLSCertSecretName(), pinnipedClient, kubeClient)
 
 	scheme := "https"
-	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
+	supervisorIssuer := testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress)
+	address := supervisorIssuer.Address() // hostname and port WITHOUT SCHEME for direct access to the supervisor's port 8443
 
-	hostAndPortSegments := strings.Split(address, ":")
 	// hostnames are case-insensitive, so test mis-matching the case of the issuer URL and the request URL
-	hostname := strings.ToLower(hostAndPortSegments[0])
-	port := "8443"
-	if len(hostAndPortSegments) > 1 {
-		port = hostAndPortSegments[1]
-	}
+	hostname := strings.ToLower(supervisorIssuer.Hostname())
+	port := supervisorIssuer.Port("8443")
 
 	ips, err := testlib.LookupIP(ctx, hostname)
 	require.NoError(t, err)
@@ -302,7 +296,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
-	defaultCA := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, ipAsHostname), env.DefaultTLSCertSecretName(), kubeClient)
+	defaultCA := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, issuerUsingIPAddress), env.DefaultTLSCertSecretName(), kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
@@ -317,7 +311,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// Create the Secret.
-	certCA := createTLSCertificateSecret(ctx, t, ns, testlib.NewSupervisorIssuer(t, hostname), certSecretName, kubeClient)
+	certCA := createTLSCertificateSecret(ctx, t, ns, supervisorIssuer, certSecretName, kubeClient)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA from the SNI cert.
 	// Hostnames are case-insensitive, so the request should still work even if the case of the hostname is different

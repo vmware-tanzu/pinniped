@@ -37,10 +37,10 @@ func TestSupervisorHealthzBootstrap_Disruptive(t *testing.T) {
 
 	const badTLSConfigBody = "pinniped supervisor has invalid TLS serving certificate configuration\n"
 
-	httpGet(ctx, t, httpClient, fmt.Sprintf("https://%s/healthz", env.SupervisorHTTPSAddress), http.StatusOK, "ok")
-	httpGet(ctx, t, httpClient, fmt.Sprintf("https://%s", env.SupervisorHTTPSAddress), http.StatusInternalServerError, badTLSConfigBody)
-	httpGet(ctx, t, httpClient, fmt.Sprintf("https://%s/nothealthz", env.SupervisorHTTPSAddress), http.StatusInternalServerError, badTLSConfigBody)
-	httpGet(ctx, t, httpClient, fmt.Sprintf("https://%s/healthz/something", env.SupervisorHTTPSAddress), http.StatusInternalServerError, badTLSConfigBody)
+	httpGet(ctx, t, httpClient, fmt.Sprintf("%s/healthz", env.SupervisorHTTPSAddress), http.StatusOK, "ok")
+	httpGet(ctx, t, httpClient, env.SupervisorHTTPSAddress, http.StatusInternalServerError, badTLSConfigBody)
+	httpGet(ctx, t, httpClient, fmt.Sprintf("%s/nothealthz", env.SupervisorHTTPSAddress), http.StatusInternalServerError, badTLSConfigBody)
+	httpGet(ctx, t, httpClient, fmt.Sprintf("%s/healthz/something", env.SupervisorHTTPSAddress), http.StatusInternalServerError, badTLSConfigBody)
 }
 
 func httpGet(ctx context.Context, t *testing.T, client *http.Client, url string, expectedStatus int, expectedBody string) {

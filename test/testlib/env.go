@@ -5,20 +5,16 @@ package testlib
 
 import (
 	"encoding/base64"
-	"net"
-	"net/url"
 	"os"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
-	"go.pinniped.dev/internal/certauthority"
 )
 
 type Capability string
@@ -85,63 +81,6 @@ type TestOIDCUpstream struct {
 	Username         string   `json:"username"`
 	Password         string   `json:"password"`
 	ExpectedGroups   []string `json:"expectedGroups"`
-}
-
-type SupervisorIssuer struct {
-	issuerURL *url.URL
-}
-
-func NewSupervisorIssuer(t *testing.T, issuer string) SupervisorIssuer {
-	t.Helper()
-
-	t.Logf("NewSupervisorIssuer: %s", issuer)
-
-	issuerURL, err := url.Parse(issuer)
-	require.NoError(t, err)
-
-	return SupervisorIssuer{
-		issuerURL: issuerURL,
-	}
-}
-
-func (s SupervisorIssuer) Issuer() string {
-	return s.issuerURL.String()
-}
-
-func (s SupervisorIssuer) Hostnames() []string {
-	// TODO: Why does this happen?
-	if s.issuerURL.Hostname() == "" {
-		return []string{"localhost"}
-	}
-	return []string{s.issuerURL.Hostname()}
-}
-
-func (s SupervisorIssuer) IPs() []net.IP {
-	var ips []net.IP
-	if ip := net.ParseIP(s.issuerURL.Hostname()); ip != nil {
-		ips = append(ips, ip)
-	}
-	return ips
-}
-
-func (s SupervisorIssuer) IssuerServerCert(
-	t *testing.T,
-	ca *certauthority.CA,
-) ([]byte, []byte) {
-	t.Helper()
-
-	t.Logf("issuing server cert for Supervisor: hostname=%+v, ips=%+v",
-		s.Hostnames(), s.IPs())
-
-	cert, err := ca.IssueServerCert(s.Hostnames(), s.IPs(), 24*time.Hour)
-	require.NoError(t, err)
-	certPEM, keyPEM, err := certauthority.ToPEM(cert)
-	require.NoError(t, err)
-	return certPEM, keyPEM
-}
-
-func (s SupervisorIssuer) IsIPAddress() bool {
-	return len(s.IPs()) > 0
 }
 
 // InferSupervisorIssuerURL infers the downstream issuer URL from the callback associated with the upstream test client registration.

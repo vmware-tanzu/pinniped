@@ -38,7 +38,6 @@ import (
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	supervisorclient "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
-	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/testutil"
@@ -66,6 +65,16 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 	topSetupCtx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelFunc()
+	supervisorClient := testlib.NewSupervisorClientset(t)
+	kubeClient := testlib.NewKubernetesClientset(t)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
+		topSetupCtx,
+		t,
+		env.SupervisorNamespace,
+		env.DefaultTLSCertSecretName(),
+		supervisorClient,
+		kubeClient,
+	)
 
 	// Build pinniped CLI.
 	pinnipedExe := testlib.PinnipedCLIPath(t)
@@ -74,58 +83,28 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
-	federationDomainSelfSignedCA, err := certauthority.New("Downstream Test CA", 1*time.Hour)
-	require.NoError(t, err)
+	tlsServingCertForSupervisorSecretName := "federation-domain-serving-cert-" + testlib.RandHex(t, 8)
+
+	federationDomainSelfSignedCA := createTLSServingCertSecretForSupervisor(
+		topSetupCtx,
+		t,
+		env,
+		supervisorIssuer,
+		tlsServingCertForSupervisorSecretName,
+		kubeClient,
+	)
 
 	// Save that bundle plus the one that signs the upstream issuer, for test purposes.
 	federationDomainCABundlePath := filepath.Join(t.TempDir(), "test-ca.pem")
 	federationDomainCABundlePEM := federationDomainSelfSignedCA.Bundle()
 	require.NoError(t, os.WriteFile(federationDomainCABundlePath, federationDomainCABundlePEM, 0600))
 
-	// Use the CA to issue a TLS server cert.
-	certPEM, keyPEM := supervisorIssuer.IssuerServerCert(t, federationDomainSelfSignedCA)
-
-	supervisorClient := testlib.NewSupervisorClientset(t)
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(
-		topSetupCtx,
-		t,
-		env.SupervisorNamespace,
-		env.DefaultTLSCertSecretName(),
-		supervisorClient,
-		testlib.NewKubernetesClientset(t),
-	)
-
-	var tlsSpecForFederationDomain *supervisorconfigv1alpha1.FederationDomainTLSSpec
-	if supervisorIssuer.IsIPAddress() {
-		testlib.CreateTestSecretWithName(
-			t,
-			env.SupervisorNamespace,
-			env.DefaultTLSCertSecretName(),
-			corev1.SecretTypeTLS,
-			map[string]string{
-				"tls.crt": string(certPEM),
-				"tls.key": string(keyPEM),
-			},
-		)
-	} else {
-		// Write the serving cert to a secret.
-		federationDomainTLSServingCertSecret := testlib.CreateTestSecret(t,
-			env.SupervisorNamespace,
-			"oidc-provider-tls",
-			corev1.SecretTypeTLS,
-			map[string]string{
-				"tls.crt": string(certPEM),
-				"tls.key": string(keyPEM),
-			},
-		)
-		tlsSpecForFederationDomain = &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: federationDomainTLSServingCertSecret.Name}
-	}
-
 	// Create the downstream FederationDomain.
+	// This helper function will nil out spec.TLS if spec.Issuer is an IP address.
 	federationDomain := testlib.CreateTestFederationDomain(topSetupCtx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer: supervisorIssuer.Issuer(),
-			TLS:    tlsSpecForFederationDomain,
+			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: tlsServingCertForSupervisorSecretName},
 		},
 		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)
@@ -552,6 +531,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 		if runtime.GOOS != "darwin" {
 			// For some unknown reason this breaks the pty library on some macOS machines.
 			// The problem doesn't reproduce for everyone, so this is just a workaround.
+			var err error
 			kubectlStdoutPipe, err = kubectlCmd.StdoutPipe()
 			require.NoError(t, err)
 		}

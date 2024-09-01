@@ -118,7 +118,15 @@ func TestSecureTLSSupervisor(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	startKubectlPortForward(ctx, t, "10448", "443", env.SupervisorAppName+"-nodeport", env.SupervisorNamespace)
+	supervisorIssuer := testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress)
+
+	serviceSuffix := "-nodeport"
+	if supervisorIssuer.IsIPAddress() {
+		// Then there's no nodeport service to connect to, it's a load balancer service!
+		serviceSuffix = "-loadbalancer"
+	}
+
+	startKubectlPortForward(ctx, t, "10448", "443", env.SupervisorAppName+serviceSuffix, env.SupervisorNamespace)
 
 	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10448)
 

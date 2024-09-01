@@ -21,13 +21,11 @@ import (
 	"github.com/creack/pty"
 	"github.com/stretchr/testify/require"
 	authorizationv1 "k8s.io/api/authorization/v1"
-	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
@@ -49,37 +47,33 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 	tempDir := t.TempDir()
 
 	supervisorIssuer := env.InferSupervisorIssuerURL(t)
+	kubeClient := testlib.NewKubernetesClientset(t)
+	var err error
 
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
-	ca, err := certauthority.New("Downstream Test CA", 1*time.Hour)
-	require.NoError(t, err)
+	downstreamTLSServingCertName := "oidc-provider-tls-" + testlib.RandHex(t, 8)
+	federationDomainSelfSignedCA := createTLSServingCertSecretForSupervisor(
+		ctx,
+		t,
+		env,
+		supervisorIssuer,
+		downstreamTLSServingCertName,
+		kubeClient,
+	)
 
 	// Save that bundle plus the one that signs the upstream issuer, for test purposes.
 	testCABundlePath := filepath.Join(tempDir, "test-ca.pem")
-	testCABundlePEM := []byte(string(ca.Bundle()) + "\n" + env.SupervisorUpstreamOIDC.CABundle)
+	testCABundlePEM := []byte(string(federationDomainSelfSignedCA.Bundle()) + "\n" + env.SupervisorUpstreamOIDC.CABundle)
 	testCABundleBase64 := base64.StdEncoding.EncodeToString(testCABundlePEM)
 	require.NoError(t, os.WriteFile(testCABundlePath, testCABundlePEM, 0600))
 
-	// Use the CA to issue a TLS server cert.
-	certPEM, keyPEM := supervisorIssuer.IssuerServerCert(t, ca)
-
-	// Write the serving cert to a secret.
-	certSecret := testlib.CreateTestSecret(t,
-		env.SupervisorNamespace,
-		"oidc-provider-tls",
-		corev1.SecretTypeTLS,
-		map[string]string{
-			"tls.crt": string(certPEM),
-			"tls.key": string(keyPEM),
-		},
-	)
-
 	// Create the downstream FederationDomain and expect it to go into the success status condition.
+	// This helper function will nil out spec.TLS if spec.Issuer is an IP address.
 	downstream := testlib.CreateTestFederationDomain(ctx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer: supervisorIssuer.Issuer(),
-			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+			TLS:    &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: downstreamTLSServingCertName},
 		},
 		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created
 	)

@@ -31,7 +31,6 @@ import (
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
@@ -2940,15 +2939,24 @@ func testSupervisorLogin(
 
 	supervisorIssuer := env.InferSupervisorIssuerURL(t)
 
+	tlsServingCertForSupervisorSecretName := "federation-tls-cert-" + testlib.RandHex(t, 8)
+	kubeClient := testlib.NewKubernetesClientset(t)
+	federationDomainSelfSignedCA := createTLSServingCertSecretForSupervisor(
+		ctx,
+		t,
+		env,
+		supervisorIssuer,
+		tlsServingCertForSupervisorSecretName,
+		kubeClient,
+	)
+
 	// Generate a CA bundle with which to serve this provider.
 	t.Logf("generating test CA")
-	ca, err := certauthority.New("Downstream Test CA", 1*time.Hour)
-	require.NoError(t, err)
 
 	// Create an HTTP client that can reach the downstream discovery endpoint using the CA certs.
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{RootCAs: ca.Pool()}, //nolint:gosec // not concerned with TLS MinVersion here
+			TLSClientConfig: &tls.Config{RootCAs: federationDomainSelfSignedCA.Pool()}, //nolint:gosec // not concerned with TLS MinVersion here
 			Proxy: func(req *http.Request) (*url.URL, error) {
 				if strings.HasPrefix(req.URL.Host, "127.0.0.1") {
 					// don't proxy requests to localhost to avoid proxying calls to our local callback listener
@@ -2971,20 +2979,6 @@ func testSupervisorLogin(
 	}
 	oidcHTTPClientContext := coreosoidc.ClientContext(ctx, httpClient)
 
-	// Use the CA to issue a TLS server cert.
-	certPEM, keyPEM := supervisorIssuer.IssuerServerCert(t, ca)
-
-	// Write the serving cert to a secret.
-	certSecret := testlib.CreateTestSecret(t,
-		env.SupervisorNamespace,
-		"oidc-provider-tls",
-		corev1.SecretTypeTLS,
-		map[string]string{
-			"tls.crt": string(certPEM),
-			"tls.key": string(keyPEM),
-		},
-	)
-
 	// Create upstream IDP and wait for it to become ready.
 	idpName := createIDP(t)
 
@@ -2996,10 +2990,11 @@ func testSupervisorLogin(
 	}
 
 	// Create the downstream FederationDomain and expect it to go into the appropriate status condition.
+	// This helper function will nil out spec.TLS if spec.Issuer is an IP address.
 	federationDomain := testlib.CreateTestFederationDomain(ctx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
 			Issuer:            supervisorIssuer.Issuer(),
-			TLS:               &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecret.Name},
+			TLS:               &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: tlsServingCertForSupervisorSecretName},
 			IdentityProviders: fdIDPSpec,
 		},
 		// The IDP CR already exists, so even for legacy FederationDomains which do not explicitly list

@@ -367,6 +367,11 @@ func CreateTestFederationDomain(
 	createContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
+	// If the issuer is an IP address, then we have to update the DEFAULT cert, and there's no secret associated with this FederationDomain
+	if NewSupervisorIssuer(t, spec.Issuer).IsIPAddress() {
+		spec.TLS = nil
+	}
+
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
 	federationDomain, err := federationDomainsClient.Create(createContext, &supervisorconfigv1alpha1.FederationDomain{
 		ObjectMeta: TestObjectMeta(t, "oidc-provider"),

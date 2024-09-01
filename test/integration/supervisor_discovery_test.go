@@ -80,7 +80,7 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 
 			if addr == "" {
 				// Both cases are not required, so when one is empty skip it.
-				t.Skip("no address defined")
+				t.Skip("skipping - no address defined")
 			}
 
 			addr, _ = strings.CutPrefix(addr, "https://")
@@ -353,6 +353,8 @@ func createTLSCertificateSecret(
 	_, err = kubeClient.CoreV1().Secrets(namespace).Create(ctx, &secret, metav1.CreateOptions{})
 	require.NoError(t, err)
 
+	t.Logf("wrote TLS cert secret to: %s/%s", namespace, secretName)
+
 	// Delete the Secret when the test ends.
 	t.Cleanup(func() {
 		t.Helper()
@@ -590,6 +592,33 @@ func requireJWKSEndpointIsWorking(t *testing.T, supervisorScheme, supervisorAddr
 	return &result
 }
 
+func printServerCert(t *testing.T, address string, dnsOverrides map[string]string) {
+	conf := &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec // this is for testing purposes
+	}
+
+	addressURL, err := url.Parse(address)
+	require.NoError(t, err)
+
+	host := addressURL.Host
+	if _, ok := dnsOverrides[host]; ok {
+		host = dnsOverrides[address]
+	}
+
+	conn, err := tls.Dial("tcp", host, conf)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+	certs := conn.ConnectionState().PeerCertificates
+	for i, cert := range certs {
+		t.Logf("found cert %d of %d for host=%q with dns=%+v and ips=%+v",
+			i+1,
+			len(certs),
+			host,
+			cert.DNSNames,
+			cert.IPAddresses)
+	}
+}
+
 func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle string, dnsOverrides map[string]string) (*http.Response, string) {
 	t.Helper()
 	httpClient := newHTTPClient(t, caBundle, dnsOverrides)
@@ -618,9 +647,21 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 		// header is respected by the supervisor server.
 		requestDiscoveryEndpoint.Host = issuerURL.Host
 
+		printServerCert(t, endpointURL, dnsOverrides)
+
 		response, err = httpClient.Do(requestDiscoveryEndpoint)
 		requireEventually.NoError(err)
 		defer func() { _ = response.Body.Close() }()
+
+		t.Logf("successful GET requestDiscoveryEndpoint=%q, found serverName=%s, with %d certificates",
+			requestDiscoveryEndpoint.URL.String(),
+			response.TLS.ServerName,
+			len(response.TLS.PeerCertificates))
+		for _, peerCertificate := range response.TLS.PeerCertificates {
+			t.Logf("Found peerCertificate with dns=%+v and ips=%+v",
+				peerCertificate.DNSNames,
+				peerCertificate.IPAddresses)
+		}
 
 		requireEventually.Equal(http.StatusOK, response.StatusCode)
 

@@ -76,13 +76,13 @@ func (s SupervisorIssuer) IssuerServerCert(
 ) ([]byte, []byte) {
 	t.Helper()
 
-	t.Logf("issuing server cert for Supervisor: hostname=%+v, ips=%+v",
-		s.Hostnames(), s.IPs())
-
 	cert, err := ca.IssueServerCert(s.Hostnames(), s.IPs(), 24*time.Hour)
 	require.NoError(t, err)
 	certPEM, keyPEM, err := certauthority.ToPEM(cert)
 	require.NoError(t, err)
+	t.Logf("issued server cert for Supervisor: hostname=%+v, ips=%+v\n%s",
+		s.Hostnames(), s.IPs(),
+		certPEM)
 	return certPEM, keyPEM
 }
 

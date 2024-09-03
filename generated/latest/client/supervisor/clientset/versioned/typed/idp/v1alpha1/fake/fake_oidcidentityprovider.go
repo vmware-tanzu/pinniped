@@ -28,22 +28,24 @@ var oidcidentityprovidersKind = v1alpha1.SchemeGroupVersion.WithKind("OIDCIdenti
 
 // Get takes name of the oIDCIdentityProvider, and returns the corresponding oIDCIdentityProvider object, and an error if there is any.
 func (c *FakeOIDCIdentityProviders) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.OIDCIdentityProvider, err error) {
+	emptyResult := &v1alpha1.OIDCIdentityProvider{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(oidcidentityprovidersResource, c.ns, name), &v1alpha1.OIDCIdentityProvider{})
+		Invokes(testing.NewGetActionWithOptions(oidcidentityprovidersResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.OIDCIdentityProvider), err
 }
 
 // List takes label and field selectors, and returns the list of OIDCIdentityProviders that match those selectors.
 func (c *FakeOIDCIdentityProviders) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.OIDCIdentityProviderList, err error) {
+	emptyResult := &v1alpha1.OIDCIdentityProviderList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(oidcidentityprovidersResource, oidcidentityprovidersKind, c.ns, opts), &v1alpha1.OIDCIdentityProviderList{})
+		Invokes(testing.NewListActionWithOptions(oidcidentityprovidersResource, oidcidentityprovidersKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -62,40 +64,43 @@ func (c *FakeOIDCIdentityProviders) List(ctx context.Context, opts v1.ListOption
 // Watch returns a watch.Interface that watches the requested oIDCIdentityProviders.
 func (c *FakeOIDCIdentityProviders) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(oidcidentityprovidersResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(oidcidentityprovidersResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a oIDCIdentityProvider and creates it.  Returns the server's representation of the oIDCIdentityProvider, and an error, if there is any.
 func (c *FakeOIDCIdentityProviders) Create(ctx context.Context, oIDCIdentityProvider *v1alpha1.OIDCIdentityProvider, opts v1.CreateOptions) (result *v1alpha1.OIDCIdentityProvider, err error) {
+	emptyResult := &v1alpha1.OIDCIdentityProvider{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(oidcidentityprovidersResource, c.ns, oIDCIdentityProvider), &v1alpha1.OIDCIdentityProvider{})
+		Invokes(testing.NewCreateActionWithOptions(oidcidentityprovidersResource, c.ns, oIDCIdentityProvider, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.OIDCIdentityProvider), err
 }
 
 // Update takes the representation of a oIDCIdentityProvider and updates it. Returns the server's representation of the oIDCIdentityProvider, and an error, if there is any.
 func (c *FakeOIDCIdentityProviders) Update(ctx context.Context, oIDCIdentityProvider *v1alpha1.OIDCIdentityProvider, opts v1.UpdateOptions) (result *v1alpha1.OIDCIdentityProvider, err error) {
+	emptyResult := &v1alpha1.OIDCIdentityProvider{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(oidcidentityprovidersResource, c.ns, oIDCIdentityProvider), &v1alpha1.OIDCIdentityProvider{})
+		Invokes(testing.NewUpdateActionWithOptions(oidcidentityprovidersResource, c.ns, oIDCIdentityProvider, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.OIDCIdentityProvider), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeOIDCIdentityProviders) UpdateStatus(ctx context.Context, oIDCIdentityProvider *v1alpha1.OIDCIdentityProvider, opts v1.UpdateOptions) (*v1alpha1.OIDCIdentityProvider, error) {
+func (c *FakeOIDCIdentityProviders) UpdateStatus(ctx context.Context, oIDCIdentityProvider *v1alpha1.OIDCIdentityProvider, opts v1.UpdateOptions) (result *v1alpha1.OIDCIdentityProvider, err error) {
+	emptyResult := &v1alpha1.OIDCIdentityProvider{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(oidcidentityprovidersResource, "status", c.ns, oIDCIdentityProvider), &v1alpha1.OIDCIdentityProvider{})
+		Invokes(testing.NewUpdateSubresourceActionWithOptions(oidcidentityprovidersResource, "status", c.ns, oIDCIdentityProvider, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.OIDCIdentityProvider), err
 }
@@ -110,7 +115,7 @@ func (c *FakeOIDCIdentityProviders) Delete(ctx context.Context, name string, opt
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeOIDCIdentityProviders) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(oidcidentityprovidersResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(oidcidentityprovidersResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.OIDCIdentityProviderList{})
 	return err
@@ -118,11 +123,12 @@ func (c *FakeOIDCIdentityProviders) DeleteCollection(ctx context.Context, opts v
 
 // Patch applies the patch and returns the patched oIDCIdentityProvider.
 func (c *FakeOIDCIdentityProviders) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.OIDCIdentityProvider, err error) {
+	emptyResult := &v1alpha1.OIDCIdentityProvider{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(oidcidentityprovidersResource, c.ns, name, pt, data, subresources...), &v1alpha1.OIDCIdentityProvider{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(oidcidentityprovidersResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.OIDCIdentityProvider), err
 }

@@ -23,6 +23,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	applycorev1 "k8s.io/client-go/applyconfigurations/core/v1"
+	applymetav1 "k8s.io/client-go/applyconfigurations/meta/v1"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
@@ -47,22 +50,18 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 	client := testlib.NewSupervisorClientset(t)
 	kubeClient := testlib.NewKubernetesClientset(t)
 
-	ns := env.SupervisorNamespace
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	httpsAddress := env.SupervisorHTTPSAddress
-	var ips []net.IP
-	if host, _, err := net.SplitHostPort(httpsAddress); err == nil {
-		httpsAddress = host
-	}
-	if ip := net.ParseIP(httpsAddress); ip != nil {
-		ips = append(ips, ip)
-	}
-
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), client, testlib.NewKubernetesClientset(t))
-	defaultCA := createTLSCertificateSecret(ctx, t, ns, httpsAddress, ips, defaultTLSCertSecretName(env), kubeClient)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, env.SupervisorNamespace, env.DefaultTLSCertSecretName(), client, testlib.NewKubernetesClientset(t))
+	defaultCA := createTLSServingCertSecretForSupervisor(
+		ctx,
+		t,
+		env,
+		testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress),
+		env.DefaultTLSCertSecretName(),
+		kubeClient,
+	)
 
 	tests := []struct {
 		Name     string
@@ -82,8 +81,10 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 
 			if addr == "" {
 				// Both cases are not required, so when one is empty skip it.
-				t.Skip("no address defined")
+				t.Skip("skipping - no address defined")
 			}
+
+			addr, _ = strings.CutPrefix(addr, "https://")
 
 			// Create any IDP so that any FederationDomain created later by this test will see that exactly one IDP exists.
 			testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
@@ -105,9 +106,9 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 
 			// When FederationDomains are created in sequence they each cause a discovery endpoint to appear only for as long as the FederationDomain exists.
 			config1, jwks1 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer1, client)
-			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config1, client, ns, scheme, addr, caBundle, issuer1)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config1, client, env.SupervisorNamespace, scheme, addr, caBundle, issuer1)
 			config2, jwks2 := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer2, client)
-			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config2, client, ns, scheme, addr, caBundle, issuer2)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config2, client, env.SupervisorNamespace, scheme, addr, caBundle, issuer2)
 			// The auto-created JWK's were different from each other.
 			require.NotEqual(t, jwks1.Keys[0]["x"], jwks2.Keys[0]["x"])
 			require.NotEqual(t, jwks1.Keys[0]["y"], jwks2.Keys[0]["y"])
@@ -121,47 +122,47 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 			require.NotEqual(t, jwks3.Keys[0]["y"], jwks4.Keys[0]["y"])
 
 			// Editing a FederationDomain to change the issuer URL updates the endpoints that are being served.
-			updatedConfig4 := editFederationDomainIssuerName(t, config4, client, ns, issuer5)
+			updatedConfig4 := editFederationDomainIssuerName(t, config4, client, env.SupervisorNamespace, issuer5)
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer4)
 			jwks5 := requireStandardDiscoveryEndpointsAreWorking(t, scheme, addr, caBundle, issuer5, nil)
 			// The JWK did not change when the issuer name was updated.
 			require.Equal(t, jwks4.Keys[0], jwks5.Keys[0])
 
 			// When they are deleted they stop serving discovery endpoints.
-			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config3, client, ns, scheme, addr, caBundle, issuer3)
-			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, ns, scheme, addr, caBundle, issuer5)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config3, client, env.SupervisorNamespace, scheme, addr, caBundle, issuer3)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, updatedConfig4, client, env.SupervisorNamespace, scheme, addr, caBundle, issuer5)
 
 			// When the same issuer URL is added to two FederationDomains, both FederationDomains are marked as duplicates, and neither is serving.
 			config6Duplicate1, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer6, client)
 			config6Duplicate2 := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{Issuer: issuer6}, supervisorconfigv1alpha1.FederationDomainPhaseError)
-			requireStatus(t, client, ns, config6Duplicate1.Name, supervisorconfigv1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
-			requireStatus(t, client, ns, config6Duplicate2.Name, supervisorconfigv1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
+			requireStatus(t, client, env.SupervisorNamespace, config6Duplicate1.Name, supervisorconfigv1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
+			requireStatus(t, client, env.SupervisorNamespace, config6Duplicate2.Name, supervisorconfigv1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerIsUnique"}))
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, issuer6)
 
 			// If we delete the first duplicate FederationDomain, the second duplicate FederationDomain starts serving.
-			requireDelete(t, client, ns, config6Duplicate1.Name)
+			requireDelete(t, client, env.SupervisorNamespace, config6Duplicate1.Name)
 			requireWellKnownEndpointIsWorking(t, scheme, addr, caBundle, issuer6, nil)
-			requireStatus(t, client, ns, config6Duplicate2.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
+			requireStatus(t, client, env.SupervisorNamespace, config6Duplicate2.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 			// When we finally delete all FederationDomains, the discovery endpoints should be down.
-			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, ns, scheme, addr, caBundle, issuer6)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config6Duplicate2, client, env.SupervisorNamespace, scheme, addr, caBundle, issuer6)
 
 			// "Host" headers can be used to send requests to discovery endpoints when the public address is different from the issuer URL.
 			issuer7 := "https://some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com:2684/issuer7"
 			config7, _ := requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(ctx, t, scheme, addr, caBundle, issuer7, client)
-			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config7, client, ns, scheme, addr, caBundle, issuer7)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config7, client, env.SupervisorNamespace, scheme, addr, caBundle, issuer7)
 
 			// When we create a FederationDomain with an invalid issuer url, the status is set to invalid.
 			badConfig := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{Issuer: badIssuer}, supervisorconfigv1alpha1.FederationDomainPhaseError)
-			requireStatus(t, client, ns, badConfig.Name, supervisorconfigv1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerURLValid"}))
+			requireStatus(t, client, env.SupervisorNamespace, badConfig.Name, supervisorconfigv1alpha1.FederationDomainPhaseError, withFalseConditions([]string{"Ready", "IssuerURLValid"}))
 			requireDiscoveryEndpointsAreNotFound(t, scheme, addr, caBundle, badIssuer)
-			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, ns, scheme, addr, caBundle, badIssuer)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, badConfig, client, env.SupervisorNamespace, scheme, addr, caBundle, badIssuer)
 
 			issuer8 := fmt.Sprintf("https://%s/issuer8multipleIDP", addr)
-			config8 := requireIDPsListedByIDPDiscoveryEndpoint(t, env, ctx, kubeClient, ns, scheme, addr, caBundle, issuer8)
+			config8 := requireIDPsListedByIDPDiscoveryEndpoint(t, env, ctx, kubeClient, env.SupervisorNamespace, scheme, addr, caBundle, issuer8)
 
 			// requireJWKSEndpointIsWorking() will give us a bit of an idea what to do...
-			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config8, client, ns, scheme, addr, caBundle, issuer8)
+			requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(t, config8, client, env.SupervisorNamespace, scheme, addr, caBundle, issuer8)
 		})
 	}
 }
@@ -172,7 +173,6 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	pinnipedClient := testlib.NewSupervisorClientset(t)
 	kubeClient := testlib.NewKubernetesClientset(t)
 
-	ns := env.SupervisorNamespace
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
@@ -182,12 +182,12 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 		Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 	}, idpv1alpha1.PhaseError)
 
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, env.SupervisorNamespace, env.DefaultTLSCertSecretName(), pinnipedClient, kubeClient)
 
 	scheme := "https"
-	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
+	supervisorIssuer := testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress)
+	address := supervisorIssuer.Address() // hostname and port WITHOUT SCHEME for direct access to the supervisor's port 8443
 
-	hostname1 := strings.Split(address, ":")[0]
 	issuer1 := fmt.Sprintf("%s://%s/issuer1", scheme, address)
 	certSecretName1 := "integration-test-cert-1"
 
@@ -203,20 +203,31 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create the Secret.
-	ca1 := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1, kubeClient)
+	ca1 := createTLSServingCertSecretForSupervisor(
+		ctx,
+		t,
+		env,
+		supervisorIssuer,
+		certSecretName1,
+		kubeClient,
+	)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
 
+	// Delete the default TLS secret as well
+	err := kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Delete(ctx, env.DefaultTLSCertSecretName(), metav1.DeleteOptions{})
+	require.True(t, err == nil || apierrors.IsNotFound(err), "unexpected error when deleting the default secret: %s", err)
+
 	// Update the config to with a new .spec.tls.secretName.
 	certSecretName1update := "integration-test-cert-1-update"
 	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		federationDomain1LatestVersion, err := pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Get(ctx, federationDomain1.Name, metav1.GetOptions{})
+		federationDomain1LatestVersion, err := pinnipedClient.ConfigV1alpha1().FederationDomains(env.SupervisorNamespace).Get(ctx, federationDomain1.Name, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
 		federationDomain1LatestVersion.Spec.TLS = &supervisorconfigv1alpha1.FederationDomainTLSSpec{SecretName: certSecretName1update}
-		_, err = pinnipedClient.ConfigV1alpha1().FederationDomains(ns).Update(ctx, federationDomain1LatestVersion, metav1.UpdateOptions{})
+		_, err = pinnipedClient.ConfigV1alpha1().FederationDomains(env.SupervisorNamespace).Update(ctx, federationDomain1LatestVersion, metav1.UpdateOptions{})
 		return err
 	}))
 
@@ -224,7 +235,14 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuer1)
 
 	// Create a Secret at the updated name.
-	ca1update := createTLSCertificateSecret(ctx, t, ns, hostname1, nil, certSecretName1update, kubeClient)
+	ca1update := createTLSServingCertSecretForSupervisor(
+		ctx,
+		t,
+		env,
+		supervisorIssuer,
+		certSecretName1update,
+		kubeClient,
+	)
 
 	// Now that the Secret exists at the new name, we should be able to access the endpoints by hostname using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
@@ -244,7 +262,14 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// Create the Secret.
-	ca2 := createTLSCertificateSecret(ctx, t, ns, hostname2, nil, certSecretName2, kubeClient)
+	ca2 := createTLSServingCertSecretForSupervisor(
+		ctx,
+		t,
+		env,
+		testlib.NewSupervisorIssuer(t, issuer2),
+		certSecretName2,
+		kubeClient,
+	)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
@@ -258,7 +283,6 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	pinnipedClient := testlib.NewSupervisorClientset(t)
 	kubeClient := testlib.NewKubernetesClientset(t)
 
-	ns := env.SupervisorNamespace
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
@@ -268,26 +292,25 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 		Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 	}, idpv1alpha1.PhaseError)
 
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, ns, defaultTLSCertSecretName(env), pinnipedClient, kubeClient)
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, env.SupervisorNamespace, env.DefaultTLSCertSecretName(), pinnipedClient, kubeClient)
 
 	scheme := "https"
-	address := env.SupervisorHTTPSAddress // hostname and port for direct access to the supervisor's port 8443
+	supervisorIssuer := testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress)
+	address := supervisorIssuer.Address() // hostname and port WITHOUT SCHEME for direct access to the supervisor's port 8443
 
-	hostAndPortSegments := strings.Split(address, ":")
 	// hostnames are case-insensitive, so test mis-matching the case of the issuer URL and the request URL
-	hostname := strings.ToLower(hostAndPortSegments[0])
-	port := "8443"
-	if len(hostAndPortSegments) > 1 {
-		port = hostAndPortSegments[1]
-	}
+	hostname := strings.ToLower(supervisorIssuer.Hostname())
+	port := supervisorIssuer.Port("8443")
 
 	ips, err := testlib.LookupIP(ctx, hostname)
 	require.NoError(t, err)
 	require.NotEmpty(t, ips)
-	ipWithPort := ips[0].String() + ":" + port
+	ipAsHostname := ips[0].String()
+	ipWithPort := ipAsHostname + ":" + port
 
+	// Use different paths just in case the hostname is the IP address!
 	issuerUsingIPAddress := fmt.Sprintf("%s://%s/issuer1", scheme, ipWithPort)
-	issuerUsingHostname := fmt.Sprintf("%s://%s/issuer1", scheme, address)
+	issuerUsingHostname := fmt.Sprintf("%s://%s/issuer2", scheme, address)
 
 	// Create an FederationDomain without a spec.tls.secretName.
 	federationDomain1 := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{Issuer: issuerUsingIPAddress}, supervisorconfigv1alpha1.FederationDomainPhaseReady)
@@ -297,7 +320,14 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t, issuerUsingIPAddress)
 
 	// Create a Secret at the special name which represents the default TLS cert.
-	defaultCA := createTLSCertificateSecret(ctx, t, ns, "cert-hostname-doesnt-matter", []net.IP{ips[0]}, defaultTLSCertSecretName(env), kubeClient)
+	defaultCA := createTLSServingCertSecretForSupervisor(
+		ctx,
+		t,
+		env,
+		testlib.NewSupervisorIssuer(t, issuerUsingIPAddress),
+		env.DefaultTLSCertSecretName(),
+		kubeClient,
+	)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
@@ -312,55 +342,84 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	requireStatus(t, pinnipedClient, federationDomain2.Namespace, federationDomain2.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady, withAllSuccessfulConditions())
 
 	// Create the Secret.
-	certCA := createTLSCertificateSecret(ctx, t, ns, hostname, nil, certSecretName, kubeClient)
+	certCA := createTLSServingCertSecretForSupervisor(
+		ctx,
+		t,
+		env,
+		supervisorIssuer,
+		certSecretName,
+		kubeClient,
+	)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA from the SNI cert.
 	// Hostnames are case-insensitive, so the request should still work even if the case of the hostname is different
 	// from the case of the issuer URL's hostname.
 	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, string(certCA.Bundle()), issuerUsingHostname, nil)
 
-	// And we can still access the other issuer using the default cert.
-	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
+	if !supervisorIssuer.IsIPAddress() {
+		// And we can still access the other issuer using the default cert,
+		// except when we have an IP address, because in that case we just overwrote the default cert
+		_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
+	}
 }
 
-func defaultTLSCertSecretName(env *testlib.TestEnv) string {
-	return env.SupervisorAppName + "-default-tls-certificate"
-}
+func createTLSServingCertSecretForSupervisor(
+	ctx context.Context,
+	t *testing.T,
+	env *testlib.TestEnv,
+	supervisorIssuer testlib.SupervisorIssuer,
+	secretName string,
+	kubeClient kubernetes.Interface,
+) *certauthority.CA {
+	// If the issuer is an IP address, then we have to create/update the DEFAULT cert, not the given secret
+	if supervisorIssuer.IsIPAddress() {
+		secretName = env.DefaultTLSCertSecretName()
+	}
 
-func createTLSCertificateSecret(ctx context.Context, t *testing.T, ns string, hostname string, ips []net.IP, secretName string, kubeClient kubernetes.Interface) *certauthority.CA {
 	// Create a CA.
 	ca, err := certauthority.New("Acme Corp", 1000*time.Hour)
 	require.NoError(t, err)
 
-	// Using the CA, create a TLS server cert.
-	tlsCert, err := ca.IssueServerCert([]string{hostname}, ips, 1000*time.Hour)
-	require.NoError(t, err)
+	// Using the CA, create a TLS serving cert.
+	certPEM, keyPEM := supervisorIssuer.IssuerServerCert(t, ca)
 
-	// Write the serving cert to the SNI secret.
-	tlsCertChainPEM, tlsPrivateKeyPEM, err := certauthority.ToPEM(tlsCert)
-	require.NoError(t, err)
-	secret := corev1.Secret{
-		Type:     corev1.SecretTypeTLS,
-		TypeMeta: metav1.TypeMeta{},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: ns,
+	secret := &applycorev1.SecretApplyConfiguration{
+		TypeMetaApplyConfiguration: applymetav1.TypeMetaApplyConfiguration{
+			Kind:       ptr.To("Secret"),
+			APIVersion: ptr.To("v1"),
+		},
+		Type: ptr.To(corev1.SecretTypeTLS),
+		ObjectMetaApplyConfiguration: &applymetav1.ObjectMetaApplyConfiguration{
+			Name:      ptr.To(secretName),
+			Namespace: ptr.To(env.SupervisorNamespace),
 		},
 		StringData: map[string]string{
-			"tls.crt": string(tlsCertChainPEM),
-			"tls.key": string(tlsPrivateKeyPEM),
+			"tls.crt": string(certPEM),
+			"tls.key": string(keyPEM),
 		},
 	}
-	_, err = kubeClient.CoreV1().Secrets(ns).Create(ctx, &secret, metav1.CreateOptions{})
+
+	_, err = kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Apply(ctx, secret, metav1.ApplyOptions{FieldManager: "pinniped-integration-tests"})
 	require.NoError(t, err)
+
+	t.Logf("wrote TLS cert secret to: %s/%s", env.SupervisorNamespace, secretName)
 
 	// Delete the Secret when the test ends.
 	t.Cleanup(func() {
 		t.Helper()
 		deleteCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		err := kubeClient.CoreV1().Secrets(ns).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
-		require.NoError(t, err)
+		// check to see if it exists (so that the default TLS secret doesn't get deleted multiple times)
+		secret, err := kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Get(deleteCtx, secretName, metav1.GetOptions{})
+		require.True(t, err == nil || apierrors.IsNotFound(err), "unexpected error when getting secret %s/%s: %s",
+			env.SupervisorNamespace,
+			secretName,
+			err)
+
+		if err == nil && secret != nil {
+			err = kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Delete(deleteCtx, secretName, metav1.DeleteOptions{})
+			require.NoError(t, err)
+		}
 	})
 
 	return ca
@@ -591,6 +650,33 @@ func requireJWKSEndpointIsWorking(t *testing.T, supervisorScheme, supervisorAddr
 	return &result
 }
 
+func printServerCert(t *testing.T, address string, dnsOverrides map[string]string) {
+	conf := &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec // this is for testing purposes
+	}
+
+	addressURL, err := url.Parse(address)
+	require.NoError(t, err)
+
+	host := addressURL.Host
+	if _, ok := dnsOverrides[host]; ok {
+		host = dnsOverrides[host]
+	}
+
+	conn, err := tls.Dial("tcp", host, conf)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+	certs := conn.ConnectionState().PeerCertificates
+	for i, cert := range certs {
+		t.Logf("found cert %d of %d for host=%q with dns=%+v and ips=%+v",
+			i+1,
+			len(certs),
+			host,
+			cert.DNSNames,
+			cert.IPAddresses)
+	}
+}
+
 func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle string, dnsOverrides map[string]string) (*http.Response, string) {
 	t.Helper()
 	httpClient := newHTTPClient(t, caBundle, dnsOverrides)
@@ -619,9 +705,21 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 		// header is respected by the supervisor server.
 		requestDiscoveryEndpoint.Host = issuerURL.Host
 
+		printServerCert(t, endpointURL, dnsOverrides)
+
 		response, err = httpClient.Do(requestDiscoveryEndpoint)
 		requireEventually.NoError(err)
 		defer func() { _ = response.Body.Close() }()
+
+		t.Logf("successful GET requestDiscoveryEndpoint=%q, found serverName=%s, with %d certificates",
+			requestDiscoveryEndpoint.URL.String(),
+			response.TLS.ServerName,
+			len(response.TLS.PeerCertificates))
+		for _, peerCertificate := range response.TLS.PeerCertificates {
+			t.Logf("Found peerCertificate with dns=%+v and ips=%+v",
+				peerCertificate.DNSNames,
+				peerCertificate.IPAddresses)
+		}
 
 		requireEventually.Equal(http.StatusOK, response.StatusCode)
 

@@ -11,7 +11,7 @@ import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 	scheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // OIDCClientSecretRequestsGetter has a method to return a OIDCClientSecretRequestInterface.
@@ -28,27 +28,17 @@ type OIDCClientSecretRequestInterface interface {
 
 // oIDCClientSecretRequests implements OIDCClientSecretRequestInterface
 type oIDCClientSecretRequests struct {
-	client rest.Interface
-	ns     string
+	*gentype.Client[*v1alpha1.OIDCClientSecretRequest]
 }
 
 // newOIDCClientSecretRequests returns a OIDCClientSecretRequests
 func newOIDCClientSecretRequests(c *ClientsecretV1alpha1Client, namespace string) *oIDCClientSecretRequests {
 	return &oIDCClientSecretRequests{
-		client: c.RESTClient(),
-		ns:     namespace,
+		gentype.NewClient[*v1alpha1.OIDCClientSecretRequest](
+			"oidcclientsecretrequests",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			namespace,
+			func() *v1alpha1.OIDCClientSecretRequest { return &v1alpha1.OIDCClientSecretRequest{} }),
 	}
-}
-
-// Create takes the representation of a oIDCClientSecretRequest and creates it.  Returns the server's representation of the oIDCClientSecretRequest, and an error, if there is any.
-func (c *oIDCClientSecretRequests) Create(ctx context.Context, oIDCClientSecretRequest *v1alpha1.OIDCClientSecretRequest, opts v1.CreateOptions) (result *v1alpha1.OIDCClientSecretRequest, err error) {
-	result = &v1alpha1.OIDCClientSecretRequest{}
-	err = c.client.Post().
-		Namespace(c.ns).
-		Resource("oidcclientsecretrequests").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(oIDCClientSecretRequest).
-		Do(ctx).
-		Into(result)
-	return
 }

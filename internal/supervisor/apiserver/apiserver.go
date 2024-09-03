@@ -16,6 +16,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	utilversion "k8s.io/apiserver/pkg/util/version"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	configv1alpha1clientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
@@ -56,13 +57,13 @@ type CompletedConfig struct {
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
 func (c *Config) Complete() CompletedConfig {
+	// Be sure to set this before calling c.GenericConfig.Complete()
+	c.GenericConfig.EffectiveVersion = utilversion.NewEffectiveVersion(pversion.Get().String())
+
 	completedCfg := completedConfig{
 		c.GenericConfig.Complete(),
 		&c.ExtraConfig,
 	}
-
-	versionInfo := pversion.Get()
-	completedCfg.GenericConfig.Version = &versionInfo
 
 	return CompletedConfig{completedConfig: &completedCfg}
 }

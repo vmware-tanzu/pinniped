@@ -2596,7 +2596,7 @@ func TestController(t *testing.T) {
 			}
 			// This List action is coming from the test code when it pulls the GitHubIdentityProviders from K8s
 			wantActions[len(wantActions)-1] = coretesting.NewListAction(githubIDPGVR, githubIDPKind, namespace, metav1.ListOptions{})
-			require.Equal(t, wantActions, fakeSupervisorClient.Actions())
+			require.Equal(t, wantActions, testutil.ScrubListOptionsForActions(t, fakeSupervisorClient.Actions()))
 		})
 	}
 }
@@ -2901,7 +2901,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.Equal(t, tt.wantActions, fakeSupervisorClient.Actions())
+			require.Equal(t, tt.wantActions, testutil.ScrubListOptionsForActions(t, fakeSupervisorClient.Actions()))
 		})
 	}
 }

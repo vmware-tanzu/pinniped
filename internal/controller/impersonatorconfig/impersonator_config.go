@@ -81,7 +81,7 @@ type impersonatorConfigController struct {
 	impersonatorFunc                 impersonator.FactoryFunc
 
 	hasControlPlaneNodes              *bool
-	serverStopCh                      chan struct{}
+	serverCancelFunc                  context.CancelFunc
 	errorCh                           chan error
 	tlsServingCertDynamicCertProvider dynamiccert.Private
 	log                               plog.Logger
@@ -461,7 +461,7 @@ func (c *impersonatorConfigController) tlsSecretExists() (bool, *corev1.Secret, 
 }
 
 func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx controllerlib.Context) error {
-	if c.serverStopCh != nil {
+	if c.serverCancelFunc != nil {
 		// The server was already started, but it could have died in the background, so make a non-blocking
 		// check to see if it has sent any errors on the errorCh.
 		select {
@@ -495,7 +495,8 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 		return err
 	}
 
-	c.serverStopCh = make(chan struct{})
+	var serverCtx context.Context
+	serverCtx, c.serverCancelFunc = context.WithCancel(context.Background())
 	// use a buffered channel so that startImpersonatorFunc can send
 	// on it without coordinating with the main controller go routine
 	c.errorCh = make(chan error, 1)
@@ -509,26 +510,26 @@ func (c *impersonatorConfigController) ensureImpersonatorIsStarted(syncCtx contr
 		defer syncCtx.Queue.AddRateLimited(syncCtx.Key)
 
 		// Forward any errors returned by startImpersonatorFunc on the errorCh.
-		c.errorCh <- startImpersonatorFunc(c.serverStopCh)
+		c.errorCh <- startImpersonatorFunc(serverCtx)
 	}()
 
 	return nil
 }
 
 func (c *impersonatorConfigController) ensureImpersonatorIsStopped(shouldCloseErrChan bool) error {
-	if c.serverStopCh == nil {
+	if c.serverCancelFunc == nil {
 		return nil
 	}
 
 	c.log.Info("stopping impersonation proxy", "port", c.impersonationProxyPort)
-	close(c.serverStopCh)
+	c.serverCancelFunc()
 	stopErr := <-c.errorCh
 
 	if shouldCloseErrChan {
 		close(c.errorCh)
 	}
 
-	c.serverStopCh = nil
+	c.serverCancelFunc = nil
 	c.errorCh = nil
 
 	return stopErr

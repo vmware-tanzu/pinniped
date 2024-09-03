@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controllerlib
@@ -61,7 +61,7 @@ func New(config Config, opts ...Option) Controller {
 	}
 
 	// set up defaults
-	WithRateLimiter(workqueue.DefaultControllerRateLimiter())(c)
+	WithRateLimiter(workqueue.DefaultTypedControllerRateLimiter[any]())(c)
 	WithRecorder(klogRecorder{})(c)
 
 	for _, opt := range opts {
@@ -74,7 +74,7 @@ func New(config Config, opts ...Option) Controller {
 type controller struct {
 	config Config
 
-	queue        workqueue.RateLimitingInterface
+	queue        workqueue.TypedRateLimitingInterface[any]
 	queueWrapper Queue
 	maxRetries   int
 	recorder     events.EventRecorder

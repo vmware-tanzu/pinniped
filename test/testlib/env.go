@@ -5,7 +5,6 @@ package testlib
 
 import (
 	"encoding/base64"
-	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -85,17 +84,19 @@ type TestOIDCUpstream struct {
 }
 
 // InferSupervisorIssuerURL infers the downstream issuer URL from the callback associated with the upstream test client registration.
-func (e *TestEnv) InferSupervisorIssuerURL(t *testing.T) (*url.URL, string) {
+func (e *TestEnv) InferSupervisorIssuerURL(t *testing.T) SupervisorIssuer {
 	t.Helper()
-	issuerURL, err := url.Parse(e.SupervisorUpstreamOIDC.CallbackURL)
-	require.NoError(t, err)
-	require.True(t, strings.HasSuffix(issuerURL.Path, "/callback"))
-	issuerURL.Path = strings.TrimSuffix(issuerURL.Path, "/callback")
+	supervisorIssuer := NewSupervisorIssuer(t, e.SupervisorUpstreamOIDC.CallbackURL)
+	require.True(t, strings.HasSuffix(supervisorIssuer.issuerURL.Path, "/callback"))
+	supervisorIssuer.issuerURL.Path = strings.TrimSuffix(supervisorIssuer.issuerURL.Path, "/callback")
 
-	issuerAsString := issuerURL.String()
-	t.Logf("testing with downstream issuer URL %s", issuerAsString)
+	t.Logf("InferSupervisorIssuerURL(): testing with downstream issuer URL %s", supervisorIssuer.Issuer())
 
-	return issuerURL, issuerAsString
+	return supervisorIssuer
+}
+
+func (e *TestEnv) DefaultTLSCertSecretName() string {
+	return e.SupervisorAppName + "-default-tls-certificate"
 }
 
 type TestLDAPUpstream struct {
@@ -262,9 +263,6 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 
 	result.SupervisorHTTPSIngressAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")
 	result.SupervisorHTTPSAddress = needEnv(t, "PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS")
-	require.NotRegexp(t, "^[0-9]", result.SupervisorHTTPSAddress,
-		"PINNIPED_TEST_SUPERVISOR_HTTPS_ADDRESS must be a hostname with an optional port and cannot be an IP address",
-	)
 	result.SupervisorHTTPSIngressCABundle = base64Decoded(t, os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_CA_BUNDLE"))
 
 	conciergeCustomLabelsYAML := needEnv(t, "PINNIPED_TEST_CONCIERGE_CUSTOM_LABELS")

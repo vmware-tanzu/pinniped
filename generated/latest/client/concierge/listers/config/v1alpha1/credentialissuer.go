@@ -7,8 +7,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -26,30 +26,10 @@ type CredentialIssuerLister interface {
 
 // credentialIssuerLister implements the CredentialIssuerLister interface.
 type credentialIssuerLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.CredentialIssuer]
 }
 
 // NewCredentialIssuerLister returns a new CredentialIssuerLister.
 func NewCredentialIssuerLister(indexer cache.Indexer) CredentialIssuerLister {
-	return &credentialIssuerLister{indexer: indexer}
-}
-
-// List lists all CredentialIssuers in the indexer.
-func (s *credentialIssuerLister) List(selector labels.Selector) (ret []*v1alpha1.CredentialIssuer, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.CredentialIssuer))
-	})
-	return ret, err
-}
-
-// Get retrieves the CredentialIssuer from the index for a given name.
-func (s *credentialIssuerLister) Get(name string) (*v1alpha1.CredentialIssuer, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("credentialissuer"), name)
-	}
-	return obj.(*v1alpha1.CredentialIssuer), nil
+	return &credentialIssuerLister{listers.New[*v1alpha1.CredentialIssuer](indexer, v1alpha1.Resource("credentialissuer"))}
 }

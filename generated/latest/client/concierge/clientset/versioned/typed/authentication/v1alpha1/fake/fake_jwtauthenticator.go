@@ -27,20 +27,22 @@ var jwtauthenticatorsKind = v1alpha1.SchemeGroupVersion.WithKind("JWTAuthenticat
 
 // Get takes name of the jWTAuthenticator, and returns the corresponding jWTAuthenticator object, and an error if there is any.
 func (c *FakeJWTAuthenticators) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.JWTAuthenticator, err error) {
+	emptyResult := &v1alpha1.JWTAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(jwtauthenticatorsResource, name), &v1alpha1.JWTAuthenticator{})
+		Invokes(testing.NewRootGetActionWithOptions(jwtauthenticatorsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.JWTAuthenticator), err
 }
 
 // List takes label and field selectors, and returns the list of JWTAuthenticators that match those selectors.
 func (c *FakeJWTAuthenticators) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.JWTAuthenticatorList, err error) {
+	emptyResult := &v1alpha1.JWTAuthenticatorList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(jwtauthenticatorsResource, jwtauthenticatorsKind, opts), &v1alpha1.JWTAuthenticatorList{})
+		Invokes(testing.NewRootListActionWithOptions(jwtauthenticatorsResource, jwtauthenticatorsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -59,36 +61,39 @@ func (c *FakeJWTAuthenticators) List(ctx context.Context, opts v1.ListOptions) (
 // Watch returns a watch.Interface that watches the requested jWTAuthenticators.
 func (c *FakeJWTAuthenticators) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(jwtauthenticatorsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(jwtauthenticatorsResource, opts))
 }
 
 // Create takes the representation of a jWTAuthenticator and creates it.  Returns the server's representation of the jWTAuthenticator, and an error, if there is any.
 func (c *FakeJWTAuthenticators) Create(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.CreateOptions) (result *v1alpha1.JWTAuthenticator, err error) {
+	emptyResult := &v1alpha1.JWTAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(jwtauthenticatorsResource, jWTAuthenticator), &v1alpha1.JWTAuthenticator{})
+		Invokes(testing.NewRootCreateActionWithOptions(jwtauthenticatorsResource, jWTAuthenticator, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.JWTAuthenticator), err
 }
 
 // Update takes the representation of a jWTAuthenticator and updates it. Returns the server's representation of the jWTAuthenticator, and an error, if there is any.
 func (c *FakeJWTAuthenticators) Update(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.UpdateOptions) (result *v1alpha1.JWTAuthenticator, err error) {
+	emptyResult := &v1alpha1.JWTAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(jwtauthenticatorsResource, jWTAuthenticator), &v1alpha1.JWTAuthenticator{})
+		Invokes(testing.NewRootUpdateActionWithOptions(jwtauthenticatorsResource, jWTAuthenticator, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.JWTAuthenticator), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeJWTAuthenticators) UpdateStatus(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.UpdateOptions) (*v1alpha1.JWTAuthenticator, error) {
+func (c *FakeJWTAuthenticators) UpdateStatus(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.UpdateOptions) (result *v1alpha1.JWTAuthenticator, err error) {
+	emptyResult := &v1alpha1.JWTAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(jwtauthenticatorsResource, "status", jWTAuthenticator), &v1alpha1.JWTAuthenticator{})
+		Invokes(testing.NewRootUpdateSubresourceActionWithOptions(jwtauthenticatorsResource, "status", jWTAuthenticator, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.JWTAuthenticator), err
 }
@@ -102,7 +107,7 @@ func (c *FakeJWTAuthenticators) Delete(ctx context.Context, name string, opts v1
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeJWTAuthenticators) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(jwtauthenticatorsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(jwtauthenticatorsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.JWTAuthenticatorList{})
 	return err
@@ -110,10 +115,11 @@ func (c *FakeJWTAuthenticators) DeleteCollection(ctx context.Context, opts v1.De
 
 // Patch applies the patch and returns the patched jWTAuthenticator.
 func (c *FakeJWTAuthenticators) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.JWTAuthenticator, err error) {
+	emptyResult := &v1alpha1.JWTAuthenticator{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(jwtauthenticatorsResource, name, pt, data, subresources...), &v1alpha1.JWTAuthenticator{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(jwtauthenticatorsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.JWTAuthenticator), err
 }

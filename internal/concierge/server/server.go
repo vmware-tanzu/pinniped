@@ -222,7 +222,7 @@ func (a *App) runServer(ctx context.Context) error {
 	// Run the server. Its post-start hook will start the controllers. Its pre shutdown hook will be called when ctx is
 	// cancelled, and that hook should graceful stop the controllers and give up the leader election lease. See the
 	// code for these hooks in internal/concierge/apiserver.go.
-	return server.GenericAPIServer.PrepareRun().Run(ctx.Done())
+	return server.GenericAPIServer.PrepareRun().RunWithContext(ctx)
 }
 
 // Create a configuration for the aggregated API server.

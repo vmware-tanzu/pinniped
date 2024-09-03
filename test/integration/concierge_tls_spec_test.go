@@ -506,7 +506,7 @@ func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 			})
 
 			t.Run("apply jwt authenticator", func(t *testing.T) {
-				_, supervisorIssuer := env.InferSupervisorIssuerURL(t)
+				supervisorIssuer := env.InferSupervisorIssuerURL(t)
 
 				resourceName := "test-jwt-authenticator-" + testlib.RandHex(t, 7)
 
@@ -519,7 +519,7 @@ func TestTLSSpecValidationConcierge_Parallel(t *testing.T) {
 				)
 
 				yamlBytes := []byte(fmt.Sprintf(jwtAuthenticatorYamlTemplate,
-					env.APIGroupSuffix, resourceName, supervisorIssuer,
+					env.APIGroupSuffix, resourceName, supervisorIssuer.Issuer(),
 					indentForHeredoc(tc.tlsYAML(secretOrConfigmapResourceName))))
 
 				stdOut, stdErr, err := performKubectlApply(t, resourceName, yamlBytes)

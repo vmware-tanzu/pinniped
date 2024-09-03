@@ -365,8 +365,8 @@ func LoginToUpstreamOIDC(t *testing.T, b *Browser, upstream testlib.TestOIDCUpst
 		},
 		{
 			Name:                "Dex",
-			IssuerPattern:       regexp.MustCompile(`\Ahttps://dex\.tools\.svc\.cluster\.local/dex.*\z`),
-			LoginPagePattern:    regexp.MustCompile(`\Ahttps://dex\.tools\.svc\.cluster\.local/dex/auth/local.+\z`),
+			IssuerPattern:       regexp.MustCompile(`\Ahttps://.*/dex.*\z`),
+			LoginPagePattern:    regexp.MustCompile(`\Ahttps://.*/dex/auth/local.+\z`),
 			UsernameSelector:    "input#login",
 			PasswordSelector:    "input#password",
 			LoginButtonSelector: "button#submit-login",
@@ -378,7 +378,7 @@ func LoginToUpstreamOIDC(t *testing.T, b *Browser, upstream testlib.TestOIDCUpst
 		}
 	}
 	if cfg == nil {
-		require.Failf(t, "could not find login provider for issuer %q", upstream.Issuer)
+		require.Failf(t, "failure message goes here", "could not find login provider for issuer %q", upstream.Issuer)
 		return
 	}
 

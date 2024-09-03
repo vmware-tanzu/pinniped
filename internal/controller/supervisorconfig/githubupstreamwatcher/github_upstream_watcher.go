@@ -6,7 +6,6 @@ package githubupstreamwatcher
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -117,7 +116,7 @@ type gitHubWatcherController struct {
 	secretInformer                 corev1informers.SecretInformer
 	configMapInformer              corev1informers.ConfigMapInformer
 	clock                          clock.Clock
-	dialFunc                       func(network, addr string, config *tls.Config) (*tls.Conn, error)
+	dialer                         ptls.Dialer
 	validatedCache                 GitHubValidatedAPICacheI
 }
 
@@ -132,7 +131,7 @@ func New(
 	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
-	dialFunc func(network, addr string, config *tls.Config) (*tls.Conn, error),
+	dialer ptls.Dialer,
 	validatedCache *cache.Expiring,
 ) controllerlib.Controller {
 	c := gitHubWatcherController{
@@ -144,7 +143,7 @@ func New(
 		secretInformer:                 secretInformer,
 		configMapInformer:              configMapInformer,
 		clock:                          clock,
-		dialFunc:                       dialFunc,
+		dialer:                         dialer,
 		validatedCache:                 NewGitHubValidatedAPICache(validatedCache),
 	}
 
@@ -471,7 +470,7 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 	apiAddress := apiHostPort.Endpoint()
 
 	if !c.validatedCache.IsValid(apiAddress, caBundle.Hash()) {
-		conn, tlsDialErr := c.dialFunc("tcp", apiAddress, ptls.Default(caBundle.CertPool()))
+		tlsDialErr := c.dialer.IsReachableAndTLSValidationSucceeds(apiAddress, caBundle.CertPool(), c.log)
 		if tlsDialErr != nil {
 			return &metav1.Condition{
 				Type:   GitHubConnectionValid,
@@ -481,8 +480,6 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 					apiAddress, *specifiedHost, buildDialErrorMessage(tlsDialErr)),
 			}, nil, tlsDialErr
 		}
-		// Any error should be ignored. We have performed a successful Dial, so no need to requeue this Sync.
-		_ = conn.Close()
 	}
 
 	c.validatedCache.MarkAsValidated(apiAddress, caBundle.Hash())

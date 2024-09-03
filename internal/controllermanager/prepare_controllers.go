@@ -28,6 +28,7 @@ import (
 	"go.pinniped.dev/internal/controller/serviceaccounttokencleanup"
 	"go.pinniped.dev/internal/controllerinit"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/deploymentref"
 	"go.pinniped.dev/internal/downward"
 	"go.pinniped.dev/internal/dynamiccert"
@@ -244,6 +245,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				controllerlib.WithInformer,
 				clock.RealClock{},
 				plog.New(),
+				ptls.NewDialer(),
 			),
 			singletonWorker,
 		).

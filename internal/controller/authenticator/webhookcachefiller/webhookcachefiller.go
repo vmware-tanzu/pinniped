@@ -6,7 +6,6 @@ package webhookcachefiller
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"net/url"
@@ -77,6 +76,7 @@ func New(
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
 	log plog.Logger,
+	dialer ptls.Dialer,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
@@ -90,6 +90,7 @@ func New(
 				configMapInformer: configMapInformer,
 				clock:             clock,
 				log:               log.WithName(controllerName),
+				dialer:            dialer,
 			},
 		},
 		withInformer(
@@ -125,6 +126,7 @@ type webhookCacheFillerController struct {
 	client            conciergeclientset.Interface
 	clock             clock.Clock
 	log               plog.Logger
+	dialer            ptls.Dialer
 }
 
 // Sync implements controllerlib.Syncer.
@@ -428,11 +430,11 @@ func (c *webhookCacheFillerController) validateConnection(
 		return conditions, nil
 	}
 
-	conn, err := tls.Dial("tcp", endpointHostPort.Endpoint(), ptls.Default(certPool))
+	err := c.dialer.IsReachableAndTLSValidationSucceeds(endpointHostPort.Endpoint(), certPool, logger)
 
 	if err != nil {
 		errText := "cannot dial server"
-		msg := fmt.Sprintf("%s: %s", errText, err.Error())
+		msg := fmt.Sprintf("%s: %s", errText, err)
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeWebhookConnectionValid,
 			Status:  metav1.ConditionFalse,
@@ -440,13 +442,6 @@ func (c *webhookCacheFillerController) validateConnection(
 			Message: msg,
 		})
 		return conditions, fmt.Errorf("%s: %w", errText, err)
-	}
-
-	// this error should never be significant
-	err = conn.Close()
-	if err != nil {
-		// no unit test for this failure
-		logger.Error("error closing dialer", err)
 	}
 
 	conditions = append(conditions, successfulWebhookConnectionValidCondition())

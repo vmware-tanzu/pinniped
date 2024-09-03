@@ -1934,7 +1934,8 @@ func TestController(t *testing.T) {
 				kubeInformers.Core().V1().ConfigMaps(),
 				controllerlib.WithInformer,
 				frozenClock,
-				logger)
+				logger,
+				ptls.NewDialer())
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -2177,7 +2178,8 @@ func TestControllerFilterSecret(t *testing.T) {
 				configMapInformer,
 				observableInformers.WithInformer,
 				frozenClock,
-				logger)
+				logger,
+				ptls.NewDialer())
 
 			unrelated := &corev1.Secret{}
 			filter := observableInformers.GetFilterForInformer(secretInformer)
@@ -2238,7 +2240,8 @@ func TestControllerFilterConfigMap(t *testing.T) {
 				configMapInformer,
 				observableInformers.WithInformer,
 				frozenClock,
-				logger)
+				logger,
+				ptls.NewDialer())
 
 			unrelated := &corev1.ConfigMap{}
 			filter := observableInformers.GetFilterForInformer(configMapInformer)

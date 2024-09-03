@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package loginhtml defines HTML templates used by the Supervisor.
@@ -25,7 +25,7 @@ var (
 
 	// Parse the Go templated HTML and inject functions providing the minified inline CSS and JS.
 	parsedHTMLTemplate = template.Must(template.New("login_form.gohtml").Funcs(template.FuncMap{
-		"minifiedCSS": func() template.CSS { return template.CSS(CSS()) },
+		"minifiedCSS": func() template.CSS { return template.CSS(CSS()) }, //nolint:gosec // This is 100% static input, not attacker-controlled.
 	}).Parse(rawHTMLTemplate))
 
 	// Generate the CSP header value once since it's effectively constant.

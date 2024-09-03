@@ -71,7 +71,10 @@ func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
 		return HostPort{}, fmt.Errorf("host %q is not a valid hostname or IP address", host)
 	}
 
-	return HostPort{Host: host, Port: uint16(integerPort)}, nil
+	return HostPort{
+		Host: host,
+		Port: uint16(integerPort), //nolint:gosec // this cast is checked by validation.IsValidPortNum above
+	}, nil
 }
 
 // ParseFromURL wraps Parse but specifically takes a url.URL instead of an endpoint string.

@@ -75,7 +75,7 @@ const (
 )
 
 // stdin returns the file descriptor for stdin as an int.
-func stdin() int { return int(os.Stdin.Fd()) }
+func stdin() int { return int(os.Stdin.Fd()) } //nolint:gosec // this is an int, cast to uintptr, cast back to int
 
 type handlerState struct {
 	// Basic parameters.

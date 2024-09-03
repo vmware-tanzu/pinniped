@@ -80,7 +80,7 @@ func GenerateOTPCode(t *testing.T, token string, when time.Time) (string, int64)
 		((int(sum[offset+2] & mask3)) << shift8) |
 		(int(sum[offset+3]) & mask3))
 
-	modulo := int32(value % int64(math.Pow10(length)))
+	modulo := int32(value % int64(math.Pow10(length))) //nolint:gosec // the resulting number must be less than 10^6
 
 	format := fmt.Sprintf("%%0%dd", length)
 

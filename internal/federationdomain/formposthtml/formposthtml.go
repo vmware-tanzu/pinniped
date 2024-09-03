@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package formposthtml defines HTML templates used by the Supervisor.
@@ -29,8 +29,8 @@ var (
 
 	// Parse the Go templated HTML and inject functions providing the minified inline CSS and JS.
 	parsedHTMLTemplate = template.Must(template.New("form_post.gohtml").Funcs(template.FuncMap{
-		"minifiedCSS": func() template.CSS { return template.CSS(minifiedCSS) },
-		"minifiedJS":  func() template.JS { return template.JS(minifiedJS) }, //nolint:gosec // This is 100% static input, not attacker-controlled.
+		"minifiedCSS": func() template.CSS { return template.CSS(minifiedCSS) }, //nolint:gosec // This is 100% static input, not attacker-controlled.
+		"minifiedJS":  func() template.JS { return template.JS(minifiedJS) },    //nolint:gosec // This is 100% static input, not attacker-controlled.
 	}).Parse(rawHTMLTemplate))
 
 	// Generate the CSP header value once since it's effectively constant.

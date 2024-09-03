@@ -97,7 +97,7 @@ func shutdownAllPodsOfApp(
 		var newPods []corev1.Pod
 		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 			newPods = getRunningPodsByNamePrefix(t, namespace, appName+"-", ignorePodsWithNameSubstring)
-			requireEventually.Len(newPods, originalScale, "wanted pods to return to original scale")
+			requireEventually.Equal(len(newPods), int(originalScale), "wanted pods to return to original scale")
 			requireEventually.True(allPodsReady(newPods), "wanted all new pods to be ready")
 		}, 2*time.Minute, 200*time.Millisecond)
 
@@ -111,7 +111,7 @@ func shutdownAllPodsOfApp(
 
 	// Double check: the deployment's previous scale should have equaled the actual number of running pods from
 	// the start of the test (before we scaled down).
-	require.Equal(t, len(initialPods), originalScale)
+	require.Equal(t, len(initialPods), int(originalScale))
 
 	// Now that we have adjusted the scale to 0, the pods should go away.
 	// Our pods are intended to gracefully shut down within a few seconds, so fail unless it happens fairly quickly.
@@ -204,7 +204,7 @@ func isPodReady(pod corev1.Pod) bool {
 	return false
 }
 
-func updateDeploymentScale(t *testing.T, namespace string, deploymentName string, newScale int) int {
+func updateDeploymentScale(t *testing.T, namespace string, deploymentName string, newScale int32) int32 {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
@@ -214,13 +214,13 @@ func updateDeploymentScale(t *testing.T, namespace string, deploymentName string
 	require.NoError(t, err)
 
 	desiredScale := initialScale.DeepCopy()
-	desiredScale.Spec.Replicas = int32(newScale)
+	desiredScale.Spec.Replicas = newScale
 	updatedScale, err := client.AppsV1().Deployments(namespace).UpdateScale(ctx, deploymentName, desiredScale, metav1.UpdateOptions{})
 	require.NoError(t, err)
 	t.Logf("updated scale of Deployment %s/%s from %d to %d",
 		namespace, deploymentName, initialScale.Spec.Replicas, updatedScale.Spec.Replicas)
 
-	return int(initialScale.Spec.Replicas)
+	return initialScale.Spec.Replicas
 }
 
 func tailFollowPodLogs(t *testing.T, pod corev1.Pod) (chan struct{}, *bytes.Buffer) {

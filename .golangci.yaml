@@ -20,7 +20,6 @@ linters:
     # - depguard
     - dogsled
     - exhaustive
-    - exportloopref
     - funlen
     - gochecknoglobals
     - gochecknoinits
@@ -39,7 +38,6 @@ linters:
     - nolintlint
     - prealloc
     - rowserrcheck
-    - exportloopref
     - sqlclosecheck
     - unconvert
     - whitespace

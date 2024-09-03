@@ -7,8 +7,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"testing"
@@ -328,6 +330,13 @@ func TestWhoAmI_CSR_Parallel(t *testing.T) {
 	csrConfig := testlib.NewAnonymousClientRestConfig(t)
 	csrConfig.CertData = crtPEM
 	csrConfig.KeyData = keyPEM
+
+	bytesToHexOfSHA256 := func(b []byte) string {
+		shasum := sha256.Sum256(b)
+		return hex.EncodeToString(shasum[:])
+	}
+
+	t.Logf("sha256 of crtPEM: %s", bytesToHexOfSHA256(crtPEM))
 
 	whoAmI, err := testlib.NewKubeclient(t, csrConfig).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})

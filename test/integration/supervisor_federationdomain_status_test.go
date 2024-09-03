@@ -33,7 +33,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 	t.Cleanup(cancel)
 
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t,
-		env.SupervisorNamespace, defaultTLSCertSecretName(env), supervisorClient, testlib.NewKubernetesClientset(t))
+		env.SupervisorNamespace, env.DefaultTLSCertSecretName(), supervisorClient, testlib.NewKubernetesClientset(t))
 
 	tests := []struct {
 		name string

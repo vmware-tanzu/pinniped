@@ -7,8 +7,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -25,25 +25,17 @@ type ActiveDirectoryIdentityProviderLister interface {
 
 // activeDirectoryIdentityProviderLister implements the ActiveDirectoryIdentityProviderLister interface.
 type activeDirectoryIdentityProviderLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.ActiveDirectoryIdentityProvider]
 }
 
 // NewActiveDirectoryIdentityProviderLister returns a new ActiveDirectoryIdentityProviderLister.
 func NewActiveDirectoryIdentityProviderLister(indexer cache.Indexer) ActiveDirectoryIdentityProviderLister {
-	return &activeDirectoryIdentityProviderLister{indexer: indexer}
-}
-
-// List lists all ActiveDirectoryIdentityProviders in the indexer.
-func (s *activeDirectoryIdentityProviderLister) List(selector labels.Selector) (ret []*v1alpha1.ActiveDirectoryIdentityProvider, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ActiveDirectoryIdentityProvider))
-	})
-	return ret, err
+	return &activeDirectoryIdentityProviderLister{listers.New[*v1alpha1.ActiveDirectoryIdentityProvider](indexer, v1alpha1.Resource("activedirectoryidentityprovider"))}
 }
 
 // ActiveDirectoryIdentityProviders returns an object that can list and get ActiveDirectoryIdentityProviders.
 func (s *activeDirectoryIdentityProviderLister) ActiveDirectoryIdentityProviders(namespace string) ActiveDirectoryIdentityProviderNamespaceLister {
-	return activeDirectoryIdentityProviderNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return activeDirectoryIdentityProviderNamespaceLister{listers.NewNamespaced[*v1alpha1.ActiveDirectoryIdentityProvider](s.ResourceIndexer, namespace)}
 }
 
 // ActiveDirectoryIdentityProviderNamespaceLister helps list and get ActiveDirectoryIdentityProviders.
@@ -61,26 +53,5 @@ type ActiveDirectoryIdentityProviderNamespaceLister interface {
 // activeDirectoryIdentityProviderNamespaceLister implements the ActiveDirectoryIdentityProviderNamespaceLister
 // interface.
 type activeDirectoryIdentityProviderNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all ActiveDirectoryIdentityProviders in the indexer for a given namespace.
-func (s activeDirectoryIdentityProviderNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.ActiveDirectoryIdentityProvider, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.ActiveDirectoryIdentityProvider))
-	})
-	return ret, err
-}
-
-// Get retrieves the ActiveDirectoryIdentityProvider from the indexer for a given namespace and name.
-func (s activeDirectoryIdentityProviderNamespaceLister) Get(name string) (*v1alpha1.ActiveDirectoryIdentityProvider, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("activedirectoryidentityprovider"), name)
-	}
-	return obj.(*v1alpha1.ActiveDirectoryIdentityProvider), nil
+	listers.ResourceIndexer[*v1alpha1.ActiveDirectoryIdentityProvider]
 }

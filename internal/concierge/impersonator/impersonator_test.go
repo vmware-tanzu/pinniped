@@ -37,6 +37,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	utilversion "k8s.io/apiserver/pkg/util/version"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -836,6 +837,8 @@ func TestImpersonator(t *testing.T) {
 
 			// Allow standard REST verbs to be authorized so that tests pass without invasive changes
 			recConfig := func(config *genericapiserver.RecommendedConfig) {
+				// TODO: is it ok to use a placeholder version for a test?
+				config.EffectiveVersion = utilversion.NewEffectiveVersion("1.2.3")
 				authz := config.Authorization.Authorizer.(*comparableAuthorizer)
 				delegate := authz.AuthorizerFunc
 				authz.AuthorizerFunc = func(ctx context.Context, a authorizer.Attributes) (authorizer.Decision, string, error) {
@@ -873,16 +876,16 @@ func TestImpersonator(t *testing.T) {
 			require.NotNil(t, runner)
 
 			// Start the impersonator.
-			stopCh := make(chan struct{})
+			runnerCtx, runnerCancel := context.WithCancel(context.Background())
 			errCh := make(chan error)
 			go func() {
-				stopErr := runner(stopCh)
+				stopErr := runner(runnerCtx)
 				errCh <- stopErr
 			}()
 
 			// Stop the impersonator server at the end of the test, even if it fails.
 			t.Cleanup(func() {
-				close(stopCh)
+				runnerCancel()
 				exitErr := <-errCh
 				require.NoError(t, exitErr)
 			})

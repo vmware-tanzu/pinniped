@@ -7,8 +7,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -25,25 +25,17 @@ type GitHubIdentityProviderLister interface {
 
 // gitHubIdentityProviderLister implements the GitHubIdentityProviderLister interface.
 type gitHubIdentityProviderLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.GitHubIdentityProvider]
 }
 
 // NewGitHubIdentityProviderLister returns a new GitHubIdentityProviderLister.
 func NewGitHubIdentityProviderLister(indexer cache.Indexer) GitHubIdentityProviderLister {
-	return &gitHubIdentityProviderLister{indexer: indexer}
-}
-
-// List lists all GitHubIdentityProviders in the indexer.
-func (s *gitHubIdentityProviderLister) List(selector labels.Selector) (ret []*v1alpha1.GitHubIdentityProvider, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.GitHubIdentityProvider))
-	})
-	return ret, err
+	return &gitHubIdentityProviderLister{listers.New[*v1alpha1.GitHubIdentityProvider](indexer, v1alpha1.Resource("githubidentityprovider"))}
 }
 
 // GitHubIdentityProviders returns an object that can list and get GitHubIdentityProviders.
 func (s *gitHubIdentityProviderLister) GitHubIdentityProviders(namespace string) GitHubIdentityProviderNamespaceLister {
-	return gitHubIdentityProviderNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return gitHubIdentityProviderNamespaceLister{listers.NewNamespaced[*v1alpha1.GitHubIdentityProvider](s.ResourceIndexer, namespace)}
 }
 
 // GitHubIdentityProviderNamespaceLister helps list and get GitHubIdentityProviders.
@@ -61,26 +53,5 @@ type GitHubIdentityProviderNamespaceLister interface {
 // gitHubIdentityProviderNamespaceLister implements the GitHubIdentityProviderNamespaceLister
 // interface.
 type gitHubIdentityProviderNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all GitHubIdentityProviders in the indexer for a given namespace.
-func (s gitHubIdentityProviderNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.GitHubIdentityProvider, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.GitHubIdentityProvider))
-	})
-	return ret, err
-}
-
-// Get retrieves the GitHubIdentityProvider from the indexer for a given namespace and name.
-func (s gitHubIdentityProviderNamespaceLister) Get(name string) (*v1alpha1.GitHubIdentityProvider, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("githubidentityprovider"), name)
-	}
-	return obj.(*v1alpha1.GitHubIdentityProvider), nil
+	listers.ResourceIndexer[*v1alpha1.GitHubIdentityProvider]
 }

@@ -4,6 +4,7 @@
 package tlsconfigutil
 
 import (
+	"crypto/sha256"
 	"crypto/x509"
 	"testing"
 	"time"
@@ -14,13 +15,13 @@ import (
 )
 
 func TestNewCABundleHash(t *testing.T) {
-	sha256OfNil := CABundleHash{hash: [32]byte{0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55}}
+	sha256OfNil := CABundleHash{hash: [sha256.Size]byte{0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55}}
 
 	// On the command line, `echo "test" | shasum -a 256` yields "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
 	// which is 32 bytes of data encoded as 64 characters.
 	// https://stackoverflow.com/a/70565837
 	// This is the actual binary data:
-	sha256OfTest := CABundleHash{hash: [32]byte{159, 134, 208, 129, 136, 76, 125, 101, 154, 47, 234, 160, 197, 90, 208, 21, 163, 191, 79, 27, 43, 11, 130, 44, 209, 93, 108, 21, 176, 240, 10, 8}}
+	sha256OfTest := CABundleHash{hash: [sha256.Size]byte{159, 134, 208, 129, 136, 76, 125, 101, 154, 47, 234, 160, 197, 90, 208, 21, 163, 191, 79, 27, 43, 11, 130, 44, 209, 93, 108, 21, 176, 240, 10, 8}}
 
 	t.Run("will hash the data given", func(t *testing.T) {
 		caBundleHash := NewCABundleHash([]byte("test"))

@@ -240,9 +240,9 @@ func (r *REST) validateRequest(
 	// Ensure namespace on the object is correct, or error if a conflicting namespace was set in the object.
 	requestNamespace, ok := genericapirequest.NamespaceFrom(ctx)
 	if !ok {
-		msg := "no namespace information found in request context"
-		traceValidationFailure(tracer, msg)
-		return nil, apierrors.NewInternalError(errors.New(msg))
+		const errorMsg = "no namespace information found in request context"
+		traceValidationFailure(tracer, errorMsg)
+		return nil, apierrors.NewInternalError(errors.New(errorMsg))
 	}
 	if err := rest.EnsureObjectNamespaceMatchesRequestNamespace(requestNamespace, clientSecretRequest); err != nil {
 		traceValidationFailure(tracer, err.Error())

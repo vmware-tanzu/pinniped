@@ -24,10 +24,11 @@ var whoamirequestsKind = v1alpha1.SchemeGroupVersion.WithKind("WhoAmIRequest")
 
 // Create takes the representation of a whoAmIRequest and creates it.  Returns the server's representation of the whoAmIRequest, and an error, if there is any.
 func (c *FakeWhoAmIRequests) Create(ctx context.Context, whoAmIRequest *v1alpha1.WhoAmIRequest, opts v1.CreateOptions) (result *v1alpha1.WhoAmIRequest, err error) {
+	emptyResult := &v1alpha1.WhoAmIRequest{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(whoamirequestsResource, whoAmIRequest), &v1alpha1.WhoAmIRequest{})
+		Invokes(testing.NewRootCreateActionWithOptions(whoamirequestsResource, whoAmIRequest, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.WhoAmIRequest), err
 }

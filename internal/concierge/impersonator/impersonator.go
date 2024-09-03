@@ -45,6 +45,7 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/pkg/server/filters"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	utilversion "k8s.io/apiserver/pkg/util/version"
 	auditfake "k8s.io/apiserver/plugin/pkg/audit/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
@@ -55,13 +56,14 @@ import (
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/pversion"
 	"go.pinniped.dev/internal/tokenclient"
 	"go.pinniped.dev/internal/valuelesscontext"
 )
 
 // FactoryFunc is a function which can create an impersonator server.
 // It returns a function which will start the impersonator server.
-// That start function takes a stopCh which can be used to stop the server.
+// That start function takes a context which can be cancelled to stop the server.
 // Once a server has been stopped, don't start it again using the start function.
 // Instead, call the factory function again to get a new start function.
 type FactoryFunc func(
@@ -69,16 +71,18 @@ type FactoryFunc func(
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
 	impersonationProxyTokenCache tokenclient.ExpiringSingletonTokenCacheGet,
-) (func(stopCh <-chan struct{}) error, error)
+) (func(ctx context.Context) error, error)
 
 func New(
 	port int,
 	dynamicCertProvider dynamiccert.Private,
 	impersonationProxySignerCA dynamiccert.Public,
 	impersonationProxyTokenCache tokenclient.ExpiringSingletonTokenCacheGet,
-) (func(stopCh <-chan struct{}) error, error) {
+) (func(ctx context.Context) error, error) {
 	return newInternal(port, dynamicCertProvider, impersonationProxySignerCA, kubeclient.Secure, impersonationProxyTokenCache, nil, nil, nil)
 }
+
+var _ FactoryFunc = New
 
 //nolint:funlen // It is definitely too complicated. New calls newInternal, which makes another function.
 func newInternal(
@@ -90,7 +94,7 @@ func newInternal(
 	baseConfig *rest.Config, // for unit testing, should always be nil in production
 	recOpts func(*genericoptions.RecommendedOptions), // for unit testing, should always be nil in production
 	recConfig func(*genericapiserver.RecommendedConfig), // for unit testing, should always be nil in production
-) (func(stopCh <-chan struct{}) error, error) {
+) (func(ctx context.Context) error, error) {
 	var listener net.Listener
 	var err error
 
@@ -101,7 +105,7 @@ func newInternal(
 		}
 	}
 
-	constructServer := func() (func(stopCh <-chan struct{}) error, error) {
+	constructServer := func() (func(ctx context.Context) error, error) {
 		// Bare minimum server side scheme to allow for status messages to be encoded.
 		scheme := runtime.NewScheme()
 		metav1.AddToGroupVersion(scheme, metav1.Unversioned)
@@ -174,7 +178,7 @@ func newInternal(
 		// See sanity checks at the end of this function.
 		serverConfig.LoopbackClientConfig.BearerToken = ""
 
-		// match KAS exactly since our long running operations are just a proxy to it
+		// match KAS exactly since our long-running operations are just a proxy to it
 		// this must be kept in sync with github.com/kubernetes/kubernetes/cmd/kube-apiserver/app/server.go
 		// this is nothing to stress about - it has not changed since the beginning of Kube:
 		// v1.6 no-op move away from regex to request info https://github.com/kubernetes/kubernetes/pull/38119
@@ -321,6 +325,7 @@ func newInternal(
 			recConfig(serverConfig)
 		}
 
+		serverConfig.EffectiveVersion = utilversion.NewEffectiveVersion(pversion.Get().String())
 		completedConfig := serverConfig.Complete()
 		impersonationProxyServer, err := completedConfig.New("impersonation-proxy", genericapiserver.NewEmptyDelegate())
 		if err != nil {
@@ -339,7 +344,7 @@ func newInternal(
 			return nil, fmt.Errorf("invalid mutation of impersonation authorizer detected: %#v", preparedRun.Authorizer)
 		}
 
-		return preparedRun.Run, nil
+		return preparedRun.RunWithContext, nil
 	}
 
 	result, err := constructServer()

@@ -9,7 +9,7 @@ import (
 )
 
 type CABundleHash struct {
-	hash [32]byte
+	hash [sha256.Size]byte
 }
 
 func NewCABundleHash(bundle []byte) CABundleHash {

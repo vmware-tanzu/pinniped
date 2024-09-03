@@ -20,7 +20,7 @@ func TestEnableAndDisableKubeFeatureGate(t *testing.T) {
 	require.True(t, feature.DefaultFeatureGate.Enabled(f))
 
 	// Set it back to its default value of true at the end of this test.
-	defer featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, f, true)()
+	featuregatetesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, f, true)
 
 	EnableKubeFeatureGate(f)
 	require.True(t, feature.DefaultFeatureGate.Enabled(f))

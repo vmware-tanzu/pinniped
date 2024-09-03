@@ -10,16 +10,17 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	certificatesv1 "k8s.io/api/certificates/v1"
-	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/certificate/csr"
@@ -62,6 +63,8 @@ func TestWhoAmI_Kubeadm_Parallel(t *testing.T) {
 					User: identityv1alpha1.UserInfo{
 						Username: "kubernetes-admin",
 						Groups:   wantGroups,
+						// Starting in 1.32, Kubernetes returns us a dynamically-computed SHA256 that we can't predict here.
+						Extra: whoAmI.Status.KubernetesUserInfo.User.Extra,
 					},
 				},
 			},
@@ -298,53 +301,26 @@ func TestWhoAmI_CSR_Parallel(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	useCertificatesV1API := testutil.KubeServerSupportsCertificatesV1API(t, kubeClient.Discovery())
-
 	t.Cleanup(func() {
-		if useCertificatesV1API {
-			require.NoError(t, kubeClient.CertificatesV1().CertificateSigningRequests().
-				Delete(context.Background(), csrName, metav1.DeleteOptions{}))
-		} else {
-			// On old clusters use v1beta1
-			require.NoError(t, kubeClient.CertificatesV1beta1().CertificateSigningRequests().
-				Delete(context.Background(), csrName, metav1.DeleteOptions{}))
-		}
+		require.NoError(t, kubeClient.CertificatesV1().CertificateSigningRequests().
+			Delete(context.Background(), csrName, metav1.DeleteOptions{}))
 	})
 
-	if useCertificatesV1API {
-		_, err = kubeClient.CertificatesV1().CertificateSigningRequests().UpdateApproval(ctx, csrName, &certificatesv1.CertificateSigningRequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: csrName,
-			},
-			Status: certificatesv1.CertificateSigningRequestStatus{
-				Conditions: []certificatesv1.CertificateSigningRequestCondition{
-					{
-						Type:   certificatesv1.CertificateApproved,
-						Status: corev1.ConditionTrue,
-						Reason: "WhoAmICSRTest",
-					},
+	_, err = kubeClient.CertificatesV1().CertificateSigningRequests().UpdateApproval(ctx, csrName, &certificatesv1.CertificateSigningRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: csrName,
+		},
+		Status: certificatesv1.CertificateSigningRequestStatus{
+			Conditions: []certificatesv1.CertificateSigningRequestCondition{
+				{
+					Type:   certificatesv1.CertificateApproved,
+					Status: corev1.ConditionTrue,
+					Reason: "WhoAmICSRTest",
 				},
 			},
-		}, metav1.UpdateOptions{})
-		require.NoError(t, err)
-	} else {
-		// On old Kubernetes clusters use CertificatesV1beta1
-		_, err = kubeClient.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(ctx, &certificatesv1beta1.CertificateSigningRequest{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: csrName,
-			},
-			Status: certificatesv1beta1.CertificateSigningRequestStatus{
-				Conditions: []certificatesv1beta1.CertificateSigningRequestCondition{
-					{
-						Type:   certificatesv1beta1.CertificateApproved,
-						Status: corev1.ConditionTrue,
-						Reason: "WhoAmICSRTest",
-					},
-				},
-			},
-		}, metav1.UpdateOptions{})
-		require.NoError(t, err)
-	}
+		},
+	}, metav1.UpdateOptions{})
+	require.NoError(t, err)
 
 	crtPEM, err := csr.WaitForCertificate(ctx, kubeClient, csrName, csrUID)
 	require.NoError(t, err)
@@ -357,6 +333,8 @@ func TestWhoAmI_CSR_Parallel(t *testing.T) {
 		Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	require.NoError(t, err, testlib.Sdump(err))
 
+	testutil.PrintKubeServerVersion(t, kubeClient.Discovery())
+
 	require.Equal(t,
 		&identityv1alpha1.WhoAmIRequest{
 			Status: identityv1alpha1.WhoAmIRequestStatus{
@@ -368,12 +346,40 @@ func TestWhoAmI_CSR_Parallel(t *testing.T) {
 							"living-the-dream",
 							"system:authenticated",
 						},
+						Extra: maybeNeedsExtraWithSHA256(t, kubeClient.Discovery(), crtPEM),
 					},
 				},
 			},
 		},
 		whoAmI,
 	)
+}
+
+func maybeNeedsExtraWithSHA256(
+	t *testing.T,
+	discoveryClient discovery.DiscoveryInterface,
+	certPEM []byte,
+) map[string]identityv1alpha1.ExtraValue {
+	t.Helper()
+	var extra map[string]identityv1alpha1.ExtraValue
+
+	if testutil.KubeServerMinorVersionAtLeastInclusive(t, discoveryClient, 32) {
+		t.Log("Adding extra that includes SHA256 of the DER of the first cert")
+		block, _ := pem.Decode(certPEM)
+		require.NotEmpty(t, block)
+
+		bytesToHexOfSHA256 := func(b []byte) string {
+			shasum := sha256.Sum256(b)
+			return hex.EncodeToString(shasum[:])
+		}
+
+		sha256OfDER := fmt.Sprintf("X509SHA256=%s", bytesToHexOfSHA256(block.Bytes))
+
+		extra = map[string]identityv1alpha1.ExtraValue{
+			"authentication.kubernetes.io/credential-id": []string{sha256OfDER},
+		}
+	}
+	return extra
 }
 
 // whoami requests are non-mutating and safe to run in parallel with serial tests, see main_test.go.

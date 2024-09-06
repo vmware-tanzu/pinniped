@@ -146,6 +146,7 @@ func (c *oidcClientWatcherController) updateStatus(
 		updated.Status.Phase = supervisorconfigv1alpha1.OIDCClientPhaseError
 	}
 
+	//nolint:gosec // looks like we are willing to accept the risk that there are less than 2147483647 dynamic clients
 	updated.Status.TotalClientSecrets = int32(totalClientSecrets)
 
 	if equality.Semantic.DeepEqual(upstream, updated) {

@@ -44,6 +44,7 @@ type TestEnv struct {
 	SupervisorNamespace            string                                          `json:"supervisorNamespace"`
 	ConciergeAppName               string                                          `json:"conciergeAppName"`
 	SupervisorAppName              string                                          `json:"supervisorAppName"`
+	SupervisorServiceName          string                                          `json:"supervisorServiceName"`
 	SupervisorCustomLabels         map[string]string                               `json:"supervisorCustomLabels"`
 	ConciergeCustomLabels          map[string]string                               `json:"conciergeCustomLabels"`
 	KubernetesDistribution         KubeDistro                                      `json:"kubernetesDistribution"`
@@ -259,6 +260,7 @@ func loadEnvVars(t *testing.T, result *TestEnv) {
 	result.TestWebhook.Endpoint = needEnv(t, "PINNIPED_TEST_WEBHOOK_ENDPOINT")
 	result.SupervisorNamespace = needEnv(t, "PINNIPED_TEST_SUPERVISOR_NAMESPACE")
 	result.SupervisorAppName = needEnv(t, "PINNIPED_TEST_SUPERVISOR_APP_NAME")
+	result.SupervisorServiceName = os.Getenv("PINNIPED_TEST_SUPERVISOR_SERVICE_NAME")
 	result.TestWebhook.TLS = &authenticationv1alpha1.TLSSpec{CertificateAuthorityData: needEnv(t, "PINNIPED_TEST_WEBHOOK_CA_BUNDLE")}
 
 	result.SupervisorHTTPSIngressAddress = os.Getenv("PINNIPED_TEST_SUPERVISOR_HTTPS_INGRESS_ADDRESS")

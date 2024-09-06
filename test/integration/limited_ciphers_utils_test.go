@@ -114,7 +114,7 @@ func expectTLSConfigForServicePort(
 ) {
 	portAsInt, err := strconv.Atoi(localPortAsStr)
 	require.NoError(t, err)
-	portAsUint := uint16(portAsInt) // okay to cast because it will only be legal port numbers
+	portAsUint := uint16(portAsInt) //nolint:gosec // okay to cast because it will only be legal port numbers
 
 	startKubectlPortForward(ctx, t, localPortAsStr, "443", serviceName, serviceNamespace)
 
@@ -193,7 +193,7 @@ func restartAllPodsOfApp(
 
 	// Scale down the deployment's number of replicas to 0, which will shut down all the pods.
 	originalScale := updateDeploymentScale(t, namespace, appName, 0)
-	require.Greater(t, originalScale, 0)
+	require.Greater(t, int(originalScale), 0)
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		newPods := getRunningPodsByNamePrefix(t, namespace, appName+"-", ignorePodsWithNameSubstring)
@@ -205,7 +205,7 @@ func restartAllPodsOfApp(
 
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		newPods := getRunningPodsByNamePrefix(t, namespace, appName+"-", ignorePodsWithNameSubstring)
-		requireEventually.Len(newPods, originalScale, "wanted %d pods", originalScale)
+		requireEventually.Equal(len(newPods), int(originalScale), "wanted %d pods", originalScale)
 		requireEventually.True(allPodsReady(newPods), "wanted all new pods to be ready")
 	}, 2*time.Minute, 200*time.Millisecond)
 }

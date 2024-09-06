@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package chooseidphtml
@@ -28,8 +28,8 @@ var (
 
 	// Parse the Go templated HTML and inject functions providing the minified inline CSS and JS.
 	parsedHTMLTemplate = template.Must(template.New("choose_idp.gohtml").Funcs(template.FuncMap{
-		"minifiedCSS": func() template.CSS { return template.CSS(CSS()) },
-		"minifiedJS":  func() template.JS { return template.JS(JS()) }, //nolint:gosec // This is 100% static input, not attacker-controlled.
+		"minifiedCSS": func() template.CSS { return template.CSS(CSS()) }, //nolint:gosec // This is 100% static input, not attacker-controlled.
+		"minifiedJS":  func() template.JS { return template.JS(JS()) },    //nolint:gosec // This is 100% static input, not attacker-controlled.
 	}).Parse(rawHTMLTemplate))
 
 	// Generate the CSP header value once since it's effectively constant.

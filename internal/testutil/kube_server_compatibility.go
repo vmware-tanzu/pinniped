@@ -32,6 +32,15 @@ func KubeServerSupportsCertificatesV1API(t *testing.T, discoveryClient discovery
 	return false
 }
 
+func PrintKubeServerVersion(t *testing.T, discoveryClient discovery.DiscoveryInterface) {
+	t.Helper()
+
+	version, err := discoveryClient.ServerVersion()
+	require.NoError(t, err)
+
+	t.Logf("K8s server version: %s\n%+v", version, version)
+}
+
 func KubeServerMinorVersionAtLeastInclusive(t *testing.T, discoveryClient discovery.DiscoveryInterface, min int) bool {
 	return !KubeServerMinorVersionInBetweenInclusive(t, discoveryClient, 0, min-1)
 }

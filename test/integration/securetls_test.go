@@ -118,15 +118,22 @@ func TestSecureTLSSupervisor(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	supervisorIssuer := testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress)
+	// On kind, this will generally be app-name-nodeport
+	// On GKE and AKS, this will generally be app-name-loadbalancer (their ingresses use IP addresses)
+	// On EKS, this will generally be app-name-loadbalancer (this ingress uses DNS addresses), but we should rely on
+	// the PINNIPED_TEST_SUPERVISOR_SERVICE_NAME variable.
+	serviceName := env.SupervisorServiceName
+	if serviceName == "" {
+		serviceName = env.SupervisorAppName + "-nodeport"
 
-	serviceSuffix := "-nodeport"
-	if supervisorIssuer.IsIPAddress() {
-		// Then there's no nodeport service to connect to, it's a load balancer service!
-		serviceSuffix = "-loadbalancer"
+		supervisorIssuer := testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress)
+		if supervisorIssuer.IsIPAddress() {
+			// Then there's no nodeport service to connect to, it's a load balancer service!
+			serviceName = env.SupervisorAppName + "-loadbalancer"
+		}
 	}
 
-	startKubectlPortForward(ctx, t, "10448", "443", env.SupervisorAppName+serviceSuffix, env.SupervisorNamespace)
+	startKubectlPortForward(ctx, t, "10448", "443", serviceName, env.SupervisorNamespace)
 
 	stdout, stderr := testlib.RunNmapSSLEnum(t, "127.0.0.1", 10448)
 

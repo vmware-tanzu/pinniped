@@ -57,6 +57,7 @@ func ValidateAndSetLogLevelAndFormatGlobally(ctx context.Context, spec LogSpec) 
 	if _, err := logs.GlogSetter(strconv.Itoa(int(klogLevel))); err != nil {
 		panic(err) // programmer error
 	}
+	//nolint:gosec // the range for klogLevel is [0,108]
 	globalLevel.SetLevel(zapcore.Level(-klogLevel)) // klog levels are inverted when zap handles them
 
 	var encoding string

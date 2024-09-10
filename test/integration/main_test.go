@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 func splitIntegrationTestsIntoBuckets(m *testing.M) {
 	// this is some dark magic to set a private field
 	testsField := reflect.ValueOf(m).Elem().FieldByName("tests")
-	testsPointer := (*[]testing.InternalTest)(unsafe.Pointer(testsField.UnsafeAddr())) //nolint:gosec // this is a test hack we are willing to live with
+	testsPointer := (*[]testing.InternalTest)(unsafe.Pointer(testsField.UnsafeAddr()))
 
 	tests := *testsPointer
 

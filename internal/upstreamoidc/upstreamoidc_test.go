@@ -1461,7 +1461,7 @@ func forceUserInfoWithClaims(subject string, claims string) *coreosoidc.UserInfo
 
 	// this is some dark magic to set a private field
 	claimsField := reflect.ValueOf(userInfo).Elem().FieldByName("claims")
-	claimsPointer := (*[]byte)(unsafe.Pointer(claimsField.UnsafeAddr())) //nolint:gosec // this is a test hack we are willing to live with
+	claimsPointer := (*[]byte)(unsafe.Pointer(claimsField.UnsafeAddr()))
 	*claimsPointer = []byte(claims)
 
 	return userInfo

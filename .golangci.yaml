@@ -43,7 +43,7 @@ linters:
     - whitespace
     - copyloopvar
     - intrange
-    - fatcontext
+    # - fatcontext Starting in go@1.23.1 and golangci-lint@1.61.0 this gave a lot of false positives
     # - canonicalheader Can't do this one since it alerts on valid headers such as X-XSS-Protection
     - spancheck
     - importas

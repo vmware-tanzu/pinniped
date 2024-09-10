@@ -2,7 +2,7 @@ module go.pinniped.dev
 
 go 1.22.0
 
-toolchain go1.23.0
+toolchain go1.23.1
 
 // This version taken from https://github.com/kubernetes/apiserver/blob/v0.31.0/go.mod#L14 to avoid compile failures.
 replace github.com/google/cel-go => github.com/google/cel-go v0.20.1
@@ -67,8 +67,8 @@ require (
 	github.com/tdewolff/minify/v2 v2.20.37
 	go.uber.org/mock v0.4.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.26.0
-	golang.org/x/net v0.28.0
+	golang.org/x/crypto v0.27.0
+	golang.org/x/net v0.29.0
 	golang.org/x/oauth2 v0.23.0
 	golang.org/x/sync v0.8.0
 	golang.org/x/term v0.24.0

@@ -199,7 +199,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		)
 	} else {
 		// Run all remaining validations.
-		a, moreConditions, moreErrs := c.doExpensiveValidations(webhookAuthenticator, endpointHostPort, caBundle, okSoFar, logger)
+		a, moreConditions, moreErrs := c.doExpensiveValidations(ctx, webhookAuthenticator, endpointHostPort, caBundle, okSoFar, logger)
 		newWebhookAuthenticatorForCache = a
 		conditions = append(conditions, moreConditions...)
 		errs = append(errs, moreErrs...)
@@ -238,6 +238,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 }
 
 func (c *webhookCacheFillerController) doExpensiveValidations(
+	ctx context.Context,
 	webhookAuthenticator *authenticationv1alpha1.WebhookAuthenticator,
 	endpointHostPort *endpointaddr.HostPort,
 	caBundle *tlsconfigutil.CABundle,
@@ -248,7 +249,7 @@ func (c *webhookCacheFillerController) doExpensiveValidations(
 	var conditions []*metav1.Condition
 	var errs []error
 
-	conditions, tlsNegotiateErr := c.validateConnection(caBundle.CertPool(), endpointHostPort, conditions, okSoFar, logger)
+	conditions, tlsNegotiateErr := c.validateConnection(ctx, caBundle.CertPool(), endpointHostPort, conditions, okSoFar, logger)
 	errs = append(errs, tlsNegotiateErr)
 	okSoFar = okSoFar && tlsNegotiateErr == nil
 
@@ -414,6 +415,7 @@ func successfulWebhookConnectionValidCondition() *metav1.Condition {
 }
 
 func (c *webhookCacheFillerController) validateConnection(
+	ctx context.Context,
 	certPool *x509.CertPool,
 	endpointHostPort *endpointaddr.HostPort,
 	conditions []*metav1.Condition,
@@ -430,7 +432,9 @@ func (c *webhookCacheFillerController) validateConnection(
 		return conditions, nil
 	}
 
-	err := c.dialer.IsReachableAndTLSValidationSucceeds(endpointHostPort.Endpoint(), certPool, logger)
+	dialCtx, dialCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer dialCancel()
+	err := c.dialer.IsReachableAndTLSValidationSucceeds(dialCtx, endpointHostPort.Endpoint(), certPool, logger)
 
 	if err != nil {
 		errText := "cannot dial server"

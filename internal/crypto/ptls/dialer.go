@@ -4,52 +4,56 @@
 package ptls
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"net"
 	"time"
+
+	"go.pinniped.dev/internal/plog"
 )
 
 type Dialer interface {
 	IsReachableAndTLSValidationSucceeds(
+		ctx context.Context,
 		address string,
 		certPool *x509.CertPool,
-		logger ErrorOnlyLogger,
+		logger plog.Logger,
 	) error
 }
 
-type ErrorOnlyLogger interface {
-	Error(msg string, err error, keysAndValues ...any)
-}
-
 type internalDialer struct {
-	dialer *net.Dialer
 }
 
 func NewDialer() *internalDialer {
-	return &internalDialer{
-		dialer: &net.Dialer{
-			Timeout: 15 * time.Second,
-		},
-	}
-}
-
-func (i *internalDialer) WithTimeout(timeout time.Duration) Dialer {
-	i.dialer.Timeout = timeout
-	return i
+	return &internalDialer{}
 }
 
 func (i *internalDialer) IsReachableAndTLSValidationSucceeds(
+	ctx context.Context,
 	address string,
 	certPool *x509.CertPool,
-	logger ErrorOnlyLogger,
+	logger plog.Logger,
 ) error {
-	connection, err := tls.DialWithDialer(i.dialer, "tcp", address, Default(certPool))
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	_, hasDeadline := ctx.Deadline()
+	if !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+
+	dialer := tls.Dialer{
+		Config: Default(certPool),
+	}
+	conn, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
 		// Don't wrap this error message since this is just a helper function.
 		return err
 	}
-	err = connection.Close()
+	err = conn.Close()
 	if err != nil { // untested
 		// Log it just so that it doesn't completely disappear.
 		logger.Error("Failed to close connection: ", err)

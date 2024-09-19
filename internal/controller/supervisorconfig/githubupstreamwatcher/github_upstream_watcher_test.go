@@ -67,10 +67,10 @@ type fakeGithubDialer struct {
 	realCertPool *x509.CertPool
 }
 
-func (f fakeGithubDialer) IsReachableAndTLSValidationSucceeds(address string, _ *x509.CertPool, logger ptls.ErrorOnlyLogger) error {
+func (f fakeGithubDialer) IsReachableAndTLSValidationSucceeds(ctx context.Context, address string, _ *x509.CertPool, logger plog.Logger) error {
 	require.Equal(f.t, "api.github.com:443", address)
 
-	return ptls.NewDialer().IsReachableAndTLSValidationSucceeds(f.realAddress, f.realCertPool, logger)
+	return ptls.NewDialer().IsReachableAndTLSValidationSucceeds(ctx, f.realAddress, f.realCertPool, logger)
 }
 
 var _ ptls.Dialer = (*fakeGithubDialer)(nil)
@@ -79,7 +79,7 @@ type allowNoDials struct {
 	t *testing.T
 }
 
-func (f allowNoDials) IsReachableAndTLSValidationSucceeds(_ string, _ *x509.CertPool, _ ptls.ErrorOnlyLogger) error {
+func (f allowNoDials) IsReachableAndTLSValidationSucceeds(_ context.Context, _ string, _ *x509.CertPool, _ plog.Logger) error {
 	f.t.Errorf("this test should not perform dial")
 	f.t.FailNow()
 	return nil

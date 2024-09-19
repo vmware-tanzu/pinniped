@@ -5,6 +5,8 @@
 package ptls_test
 
 import (
+	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"net/http/httptest"
@@ -15,18 +17,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/crypto/ptls"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
-
-type fakeerroronlylogger struct {
-}
-
-func (_ *fakeerroronlylogger) Error(msg string, err error, keysAndValues ...any) {
-	// NOOP
-}
-
-var _ ptls.ErrorOnlyLogger = (*fakeerroronlylogger)(nil)
 
 func TestDialer(t *testing.T) {
 	secureServerIPv4, secureServerIPv4CA := tlsserver.TestServerIPv4(t, nil, nil)
@@ -69,10 +63,14 @@ func TestDialer(t *testing.T) {
 			t.Parallel()
 			dialer := ptls.NewDialer()
 
+			var log bytes.Buffer
+			logger := plog.TestLogger(t, &log)
+
 			err := dialer.IsReachableAndTLSValidationSucceeds(
+				context.Background(),
 				urlToAddress(t, test.fullURL),
 				test.certPool,
-				&fakeerroronlylogger{},
+				logger,
 			)
 			if test.wantError != "" {
 				require.EqualError(t, err, test.wantError)
@@ -86,51 +84,94 @@ func TestDialer(t *testing.T) {
 func TestDialer_TimeoutAfter15s(t *testing.T) {
 	t.Parallel()
 
-	dialer := ptls.NewDialer()
+	dialTimeout := 15 * time.Second
 
-	timeout := time.After(30 * time.Second)
-	testDone := make(chan bool)
+	maxDurationForTest := 2 * dialTimeout
+	maxTimeForTest := time.After(maxDurationForTest)
+	testPassed := make(chan bool)
 	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
+		defer cancel()
+
+		var log bytes.Buffer
+		logger := plog.TestLogger(t, &log)
+
+		dialer := ptls.NewDialer()
 		err := dialer.IsReachableAndTLSValidationSucceeds(
+			ctx, // replace with context.Background() to verify that this hangs indefinitely
 			setupHangingServer(t),
 			nil,
-			&fakeerroronlylogger{},
+			logger,
 		)
 		require.EqualError(t, err, "context deadline exceeded")
-		testDone <- true
+		testPassed <- true
 	}()
 
 	select {
-	case <-timeout:
-		t.Errorf("test did not complete within 30 seconds")
+	case <-maxTimeForTest:
+		t.Errorf("timeout not honored: test did not complete within %s", maxDurationForTest)
 		t.FailNow()
-	case <-testDone:
+	case <-testPassed:
 		t.Log("everything ok!")
 	}
 }
 
-func TestDialer_WithCustomTimeTimeoutAfter2s(t *testing.T) {
+func TestDialer_WithoutDeadline_Uses30sTimeout(t *testing.T) {
 	t.Parallel()
 
-	dialer := ptls.NewDialer().WithTimeout(2 * time.Second)
-
-	timeout := time.After(5 * time.Second)
-	testDone := make(chan bool)
+	maxDurationForTest := 40 * time.Second
+	maxTimeForTest := time.After(maxDurationForTest)
+	testPassed := make(chan bool)
 	go func() {
+		var log bytes.Buffer
+		logger := plog.TestLogger(t, &log)
+
+		dialer := ptls.NewDialer()
 		err := dialer.IsReachableAndTLSValidationSucceeds(
+			context.Background(),
 			setupHangingServer(t),
 			nil,
-			&fakeerroronlylogger{},
+			logger,
 		)
 		require.EqualError(t, err, "context deadline exceeded")
-		testDone <- true
+		testPassed <- true
 	}()
 
 	select {
-	case <-timeout:
-		t.Errorf("test did not complete within 5 seconds")
+	case <-maxTimeForTest:
+		t.Errorf("timeout not honored: test did not complete within %s", maxDurationForTest)
 		t.FailNow()
-	case <-testDone:
+	case <-testPassed:
+		t.Log("everything ok!")
+	}
+}
+
+func TestDialer_WithNilContext_Uses30sTimeout(t *testing.T) {
+	t.Parallel()
+
+	maxDurationForTest := 40 * time.Second
+	maxTimeForTest := time.After(maxDurationForTest)
+	testPassed := make(chan bool)
+	go func() {
+		var log bytes.Buffer
+		logger := plog.TestLogger(t, &log)
+
+		dialer := ptls.NewDialer()
+		err := dialer.IsReachableAndTLSValidationSucceeds(
+			nil,
+			setupHangingServer(t),
+			nil,
+			logger,
+		)
+		require.EqualError(t, err, "context deadline exceeded")
+		testPassed <- true
+	}()
+
+	select {
+	case <-maxTimeForTest:
+		t.Errorf("timeout not honored: test did not complete within %s", maxDurationForTest)
+		t.FailNow()
+	case <-testPassed:
 		t.Log("everything ok!")
 	}
 }

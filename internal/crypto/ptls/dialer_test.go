@@ -158,7 +158,7 @@ func TestDialer_WithNilContext_Uses30sTimeout(t *testing.T) {
 
 		dialer := ptls.NewDialer()
 		err := dialer.IsReachableAndTLSValidationSucceeds(
-			nil,
+			nil, //nolint:staticcheck // Unit testing nil handling.
 			setupHangingServer(t),
 			nil,
 			logger,

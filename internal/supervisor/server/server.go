@@ -342,7 +342,7 @@ func prepareControllers(
 				plog.New(),
 				controllerlib.WithInformer,
 				clock.RealClock{},
-				tls.Dial,
+				ptls.NewDialer(),
 				cache.NewExpiring(),
 			),
 			singletonWorker).

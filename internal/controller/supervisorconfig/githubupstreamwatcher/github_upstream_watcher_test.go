@@ -6,7 +6,6 @@ package githubupstreamwatcher
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
@@ -41,6 +40,7 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
+	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/federationdomain/dynamicupstreamprovider"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/net/phttp"
@@ -60,6 +60,32 @@ var (
 
 	githubIDPKind = idpv1alpha1.SchemeGroupVersion.WithKind("GitHubIdentityProvider")
 )
+
+type fakeGithubDialer struct {
+	t            *testing.T
+	realAddress  string
+	realCertPool *x509.CertPool
+}
+
+func (f fakeGithubDialer) IsReachableAndTLSValidationSucceeds(ctx context.Context, address string, _ *x509.CertPool, logger plog.Logger) error {
+	require.Equal(f.t, "api.github.com:443", address)
+
+	return ptls.NewDialer().IsReachableAndTLSValidationSucceeds(ctx, f.realAddress, f.realCertPool, logger)
+}
+
+var _ ptls.Dialer = (*fakeGithubDialer)(nil)
+
+type allowNoDials struct {
+	t *testing.T
+}
+
+func (f allowNoDials) IsReachableAndTLSValidationSucceeds(_ context.Context, _ string, _ *x509.CertPool, _ plog.Logger) error {
+	f.t.Errorf("this test should not perform dial")
+	f.t.FailNow()
+	return nil
+}
+
+var _ ptls.Dialer = (*allowNoDials)(nil)
 
 func TestController(t *testing.T) {
 	require.Equal(t, 6, countExpectedConditions)
@@ -406,7 +432,7 @@ func TestController(t *testing.T) {
 		name                      string
 		githubIdentityProviders   []runtime.Object
 		secretsAndConfigMaps      []runtime.Object
-		mockDialer                func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error)
+		mockDialer                func(*testing.T) ptls.Dialer
 		preexistingValidatedCache []GitHubValidatedAPICacheKey
 		wantErr                   string
 		wantLogs                  []string
@@ -555,15 +581,13 @@ func TestController(t *testing.T) {
 					return githubIDP
 				}(),
 			},
-			mockDialer: func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+			mockDialer: func(t *testing.T) ptls.Dialer {
 				t.Helper()
 
-				return func(network, addr string, config *tls.Config) (*tls.Conn, error) {
-					require.Equal(t, "api.github.com:443", addr)
-					// don't actually dial github.com to avoid making external network calls in unit test
-					configClone := config.Clone()
-					configClone.RootCAs = goodServerCertPool
-					return tls.Dial(network, goodServerDomain, configClone)
+				return &fakeGithubDialer{
+					t:            t,
+					realAddress:  goodServerDomain,
+					realCertPool: goodServerCertPool,
 				}
 			},
 			wantResultingCache: []*upstreamgithub.ProviderConfig{
@@ -638,15 +662,13 @@ func TestController(t *testing.T) {
 					return githubIDP
 				}(),
 			},
-			mockDialer: func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+			mockDialer: func(t *testing.T) ptls.Dialer {
 				t.Helper()
 
-				return func(network, addr string, config *tls.Config) (*tls.Conn, error) {
-					require.Equal(t, "api.github.com:443", addr)
-					// don't actually dial github.com to avoid making external network calls in unit test
-					configClone := config.Clone()
-					configClone.RootCAs = goodServerCertPool
-					return tls.Dial(network, goodServerDomain, configClone)
+				return &fakeGithubDialer{
+					t:            t,
+					realAddress:  goodServerDomain,
+					realCertPool: goodServerCertPool,
 				}
 			},
 			wantResultingCache: []*upstreamgithub.ProviderConfig{
@@ -721,15 +743,13 @@ func TestController(t *testing.T) {
 					return githubIDP
 				}(),
 			},
-			mockDialer: func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+			mockDialer: func(t *testing.T) ptls.Dialer {
 				t.Helper()
 
-				return func(network, addr string, config *tls.Config) (*tls.Conn, error) {
-					require.Equal(t, "api.github.com:443", addr)
-					// don't actually dial github.com to avoid making external network calls in unit test
-					configClone := config.Clone()
-					configClone.RootCAs = goodServerCertPool
-					return tls.Dial(network, goodServerDomain, configClone)
+				return &fakeGithubDialer{
+					t:            t,
+					realAddress:  goodServerDomain,
+					realCertPool: goodServerCertPool,
 				}
 			},
 			wantResultingCache: []*upstreamgithub.ProviderConfig{
@@ -804,15 +824,13 @@ func TestController(t *testing.T) {
 					return githubIDP
 				}(),
 			},
-			mockDialer: func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+			mockDialer: func(t *testing.T) ptls.Dialer {
 				t.Helper()
 
-				return func(network, addr string, config *tls.Config) (*tls.Conn, error) {
-					require.Equal(t, "api.github.com:443", addr)
-					// don't actually dial github.com to avoid making external network calls in unit test
-					configClone := config.Clone()
-					configClone.RootCAs = goodServerCertPool
-					return tls.Dial(network, goodServerDomain, configClone)
+				return &fakeGithubDialer{
+					t:            t,
+					realAddress:  goodServerDomain,
+					realCertPool: goodServerCertPool,
 				}
 			},
 			wantResultingCache: []*upstreamgithub.ProviderConfig{
@@ -887,15 +905,13 @@ func TestController(t *testing.T) {
 					return githubIDP
 				}(),
 			},
-			mockDialer: func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+			mockDialer: func(t *testing.T) ptls.Dialer {
 				t.Helper()
 
-				return func(network, addr string, config *tls.Config) (*tls.Conn, error) {
-					require.Equal(t, "api.github.com:443", addr)
-					// don't actually dial github.com to avoid making external network calls in unit test
-					configClone := config.Clone()
-					configClone.RootCAs = goodServerCertPool
-					return tls.Dial(network, goodServerDomain, configClone)
+				return &fakeGithubDialer{
+					t:            t,
+					realAddress:  goodServerDomain,
+					realCertPool: goodServerCertPool,
 				}
 			},
 			wantResultingCache: []*upstreamgithub.ProviderConfig{
@@ -1379,14 +1395,10 @@ func TestController(t *testing.T) {
 			name:                    "happy path with previously validated address/CA Bundle does not validate again",
 			secretsAndConfigMaps:    []runtime.Object{goodClientCredentialsSecret},
 			githubIdentityProviders: []runtime.Object{validFilledOutIDP},
-			mockDialer: func(t *testing.T) func(network, addr string, config *tls.Config) (*tls.Conn, error) {
+			mockDialer: func(t *testing.T) ptls.Dialer {
 				t.Helper()
 
-				return func(network, addr string, config *tls.Config) (*tls.Conn, error) {
-					t.Errorf("this test should not perform dial")
-					t.FailNow()
-					return nil, nil
-				}
+				return &allowNoDials{t: t}
 			},
 			preexistingValidatedCache: []GitHubValidatedAPICacheKey{
 				{
@@ -2479,7 +2491,7 @@ func TestController(t *testing.T) {
 
 			gitHubIdentityProviderInformer := supervisorInformers.IDP().V1alpha1().GitHubIdentityProviders()
 
-			dialer := tls.Dial
+			var dialer ptls.Dialer = ptls.NewDialer()
 			if tt.mockDialer != nil {
 				dialer = tt.mockDialer(t)
 			}
@@ -2882,7 +2894,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 				logger,
 				controllerlib.WithInformer,
 				frozenClockForLastTransitionTime,
-				tls.Dial,
+				ptls.NewDialer(),
 				cache.NewExpiring(),
 			)
 
@@ -3006,7 +3018,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},
-				tls.Dial,
+				ptls.NewDialer(),
 				cache.NewExpiring(),
 			)
 
@@ -3063,7 +3075,7 @@ func TestGitHubUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},
-				tls.Dial,
+				ptls.NewDialer(),
 				cache.NewExpiring(),
 			)
 
@@ -3120,7 +3132,7 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 				logger,
 				observableInformers.WithInformer,
 				clock.RealClock{},
-				tls.Dial,
+				ptls.NewDialer(),
 				cache.NewExpiring(),
 			)
 

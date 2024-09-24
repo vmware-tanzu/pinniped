@@ -6,7 +6,6 @@ package githubupstreamwatcher
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -117,7 +116,7 @@ type gitHubWatcherController struct {
 	secretInformer                 corev1informers.SecretInformer
 	configMapInformer              corev1informers.ConfigMapInformer
 	clock                          clock.Clock
-	dialFunc                       func(network, addr string, config *tls.Config) (*tls.Conn, error)
+	dialer                         ptls.Dialer
 	validatedCache                 GitHubValidatedAPICacheI
 }
 
@@ -132,7 +131,7 @@ func New(
 	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
-	dialFunc func(network, addr string, config *tls.Config) (*tls.Conn, error),
+	dialer ptls.Dialer,
 	validatedCache *cache.Expiring,
 ) controllerlib.Controller {
 	c := gitHubWatcherController{
@@ -144,7 +143,7 @@ func New(
 		secretInformer:                 secretInformer,
 		configMapInformer:              configMapInformer,
 		clock:                          clock,
-		dialFunc:                       dialFunc,
+		dialer:                         dialer,
 		validatedCache:                 NewGitHubValidatedAPICache(validatedCache),
 	}
 
@@ -190,7 +189,7 @@ func (c *gitHubWatcherController) Sync(ctx controllerlib.Context) error {
 	var applicationErrors []error
 	validatedUpstreams := make([]upstreamprovider.UpstreamGithubIdentityProviderI, 0, len(actualUpstreams))
 	for _, upstream := range actualUpstreams {
-		validatedUpstream, applicationErr := c.validateUpstreamAndUpdateConditions(ctx, upstream)
+		validatedUpstream, applicationErr := c.validateUpstreamAndUpdateConditions(ctx.Context, upstream)
 		if applicationErr != nil {
 			applicationErrors = append(applicationErrors, applicationErr)
 		} else if validatedUpstream != nil {
@@ -298,7 +297,7 @@ func validateOrganizationsPolicy(organizationsSpec *idpv1alpha1.GitHubOrganizati
 	}
 }
 
-func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx controllerlib.Context, upstream *idpv1alpha1.GitHubIdentityProvider) (
+func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx context.Context, upstream *idpv1alpha1.GitHubIdentityProvider) (
 	*upstreamgithub.Provider, // If validated, returns the config
 	error, // This error will only refer to programmatic errors such as inability to perform a Dial or dereference a pointer, not configuration errors
 ) {
@@ -332,6 +331,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 	conditions = append(conditions, tlsConfigCondition)
 
 	githubConnectionCondition, httpClient, githubConnectionErr := c.validateGitHubConnection(
+		ctx,
 		apiHostPort,
 		upstream.Spec.GitHubAPI.Host,
 		caBundle,
@@ -350,7 +350,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contro
 		applicationErrors = append(applicationErrors, fmt.Errorf("expected %d conditions but found %d conditions", countExpectedConditions, len(conditions)))
 		return nil, utilerrors.NewAggregate(applicationErrors)
 	}
-	hadErrorCondition, updateStatusErr := c.updateStatus(ctx.Context, upstream, conditions)
+	hadErrorCondition, updateStatusErr := c.updateStatus(ctx, upstream, conditions)
 	if updateStatusErr != nil {
 		applicationErrors = append(applicationErrors, updateStatusErr)
 	}
@@ -454,6 +454,7 @@ func validateHost(specifiedHost *string) (*metav1.Condition, *endpointaddr.HostP
 }
 
 func (c *gitHubWatcherController) validateGitHubConnection(
+	ctx context.Context,
 	apiHostPort *endpointaddr.HostPort,
 	specifiedHost *string,
 	caBundle *tlsconfigutil.CABundle,
@@ -471,7 +472,10 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 	apiAddress := apiHostPort.Endpoint()
 
 	if !c.validatedCache.IsValid(apiAddress, caBundle.Hash()) {
-		conn, tlsDialErr := c.dialFunc("tcp", apiAddress, ptls.Default(caBundle.CertPool()))
+		dialCtx, dialCancel := context.WithTimeout(ctx, 30*time.Second)
+		defer dialCancel()
+
+		tlsDialErr := c.dialer.IsReachableAndTLSValidationSucceeds(dialCtx, apiAddress, caBundle.CertPool(), c.log)
 		if tlsDialErr != nil {
 			return &metav1.Condition{
 				Type:   GitHubConnectionValid,
@@ -481,8 +485,6 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 					apiAddress, *specifiedHost, buildDialErrorMessage(tlsDialErr)),
 			}, nil, tlsDialErr
 		}
-		// Any error should be ignored. We have performed a successful Dial, so no need to requeue this Sync.
-		_ = conn.Close()
 	}
 
 	c.validatedCache.MarkAsValidated(apiAddress, caBundle.Hash())

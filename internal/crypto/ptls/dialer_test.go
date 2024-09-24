@@ -81,115 +81,83 @@ func TestDialer(t *testing.T) {
 	}
 }
 
-func TestDialer_TimeoutAfter15s(t *testing.T) {
-	t.Parallel()
+func TestDialer_AppliesTimeouts(t *testing.T) {
+	setupHangingServer := func(t *testing.T) string {
+		startedTLSListener, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				// This causes the dial to hang. I'm actually not quite sure why.
+				return nil, nil
+			},
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			require.NoError(t, startedTLSListener.Close())
+		})
 
-	dialTimeout := 15 * time.Second
-
-	maxDurationForTest := 2 * dialTimeout
-	maxTimeForTest := time.After(maxDurationForTest)
-	testPassed := make(chan bool)
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
-		defer cancel()
-
-		var log bytes.Buffer
-		logger := plog.TestLogger(t, &log)
-
-		dialer := ptls.NewDialer()
-		err := dialer.IsReachableAndTLSValidationSucceeds(
-			ctx, // replace with context.Background() to verify that this hangs indefinitely
-			setupHangingServer(t),
-			nil,
-			logger,
-		)
-		require.EqualError(t, err, "context deadline exceeded")
-		testPassed <- true
-	}()
-
-	select {
-	case <-maxTimeForTest:
-		t.Errorf("timeout not honored: test did not complete within %s", maxDurationForTest)
-		t.FailNow()
-	case <-testPassed:
-		t.Log("everything ok!")
+		return startedTLSListener.Addr().String()
 	}
-}
 
-func TestDialer_WithoutDeadline_Uses30sTimeout(t *testing.T) {
-	t.Parallel()
-
-	maxDurationForTest := 40 * time.Second
-	maxTimeForTest := time.After(maxDurationForTest)
-	testPassed := make(chan bool)
-	go func() {
-		var log bytes.Buffer
-		logger := plog.TestLogger(t, &log)
-
-		dialer := ptls.NewDialer()
-		err := dialer.IsReachableAndTLSValidationSucceeds(
-			context.Background(),
-			setupHangingServer(t),
-			nil,
-			logger,
-		)
-		require.EqualError(t, err, "context deadline exceeded")
-		testPassed <- true
-	}()
-
-	select {
-	case <-maxTimeForTest:
-		t.Errorf("timeout not honored: test did not complete within %s", maxDurationForTest)
-		t.FailNow()
-	case <-testPassed:
-		t.Log("everything ok!")
-	}
-}
-
-func TestDialer_WithNilContext_Uses30sTimeout(t *testing.T) {
-	t.Parallel()
-
-	maxDurationForTest := 40 * time.Second
-	maxTimeForTest := time.After(maxDurationForTest)
-	testPassed := make(chan bool)
-	go func() {
-		var log bytes.Buffer
-		logger := plog.TestLogger(t, &log)
-
-		dialer := ptls.NewDialer()
-		err := dialer.IsReachableAndTLSValidationSucceeds(
-			nil, //nolint:staticcheck // Unit testing nil handling.
-			setupHangingServer(t),
-			nil,
-			logger,
-		)
-		require.EqualError(t, err, "context deadline exceeded")
-		testPassed <- true
-	}()
-
-	select {
-	case <-maxTimeForTest:
-		t.Errorf("timeout not honored: test did not complete within %s", maxDurationForTest)
-		t.FailNow()
-	case <-testPassed:
-		t.Log("everything ok!")
-	}
-}
-
-func setupHangingServer(t *testing.T) string {
-	startedTLSListener, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			// This causes the dial to hang. I'm actually not quite sure why.
-			return nil, nil
+	tests := []struct {
+		name            string
+		maxTestDuration time.Duration
+		makeContext     func(*testing.T) context.Context
+	}{
+		{
+			name:            "timeout after 15s",
+			maxTestDuration: 20 * time.Second,
+			makeContext: func(t *testing.T) context.Context {
+				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				t.Cleanup(cancel)
+				return ctx
+			},
 		},
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, startedTLSListener.Close())
-	})
+		{
+			name:            "uses 30s timeout without a deadline",
+			maxTestDuration: 35 * time.Second,
+			makeContext: func(t *testing.T) context.Context {
+				return context.Background()
+			},
+		},
+		{
+			name:            "uses 30s timeout with a nil context",
+			maxTestDuration: 35 * time.Second,
+			makeContext: func(t *testing.T) context.Context {
+				return nil
+			},
+		},
+	}
 
-	return startedTLSListener.Addr().String()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			maxTimeForTest := time.After(test.maxTestDuration)
+			testPassed := make(chan bool)
+			go func() {
+				var log bytes.Buffer
+				logger := plog.TestLogger(t, &log)
+
+				dialer := ptls.NewDialer()
+				err := dialer.IsReachableAndTLSValidationSucceeds(
+					test.makeContext(t),
+					setupHangingServer(t),
+					nil,
+					logger,
+				)
+				require.EqualError(t, err, "context deadline exceeded")
+				testPassed <- true
+			}()
+
+			select {
+			case <-maxTimeForTest:
+				t.Errorf("timeout not honored: test did not complete within %s", test.maxTestDuration)
+				t.FailNow()
+			case <-testPassed:
+				t.Log("everything ok!")
+			}
+		})
+	}
 }
 
 func urlToAddress(t *testing.T, urlAsString string) string {

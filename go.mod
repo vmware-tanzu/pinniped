@@ -33,7 +33,7 @@ replace github.com/hashicorp/go-retryablehttp => github.com/hashicorp/go-retryab
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20240810084448-b931b754e476
+	github.com/chromedp/cdproto v0.0.0-20240919203636-12af5e8a671f
 	github.com/chromedp/chromedp v0.10.0
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/coreos/go-semver v0.3.1
@@ -83,7 +83,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.31.1
 	k8s.io/kube-openapi v0.0.0-20240903163716-9e1beecbcb38
-	k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3
+	k8s.io/utils v0.0.0-20240921022957-49e7df575cb6
 	sigs.k8s.io/yaml v1.4.0
 )
 

@@ -663,6 +663,11 @@ func printServerCert(t *testing.T, address string, dnsOverrides map[string]strin
 		host = dnsOverrides[host]
 	}
 
+	if !strings.Contains(host, ":") {
+		// tls.Dial() requires a port number, but there was no port number in the host, so assume 443.
+		host += ":443"
+	}
+
 	conn, err := tls.Dial("tcp", host, conf)
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()

@@ -314,7 +314,7 @@ func (p *Provider) dial(ctx context.Context) (Conn, error) {
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
 func (p *Provider) dialTLS(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
-	tlsConfig, err := p.tlsConfig()
+	tlsConfig, err := p.validateAndBuildTLSConfig()
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
 	}
@@ -334,8 +334,18 @@ func (p *Provider) dialTLS(ctx context.Context, addr endpointaddr.HostPort) (Con
 // Unfortunately, the go-ldap library does not seem to support dialing with a context.Context,
 // so we implement it ourselves, heavily inspired by ldap.DialURL.
 func (p *Provider) dialStartTLS(ctx context.Context, addr endpointaddr.HostPort) (Conn, error) {
-	// start with a plaintext tcp connection which will then be upgraded to
-	// and LDAP connection over TLS.
+	// Validate TLS configuration before dialing, even though we perform a plaintext (non-TLS) dial.
+	// That way we can avoid the more expensive dial operation if this returns an error.
+	tlsConfig, err := p.validateAndBuildTLSConfig()
+	if err != nil {
+		return nil, ldap.NewError(ldap.ErrorNetwork, err)
+	}
+
+	// Unfortunately, this seems to be required for StartTLS, even though it is not needed for regular TLS.
+	tlsConfig.ServerName = addr.Host
+
+	// Start with a plaintext tcp connection which will then be upgraded to
+	// an LDAP connection over TLS.
 	c, err := netDialer().DialContext(ctx, "tcp", addr.Endpoint())
 	if err != nil {
 		return nil, ldap.NewError(ldap.ErrorNetwork, err)
@@ -343,12 +353,6 @@ func (p *Provider) dialStartTLS(ctx context.Context, addr endpointaddr.HostPort)
 
 	conn := ldap.NewConn(c, false)
 	conn.Start()
-	tlsConfig, err := p.tlsConfig()
-	if err != nil {
-		return nil, ldap.NewError(ldap.ErrorNetwork, err)
-	}
-	// Unfortunately, this seems to be required for StartTLS, even though it is not needed for regular TLS.
-	tlsConfig.ServerName = addr.Host
 	err = conn.StartTLS(tlsConfig)
 	if err != nil {
 		return nil, err
@@ -361,7 +365,7 @@ func netDialer() *net.Dialer {
 	return &net.Dialer{Timeout: time.Minute}
 }
 
-func (p *Provider) tlsConfig() (*tls.Config, error) {
+func (p *Provider) validateAndBuildTLSConfig() (*tls.Config, error) {
 	var rootCAs *x509.CertPool
 	if p.c.CABundle != nil {
 		rootCAs = x509.NewCertPool()

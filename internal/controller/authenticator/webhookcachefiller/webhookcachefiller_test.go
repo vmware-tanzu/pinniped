@@ -44,8 +44,10 @@ import (
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/mocks/mockcachevalue"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/proxydetect"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/conditionstestutil"
+	"go.pinniped.dev/internal/testutil/fakeproxydetect"
 	"go.pinniped.dev/internal/testutil/tlsserver"
 )
 
@@ -302,6 +304,11 @@ func TestController(t *testing.T) {
 			Message:            "successfully dialed webhook server",
 		}
 	}
+	happyWebhookConnectionValidWithoutDialingDueToProxy := func(time metav1.Time, observedGeneration int64) metav1.Condition {
+		c := happyWebhookConnectionValid(time, observedGeneration)
+		c.Message = "skipped dialing connection probe because HTTPS_PROXY is configured for use with the specified host"
+		return c
+	}
 	unknownWebhookConnectionValid := func(time metav1.Time, observedGeneration int64) metav1.Condition {
 		return metav1.Condition{
 			Type:               "WebhookConnectionValid",
@@ -373,7 +380,16 @@ func TestController(t *testing.T) {
 			Message:            fmt.Sprintf(`spec.endpoint URL %s has invalid scheme, require 'https'`, endpoint),
 		}
 	}
-
+	sadEndpointURLValidProxyDetectErr := func(msg string, time metav1.Time, observedGeneration int64) metav1.Condition {
+		return metav1.Condition{
+			Type:               "EndpointURLValid",
+			Status:             "False",
+			ObservedGeneration: observedGeneration,
+			LastTransitionTime: time,
+			Reason:             "InvalidEndpointCannotDetermineProxy",
+			Message:            msg,
+		}
+	}
 	sadEndpointURLValidWithMessage := func(time metav1.Time, observedGeneration int64, msg string) metav1.Condition {
 		return metav1.Condition{
 			Type:               "EndpointURLValid",
@@ -412,10 +428,11 @@ func TestController(t *testing.T) {
 		webhookAuthenticators []runtime.Object
 		secretsAndConfigMaps  []runtime.Object
 		// for modifying the clients to hack in arbitrary api responses
-		configClient func(*conciergefake.Clientset)
-		wantSyncErr  testutil.RequireErrorStringFunc
-		wantLogLines []string
-		wantActions  func() []coretesting.Action
+		configClient  func(*conciergefake.Clientset)
+		proxyDetector func(t *testing.T) proxydetect.ProxyDetect
+		wantSyncErr   testutil.RequireErrorStringFunc
+		wantLogLines  []string
+		wantActions   func() []coretesting.Action
 		// random comment so lines above don't have huge indents
 		wantNamesOfWebhookAuthenticatorsInCache []string
 	}{
@@ -1012,6 +1029,80 @@ func TestController(t *testing.T) {
 			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"}, // keeps the old entry in the cache
 		},
 		{
+			name: "Sync: previously cached valid authenticator with unchanged endpoint URL and CA bundle hash has invalid status conditions in informer cache, as can happen on subsequent sync soon after multiple quick status updates (when the informer cache finally catches up), and the webhook host would be reached through a proxy: should update status in current sync",
+			cache: func(t *testing.T, cache *authncache.Cache) {
+				oldCA, err := base64.StdEncoding.DecodeString(goodWebhookAuthenticatorSpecWithCA.TLS.CertificateAuthorityData)
+				require.NoError(t, err)
+				cache.Store(
+					authncache.Key{
+						Name:     "test-name",
+						Kind:     "WebhookAuthenticator",
+						APIGroup: authenticationv1alpha1.SchemeGroupVersion.Group,
+					},
+					newCacheValue(t, goodWebhookAuthenticatorSpecWithCA, string(oldCA)),
+				)
+			},
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test-name",
+						Generation: 1234,
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadTLSConfigurationValid(frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				},
+			},
+			proxyDetector: func(t *testing.T) proxydetect.ProxyDetect {
+				// Detect that a proxy is required for the webhook host.
+				fakeProxyDetect := fakeproxydetect.New(true, nil)
+				t.Cleanup(func() {
+					require.Equal(t, 1, fakeProxyDetect.NumberOfInvocations())
+					require.Equal(t, "127.0.0.1", fakeProxyDetect.ReceivedHostDuringMostRecentInvocation())
+				})
+				return fakeProxyDetect
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations","webhookAuthenticator":"test-name","endpoint":"%s"}`, goodWebhookAuthenticatorSpecWithCA.Endpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookAuthenticatorSpecWithCA.Endpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test-name",
+						Generation: 1234,
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{ // updates the status to ready
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 1234),
+							[]metav1.Condition{
+								happyWebhookConnectionValidWithoutDialingDueToProxy(frozenMetav1Now, 1234),
+							},
+						),
+						Phase: "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"}, // keeps the old entry in the cache
+		},
+		{
 			name: "Sync: valid WebhookAuthenticator with CA: will complete sync loop successfully with success conditions and ready phase",
 			webhookAuthenticators: []runtime.Object{
 				&authenticationv1alpha1.WebhookAuthenticator{
@@ -1020,6 +1111,15 @@ func TestController(t *testing.T) {
 					},
 					Spec: goodWebhookAuthenticatorSpecWithCA,
 				},
+			},
+			proxyDetector: func(t *testing.T) proxydetect.ProxyDetect {
+				// Detect that a proxy is not required for the webhook host.
+				fakeProxyDetect := fakeproxydetect.New(false, nil)
+				t.Cleanup(func() {
+					require.Equal(t, 1, fakeProxyDetect.NumberOfInvocations())
+					require.Equal(t, "127.0.0.1", fakeProxyDetect.ReceivedHostDuringMostRecentInvocation())
+				})
+				return fakeProxyDetect
 			},
 			wantLogLines: []string{
 				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
@@ -1044,6 +1144,104 @@ func TestController(t *testing.T) {
 				}
 			},
 			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
+		},
+		{
+			name: "Sync: valid WebhookAuthenticator when webhook host will use web proxy: will complete sync loop successfully with success conditions and ready phase",
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+				},
+			},
+			proxyDetector: func(t *testing.T) proxydetect.ProxyDetect {
+				// Detect that a proxy is required for the webhook host.
+				fakeProxyDetect := fakeproxydetect.New(true, nil)
+				t.Cleanup(func() {
+					require.Equal(t, 1, fakeProxyDetect.NumberOfInvocations())
+					require.Equal(t, "127.0.0.1", fakeProxyDetect.ReceivedHostDuringMostRecentInvocation())
+				})
+				return fakeProxyDetect
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Ready"}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"added or updated webhook authenticator in cache","webhookAuthenticator":"test-name","endpoint":"%s","isOverwrite":false}`, goodWebhookDefaultServingCertEndpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								happyWebhookConnectionValidWithoutDialingDueToProxy(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Ready",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
+			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
+		},
+		{
+			name: "Sync: valid WebhookAuthenticator when error while checking if webhook host will use web proxy: will complete sync loop successfully with error conditions and error phase",
+			webhookAuthenticators: []runtime.Object{
+				&authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+				},
+			},
+			proxyDetector: func(t *testing.T) proxydetect.ProxyDetect {
+				// Return a fake error when trying to determine if a proxy is needed for the webhook host.
+				fakeProxyDetect := fakeproxydetect.New(false, errors.New("fake proxy detector error"))
+				t.Cleanup(func() {
+					require.Equal(t, 1, fakeProxyDetect.NumberOfInvocations())
+					require.Equal(t, "127.0.0.1", fakeProxyDetect.ReceivedHostDuringMostRecentInvocation())
+				})
+				return fakeProxyDetect
+			},
+			wantLogLines: []string{
+				fmt.Sprintf(`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).syncIndividualWebhookAuthenticator","message":"invalid webhook authenticator","webhookAuthenticator":"test-name","endpoint":"%s","removedFromCache":false}`, goodWebhookDefaultServingCertEndpoint),
+				fmt.Sprintf(`{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","logger":"webhookcachefiller-controller","caller":"webhookcachefiller/webhookcachefiller.go:<line>$webhookcachefiller.(*webhookCacheFillerController).updateStatus","message":"webhookauthenticator status successfully updated","webhookAuthenticator":"test-name","endpoint":"%s","phase":"Error"}`, goodWebhookDefaultServingCertEndpoint),
+			},
+			wantActions: func() []coretesting.Action {
+				updateStatusAction := coretesting.NewUpdateAction(webhookAuthenticatorGVR, "", &authenticationv1alpha1.WebhookAuthenticator{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-name",
+					},
+					Spec: goodWebhookAuthenticatorSpecWithCA,
+					Status: authenticationv1alpha1.WebhookAuthenticatorStatus{
+						Conditions: conditionstestutil.Replace(
+							allHappyConditionsSuccess(goodWebhookDefaultServingCertEndpoint, frozenMetav1Now, 0),
+							[]metav1.Condition{
+								sadEndpointURLValidProxyDetectErr("spec.endpoint URL error: fake proxy detector error", frozenMetav1Now, 0),
+								unknownWebhookConnectionValid(frozenMetav1Now, 0),
+								unknownAuthenticatorValid(frozenMetav1Now, 0),
+								sadReadyCondition(frozenMetav1Now, 0),
+							},
+						),
+						Phase: "Error",
+					},
+				})
+				updateStatusAction.Subresource = "status"
+				return []coretesting.Action{
+					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					updateStatusAction,
+				}
+			},
 		},
 		{
 			name: "Sync: valid WebhookAuthenticator with IPV6 and CA: will complete sync loop successfully with success conditions and ready phase",
@@ -1925,6 +2123,13 @@ func TestController(t *testing.T) {
 				tt.cache(t, cache)
 			}
 
+			if tt.proxyDetector == nil {
+				// By default, detect that a proxy is not required for any webhook hosts.
+				tt.proxyDetector = func(t *testing.T) proxydetect.ProxyDetect {
+					return fakeproxydetect.New(false, nil)
+				}
+			}
+
 			controller := New(
 				"concierge", // namespace for controller
 				cache,
@@ -1935,7 +2140,9 @@ func TestController(t *testing.T) {
 				controllerlib.WithInformer,
 				frozenClock,
 				logger,
-				ptls.NewDialer())
+				ptls.NewDialer(),
+				tt.proxyDetector(t),
+			)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -2179,7 +2386,9 @@ func TestControllerFilterSecret(t *testing.T) {
 				observableInformers.WithInformer,
 				frozenClock,
 				logger,
-				ptls.NewDialer())
+				ptls.NewDialer(),
+				fakeproxydetect.New(false, nil),
+			)
 
 			unrelated := &corev1.Secret{}
 			filter := observableInformers.GetFilterForInformer(secretInformer)
@@ -2241,7 +2450,9 @@ func TestControllerFilterConfigMap(t *testing.T) {
 				observableInformers.WithInformer,
 				frozenClock,
 				logger,
-				ptls.NewDialer())
+				ptls.NewDialer(),
+				fakeproxydetect.New(false, nil),
+			)
 
 			unrelated := &corev1.ConfigMap{}
 			filter := observableInformers.GetFilterForInformer(configMapInformer)

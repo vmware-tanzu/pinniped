@@ -1109,3 +1109,23 @@ func ObjectMetaWithRandomName(t *testing.T, baseName string) metav1.ObjectMeta {
 		Annotations: map[string]string{"pinniped.dev/testName": t.Name()},
 	}
 }
+
+func DeploymentsContainerHasHTTPSProxyEnvVar(t *testing.T, namespaceName string, deploymentName string) bool {
+	client := NewKubernetesClientset(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	d, err := client.AppsV1().Deployments(namespaceName).Get(ctx, deploymentName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	for _, c := range d.Spec.Template.Spec.Containers {
+		for _, e := range c.Env {
+			if e.Name == "HTTPS_PROXY" {
+				return true
+			}
+		}
+	}
+
+	return false
+}

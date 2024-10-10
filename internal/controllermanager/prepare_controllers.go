@@ -36,6 +36,7 @@ import (
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/leaderelection"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/proxydetect"
 	"go.pinniped.dev/internal/tokenclient"
 )
 
@@ -246,6 +247,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				clock.RealClock{},
 				plog.New(),
 				ptls.NewDialer(),
+				proxydetect.New(),
 			),
 			singletonWorker,
 		).

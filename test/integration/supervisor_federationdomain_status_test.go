@@ -46,8 +46,8 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				fd := testlib.CreateTestFederationDomain(ctx, t, supervisorconfigv1alpha1.FederationDomainSpec{
 					Issuer: "https://example.com/fake",
 				}, supervisorconfigv1alpha1.FederationDomainPhaseError)
-				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
-					allSuccessfulLegacyFederationDomainConditions("", fd.Spec),
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(t,
+					allSuccessfulLegacyFederationDomainConditions(t, "", fd.Spec),
 					[]metav1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "LegacyConfigurationIdentityProviderNotFound",
@@ -67,7 +67,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				}, idpv1alpha1.PhaseError)
 				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseReady)
 				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name,
-					allSuccessfulLegacyFederationDomainConditions(oidcIdentityProvider1.Name, fd.Spec))
+					allSuccessfulLegacyFederationDomainConditions(t, oidcIdentityProvider1.Name, fd.Spec))
 
 				// Creating a second IDP should put the FederationDomain back into an error status again.
 				oidcIdentityProvider2 := testlib.CreateTestOIDCIdentityProvider(t, idpv1alpha1.OIDCIdentityProviderSpec{
@@ -75,8 +75,8 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 				}, idpv1alpha1.PhaseError)
 				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseError)
-				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
-					allSuccessfulLegacyFederationDomainConditions(oidcIdentityProvider2.Name, fd.Spec),
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(t,
+					allSuccessfulLegacyFederationDomainConditions(t, oidcIdentityProvider2.Name, fd.Spec),
 					[]metav1.Condition{
 						{
 							Type: "IdentityProvidersFound", Status: "False", Reason: "IdentityProviderNotSpecified",
@@ -121,7 +121,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 						},
 					},
 				}, supervisorconfigv1alpha1.FederationDomainPhaseError)
-				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(t,
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]metav1.Condition{
 						{
@@ -145,7 +145,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					Client: idpv1alpha1.OIDCClient{SecretName: "this-will-not-exist-but-does-not-matter"},
 				}, oidcIDP1Meta, idpv1alpha1.PhaseError)
 				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseError)
-				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(t,
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]metav1.Condition{
 						{
@@ -173,7 +173,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				err := oidcIDPClient.Delete(ctx, oidcIdentityProvider1.Name, metav1.DeleteOptions{})
 				require.NoError(t, err)
 				testlib.WaitForFederationDomainStatusPhase(ctx, t, fd.Name, supervisorconfigv1alpha1.FederationDomainPhaseError)
-				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(t,
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]metav1.Condition{
 						{
@@ -340,7 +340,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 					},
 				}, supervisorconfigv1alpha1.FederationDomainPhaseError)
 
-				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(t,
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]metav1.Condition{
 						{
@@ -483,7 +483,7 @@ func TestSupervisorFederationDomainStatus_Disruptive(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(
+				testlib.WaitForFederationDomainStatusConditions(ctx, t, fd.Name, replaceSomeConditions(t,
 					allSuccessfulFederationDomainConditions(fd.Spec),
 					[]metav1.Condition{
 						{
@@ -950,22 +950,30 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 	}
 }
 
-func replaceSomeConditions(conditions []metav1.Condition, replaceWithTheseConditions []metav1.Condition) []metav1.Condition {
+func replaceSomeConditions(t *testing.T, conditions []metav1.Condition, replaceWithTheseConditions []metav1.Condition) []metav1.Condition {
 	cp := make([]metav1.Condition, len(conditions))
 	copy(cp, conditions)
 	for _, replacementCond := range replaceWithTheseConditions {
+		found := false
 		for i, cond := range cp {
 			if replacementCond.Type == cond.Type {
 				cp[i] = replacementCond
+				found = true
 				break
 			}
+		}
+		if !found {
+			require.Failf(t,
+				"test setup problem",
+				"replaceSomeConditions() helper was called to replace condition of type %q but no such condition was found in conditions slice",
+				replacementCond.Type)
 		}
 	}
 	return cp
 }
 
-func allSuccessfulLegacyFederationDomainConditions(idpName string, federationDomainSpec supervisorconfigv1alpha1.FederationDomainSpec) []metav1.Condition {
-	return replaceSomeConditions(
+func allSuccessfulLegacyFederationDomainConditions(t *testing.T, idpName string, federationDomainSpec supervisorconfigv1alpha1.FederationDomainSpec) []metav1.Condition {
+	return replaceSomeConditions(t,
 		allSuccessfulFederationDomainConditions(federationDomainSpec),
 		[]metav1.Condition{
 			{

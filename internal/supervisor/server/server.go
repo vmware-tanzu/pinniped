@@ -342,7 +342,7 @@ func prepareControllers(
 				plog.New(),
 				controllerlib.WithInformer,
 				clock.RealClock{},
-				ptls.NewDialer(),
+				githubupstreamwatcher.ProbeURL,
 				cache.NewExpiring(),
 			),
 			singletonWorker).

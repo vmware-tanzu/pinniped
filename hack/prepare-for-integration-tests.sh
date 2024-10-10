@@ -34,7 +34,7 @@ clean_kind=no
 api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
 dockerfile_path=""
 get_active_directory_vars="" # specify a filename for a script to get AD related env variables
-get_github_vars="" # specify a filename for a script to get GitHub related env variables
+get_github_vars=""           # specify a filename for a script to get GitHub related env variables
 alternate_deploy="undefined"
 pre_install="undefined"
 
@@ -319,6 +319,15 @@ service_https_nodeport_nodeport: $service_https_nodeport_nodeport
 service_https_clusterip_port: $service_https_clusterip_port
 EOF
 
+if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
+  # Configure the web proxy on the Supervisor pods. Note that .svc and .cluster.local are not included,
+  # so requests for things like dex.tools.svc.cluster.local will go through the web proxy.
+  cat <<EOF >>"$data_values_file"
+https_proxy: "http://proxy.tools.svc.cluster.local:3128"
+no_proxy: "\$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost"
+EOF
+fi
+
 if [ "$alternate_deploy" != "undefined" ]; then
   log_note "The Pinniped Supervisor will be deployed with $alternate_deploy pinniped-supervisor $tag $registry_with_port $repo $data_values_file ..."
   $alternate_deploy pinniped-supervisor "$tag" $registry_with_port $repo $data_values_file
@@ -338,7 +347,7 @@ manifest=/tmp/pinniped-concierge.yaml
 data_values_file=/tmp/concierge-values.yml
 concierge_app_name="pinniped-concierge"
 concierge_namespace="concierge"
-webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
+webhook_url="https://local-user-authenticator.local-user-authenticator.svc.cluster.local/authenticate"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 log_level="debug"
@@ -354,6 +363,16 @@ image_tag: $tag
 discovery_url: $discovery_url
 EOF
 
+if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
+  # Configure the web proxy on the Concierge pods. Note that .svc and .cluster.local are not included,
+  # so requests for things like pinniped-supervisor-clusterip.supervisor.svc.cluster.local and
+  # local-user-authenticator.local-user-authenticator.svc.cluster.local will go through the web proxy.
+  cat <<EOF >>"$data_values_file"
+https_proxy: "http://proxy.tools.svc.cluster.local:3128"
+no_proxy: "\$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost"
+EOF
+fi
+
 if [ "$alternate_deploy" != "undefined" ]; then
   log_note "The Pinniped Concierge will be deployed with $alternate_deploy pinniped-concierge $tag $registry_with_port $repo $data_values_file ..."
   $alternate_deploy pinniped-concierge "$tag" $registry_with_port $repo $data_values_file
@@ -364,6 +383,77 @@ else
   kapp deploy --yes --app "$concierge_app_name" --diff-changes --file "$manifest"
   kubectl apply --dry-run=client -f "$manifest" # Validate manifest schema.
   popd >/dev/null
+fi
+
+#
+# Now that the everything is deployed, optionally firewall the Dex server, the local user authenticator server,
+# and the GitHub API so that the Supervisor and Concierge cannot reach them directly. However, the Squid
+# proxy server can reach them all, so the Supervisor and Concierge can reach them through the proxy.
+#
+if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
+  log_note "Setting up firewalls for the Supervisor and Concierge's outgoing TCP/UDP network traffic..."
+  cat <<EOF | kubectl apply --wait -f -
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: supervisor-cannot-make-external-requests
+  namespace: ${supervisor_namespace}
+spec:
+  # An empty podSelector matches all pods in this namespace.
+  podSelector: {}
+  policyTypes:
+    - Egress
+  # This is an allow list. Everything else disallowed.
+  # Especially note that it cannot access Dex or the GitHub API directly.
+  egress:
+  - to:
+    # Allowed to make requests to all pods in kube-system for DNS and Kube API.
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    # Allowed to make requests to the LDAP server in tools, because we cannot use
+    # an HTTP proxy for the LDAP protocol, since LDAP is not over HTTP.
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: tools
+      podSelector:
+        matchLabels:
+          app: ldap
+    # Allowed to make requests to the Squid proxy server in the tools namespace.
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: tools
+      podSelector:
+        matchLabels:
+          app: proxy
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: concierge-cannot-make-external-requests
+  namespace: ${concierge_namespace}
+spec:
+  # An empty podSelector matches all pods in this namespace.
+  podSelector: {}
+  policyTypes:
+    - Egress
+  # This is an allow list. Everything else disallowed.
+  # Especially note that it cannot access the local user authenticator or Supervisor directly.
+  egress:
+  - to:
+    # Allowed to make requests to all pods in kube-system for DNS and Kube API.
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    # Allowed to make requests to the Squid proxy server in the tools namespace.
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: tools
+      podSelector:
+        matchLabels:
+          app: proxy
+EOF
 fi
 
 #

@@ -39,6 +39,7 @@ import (
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/proxydetect"
 )
 
 const (
@@ -49,10 +50,12 @@ const (
 	typeEndpointURLValid       = "EndpointURLValid"
 	typeAuthenticatorValid     = "AuthenticatorValid"
 
-	reasonUnableToCreateClient       = "UnableToCreateClient"
-	reasonUnableToInstantiateWebhook = "UnableToInstantiateWebhook"
-	reasonInvalidEndpointURL         = "InvalidEndpointURL"
-	reasonInvalidEndpointURLScheme   = "InvalidEndpointURLScheme"
+	reasonUnableToCreateClient                = "UnableToCreateClient"
+	reasonUnableToInstantiateWebhook          = "UnableToInstantiateWebhook"
+	reasonInvalidEndpointURL                  = "InvalidEndpointURL"
+	reasonInvalidEndpointURLScheme            = "InvalidEndpointURLScheme"
+	reasonInvalidEndpointCannotDetermineProxy = "InvalidEndpointCannotDetermineProxy"
+	reasonUnableToDialServer                  = "UnableToDialServer"
 )
 
 type cachedWebhookAuthenticator struct {
@@ -77,6 +80,7 @@ func New(
 	clock clock.Clock,
 	log plog.Logger,
 	dialer ptls.Dialer,
+	proxyDetector proxydetect.ProxyDetect,
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
@@ -91,6 +95,7 @@ func New(
 				clock:             clock,
 				log:               log.WithName(controllerName),
 				dialer:            dialer,
+				proxyDetector:     proxyDetector,
 			},
 		},
 		withInformer(
@@ -127,6 +132,7 @@ type webhookCacheFillerController struct {
 	clock             clock.Clock
 	log               plog.Logger
 	dialer            ptls.Dialer
+	proxyDetector     proxydetect.ProxyDetect
 }
 
 // Sync implements controllerlib.Syncer.
@@ -173,7 +179,7 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 
 	caBundle, conditions, tlsBundleOk := c.validateTLSBundle(webhookAuthenticator.Spec.TLS, conditions)
 
-	endpointHostPort, conditions, endpointOk := c.validateEndpoint(webhookAuthenticator.Spec.Endpoint, conditions)
+	endpointHostPort, conditions, usingProxyForHost, endpointOk := c.validateEndpoint(webhookAuthenticator.Spec.Endpoint, conditions)
 	okSoFar := tlsBundleOk && endpointOk
 
 	// Only revalidate and update the cache if the cached authenticator is different from the desired authenticator.
@@ -194,12 +200,14 @@ func (c *webhookCacheFillerController) syncIndividualWebhookAuthenticator(ctx co
 		// if they need to be updated.
 		logger.Info("cached webhook authenticator and desired webhook authenticator are the same: already cached, so skipping validations")
 		conditions = append(conditions,
-			successfulWebhookConnectionValidCondition(),
+			successfulWebhookConnectionValidCondition(usingProxyForHost),
 			successfulAuthenticatorValidCondition(),
 		)
 	} else {
 		// Run all remaining validations.
-		a, moreConditions, moreErrs := c.doExpensiveValidations(ctx, webhookAuthenticator, endpointHostPort, caBundle, okSoFar, logger)
+		a, moreConditions, moreErrs := c.doExpensiveValidations(
+			ctx, webhookAuthenticator, endpointHostPort, caBundle, okSoFar, usingProxyForHost, logger,
+		)
 		newWebhookAuthenticatorForCache = a
 		conditions = append(conditions, moreConditions...)
 		errs = append(errs, moreErrs...)
@@ -243,13 +251,14 @@ func (c *webhookCacheFillerController) doExpensiveValidations(
 	endpointHostPort *endpointaddr.HostPort,
 	caBundle *tlsconfigutil.CABundle,
 	okSoFar bool,
+	usingProxyForHost bool,
 	logger plog.Logger,
 ) (*cachedWebhookAuthenticator, []*metav1.Condition, []error) {
 	var newWebhookAuthenticatorForCache *cachedWebhookAuthenticator
 	var conditions []*metav1.Condition
 	var errs []error
 
-	conditions, tlsNegotiateErr := c.validateConnection(ctx, caBundle.CertPool(), endpointHostPort, conditions, okSoFar, logger)
+	conditions, tlsNegotiateErr := c.validateConnection(ctx, caBundle.CertPool(), endpointHostPort, conditions, okSoFar, usingProxyForHost, logger)
 	errs = append(errs, tlsNegotiateErr)
 	okSoFar = okSoFar && tlsNegotiateErr == nil
 
@@ -405,12 +414,16 @@ func newWebhookAuthenticator(
 	return webhookAuthenticator, conditions, nil
 }
 
-func successfulWebhookConnectionValidCondition() *metav1.Condition {
+func successfulWebhookConnectionValidCondition(usingProxyForHost bool) *metav1.Condition {
+	msg := "successfully dialed webhook server"
+	if usingProxyForHost {
+		msg = "skipped dialing connection probe because HTTPS_PROXY is configured for use with the specified host"
+	}
 	return &metav1.Condition{
 		Type:    typeWebhookConnectionValid,
 		Status:  metav1.ConditionTrue,
 		Reason:  conditionsutil.ReasonSuccess,
-		Message: "successfully dialed webhook server",
+		Message: msg,
 	}
 }
 
@@ -420,6 +433,7 @@ func (c *webhookCacheFillerController) validateConnection(
 	endpointHostPort *endpointaddr.HostPort,
 	conditions []*metav1.Condition,
 	prereqOk bool,
+	usingProxyForHost bool,
 	logger plog.Logger,
 ) ([]*metav1.Condition, error) {
 	if !prereqOk {
@@ -429,6 +443,13 @@ func (c *webhookCacheFillerController) validateConnection(
 			Reason:  conditionsutil.ReasonUnableToValidate,
 			Message: conditionsutil.MessageUnableToValidate,
 		})
+		return conditions, nil
+	}
+
+	if usingProxyForHost {
+		// We cannot assume that we can directly dial the host in the case where we should
+		// be using a web proxy to reach the host, so skip the dial probe in that case.
+		conditions = append(conditions, successfulWebhookConnectionValidCondition(usingProxyForHost))
 		return conditions, nil
 	}
 
@@ -442,17 +463,17 @@ func (c *webhookCacheFillerController) validateConnection(
 		conditions = append(conditions, &metav1.Condition{
 			Type:    typeWebhookConnectionValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  conditionsutil.ReasonUnableToDialServer,
+			Reason:  reasonUnableToDialServer,
 			Message: msg,
 		})
 		return conditions, fmt.Errorf("%s: %w", errText, err)
 	}
 
-	conditions = append(conditions, successfulWebhookConnectionValidCondition())
+	conditions = append(conditions, successfulWebhookConnectionValidCondition(usingProxyForHost))
 	return conditions, nil
 }
 
-func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditions []*metav1.Condition) (*endpointaddr.HostPort, []*metav1.Condition, bool) {
+func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditions []*metav1.Condition) (*endpointaddr.HostPort, []*metav1.Condition, bool, bool) {
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "spec.endpoint URL cannot be parsed", err.Error())
@@ -462,7 +483,7 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 			Reason:  reasonInvalidEndpointURL,
 			Message: msg,
 		})
-		return nil, conditions, false
+		return nil, conditions, false, false
 	}
 
 	// handles empty string and other issues as well.
@@ -474,7 +495,7 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 			Reason:  reasonInvalidEndpointURLScheme,
 			Message: msg,
 		})
-		return nil, conditions, false
+		return nil, conditions, false, false
 	}
 
 	endpointHostPort, err := endpointaddr.ParseFromURL(endpointURL, 443)
@@ -486,7 +507,19 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 			Reason:  reasonInvalidEndpointURL,
 			Message: msg,
 		})
-		return nil, conditions, false
+		return nil, conditions, false, false
+	}
+
+	usingProxyForHost, err := c.proxyDetector.UsingProxyForHost(endpointHostPort.Host)
+	if err != nil {
+		msg := fmt.Sprintf("%s: %s", "spec.endpoint URL error", err.Error())
+		conditions = append(conditions, &metav1.Condition{
+			Type:    typeEndpointURLValid,
+			Status:  metav1.ConditionFalse,
+			Reason:  reasonInvalidEndpointCannotDetermineProxy,
+			Message: msg,
+		})
+		return nil, conditions, false, false
 	}
 
 	conditions = append(conditions, &metav1.Condition{
@@ -495,7 +528,7 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 		Reason:  conditionsutil.ReasonSuccess,
 		Message: "spec.endpoint is a valid URL",
 	})
-	return &endpointHostPort, conditions, true
+	return &endpointHostPort, conditions, usingProxyForHost, true
 }
 
 func (c *webhookCacheFillerController) updateStatus(

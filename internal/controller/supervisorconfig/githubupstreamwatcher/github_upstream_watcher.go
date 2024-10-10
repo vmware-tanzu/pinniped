@@ -33,7 +33,6 @@ import (
 	"go.pinniped.dev/internal/controller/supervisorconfig/upstreamwatchers"
 	"go.pinniped.dev/internal/controller/tlsconfigutil"
 	"go.pinniped.dev/internal/controllerlib"
-	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/endpointaddr"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/net/phttp"
@@ -58,8 +57,9 @@ const (
 	GitHubConnectionValid        string = "GitHubConnectionValid"
 	ClaimsValid                  string = "ClaimsValid"
 
-	reasonInvalid     = "Invalid"
-	reasonInvalidHost = "InvalidHost"
+	reasonInvalid             = "Invalid"
+	reasonInvalidHost         = "InvalidHost"
+	reasonUnableToMakeRequest = "UnableToMakeRequest"
 
 	apiDotGithubDotCom = "api.github.com"
 	githubDotCom       = "github.com"
@@ -107,6 +107,8 @@ func NewGitHubValidatedAPICache(cache *cache.Expiring) GitHubValidatedAPICacheI 
 	return &GitHubValidatedAPICache{cache: cache}
 }
 
+type ProbeURLFunc func(ctx context.Context, client *http.Client, url string) error
+
 type gitHubWatcherController struct {
 	namespace                      string
 	cache                          UpstreamGitHubIdentityProviderICache
@@ -116,7 +118,7 @@ type gitHubWatcherController struct {
 	secretInformer                 corev1informers.SecretInformer
 	configMapInformer              corev1informers.ConfigMapInformer
 	clock                          clock.Clock
-	dialer                         ptls.Dialer
+	probeURLFunc                   ProbeURLFunc
 	validatedCache                 GitHubValidatedAPICacheI
 }
 
@@ -131,7 +133,7 @@ func New(
 	log plog.Logger,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
 	clock clock.Clock,
-	dialer ptls.Dialer,
+	probeURLFunc ProbeURLFunc,
 	validatedCache *cache.Expiring,
 ) controllerlib.Controller {
 	c := gitHubWatcherController{
@@ -143,7 +145,7 @@ func New(
 		secretInformer:                 secretInformer,
 		configMapInformer:              configMapInformer,
 		clock:                          clock,
-		dialer:                         dialer,
+		probeURLFunc:                   probeURLFunc,
 		validatedCache:                 NewGitHubValidatedAPICache(validatedCache),
 	}
 
@@ -299,7 +301,7 @@ func validateOrganizationsPolicy(organizationsSpec *idpv1alpha1.GitHubOrganizati
 
 func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx context.Context, upstream *idpv1alpha1.GitHubIdentityProvider) (
 	*upstreamgithub.Provider, // If validated, returns the config
-	error, // This error will only refer to programmatic errors such as inability to perform a Dial or dereference a pointer, not configuration errors
+	error, // This error will only refer to programmatic errors such as inability to perform a connection probe or dereference a pointer, not configuration errors
 ) {
 	conditions := make([]*metav1.Condition, 0)
 	applicationErrors := make([]error, 0)
@@ -365,7 +367,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contex
 		upstreamgithub.ProviderConfig{
 			Name:               upstream.Name,
 			ResourceUID:        upstream.UID,
-			APIBaseURL:         apiBaseUrl(apiHostPort),
+			APIBaseURL:         apiBaseURL(apiHostPort),
 			GroupNameAttribute: groupNameAttribute,
 			UsernameAttribute:  usernameAttribute,
 			OAuth2Config: &oauth2.Config{
@@ -388,7 +390,7 @@ func (c *gitHubWatcherController) validateUpstreamAndUpdateConditions(ctx contex
 	return provider, utilerrors.NewAggregate(applicationErrors)
 }
 
-func apiBaseUrl(apiHostPort *endpointaddr.HostPort) string {
+func apiBaseURL(apiHostPort *endpointaddr.HostPort) string {
 	endpoint := hostPortForHTTPS(apiHostPort)
 
 	if strings.ToLower(apiHostPort.Host) == apiDotGithubDotCom {
@@ -471,19 +473,33 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 
 	apiAddress := apiHostPort.Endpoint()
 
-	if !c.validatedCache.IsValid(apiAddress, caBundle.Hash()) {
-		dialCtx, dialCancel := context.WithTimeout(ctx, 30*time.Second)
-		defer dialCancel()
+	// Note that this client already has some reasonable timeouts configured on it.
+	httpClient := phttp.Default(caBundle.CertPool())
 
-		tlsDialErr := c.dialer.IsReachableAndTLSValidationSucceeds(dialCtx, apiAddress, caBundle.CertPool(), c.log)
-		if tlsDialErr != nil {
+	if !c.validatedCache.IsValid(apiAddress, caBundle.Hash()) {
+		// In order to provide feedback on the configured host and CA bundle, probe the configured server by using
+		// a real HTTPS request, so we can also respect the pod's proxy settings during the request, if they are present.
+		// To make a real request, we need to choose a real endpoint.
+		// According to the GitHub API docs for your getting your rate limit status, "Accessing this endpoint does not
+		// count against your REST API rate limit" and you do not need to be authenticated to use this endpoint.
+		// See https://docs.github.com/en/rest/rate-limit/rate-limit?apiVersion=2022-11-28#get-rate-limit-status-for-the-authenticated-user.
+		// Note that like other APIs, the URL path is different for GitHub Enterprise Server (https://HOSTNAME/api/v3/rate_limit)
+		// versus Enterprise Cloud or Public (https://api.github.com/rate_limit).
+		// The docs also say that "Unauthenticated requests are associated with the originating IP address" and
+		// "The primary rate limit for unauthenticated requests is 60 requests per hour."
+		// So we'll use this endpoint in hopes that we can avoid impacting the rate limit for our originating IP,
+		// which could potentially be shared with other apps.
+		rateLimitAPIURL := fmt.Sprintf("%s/rate_limit", apiBaseURL(apiHostPort))
+
+		err := c.probeURLFunc(ctx, httpClient, rateLimitAPIURL)
+		if err != nil {
 			return &metav1.Condition{
 				Type:   GitHubConnectionValid,
 				Status: metav1.ConditionFalse,
-				Reason: conditionsutil.ReasonUnableToDialServer,
-				Message: fmt.Sprintf("cannot dial %q for spec.githubAPI.host (%q): %s",
-					apiAddress, *specifiedHost, buildDialErrorMessage(tlsDialErr)),
-			}, nil, tlsDialErr
+				Reason: reasonUnableToMakeRequest,
+				Message: fmt.Sprintf("cannot make connection probe request for spec.githubAPI.host (%q): %s",
+					*specifiedHost, buildProbeErrorMessage(err)),
+			}, nil, err
 		}
 	}
 
@@ -493,18 +509,43 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 		Type:   GitHubConnectionValid,
 		Status: metav1.ConditionTrue,
 		Reason: conditionsutil.ReasonSuccess,
-		Message: fmt.Sprintf("dialed %q for spec.githubAPI.host (%q): host is reachable and TLS verification succeeds",
+		Message: fmt.Sprintf("probed connection to %q for spec.githubAPI.host (%q): host is reachable and TLS verification succeeds",
 			apiAddress, *specifiedHost),
-	}, phttp.Default(caBundle.CertPool()), nil
+	}, httpClient, nil
 }
 
-// buildDialErrorMessage standardizes DNS error messages that appear differently on different platforms, so that tests and log grepping is uniform.
-func buildDialErrorMessage(tlsDialErr error) string {
-	reason := tlsDialErr.Error()
+// ProbeURL is the production code for how to probe a GitHub URL to test our connection to the GitHub API.
+// It can be replaced via constructor injection for testing.
+func ProbeURL(ctx context.Context, client *http.Client, url string) error {
+	probeRequestCtx, probeRequestCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer probeRequestCancel()
+
+	probeRequest, err := http.NewRequestWithContext(probeRequestCtx, http.MethodGet, url, nil)
+	if err != nil {
+		// Shouldn't really get here as long as the URL is valid.
+		return err
+	}
+
+	probeResponse, err := client.Do(probeRequest)
+	if err != nil {
+		return err
+	}
+
+	// Don't care what the response was, even if it was an error status, as long as we were able to connect
+	// successfully to the specified host using the specified CA bundle and the pod's proxy env var settings.
+	_ = probeResponse.Body.Close()
+
+	return nil
+}
+
+// buildProbeErrorMessage standardizes DNS error messages that appear differently on different platforms,
+// so that tests and log grepping is uniform.
+func buildProbeErrorMessage(err error) string {
+	reason := err.Error()
 
 	var opError *net.OpError
 	var dnsError *net.DNSError
-	if errors.As(tlsDialErr, &opError) && errors.As(tlsDialErr, &dnsError) {
+	if errors.As(err, &opError) && errors.As(err, &dnsError) {
 		dnsError.Server = ""
 		opError.Err = dnsError
 		return opError.Error()

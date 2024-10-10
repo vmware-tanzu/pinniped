@@ -165,7 +165,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		finalConditions []metav1.Condition
 	}{
 		{
-			name: "basic test to see if the WebhookAuthenticator wakes up or not",
+			name: "happy path",
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				return &env.TestWebhook
 			},
@@ -174,11 +174,6 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		},
 		{
 			name: "valid spec with invalid CA in TLS config will result in a WebhookAuthenticator that is not ready",
-			maybeSkip: func(t *testing.T) {
-				if conciergeUsingHTTPSProxy {
-					t.Skip("Skipping test that requires HTTPS_PROXY to be unset")
-				}
-			},
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				caBundleString := "invalid base64-encoded data"
 				webhookSpec := env.TestWebhook.DeepCopy()
@@ -188,7 +183,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 				return webhookSpec
 			},
 			initialPhase: authenticationv1alpha1.WebhookAuthenticatorPhaseError,
-			finalConditions: replaceSomeConditions(
+			finalConditions: replaceSomeConditions(t,
 				allSuccessfulWebhookAuthenticatorConditions(false),
 				[]metav1.Condition{
 					{
@@ -219,6 +214,9 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 			name: "valid spec with valid CA in TLS config but does not match issuer server will result in a WebhookAuthenticator that is not ready",
 			maybeSkip: func(t *testing.T) {
 				if conciergeUsingHTTPSProxy {
+					// Skip this test when HTTPS_PROXY is in use, because WebhookConnectionValid will have status Success
+					// with a message saying that the dialing was skipped due to the proxy setting, so the expectations
+					// below are wrong for that case.
 					t.Skip("Skipping test that requires HTTPS_PROXY to be unset")
 				}
 			},
@@ -230,7 +228,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 				return webhookSpec
 			},
 			initialPhase: authenticationv1alpha1.WebhookAuthenticatorPhaseError,
-			finalConditions: replaceSomeConditions(
+			finalConditions: replaceSomeConditions(t,
 				allSuccessfulWebhookAuthenticatorConditions(false),
 				[]metav1.Condition{
 					{
@@ -254,21 +252,20 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		},
 		{
 			name: "invalid with unresponsive endpoint will result in a WebhookAuthenticator that is not ready",
-			maybeSkip: func(t *testing.T) {
-				if conciergeUsingHTTPSProxy {
-					t.Skip("Skipping test that requires HTTPS_PROXY to be unset")
-				}
-			},
 			spec: func() *authenticationv1alpha1.WebhookAuthenticatorSpec {
 				webhookSpec := env.TestWebhook.DeepCopy()
 				webhookSpec.TLS = &authenticationv1alpha1.TLSSpec{
 					CertificateAuthorityData: caBundleSomePivotalCA,
 				}
-				webhookSpec.Endpoint = "https://127.0.0.1:443/some-fake-endpoint"
+				// Note that requests to 127.0.0.1 will not be proxied even when HTTPS_PROXY is set on the Concierge,
+				// so it's okay to run this test in that case too. The Concierge will attempt the dial because it sees
+				// that the request would not be proxied anyway. 127.0.0.1:8781 will be seen by the Concierge as a port
+				// local to its own pod, which does not exist so the connection will fail.
+				webhookSpec.Endpoint = "https://127.0.0.1:8781/some-fake-endpoint"
 				return webhookSpec
 			},
 			initialPhase: authenticationv1alpha1.WebhookAuthenticatorPhaseError,
-			finalConditions: replaceSomeConditions(
+			finalConditions: replaceSomeConditions(t,
 				allSuccessfulWebhookAuthenticatorConditions(false),
 				[]metav1.Condition{
 					{
@@ -285,7 +282,7 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 						Type:    "WebhookConnectionValid",
 						Status:  "False",
 						Reason:  "UnableToDialServer",
-						Message: "cannot dial server: dial tcp 127.0.0.1:443: connect: connection refused",
+						Message: "cannot dial server: dial tcp 127.0.0.1:8781: connect: connection refused",
 					},
 				},
 			),
@@ -295,6 +292,10 @@ func TestConciergeWebhookAuthenticatorStatus_Parallel(t *testing.T) {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
+			if tt.maybeSkip != nil {
+				tt.maybeSkip(t)
+			}
 
 			webhookAuthenticator := testlib.CreateTestWebhookAuthenticator(
 				ctx,

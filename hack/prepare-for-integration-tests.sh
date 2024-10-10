@@ -391,7 +391,7 @@ fi
 # proxy server can reach them all, so the Supervisor and Concierge can reach them through the proxy.
 #
 if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
-  log_note "Setting up firewalls for the Supervisor and Concierge's outgoing TCP/UDP/SCTP network traffic..."
+  log_note "Setting up firewalls for the Supervisor and Concierge's outgoing TCP/UDP network traffic..."
   cat <<EOF | kubectl apply --wait -f -
 ---
 apiVersion: networking.k8s.io/v1
@@ -400,7 +400,8 @@ metadata:
   name: supervisor-cannot-make-external-requests
   namespace: ${supervisor_namespace}
 spec:
-  # Having no podSelector will select all pods in the namespace.
+  # An empty podSelector matches all pods in this namespace.
+  podSelector: {}
   policyTypes:
     - Egress
   # This is an allow list. Everything else disallowed.
@@ -433,7 +434,8 @@ metadata:
   name: concierge-cannot-make-external-requests
   namespace: ${concierge_namespace}
 spec:
-  # Having no podSelector will select all pods in the namespace.
+  # An empty podSelector matches all pods in this namespace.
+  podSelector: {}
   policyTypes:
     - Egress
   # This is an allow list. Everything else disallowed.

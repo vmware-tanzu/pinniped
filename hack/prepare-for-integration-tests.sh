@@ -347,7 +347,7 @@ manifest=/tmp/pinniped-concierge.yaml
 data_values_file=/tmp/concierge-values.yml
 concierge_app_name="pinniped-concierge"
 concierge_namespace="concierge"
-webhook_url="https://local-user-authenticator.local-user-authenticator.svc/authenticate"
+webhook_url="https://local-user-authenticator.local-user-authenticator.svc.cluster.local/authenticate"
 discovery_url="$(TERM=dumb kubectl cluster-info | awk '/master|control plane/ {print $NF}')"
 concierge_custom_labels="{myConciergeCustomLabelName: myConciergeCustomLabelValue}"
 log_level="debug"
@@ -366,7 +366,7 @@ EOF
 if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
   # Configure the web proxy on the Concierge pods. Note that .svc and .cluster.local are not included,
   # so requests for things like pinniped-supervisor-clusterip.supervisor.svc.cluster.local and
-  # local-user-authenticator.local-user-authenticator.svc will go through the web proxy.
+  # local-user-authenticator.local-user-authenticator.svc.cluster.local will go through the web proxy.
   cat <<EOF >>"$data_values_file"
 https_proxy: "http://proxy.tools.svc.cluster.local:3128"
 no_proxy: "\$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost"

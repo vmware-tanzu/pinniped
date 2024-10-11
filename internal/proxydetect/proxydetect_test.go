@@ -12,9 +12,100 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProxyDetect(t *testing.T) {
-	t.Parallel()
+func TestProxyDetectWithoutMock(t *testing.T) {
+	// Setting these real env vars means that we cannot run this test in parallel.
+	t.Setenv("HTTPS_PROXY", "http://proxy.pinniped.dev")
+	t.Setenv("NO_PROXY", "1.2.3.4,1.2.3.5:3333,4.4.4.0/28,example1.pinniped.dev:8443,example2.pinniped.dev")
 
+	subject := New()
+
+	tests := []struct {
+		name        string
+		host        string
+		wantProxied bool
+		wantErr     string
+	}{
+		// This does not test all permutations of how HTTPS_PROXY and NO_PROXY work.
+		// Some basic tests to understand how these settings work are included below.
+		// See https://pkg.go.dev/golang.org/x/net/http/httpproxy for docs.
+		{
+			name:        "any host not included in NO_PROXY should use the proxy",
+			host:        "www.pinniped.dev",
+			wantProxied: true,
+		},
+		{
+			name:        "a port different from the one specified in NO_PROXY should use the proxy, for the default HTTPS port",
+			host:        "example1.pinniped.dev",
+			wantProxied: true,
+		},
+		{
+			name:        "a port different from the one specified in NO_PROXY should use the proxy, for an explicit port",
+			host:        "example1.pinniped.dev:994",
+			wantProxied: true,
+		},
+		{
+			name:        "same port as the one specified in NO_PROXY should skip the proxy",
+			host:        "example1.pinniped.dev:8443",
+			wantProxied: false,
+		},
+		{
+			name:        "any host included in NO_PROXY should skip the proxy, with default ports",
+			host:        "example2.pinniped.dev",
+			wantProxied: false,
+		},
+		{
+			name:        "an IP specified in NO_PROXY should skip the proxy",
+			host:        "1.2.3.4",
+			wantProxied: false,
+		},
+		{
+			name:        "an IP specified in NO_PROXY should skip the proxy, with matching explicit ports",
+			host:        "1.2.3.5:3333",
+			wantProxied: false,
+		},
+		{
+			name:        "an IP specified in NO_PROXY should use the proxy when the ports don't match",
+			host:        "1.2.3.5:1234",
+			wantProxied: true,
+		},
+		{
+			name:        "an IP included in a NO_PROXY CIDR should skip the proxy",
+			host:        "4.4.4.4",
+			wantProxied: false,
+		},
+		{
+			name:        "an IP outside a NO_PROXY CIDR should use the proxy",
+			host:        "4.4.4.16",
+			wantProxied: true,
+		},
+		{
+			name:        "as a special case in the Go documentation, localhost never uses the proxy, regardless of NO_PROXY settings",
+			host:        "localhost",
+			wantProxied: false,
+		},
+		{
+			name:        "a bad hostname returns an error",
+			host:        "bad hostname",
+			wantProxied: false,
+			wantErr:     `could not determine if requests will be proxied for host "bad hostname": parse "https://bad hostname": invalid character " " in host name`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			usingProxyForHost, err := subject.UsingProxyForHost(tt.host)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantProxied, usingProxyForHost)
+		})
+	}
+}
+
+func TestProxyDetectWithMock(t *testing.T) {
 	proxyURL, err := url.Parse("http://myproxy.com")
 	require.NoError(t, err)
 
@@ -66,12 +157,12 @@ func TestProxyDetect(t *testing.T) {
 
 			proxied, err := subject.UsingProxyForHost(tt.host)
 
-			require.Equal(t, tt.wantProxied, proxied)
 			if tt.wantErr != "" {
-				require.Equal(t, tt.wantErr, err.Error())
+				require.EqualError(t, err, tt.wantErr)
 			} else {
 				require.NoError(t, err)
 			}
+			require.Equal(t, tt.wantProxied, proxied)
 		})
 	}
 }

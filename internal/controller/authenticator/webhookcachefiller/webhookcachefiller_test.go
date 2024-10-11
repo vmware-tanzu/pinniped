@@ -1068,7 +1068,10 @@ func TestController(t *testing.T) {
 				fakeProxyDetect := fakeproxydetect.New(true, nil)
 				t.Cleanup(func() {
 					require.Equal(t, 1, fakeProxyDetect.NumberOfInvocations())
-					require.Equal(t, "127.0.0.1", fakeProxyDetect.ReceivedHostDuringMostRecentInvocation())
+					require.Equal(t,
+						strings.TrimPrefix(goodWebhookAuthenticatorSpecWithCA.Endpoint, "https://"),
+						fakeProxyDetect.ReceivedHostDuringMostRecentInvocation(),
+					)
 				})
 				return fakeProxyDetect
 			},
@@ -1117,7 +1120,10 @@ func TestController(t *testing.T) {
 				fakeProxyDetect := fakeproxydetect.New(false, nil)
 				t.Cleanup(func() {
 					require.Equal(t, 1, fakeProxyDetect.NumberOfInvocations())
-					require.Equal(t, "127.0.0.1", fakeProxyDetect.ReceivedHostDuringMostRecentInvocation())
+					require.Equal(t,
+						strings.TrimPrefix(goodWebhookAuthenticatorSpecWithCA.Endpoint, "https://"),
+						fakeProxyDetect.ReceivedHostDuringMostRecentInvocation(),
+					)
 				})
 				return fakeProxyDetect
 			},
@@ -1160,7 +1166,10 @@ func TestController(t *testing.T) {
 				fakeProxyDetect := fakeproxydetect.New(true, nil)
 				t.Cleanup(func() {
 					require.Equal(t, 1, fakeProxyDetect.NumberOfInvocations())
-					require.Equal(t, "127.0.0.1", fakeProxyDetect.ReceivedHostDuringMostRecentInvocation())
+					require.Equal(t,
+						strings.TrimPrefix(goodWebhookAuthenticatorSpecWithCA.Endpoint, "https://"),
+						fakeProxyDetect.ReceivedHostDuringMostRecentInvocation(),
+					)
 				})
 				return fakeProxyDetect
 			},
@@ -1208,7 +1217,10 @@ func TestController(t *testing.T) {
 				fakeProxyDetect := fakeproxydetect.New(false, errors.New("fake proxy detector error"))
 				t.Cleanup(func() {
 					require.Equal(t, 1, fakeProxyDetect.NumberOfInvocations())
-					require.Equal(t, "127.0.0.1", fakeProxyDetect.ReceivedHostDuringMostRecentInvocation())
+					require.Equal(t,
+						strings.TrimPrefix(goodWebhookAuthenticatorSpecWithCA.Endpoint, "https://"),
+						fakeProxyDetect.ReceivedHostDuringMostRecentInvocation(),
+					)
 				})
 				return fakeProxyDetect
 			},

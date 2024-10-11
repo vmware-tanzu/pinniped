@@ -510,7 +510,7 @@ func (c *webhookCacheFillerController) validateEndpoint(endpoint string, conditi
 		return nil, conditions, false, false
 	}
 
-	usingProxyForHost, err := c.proxyDetector.UsingProxyForHost(endpointHostPort.Host)
+	usingProxyForHost, err := c.proxyDetector.UsingProxyForHost(endpointHostPort.Endpoint())
 	if err != nil {
 		msg := fmt.Sprintf("%s: %s", "spec.endpoint URL error", err.Error())
 		conditions = append(conditions, &metav1.Condition{

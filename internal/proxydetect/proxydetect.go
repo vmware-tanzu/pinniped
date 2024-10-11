@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"k8s.io/apimachinery/pkg/util/net"
 )
 
 type ProxyDetect interface {
@@ -26,7 +28,13 @@ type detector struct {
 var _ ProxyDetect = (*detector)(nil)
 
 func New() ProxyDetect {
-	return &detector{proxyFromEnvironmentFunc: http.ProxyFromEnvironment}
+	return &detector{
+		// Because this is intended for use with the WebhookAuthenticator, let's
+		// use the same proxy function that we use for the WebhookAuthenticator.
+		// Refer to how webhookcachefiller.go constructs the webhook authenticator,
+		// and you'll find how it sets the proxy function in kubeclient.go to be this...
+		proxyFromEnvironmentFunc: net.NewProxierWithNoProxyCIDR(http.ProxyFromEnvironment),
+	}
 }
 
 func (d *detector) UsingProxyForHost(host string) (bool, error) {

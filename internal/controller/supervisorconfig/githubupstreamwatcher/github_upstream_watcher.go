@@ -63,6 +63,13 @@ const (
 
 	apiDotGithubDotCom = "api.github.com"
 	githubDotCom       = "github.com"
+
+	headerNameAPIVersion          = "X-GitHub-Api-Version"
+	headerValueAPIVersion2022     = "2022-11-28"
+	headerNameUserAgent           = "User-Agent"
+	headerValueUserAgentConcierge = "pinniped-concierge/v1"
+	headerNameAccept              = "Accept"
+	headerValueAcceptGitHubJSON   = "application/vnd.github+json"
 )
 
 // UpstreamGitHubIdentityProviderICache is a thread safe cache that holds a list of validated upstream GitHub IDP configurations.
@@ -515,7 +522,7 @@ func (c *gitHubWatcherController) validateGitHubConnection(
 }
 
 // ProbeURL is the production code for how to probe a GitHub URL to test our connection to the GitHub API.
-// It can be replaced via constructor injection for testing.
+// It can be replaced via constructor injection for testing. Implements ProbeURLFunc.
 func ProbeURL(ctx context.Context, client *http.Client, url string) error {
 	probeRequestCtx, probeRequestCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer probeRequestCancel()
@@ -525,6 +532,12 @@ func ProbeURL(ctx context.Context, client *http.Client, url string) error {
 		// Shouldn't really get here as long as the URL is valid.
 		return err
 	}
+
+	// GitHub API docs say that these headers are required for all requests.
+	// See https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api?apiVersion=2022-11-28#headers.
+	probeRequest.Header.Set(headerNameAPIVersion, headerValueAPIVersion2022)
+	probeRequest.Header.Set(headerNameUserAgent, headerValueUserAgentConcierge)
+	probeRequest.Header.Set(headerNameAccept, headerValueAcceptGitHubJSON)
 
 	probeResponse, err := client.Do(probeRequest)
 	if err != nil {

@@ -81,6 +81,34 @@ func fakeGithubProbeFuncDisallowsAllProbes(t *testing.T) ProbeURLFunc {
 	}
 }
 
+// TestProbeURL tests the production version of the ProbeURLFunc type.
+func TestProbeURL(t *testing.T) {
+	serverEndpointReached := false
+	testServer, testServerCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, []string{"2022-11-28"}, r.Header.Values("X-GitHub-Api-Version"))
+		require.Equal(t, []string{"pinniped-concierge/v1"}, r.Header.Values("User-Agent"))
+		require.Equal(t, []string{"application/vnd.github+json"}, r.Header.Values("Accept"))
+		serverEndpointReached = true
+	}), nil)
+
+	testServerCertPool := x509.NewCertPool()
+	testServerCertPool.AppendCertsFromPEM(testServerCA)
+	httpClient := phttp.Default(testServerCertPool)
+
+	// Happy path.
+	err := ProbeURL(context.Background(), httpClient, testServer.URL)
+	require.NoError(t, err)
+	require.True(t, serverEndpointReached)
+
+	// Invalid URL.
+	err = ProbeURL(context.Background(), httpClient, "https://invalid hostname")
+	require.EqualError(t, err, `parse "https://invalid hostname": invalid character " " in host name`)
+
+	// Did not trust server's CA, as an example of a failed connection.
+	err = ProbeURL(context.Background(), phttp.Default(nil), testServer.URL)
+	require.EqualError(t, err, fmt.Sprintf("Get %q: tls: failed to verify certificate: x509: certificate signed by unknown authority", testServer.URL))
+}
+
 func TestController(t *testing.T) {
 	require.Equal(t, 6, countExpectedConditions)
 

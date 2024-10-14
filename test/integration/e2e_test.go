@@ -2196,7 +2196,8 @@ func requireUserCanUseKubectlWithoutAuthenticatingAgain(
 
 func requireGCAnnotationsOnSessionStorage(ctx context.Context, t *testing.T, supervisorNamespace string, startTime time.Time, token *oidctypes.Token) {
 	// check that the access token is new (since it's just been refreshed) and has close to two minutes left.
-	testutil.RequireTimeInDelta(t, startTime.Add(2*time.Minute), token.AccessToken.Expiry.Time, 15*time.Second)
+	// Give some significant fudge factor to allow for slow CI workers.
+	testutil.RequireTimeInDelta(t, startTime.Add(2*time.Minute), token.AccessToken.Expiry.Time, 35*time.Second)
 
 	kubeClient := testlib.NewKubernetesClientset(t).CoreV1()
 

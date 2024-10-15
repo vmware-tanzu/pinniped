@@ -33,8 +33,8 @@ replace github.com/hashicorp/go-retryablehttp => github.com/hashicorp/go-retryab
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20241003230502-a4a8f7c660df
-	github.com/chromedp/chromedp v0.10.0
+	github.com/chromedp/cdproto v0.0.0-20241014181340-cb3a7a1d51d7
+	github.com/chromedp/chromedp v0.11.0
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/creack/pty v1.1.23

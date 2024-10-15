@@ -192,7 +192,7 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 				},
 			},
 			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
-			wantConditions: replaceSomeConditions(
+			wantConditions: replaceSomeConditions(t,
 				allSuccessfulJWTAuthenticatorConditions(true),
 				[]metav1.Condition{
 					{
@@ -242,7 +242,7 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 				},
 			},
 			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
-			wantConditions: replaceSomeConditions(
+			wantConditions: replaceSomeConditions(t,
 				allSuccessfulJWTAuthenticatorConditions(true),
 				[]metav1.Condition{
 					{
@@ -286,7 +286,7 @@ func TestConciergeJWTAuthenticatorStatus_Parallel(t *testing.T) {
 				},
 			},
 			wantPhase: authenticationv1alpha1.JWTAuthenticatorPhaseError,
-			wantConditions: replaceSomeConditions(
+			wantConditions: replaceSomeConditions(t,
 				allSuccessfulJWTAuthenticatorConditions(len(env.SupervisorUpstreamOIDC.CABundle) != 0),
 				[]metav1.Condition{
 					{

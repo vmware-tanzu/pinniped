@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -225,6 +225,7 @@ func TestManagerControllerSync(t *testing.T) {
 				// Validate the created cert using the CA, and also validate the cert's hostname
 				validCert := testutil.ValidateServerCertificate(t, actualCACert, actualCertChain)
 				validCert.RequireDNSName("pinniped-api." + installedInNamespace + ".svc")
+				validCert.RequireDNSName("pinniped-api." + installedInNamespace + ".svc.cluster.local")
 				validCert.RequireLifetime(time.Now(), time.Now().Add(certDuration), 6*time.Minute)
 				validCert.RequireMatchesPrivateKey(actualPrivateKey)
 			})

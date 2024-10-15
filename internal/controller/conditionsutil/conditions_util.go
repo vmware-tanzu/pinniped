@@ -15,11 +15,10 @@ import (
 
 // Some common reasons and messages shared by conditions of various resources.
 const (
-	ReasonSuccess            = "Success"
-	ReasonNotReady           = "NotReady"
-	ReasonUnableToValidate   = "UnableToValidate"
-	ReasonUnableToDialServer = "UnableToDialServer"
-	ReasonInvalidIssuerURL   = "InvalidIssuerURL"
+	ReasonSuccess          = "Success"
+	ReasonNotReady         = "NotReady"
+	ReasonUnableToValidate = "UnableToValidate"
+	ReasonInvalidIssuerURL = "InvalidIssuerURL"
 
 	MessageUnableToValidate = "unable to validate; see other conditions for details"
 )

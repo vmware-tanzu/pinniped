@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
@@ -50,7 +50,7 @@ kind: WebhookAuthenticator
 metadata:
   name: local-user-authenticator
 spec:
-  endpoint: https://local-user-authenticator.local-user-authenticator.svc/authenticate
+  endpoint: https://local-user-authenticator.local-user-authenticator.svc.cluster.local/authenticate
   tls:
     certificateAuthorityData: $LOCAL_USER_AUTHENTICATOR_CA
 EOF

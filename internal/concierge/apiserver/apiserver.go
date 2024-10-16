@@ -82,7 +82,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	for _, f := range []func() (schema.GroupVersionResource, rest.Storage){
 		func() (schema.GroupVersionResource, rest.Storage) {
 			tokenCredReqGVR := c.ExtraConfig.LoginConciergeGroupVersion.WithResource("tokencredentialrequests")
-			tokenCredStorage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer, tokenCredReqGVR.GroupResource())
+			tokenCredStorage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer, tokenCredReqGVR.GroupResource(), plog.New())
 			return tokenCredReqGVR, tokenCredStorage
 		},
 		func() (schema.GroupVersionResource, rest.Storage) {

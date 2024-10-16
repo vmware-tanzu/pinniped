@@ -27,6 +27,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
@@ -1757,7 +1758,15 @@ func TestCallbackEndpoint(t *testing.T) {
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration)
 
-			subject := NewHandler(test.idps.BuildFederationDomainIdentityProvidersListerFinder(), oauthHelper, happyStateCodec, happyCookieCodec, happyUpstreamRedirectURI)
+			subject := NewHandler(
+				test.idps.BuildFederationDomainIdentityProvidersListerFinder(),
+				oauthHelper,
+				happyStateCodec,
+				happyCookieCodec,
+				happyUpstreamRedirectURI,
+				plog.New(),
+			)
+
 			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
 			req := httptest.NewRequest(test.method, test.path, nil).WithContext(reqContext)
 			if test.csrfCookie != "" {

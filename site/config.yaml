@@ -8,7 +8,7 @@ params:
   slack_url: "https://go.pinniped.dev/community/slack"
   community_url: "https://go.pinniped.dev/community"
   latest_version: v0.33.0
-  latest_codegen_version: 1.30
+  latest_codegen_version: 1.31
 pygmentsCodefences: true
 pygmentsStyle: "pygments"
 markup:

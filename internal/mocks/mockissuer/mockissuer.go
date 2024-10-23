@@ -24,6 +24,7 @@ import (
 type MockClientCertIssuer struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientCertIssuerMockRecorder
+	isgomock struct{}
 }
 
 // MockClientCertIssuerMockRecorder is the mock recorder for MockClientCertIssuer.
@@ -44,9 +45,9 @@ func (m *MockClientCertIssuer) EXPECT() *MockClientCertIssuerMockRecorder {
 }
 
 // IssueClientCertPEM mocks base method.
-func (m *MockClientCertIssuer) IssueClientCertPEM(arg0 string, arg1 []string, arg2 time.Duration) ([]byte, []byte, error) {
+func (m *MockClientCertIssuer) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IssueClientCertPEM", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "IssueClientCertPEM", username, groups, ttl)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].([]byte)
 	ret2, _ := ret[2].(error)
@@ -54,9 +55,9 @@ func (m *MockClientCertIssuer) IssueClientCertPEM(arg0 string, arg1 []string, ar
 }
 
 // IssueClientCertPEM indicates an expected call of IssueClientCertPEM.
-func (mr *MockClientCertIssuerMockRecorder) IssueClientCertPEM(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockClientCertIssuerMockRecorder) IssueClientCertPEM(username, groups, ttl any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueClientCertPEM", reflect.TypeOf((*MockClientCertIssuer)(nil).IssueClientCertPEM), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueClientCertPEM", reflect.TypeOf((*MockClientCertIssuer)(nil).IssueClientCertPEM), username, groups, ttl)
 }
 
 // Name mocks base method.

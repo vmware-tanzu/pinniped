@@ -26,6 +26,7 @@ import (
 type MockTokenCredentialRequestAuthenticator struct {
 	ctrl     *gomock.Controller
 	recorder *MockTokenCredentialRequestAuthenticatorMockRecorder
+	isgomock struct{}
 }
 
 // MockTokenCredentialRequestAuthenticatorMockRecorder is the mock recorder for MockTokenCredentialRequestAuthenticator.
@@ -46,16 +47,16 @@ func (m *MockTokenCredentialRequestAuthenticator) EXPECT() *MockTokenCredentialR
 }
 
 // AuthenticateTokenCredentialRequest mocks base method.
-func (m *MockTokenCredentialRequestAuthenticator) AuthenticateTokenCredentialRequest(arg0 context.Context, arg1 *login.TokenCredentialRequest) (user.Info, error) {
+func (m *MockTokenCredentialRequestAuthenticator) AuthenticateTokenCredentialRequest(ctx context.Context, req *login.TokenCredentialRequest) (user.Info, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AuthenticateTokenCredentialRequest", arg0, arg1)
+	ret := m.ctrl.Call(m, "AuthenticateTokenCredentialRequest", ctx, req)
 	ret0, _ := ret[0].(user.Info)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AuthenticateTokenCredentialRequest indicates an expected call of AuthenticateTokenCredentialRequest.
-func (mr *MockTokenCredentialRequestAuthenticatorMockRecorder) AuthenticateTokenCredentialRequest(arg0, arg1 any) *gomock.Call {
+func (mr *MockTokenCredentialRequestAuthenticatorMockRecorder) AuthenticateTokenCredentialRequest(ctx, req any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AuthenticateTokenCredentialRequest", reflect.TypeOf((*MockTokenCredentialRequestAuthenticator)(nil).AuthenticateTokenCredentialRequest), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AuthenticateTokenCredentialRequest", reflect.TypeOf((*MockTokenCredentialRequestAuthenticator)(nil).AuthenticateTokenCredentialRequest), ctx, req)
 }

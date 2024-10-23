@@ -26,6 +26,7 @@ import (
 type MockSecretHelper struct {
 	ctrl     *gomock.Controller
 	recorder *MockSecretHelperMockRecorder
+	isgomock struct{}
 }
 
 // MockSecretHelperMockRecorder is the mock recorder for MockSecretHelper.

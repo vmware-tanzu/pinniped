@@ -24,6 +24,7 @@ import (
 type MockConn struct {
 	ctrl     *gomock.Controller
 	recorder *MockConnMockRecorder
+	isgomock struct{}
 }
 
 // MockConnMockRecorder is the mock recorder for MockConn.
@@ -44,17 +45,17 @@ func (m *MockConn) EXPECT() *MockConnMockRecorder {
 }
 
 // Bind mocks base method.
-func (m *MockConn) Bind(arg0, arg1 string) error {
+func (m *MockConn) Bind(username, password string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Bind", arg0, arg1)
+	ret := m.ctrl.Call(m, "Bind", username, password)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Bind indicates an expected call of Bind.
-func (mr *MockConnMockRecorder) Bind(arg0, arg1 any) *gomock.Call {
+func (mr *MockConnMockRecorder) Bind(username, password any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Bind", reflect.TypeOf((*MockConn)(nil).Bind), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Bind", reflect.TypeOf((*MockConn)(nil).Bind), username, password)
 }
 
 // Close mocks base method.
@@ -72,31 +73,31 @@ func (mr *MockConnMockRecorder) Close() *gomock.Call {
 }
 
 // Search mocks base method.
-func (m *MockConn) Search(arg0 *ldap.SearchRequest) (*ldap.SearchResult, error) {
+func (m *MockConn) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Search", arg0)
+	ret := m.ctrl.Call(m, "Search", searchRequest)
 	ret0, _ := ret[0].(*ldap.SearchResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Search indicates an expected call of Search.
-func (mr *MockConnMockRecorder) Search(arg0 any) *gomock.Call {
+func (mr *MockConnMockRecorder) Search(searchRequest any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockConn)(nil).Search), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockConn)(nil).Search), searchRequest)
 }
 
 // SearchWithPaging mocks base method.
-func (m *MockConn) SearchWithPaging(arg0 *ldap.SearchRequest, arg1 uint32) (*ldap.SearchResult, error) {
+func (m *MockConn) SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize uint32) (*ldap.SearchResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SearchWithPaging", arg0, arg1)
+	ret := m.ctrl.Call(m, "SearchWithPaging", searchRequest, pagingSize)
 	ret0, _ := ret[0].(*ldap.SearchResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SearchWithPaging indicates an expected call of SearchWithPaging.
-func (mr *MockConnMockRecorder) SearchWithPaging(arg0, arg1 any) *gomock.Call {
+func (mr *MockConnMockRecorder) SearchWithPaging(searchRequest, pagingSize any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchWithPaging", reflect.TypeOf((*MockConn)(nil).SearchWithPaging), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchWithPaging", reflect.TypeOf((*MockConn)(nil).SearchWithPaging), searchRequest, pagingSize)
 }

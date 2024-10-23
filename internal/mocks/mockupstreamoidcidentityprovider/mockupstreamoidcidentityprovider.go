@@ -31,6 +31,7 @@ import (
 type MockUpstreamOIDCIdentityProviderI struct {
 	ctrl     *gomock.Controller
 	recorder *MockUpstreamOIDCIdentityProviderIMockRecorder
+	isgomock struct{}
 }
 
 // MockUpstreamOIDCIdentityProviderIMockRecorder is the mock recorder for MockUpstreamOIDCIdentityProviderI.
@@ -65,18 +66,18 @@ func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) AllowsPasswordGrant() *
 }
 
 // ExchangeAuthcodeAndValidateTokens mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) ExchangeAuthcodeAndValidateTokens(arg0 context.Context, arg1 string, arg2 pkce.Code, arg3 nonce.Nonce, arg4 string) (*oidctypes.Token, error) {
+func (m *MockUpstreamOIDCIdentityProviderI) ExchangeAuthcodeAndValidateTokens(ctx context.Context, authcode string, pkceCodeVerifier pkce.Code, expectedIDTokenNonce nonce.Nonce, redirectURI string) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExchangeAuthcodeAndValidateTokens", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "ExchangeAuthcodeAndValidateTokens", ctx, authcode, pkceCodeVerifier, expectedIDTokenNonce, redirectURI)
 	ret0, _ := ret[0].(*oidctypes.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ExchangeAuthcodeAndValidateTokens indicates an expected call of ExchangeAuthcodeAndValidateTokens.
-func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ExchangeAuthcodeAndValidateTokens(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ExchangeAuthcodeAndValidateTokens(ctx, authcode, pkceCodeVerifier, expectedIDTokenNonce, redirectURI any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExchangeAuthcodeAndValidateTokens", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ExchangeAuthcodeAndValidateTokens), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExchangeAuthcodeAndValidateTokens", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ExchangeAuthcodeAndValidateTokens), ctx, authcode, pkceCodeVerifier, expectedIDTokenNonce, redirectURI)
 }
 
 // GetAdditionalAuthcodeParams mocks base method.
@@ -220,60 +221,60 @@ func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) HasUserInfoURL() *gomoc
 }
 
 // PasswordCredentialsGrantAndValidateTokens mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) PasswordCredentialsGrantAndValidateTokens(arg0 context.Context, arg1, arg2 string) (*oidctypes.Token, error) {
+func (m *MockUpstreamOIDCIdentityProviderI) PasswordCredentialsGrantAndValidateTokens(ctx context.Context, username, password string) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PasswordCredentialsGrantAndValidateTokens", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "PasswordCredentialsGrantAndValidateTokens", ctx, username, password)
 	ret0, _ := ret[0].(*oidctypes.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // PasswordCredentialsGrantAndValidateTokens indicates an expected call of PasswordCredentialsGrantAndValidateTokens.
-func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) PasswordCredentialsGrantAndValidateTokens(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) PasswordCredentialsGrantAndValidateTokens(ctx, username, password any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PasswordCredentialsGrantAndValidateTokens", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).PasswordCredentialsGrantAndValidateTokens), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PasswordCredentialsGrantAndValidateTokens", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).PasswordCredentialsGrantAndValidateTokens), ctx, username, password)
 }
 
 // PerformRefresh mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) PerformRefresh(arg0 context.Context, arg1 string) (*oauth2.Token, error) {
+func (m *MockUpstreamOIDCIdentityProviderI) PerformRefresh(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PerformRefresh", arg0, arg1)
+	ret := m.ctrl.Call(m, "PerformRefresh", ctx, refreshToken)
 	ret0, _ := ret[0].(*oauth2.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // PerformRefresh indicates an expected call of PerformRefresh.
-func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) PerformRefresh(arg0, arg1 any) *gomock.Call {
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) PerformRefresh(ctx, refreshToken any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PerformRefresh", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).PerformRefresh), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PerformRefresh", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).PerformRefresh), ctx, refreshToken)
 }
 
 // RevokeToken mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) RevokeToken(arg0 context.Context, arg1 string, arg2 upstreamprovider.RevocableTokenType) error {
+func (m *MockUpstreamOIDCIdentityProviderI) RevokeToken(ctx context.Context, token string, tokenType upstreamprovider.RevocableTokenType) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RevokeToken", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "RevokeToken", ctx, token, tokenType)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RevokeToken indicates an expected call of RevokeToken.
-func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) RevokeToken(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) RevokeToken(ctx, token, tokenType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeToken", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).RevokeToken), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeToken", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).RevokeToken), ctx, token, tokenType)
 }
 
 // ValidateTokenAndMergeWithUserInfo mocks base method.
-func (m *MockUpstreamOIDCIdentityProviderI) ValidateTokenAndMergeWithUserInfo(arg0 context.Context, arg1 *oauth2.Token, arg2 nonce.Nonce, arg3, arg4 bool) (*oidctypes.Token, error) {
+func (m *MockUpstreamOIDCIdentityProviderI) ValidateTokenAndMergeWithUserInfo(ctx context.Context, tok *oauth2.Token, expectedIDTokenNonce nonce.Nonce, requireIDToken, requireUserInfo bool) (*oidctypes.Token, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateTokenAndMergeWithUserInfo", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "ValidateTokenAndMergeWithUserInfo", ctx, tok, expectedIDTokenNonce, requireIDToken, requireUserInfo)
 	ret0, _ := ret[0].(*oidctypes.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ValidateTokenAndMergeWithUserInfo indicates an expected call of ValidateTokenAndMergeWithUserInfo.
-func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ValidateTokenAndMergeWithUserInfo(arg0, arg1, arg2, arg3, arg4 any) *gomock.Call {
+func (mr *MockUpstreamOIDCIdentityProviderIMockRecorder) ValidateTokenAndMergeWithUserInfo(ctx, tok, expectedIDTokenNonce, requireIDToken, requireUserInfo any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateTokenAndMergeWithUserInfo", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ValidateTokenAndMergeWithUserInfo), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateTokenAndMergeWithUserInfo", reflect.TypeOf((*MockUpstreamOIDCIdentityProviderI)(nil).ValidateTokenAndMergeWithUserInfo), ctx, tok, expectedIDTokenNonce, requireIDToken, requireUserInfo)
 }

@@ -25,6 +25,7 @@ import (
 type MockDynamicCertPrivate struct {
 	ctrl     *gomock.Controller
 	recorder *MockDynamicCertPrivateMockRecorder
+	isgomock struct{}
 }
 
 // MockDynamicCertPrivateMockRecorder is the mock recorder for MockDynamicCertPrivate.
@@ -45,15 +46,15 @@ func (m *MockDynamicCertPrivate) EXPECT() *MockDynamicCertPrivateMockRecorder {
 }
 
 // AddListener mocks base method.
-func (m *MockDynamicCertPrivate) AddListener(arg0 dynamiccertificates.Listener) {
+func (m *MockDynamicCertPrivate) AddListener(listener dynamiccertificates.Listener) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddListener", arg0)
+	m.ctrl.Call(m, "AddListener", listener)
 }
 
 // AddListener indicates an expected call of AddListener.
-func (mr *MockDynamicCertPrivateMockRecorder) AddListener(arg0 any) *gomock.Call {
+func (mr *MockDynamicCertPrivateMockRecorder) AddListener(listener any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddListener", reflect.TypeOf((*MockDynamicCertPrivate)(nil).AddListener), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddListener", reflect.TypeOf((*MockDynamicCertPrivate)(nil).AddListener), listener)
 }
 
 // CurrentCertKeyContent mocks base method.
@@ -86,43 +87,43 @@ func (mr *MockDynamicCertPrivateMockRecorder) Name() *gomock.Call {
 }
 
 // Run mocks base method.
-func (m *MockDynamicCertPrivate) Run(arg0 context.Context, arg1 int) {
+func (m *MockDynamicCertPrivate) Run(ctx context.Context, workers int) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Run", arg0, arg1)
+	m.ctrl.Call(m, "Run", ctx, workers)
 }
 
 // Run indicates an expected call of Run.
-func (mr *MockDynamicCertPrivateMockRecorder) Run(arg0, arg1 any) *gomock.Call {
+func (mr *MockDynamicCertPrivateMockRecorder) Run(ctx, workers any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockDynamicCertPrivate)(nil).Run), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockDynamicCertPrivate)(nil).Run), ctx, workers)
 }
 
 // RunOnce mocks base method.
-func (m *MockDynamicCertPrivate) RunOnce(arg0 context.Context) error {
+func (m *MockDynamicCertPrivate) RunOnce(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RunOnce", arg0)
+	ret := m.ctrl.Call(m, "RunOnce", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RunOnce indicates an expected call of RunOnce.
-func (mr *MockDynamicCertPrivateMockRecorder) RunOnce(arg0 any) *gomock.Call {
+func (mr *MockDynamicCertPrivateMockRecorder) RunOnce(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunOnce", reflect.TypeOf((*MockDynamicCertPrivate)(nil).RunOnce), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunOnce", reflect.TypeOf((*MockDynamicCertPrivate)(nil).RunOnce), ctx)
 }
 
 // SetCertKeyContent mocks base method.
-func (m *MockDynamicCertPrivate) SetCertKeyContent(arg0, arg1 []byte) error {
+func (m *MockDynamicCertPrivate) SetCertKeyContent(certPEM, keyPEM []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetCertKeyContent", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetCertKeyContent", certPEM, keyPEM)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SetCertKeyContent indicates an expected call of SetCertKeyContent.
-func (mr *MockDynamicCertPrivateMockRecorder) SetCertKeyContent(arg0, arg1 any) *gomock.Call {
+func (mr *MockDynamicCertPrivateMockRecorder) SetCertKeyContent(certPEM, keyPEM any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCertKeyContent", reflect.TypeOf((*MockDynamicCertPrivate)(nil).SetCertKeyContent), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCertKeyContent", reflect.TypeOf((*MockDynamicCertPrivate)(nil).SetCertKeyContent), certPEM, keyPEM)
 }
 
 // UnsetCertKeyContent mocks base method.

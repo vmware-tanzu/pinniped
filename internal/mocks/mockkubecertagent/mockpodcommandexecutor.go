@@ -24,6 +24,7 @@ import (
 type MockPodCommandExecutor struct {
 	ctrl     *gomock.Controller
 	recorder *MockPodCommandExecutorMockRecorder
+	isgomock struct{}
 }
 
 // MockPodCommandExecutorMockRecorder is the mock recorder for MockPodCommandExecutor.
@@ -44,10 +45,10 @@ func (m *MockPodCommandExecutor) EXPECT() *MockPodCommandExecutorMockRecorder {
 }
 
 // Exec mocks base method.
-func (m *MockPodCommandExecutor) Exec(arg0 context.Context, arg1, arg2, arg3 string, arg4 ...string) (string, error) {
+func (m *MockPodCommandExecutor) Exec(ctx context.Context, podNamespace, podName, containerName string, commandAndArgs ...string) (string, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2, arg3}
-	for _, a := range arg4 {
+	varargs := []any{ctx, podNamespace, podName, containerName}
+	for _, a := range commandAndArgs {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Exec", varargs...)
@@ -57,8 +58,8 @@ func (m *MockPodCommandExecutor) Exec(arg0 context.Context, arg1, arg2, arg3 str
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockPodCommandExecutorMockRecorder) Exec(arg0, arg1, arg2, arg3 any, arg4 ...any) *gomock.Call {
+func (mr *MockPodCommandExecutorMockRecorder) Exec(ctx, podNamespace, podName, containerName any, commandAndArgs ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2, arg3}, arg4...)
+	varargs := append([]any{ctx, podNamespace, podName, containerName}, commandAndArgs...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockPodCommandExecutor)(nil).Exec), varargs...)
 }

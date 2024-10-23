@@ -25,6 +25,7 @@ import (
 type MockValue struct {
 	ctrl     *gomock.Controller
 	recorder *MockValueMockRecorder
+	isgomock struct{}
 }
 
 // MockValueMockRecorder is the mock recorder for MockValue.
@@ -45,9 +46,9 @@ func (m *MockValue) EXPECT() *MockValueMockRecorder {
 }
 
 // AuthenticateToken mocks base method.
-func (m *MockValue) AuthenticateToken(arg0 context.Context, arg1 string) (*authenticator.Response, bool, error) {
+func (m *MockValue) AuthenticateToken(ctx context.Context, token string) (*authenticator.Response, bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AuthenticateToken", arg0, arg1)
+	ret := m.ctrl.Call(m, "AuthenticateToken", ctx, token)
 	ret0, _ := ret[0].(*authenticator.Response)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
@@ -55,9 +56,9 @@ func (m *MockValue) AuthenticateToken(arg0 context.Context, arg1 string) (*authe
 }
 
 // AuthenticateToken indicates an expected call of AuthenticateToken.
-func (mr *MockValueMockRecorder) AuthenticateToken(arg0, arg1 any) *gomock.Call {
+func (mr *MockValueMockRecorder) AuthenticateToken(ctx, token any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AuthenticateToken", reflect.TypeOf((*MockValue)(nil).AuthenticateToken), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AuthenticateToken", reflect.TypeOf((*MockValue)(nil).AuthenticateToken), ctx, token)
 }
 
 // Close mocks base method.

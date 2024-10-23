@@ -24,6 +24,7 @@ import (
 type MockKeySet struct {
 	ctrl     *gomock.Controller
 	recorder *MockKeySetMockRecorder
+	isgomock struct{}
 }
 
 // MockKeySetMockRecorder is the mock recorder for MockKeySet.
@@ -44,16 +45,16 @@ func (m *MockKeySet) EXPECT() *MockKeySetMockRecorder {
 }
 
 // VerifySignature mocks base method.
-func (m *MockKeySet) VerifySignature(arg0 context.Context, arg1 string) ([]byte, error) {
+func (m *MockKeySet) VerifySignature(ctx context.Context, jwt string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VerifySignature", arg0, arg1)
+	ret := m.ctrl.Call(m, "VerifySignature", ctx, jwt)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // VerifySignature indicates an expected call of VerifySignature.
-func (mr *MockKeySetMockRecorder) VerifySignature(arg0, arg1 any) *gomock.Call {
+func (mr *MockKeySetMockRecorder) VerifySignature(ctx, jwt any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifySignature", reflect.TypeOf((*MockKeySet)(nil).VerifySignature), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifySignature", reflect.TypeOf((*MockKeySet)(nil).VerifySignature), ctx, jwt)
 }

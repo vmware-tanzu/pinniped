@@ -27,6 +27,7 @@ import (
 type MockOIDCClientOptions struct {
 	ctrl     *gomock.Controller
 	recorder *MockOIDCClientOptionsMockRecorder
+	isgomock struct{}
 }
 
 // MockOIDCClientOptionsMockRecorder is the mock recorder for MockOIDCClientOptions.
@@ -47,115 +48,115 @@ func (m *MockOIDCClientOptions) EXPECT() *MockOIDCClientOptionsMockRecorder {
 }
 
 // WithClient mocks base method.
-func (m *MockOIDCClientOptions) WithClient(arg0 *http.Client) oidcclient.Option {
+func (m *MockOIDCClientOptions) WithClient(httpClient *http.Client) oidcclient.Option {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithClient", arg0)
+	ret := m.ctrl.Call(m, "WithClient", httpClient)
 	ret0, _ := ret[0].(oidcclient.Option)
 	return ret0
 }
 
 // WithClient indicates an expected call of WithClient.
-func (mr *MockOIDCClientOptionsMockRecorder) WithClient(arg0 any) *gomock.Call {
+func (mr *MockOIDCClientOptionsMockRecorder) WithClient(httpClient any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithClient", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithClient), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithClient", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithClient), httpClient)
 }
 
 // WithContext mocks base method.
-func (m *MockOIDCClientOptions) WithContext(arg0 context.Context) oidcclient.Option {
+func (m *MockOIDCClientOptions) WithContext(ctx context.Context) oidcclient.Option {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithContext", arg0)
+	ret := m.ctrl.Call(m, "WithContext", ctx)
 	ret0, _ := ret[0].(oidcclient.Option)
 	return ret0
 }
 
 // WithContext indicates an expected call of WithContext.
-func (mr *MockOIDCClientOptionsMockRecorder) WithContext(arg0 any) *gomock.Call {
+func (mr *MockOIDCClientOptionsMockRecorder) WithContext(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithContext", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithContext), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithContext", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithContext), ctx)
 }
 
 // WithListenPort mocks base method.
-func (m *MockOIDCClientOptions) WithListenPort(arg0 uint16) oidcclient.Option {
+func (m *MockOIDCClientOptions) WithListenPort(port uint16) oidcclient.Option {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithListenPort", arg0)
+	ret := m.ctrl.Call(m, "WithListenPort", port)
 	ret0, _ := ret[0].(oidcclient.Option)
 	return ret0
 }
 
 // WithListenPort indicates an expected call of WithListenPort.
-func (mr *MockOIDCClientOptionsMockRecorder) WithListenPort(arg0 any) *gomock.Call {
+func (mr *MockOIDCClientOptionsMockRecorder) WithListenPort(port any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithListenPort", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithListenPort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithListenPort", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithListenPort), port)
 }
 
 // WithLoginFlow mocks base method.
-func (m *MockOIDCClientOptions) WithLoginFlow(arg0 v1alpha1.IDPFlow, arg1 string) oidcclient.Option {
+func (m *MockOIDCClientOptions) WithLoginFlow(loginFlow v1alpha1.IDPFlow, flowSource string) oidcclient.Option {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithLoginFlow", arg0, arg1)
+	ret := m.ctrl.Call(m, "WithLoginFlow", loginFlow, flowSource)
 	ret0, _ := ret[0].(oidcclient.Option)
 	return ret0
 }
 
 // WithLoginFlow indicates an expected call of WithLoginFlow.
-func (mr *MockOIDCClientOptionsMockRecorder) WithLoginFlow(arg0, arg1 any) *gomock.Call {
+func (mr *MockOIDCClientOptionsMockRecorder) WithLoginFlow(loginFlow, flowSource any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithLoginFlow", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithLoginFlow), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithLoginFlow", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithLoginFlow), loginFlow, flowSource)
 }
 
 // WithLoginLogger mocks base method.
-func (m *MockOIDCClientOptions) WithLoginLogger(arg0 oidcclient.Logger) oidcclient.Option {
+func (m *MockOIDCClientOptions) WithLoginLogger(logger oidcclient.Logger) oidcclient.Option {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithLoginLogger", arg0)
+	ret := m.ctrl.Call(m, "WithLoginLogger", logger)
 	ret0, _ := ret[0].(oidcclient.Option)
 	return ret0
 }
 
 // WithLoginLogger indicates an expected call of WithLoginLogger.
-func (mr *MockOIDCClientOptionsMockRecorder) WithLoginLogger(arg0 any) *gomock.Call {
+func (mr *MockOIDCClientOptionsMockRecorder) WithLoginLogger(logger any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithLoginLogger", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithLoginLogger), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithLoginLogger", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithLoginLogger), logger)
 }
 
 // WithRequestAudience mocks base method.
-func (m *MockOIDCClientOptions) WithRequestAudience(arg0 string) oidcclient.Option {
+func (m *MockOIDCClientOptions) WithRequestAudience(audience string) oidcclient.Option {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithRequestAudience", arg0)
+	ret := m.ctrl.Call(m, "WithRequestAudience", audience)
 	ret0, _ := ret[0].(oidcclient.Option)
 	return ret0
 }
 
 // WithRequestAudience indicates an expected call of WithRequestAudience.
-func (mr *MockOIDCClientOptionsMockRecorder) WithRequestAudience(arg0 any) *gomock.Call {
+func (mr *MockOIDCClientOptionsMockRecorder) WithRequestAudience(audience any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithRequestAudience", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithRequestAudience), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithRequestAudience", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithRequestAudience), audience)
 }
 
 // WithScopes mocks base method.
-func (m *MockOIDCClientOptions) WithScopes(arg0 []string) oidcclient.Option {
+func (m *MockOIDCClientOptions) WithScopes(scopes []string) oidcclient.Option {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithScopes", arg0)
+	ret := m.ctrl.Call(m, "WithScopes", scopes)
 	ret0, _ := ret[0].(oidcclient.Option)
 	return ret0
 }
 
 // WithScopes indicates an expected call of WithScopes.
-func (mr *MockOIDCClientOptionsMockRecorder) WithScopes(arg0 any) *gomock.Call {
+func (mr *MockOIDCClientOptionsMockRecorder) WithScopes(scopes any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithScopes", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithScopes), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithScopes", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithScopes), scopes)
 }
 
 // WithSessionCache mocks base method.
-func (m *MockOIDCClientOptions) WithSessionCache(arg0 oidcclient.SessionCache) oidcclient.Option {
+func (m *MockOIDCClientOptions) WithSessionCache(cache oidcclient.SessionCache) oidcclient.Option {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithSessionCache", arg0)
+	ret := m.ctrl.Call(m, "WithSessionCache", cache)
 	ret0, _ := ret[0].(oidcclient.Option)
 	return ret0
 }
 
 // WithSessionCache indicates an expected call of WithSessionCache.
-func (mr *MockOIDCClientOptionsMockRecorder) WithSessionCache(arg0 any) *gomock.Call {
+func (mr *MockOIDCClientOptionsMockRecorder) WithSessionCache(cache any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithSessionCache", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithSessionCache), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithSessionCache", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithSessionCache), cache)
 }
 
 // WithSkipBrowserOpen mocks base method.
@@ -201,15 +202,15 @@ func (mr *MockOIDCClientOptionsMockRecorder) WithSkipPrintLoginURL() *gomock.Cal
 }
 
 // WithUpstreamIdentityProvider mocks base method.
-func (m *MockOIDCClientOptions) WithUpstreamIdentityProvider(arg0, arg1 string) oidcclient.Option {
+func (m *MockOIDCClientOptions) WithUpstreamIdentityProvider(upstreamName, upstreamType string) oidcclient.Option {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithUpstreamIdentityProvider", arg0, arg1)
+	ret := m.ctrl.Call(m, "WithUpstreamIdentityProvider", upstreamName, upstreamType)
 	ret0, _ := ret[0].(oidcclient.Option)
 	return ret0
 }
 
 // WithUpstreamIdentityProvider indicates an expected call of WithUpstreamIdentityProvider.
-func (mr *MockOIDCClientOptionsMockRecorder) WithUpstreamIdentityProvider(arg0, arg1 any) *gomock.Call {
+func (mr *MockOIDCClientOptionsMockRecorder) WithUpstreamIdentityProvider(upstreamName, upstreamType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithUpstreamIdentityProvider", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithUpstreamIdentityProvider), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithUpstreamIdentityProvider", reflect.TypeOf((*MockOIDCClientOptions)(nil).WithUpstreamIdentityProvider), upstreamName, upstreamType)
 }

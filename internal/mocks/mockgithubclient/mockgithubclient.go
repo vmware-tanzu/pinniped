@@ -26,6 +26,7 @@ import (
 type MockGitHubInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockGitHubInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockGitHubInterfaceMockRecorder is the mock recorder for MockGitHubInterface.
@@ -46,46 +47,46 @@ func (m *MockGitHubInterface) EXPECT() *MockGitHubInterfaceMockRecorder {
 }
 
 // GetOrgMembership mocks base method.
-func (m *MockGitHubInterface) GetOrgMembership(arg0 context.Context) ([]string, error) {
+func (m *MockGitHubInterface) GetOrgMembership(ctx context.Context) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOrgMembership", arg0)
+	ret := m.ctrl.Call(m, "GetOrgMembership", ctx)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetOrgMembership indicates an expected call of GetOrgMembership.
-func (mr *MockGitHubInterfaceMockRecorder) GetOrgMembership(arg0 any) *gomock.Call {
+func (mr *MockGitHubInterfaceMockRecorder) GetOrgMembership(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgMembership", reflect.TypeOf((*MockGitHubInterface)(nil).GetOrgMembership), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrgMembership", reflect.TypeOf((*MockGitHubInterface)(nil).GetOrgMembership), ctx)
 }
 
 // GetTeamMembership mocks base method.
-func (m *MockGitHubInterface) GetTeamMembership(arg0 context.Context, arg1 *setutil.CaseInsensitiveSet) ([]githubclient.TeamInfo, error) {
+func (m *MockGitHubInterface) GetTeamMembership(ctx context.Context, allowedOrganizations *setutil.CaseInsensitiveSet) ([]githubclient.TeamInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTeamMembership", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetTeamMembership", ctx, allowedOrganizations)
 	ret0, _ := ret[0].([]githubclient.TeamInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetTeamMembership indicates an expected call of GetTeamMembership.
-func (mr *MockGitHubInterfaceMockRecorder) GetTeamMembership(arg0, arg1 any) *gomock.Call {
+func (mr *MockGitHubInterfaceMockRecorder) GetTeamMembership(ctx, allowedOrganizations any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTeamMembership", reflect.TypeOf((*MockGitHubInterface)(nil).GetTeamMembership), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTeamMembership", reflect.TypeOf((*MockGitHubInterface)(nil).GetTeamMembership), ctx, allowedOrganizations)
 }
 
 // GetUserInfo mocks base method.
-func (m *MockGitHubInterface) GetUserInfo(arg0 context.Context) (*githubclient.UserInfo, error) {
+func (m *MockGitHubInterface) GetUserInfo(ctx context.Context) (*githubclient.UserInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUserInfo", arg0)
+	ret := m.ctrl.Call(m, "GetUserInfo", ctx)
 	ret0, _ := ret[0].(*githubclient.UserInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetUserInfo indicates an expected call of GetUserInfo.
-func (mr *MockGitHubInterfaceMockRecorder) GetUserInfo(arg0 any) *gomock.Call {
+func (mr *MockGitHubInterfaceMockRecorder) GetUserInfo(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserInfo", reflect.TypeOf((*MockGitHubInterface)(nil).GetUserInfo), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserInfo", reflect.TypeOf((*MockGitHubInterface)(nil).GetUserInfo), ctx)
 }

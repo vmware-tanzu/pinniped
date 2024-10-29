@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -3293,14 +3292,10 @@ func TestGetKubeconfig(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			var expectedLogs string
 			if tt.wantLogs != nil {
-				temp := tt.wantLogs(string(testServerCA), testServer.URL)
-				if len(temp) > 0 {
-					expectedLogs = strings.Join(tt.wantLogs(string(testServerCA), testServer.URL), "\n") + "\n"
-				}
+				wantLogs := tt.wantLogs(string(testServerCA), testServer.URL)
+				testutil.RequireLogLines(t, wantLogs, &log)
 			}
-			require.Equal(t, expectedLogs, log.String())
 
 			expectedStdout := ""
 			if tt.wantStdout != nil {

@@ -1,0 +1,18 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+outputs:
+  - name: deploy-gke-cluster-output
+params:
+  KUBE_VERSION:
+  CLUSTER_ZONE:
+  GCP_PROJECT:
+  GCP_SERVICE_ACCOUNT:
+  GCP_JSON_KEY:
+  GKE_CHANNEL:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/deploy-gke-cluster/task.sh

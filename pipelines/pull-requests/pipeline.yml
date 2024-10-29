@@ -1,0 +1,1914 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+display:
+
+  background_image: https://upload.wikimedia.org/wikipedia/commons/d/d0/Pinniped_underwater.jpg
+
+meta:
+
+  # Save some work by skipping the full download in the implicit "get" after each of these "put" operations,
+  # as mentioned in the docs here: https://github.com/telia-oss/github-pr-resource#get
+  pr-status-handlers:
+    on_success: &pr-status-on-success
+      put: update-pull-request-status-success
+      resource: pinniped-pr
+      get_params: { skip_download: true }
+      timeout: 5m
+      inputs: [ pinniped-pr ]
+      params: &pr-status-on-success-params
+        path: pinniped-pr
+        status: success
+    on_failure: &pr-status-on-failure
+      put: update-pull-request-status-failed
+      resource: pinniped-pr
+      get_params: { skip_download: true }
+      timeout: 5m
+      inputs: [ pinniped-pr ]
+      params: &pr-status-on-failure-params
+        path: pinniped-pr
+        status: failure
+    on_error: &pr-status-on-error
+      put: update-pull-request-status-error
+      resource: pinniped-pr
+      get_params: { skip_download: true }
+      timeout: 5m
+      inputs: [ pinniped-pr ]
+      params: &pr-status-on-error-params
+        path: pinniped-pr
+        status: error
+    on_abort: &pr-status-on-abort
+      put: update-pull-request-status-aborted
+      resource: pinniped-pr
+      get_params: { skip_download: true }
+      timeout: 5m
+      inputs: [ pinniped-pr ]
+      params: &pr-status-on-abort-params
+        path: pinniped-pr
+        status: error
+
+    # on_pending isn't a real handler, but we can reuse this *pr-status-on-pending block
+    # as a task at the beginning of each job.
+    on_pending: &pr-status-on-pending
+      put: update-pull-request-status-pending
+      resource: pinniped-pr
+      get_params: { skip_download: true }
+      timeout: 5m
+      inputs: [ pinniped-pr ]
+      params: &pr-status-on-pending-params
+        path: pinniped-pr
+        status: pending
+
+  pinniped-pr-input-mapping: &pinniped-pr-input-mapping
+    input_mapping:
+      pinniped: pinniped-pr
+
+  # GKE account info and which zone the clusters should be created in and deleted from.
+  gke_account_params: &gke_account_params
+    CLUSTER_ZONE: us-central1-c
+    GCP_PROJECT: ((gcp-project-name))
+    GCP_SERVICE_ACCOUNT: ((gke-test-pool-manager-username))
+    GCP_JSON_KEY: ((gke-test-pool-manager-json-key))
+
+  # GCP account info and which zone the workers should be created in and deleted from.
+  gcp_account_params: &gcp_account_params
+    INSTANCE_ZONE: us-central1-b # which zone the kind worker VMs should be created in and deleted from
+    GCP_ZONE: us-central1-b
+    GCP_PROJECT: ((gcp-project-name))
+    GCP_USERNAME: ((gcp-instance-admin-username))
+    GCP_JSON_KEY: ((gcp-instance-admin-json-key))
+
+  cluster_diagnostics_task: &cluster_diagnostics_task
+    file: pinniped-ci/pipelines/shared-tasks/export-cluster-diagnostics/task.yml
+    image: integration-test-runner-image
+    timeout: 15m
+    params:
+      GCS_BUCKET: pinniped-ci-archive
+      GCP_PROJECT: ((gcp-project-name))
+      GCP_USERNAME: ((gcp-cluster-diagnostic-uploader-username))
+      GCP_JSON_KEY: ((gcp-cluster-diagnostic-uploaded-json-key))
+
+  # Decides which specific patch versions of k8s we would like to deploy when creating kind cluster workers.
+  # It should be safe to update the patch version numbers here whenever new versions come out.
+  # As the old workers get recycled, they will be replaced with new workers which use the patch
+  # version specified here. The latest available versions can be found here:
+  # https://hub.docker.com/r/kindest/node/tags
+  # Note that the available versions of kind node images lag behind the available versions of Kubernetes itself,
+  # so always check the tags using the above link.
+  kube_version_v1-21-x: &kube_version_v1-21-x
+    KUBE_VERSION: v1.21.14
+  kube_version_v1-31-x: &kube_version_v1-31-x
+    KUBE_VERSION: v1.31.1
+  kube_version_k8s-main: &kube_version_k8s-main
+    KUBE_VERSION: "k8s-main"
+    KIND_NODE_IMAGE: "ghcr.io/pinniped-ci-bot/kind-node-image:latest"
+  # Whenever we add a new Kubernetes version for kind clusters, please remember update these
+  # two aliases to reference the oldest and latest Kubernetes versions currently in use.
+  oldest_kind_kube_version: &oldest_kind_kube_version
+    <<: *kube_version_v1-21-x
+  latest_kind_kube_version: &latest_kind_kube_version
+    <<: *kube_version_v1-31-x
+
+  okta_integration_env_vars: &okta_integration_env_vars
+    OKTA_CLI_CALLBACK: ((okta-cli-callback))
+    OKTA_CLI_CLIENT_ID: ((okta-cli-client-id))
+    OKTA_ADDITIONAL_SCOPES: ((okta-additional-scopes))
+    OKTA_USERNAME_CLAIM: ((okta-username-claim))
+    OKTA_GROUPS_CLAIM: ((okta-groups-claim))
+    OKTA_ISSUER: ((okta-issuer))
+    OKTA_PASSWORD: ((okta-password))
+    OKTA_SUPERVISOR_CLIENT_ID: ((okta-supervisor-client-id))
+    OKTA_SUPERVISOR_CLIENT_SECRET: ((okta-supervisor-client-secret))
+    OKTA_USERNAME: ((okta-username))
+    OKTA_GROUPS: ((okta-groups))
+
+  jumpcloud_integration_env_vars: &jumpcloud_integration_env_vars
+    JUMPCLOUD_LDAP_HOST: ((jumpcloud-ldap-host))
+    JUMPCLOUD_LDAP_STARTTLS_ONLY_HOST: ((jumpcloud-ldap-start-tls-only-host))
+    JUMPCLOUD_LDAP_BIND_ACCOUNT_USERNAME: ((jumpcloud-ldap-bind-account-username))
+    JUMPCLOUD_LDAP_BIND_ACCOUNT_PASSWORD: ((jumpcloud-ldap-bind-account-password))
+    JUMPCLOUD_LDAP_USERS_SEARCH_BASE: ((jumpcloud-ldap-users-search-base))
+    JUMPCLOUD_LDAP_GROUPS_SEARCH_BASE: ((jumpcloud-ldap-groups-search-base))
+    JUMPCLOUD_LDAP_USER_DN: ((jumpcloud-ldap-user-dn))
+    JUMPCLOUD_LDAP_USER_CN: ((jumpcloud-ldap-user-cn))
+    JUMPCLOUD_LDAP_USER_PASSWORD: ((jumpcloud-ldap-user-password))
+    JUMPCLOUD_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME: ((jumpcloud-ldap-user-unique-id-attribute-name))
+    JUMPCLOUD_LDAP_USER_UNIQUE_ID_ATTRIBUTE_VALUE: ((jumpcloud-ldap-user-unique-id-attribute-value))
+    JUMPCLOUD_LDAP_USER_EMAIL_ATTRIBUTE_NAME: ((jumpcloud-ldap-user-email-attribute-name))
+    JUMPCLOUD_LDAP_USER_EMAIL_ATTRIBUTE_VALUE: ((jumpcloud-ldap-user-email-attribute-value))
+    JUMPCLOUD_LDAP_EXPECTED_DIRECT_GROUPS_DN: ((jumpcloud-ldap-expected-direct-groups-dn))
+    JUMPCLOUD_LDAP_EXPECTED_DIRECT_GROUPS_CN: ((jumpcloud-ldap-expected-direct-groups-cn))
+    JUMPCLOUD_LDAP_EXPECTED_DIRECT_POSIX_GROUPS_CN: ((jumpcloud-ldap-expected-direct-posix-groups-cn))
+
+  active_directory_integration_env_vars: &active_directory_integration_env_vars
+    TEST_ACTIVE_DIRECTORY: "yes"
+    AWS_AD_HOST: ((aws-ad-host))
+    AWS_AD_DOMAIN: ((aws-ad-domain))
+    AWS_AD_BIND_ACCOUNT_USERNAME: ((aws-ad-bind-account-username))
+    AWS_AD_BIND_ACCOUNT_PASSWORD: ((aws-ad-bind-account-password))
+    AWS_AD_USER_USER_PRINCIPAL_NAME: ((aws-ad-user-userprincipalname))
+    AWS_AD_USER_PASSWORD: ((aws-ad-user-password))
+    AWS_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME: ((aws-ad-user-unique-id-attribute-name))
+    AWS_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE: ((aws-ad-user-unique-id-attribute-value))
+    AWS_AD_USER_EXPECTED_GROUPS_DN: ((aws-ad-expected-direct-groups-dn))
+    AWS_AD_USER_EXPECTED_GROUPS_CN: ((aws-ad-expected-direct-groups-cn))
+    AWS_AD_USER_EXPECTED_GROUPS_SAMACCOUNTNAME: ((aws-ad-expected-direct-and-nested-groups-samaccountnames))
+    AWS_AD_USER_EXPECTED_GROUPS_SAMACCOUNTNAME_DOMAINNAMES: ((aws-ad-expected-direct-and-nested-groups-samaccountname-domainnames))
+    AWS_AD_LDAPS_CA_BUNDLE: ((aws-ad-ca-data))
+    AWS_AD_DEACTIVATED_USER_SAMACCOUNTNAME: ((aws-ad-deactivated-user-samaccountname))
+    AWS_AD_DEACTIVATED_USER_PASSWORD: ((aws-ad-deactivated-user-password))
+    AWS_AD_USER_EMAIL_ATTRIBUTE_VALUE: ((aws-ad-user-email-attribute-value))
+    AWS_AD_DEFAULTNAMINGCONTEXT_DN: ((aws-ad-defaultnamingcontext))
+    AWS_AD_USERS_DN: ((aws-ad-users-dn))
+
+  github_integration_env_vars: &github_integration_env_vars
+    PINNIPED_TEST_GITHUB_APP_CLIENT_ID: ((github-app-client-id))
+    PINNIPED_TEST_GITHUB_APP_CLIENT_SECRET: ((github-app-client-secret))
+    PINNIPED_TEST_GITHUB_OAUTH_APP_CLIENT_ID: ((github-oauth-app-client-id))
+    PINNIPED_TEST_GITHUB_OAUTH_APP_CLIENT_SECRET: ((github-oauth-app-client-secret))
+    PINNIPED_TEST_GITHUB_OAUTH_APP_ALLOWED_CALLBACK_URL: ((github-oauth-app-allowed-callback-url))
+    PINNIPED_TEST_GITHUB_USER_USERNAME: ((github-username))
+    PINNIPED_TEST_GITHUB_USER_PASSWORD: ((github-password))
+    PINNIPED_TEST_GITHUB_USER_OTP_SECRET: ((github-user-otp-secret))
+    PINNIPED_TEST_GITHUB_USERID: ((github-userid))
+    PINNIPED_TEST_GITHUB_ORG: ((github-org))
+    PINNIPED_TEST_GITHUB_EXPECTED_TEAM_NAMES: ((github-expected-team-names))
+    PINNIPED_TEST_GITHUB_EXPECTED_TEAM_SLUGS: ((github-expected-team-slugs))
+
+resource_types:
+
+  # Use a fork of github-pr-resource that has "trusted_orgs" and "trusted_users" parametesr.
+  - name: pull-request
+    type: registry-image
+    source:
+      repository: ((ci-ghcr-registry))/github-pr-resource
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+      tag: latest
+
+resources:
+
+  - name: pinniped-pr
+    type: pull-request
+    icon: source-pull
+    check_every: 10m
+    webhook_token: ((github-webhook-token))
+    source:
+      repository: vmware-tanzu/pinniped
+      access_token: ((ci-bot-access-token-with-repo-status-permission))
+      disable_forks: false
+      base_branch: main
+      disable_ci_skip: true # ignore "[skip ci]" in commit message and PR title
+      required_review_approvals: 1
+      trusted_orgs: # skip required_review_approvals for users with public membership in at least one of these orgs
+        - vmware
+        - vmware-tanzu
+      trusted_users: # skip required_review_approvals for @dependabot so those automated PRs get tested automatically
+        - dependabot
+
+  - name: pinniped-ci
+    type: git
+    icon: github
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+
+  - name: ci-build-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/test-ci-build
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: ci-fips-build-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/test-ci-fips-build
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: ci-test-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/test-ci-test-binaries
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: ci-fips-test-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/test-ci-fips-test-binaries
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: integration-test-runner-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/integration-test-runner
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: kind-release
+    type: github-release
+    source:
+      access_token: ((ci-bot-access-token-with-read-user-permission)) # needed to avoid rate limits on GitHub API requests
+      owner: kubernetes-sigs
+      repository: kind
+      pre_release: true
+
+  - name: gcloud-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: google/cloud-sdk
+      tag: slim
+
+  - name: k8s-app-deployer-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/k8s-app-deployer
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: opensource-lint-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: golangci/golangci-lint
+
+  - name: code-coverage-uploader-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/code-coverage-uploader
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: k8s-code-generator-1.25-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.25
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: k8s-code-generator-1.26-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.26
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: k8s-code-generator-1.27-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.27
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: k8s-code-generator-1.28-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.28
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: k8s-code-generator-1.29-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.29
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: k8s-code-generator-1.30-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.30
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: k8s-code-generator-1.31-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.31
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+jobs:
+
+  - name: start
+    public: true # all logs are publicly visible
+    plan:
+      - get: pinniped-pr
+        trigger: true
+        version: every
+      - in_parallel:
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: lint } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: verify-codegen } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: unit-test } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: scan-dependencies } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: run-go-vuln-scan } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: build-image } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: build-fips-image } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: build-test-fips-image } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: build-test-binaries } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: scan-image } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-oldest } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-latest } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-latest-arm64 } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-idps-firewalled } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-latest-fips } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-k8s-main } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: kubectl-apply-test } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-changed-api-group-oldest } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-changed-api-group-latest } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-multiple-pinnipeds } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: uninstall-test } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: uninstall-from-existing-namespace-test } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-gke-rapid } }
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-latest-with-external-idps } }
+
+  - name: lint
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: lint } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: lint } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: lint } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: lint } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: lint } }
+      - task: lint
+        timeout: 30m
+        <<: *pinniped-pr-input-mapping
+        file: pinniped-ci/pipelines/shared-tasks/run-verify-lint/task.yml
+
+  - name: lint-latest
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+          - get: opensource-lint-image
+      - task: lint
+        timeout: 30m
+        <<: *pinniped-pr-input-mapping
+        file: pinniped-ci/pipelines/shared-tasks/run-verify-lint/task.yml
+        image: opensource-lint-image
+        params:
+          SKIP_INSTALL_GOLANGCI_LINT: "true"
+
+  - name: verify-codegen
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: verify-codegen } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: verify-codegen } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: verify-codegen } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: verify-codegen } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+          - get: k8s-code-generator-1.25-image
+          - get: k8s-code-generator-1.26-image
+          - get: k8s-code-generator-1.27-image
+          - get: k8s-code-generator-1.28-image
+          - get: k8s-code-generator-1.29-image
+          - get: k8s-code-generator-1.30-image
+          - get: k8s-code-generator-1.31-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: verify-codegen } }
+      - in_parallel:
+          - task: verify-go-mod-tidy
+            timeout: 20m
+            <<: *pinniped-pr-input-mapping
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-go-mod-tidy/task.yml
+          - task: verify-go-generate
+            timeout: 20m
+            <<: *pinniped-pr-input-mapping
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-go-generate/task.yml
+          - task: codegen-1.25
+            timeout: 20m
+            <<: *pinniped-pr-input-mapping
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-codegen/task.yml
+            image: k8s-code-generator-1.25-image
+            params:
+              KUBE_MINOR_VERSION: "1.25"
+          - task: codegen-1.26
+            timeout: 20m
+            <<: *pinniped-pr-input-mapping
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-codegen/task.yml
+            image: k8s-code-generator-1.26-image
+            params:
+              KUBE_MINOR_VERSION: "1.26"
+          - task: codegen-1.27
+            timeout: 20m
+            <<: *pinniped-pr-input-mapping
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-codegen/task.yml
+            image: k8s-code-generator-1.27-image
+            params:
+              KUBE_MINOR_VERSION: "1.27"
+          - task: codegen-1.28
+            timeout: 20m
+            <<: *pinniped-pr-input-mapping
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-codegen/task.yml
+            image: k8s-code-generator-1.28-image
+            params:
+              KUBE_MINOR_VERSION: "1.28"
+          - task: codegen-1.29
+            timeout: 20m
+            <<: *pinniped-pr-input-mapping
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-codegen/task.yml
+            image: k8s-code-generator-1.29-image
+            params:
+              KUBE_MINOR_VERSION: "1.29"
+          - task: codegen-1.30
+            timeout: 20m
+            <<: *pinniped-pr-input-mapping
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-codegen/task.yml
+            image: k8s-code-generator-1.30-image
+            params:
+              KUBE_MINOR_VERSION: "1.30"
+          - task: codegen-1.31
+            timeout: 20m
+            <<: *pinniped-pr-input-mapping
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-codegen/task.yml
+            image: k8s-code-generator-1.31-image
+            params:
+              KUBE_MINOR_VERSION: "1.31"
+
+  - name: unit-test
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: unit-test } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: unit-test } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: unit-test } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: unit-test } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+          - get: code-coverage-uploader-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: unit-test } }
+      - task: run-unit-tests
+        timeout: 45m
+        <<: *pinniped-pr-input-mapping
+        file: pinniped-ci/pipelines/shared-tasks/run-unit-tests/task.yml
+      - task: upload-test-coverage
+        timeout: 10m
+        <<: *pinniped-pr-input-mapping
+        params:
+          CODECOV_TOKEN: ((codecov-token))
+        file: pinniped-ci/pipelines/shared-tasks/upload-test-coverage/task.yml
+        image: code-coverage-uploader-image
+
+  - name: scan-dependencies
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: scan-dependencies } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: scan-dependencies } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: scan-dependencies } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: scan-dependencies } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: scan-dependencies } }
+      - task: get-modules
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: golang
+              tag: '1.23.2'
+          inputs:
+            - name: pinniped-pr
+          outputs:
+            - name: pinniped-modules
+          run:
+            dir: pinniped-pr
+            path: sh
+            args:
+              - "-c"
+              - |
+                set -e
+                echo "Installing jq..."
+                ( apt-get update -y && apt-get install -y jq ) 2>&1 > install.log || cat install.log
+
+                # Use 'go list' to find package dependencies, then select the associated module versions.
+                # See https://github.com/sonatype-nexus-community/nancy/issues/228 for details about why
+                # we can't just use 'go list -mod -json all'.
+                echo "Listing Go module dependencies..."
+                go list -deps -json all | jq -s 'unique_by(.Module.Path)|.[]|select(has("Module"))|.Module' > ../pinniped-modules/modules.json
+      - task: scan
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: docker.io/sonatypecommunity/nancy
+              tag: alpine
+          inputs:
+            - name: pinniped-modules
+          run:
+            path: 'sh'
+            args:
+              - '-c'
+              - |
+                set -e
+                cat <<EOF > exclusions.txt
+                # Vulnerability exclusions for Nancy:
+                # https://github.com/sonatype-nexus-community/nancy#exclude-vulnerabilities
+                #
+                # When editing this, please add an `until=` tag on each entry so we remember to revisit
+                # and clean this file later.
+                # CVE-0000-00000 until=2022-01-01
+
+                # CVE-2020-8561 is in k8s.io/apiserver.
+                # From the comments on this issue https://github.com/kubernetes/kubernetes/issues/104720
+                # it seems like the Kubernetes maintainers are never going to fix it.
+                # Removing the "until" date on the next line to ignore this CVE forever.
+                CVE-2020-8561
+
+                EOF
+
+                nancy sleuth --exclude-vulnerability-file=exclusions.txt < pinniped-modules/modules.json
+
+  - name: run-go-vuln-scan
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: run-go-vuln-scan } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: run-go-vuln-scan } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: run-go-vuln-scan } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: run-go-vuln-scan } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: run-go-vuln-scan } }
+      - task: run-go-vuln-scan
+        file: pinniped-ci/pipelines/shared-tasks/run-go-vuln-scan/task.yml
+        input_mapping:
+          pinniped: pinniped-pr
+        params:
+          BUILD_TAGS:
+
+  - name: build-cli
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: build-cli } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: build-cli } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: build-cli } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: build-cli } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: build-cli } }
+      - task: compile
+        timeout: 45m
+        <<: *pinniped-pr-input-mapping
+        file: pinniped-ci/pipelines/shared-tasks/build-cli-binaries/task.yml
+        params:
+          DRY_RUN: "yes"
+
+  - name: build-image
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: build-image } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: build-image } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: build-image } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: build-image } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: build-image } }
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: pinniped-pr
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: pinniped-pr
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: ci-build-image
+        get_params:
+          skip_download: true
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: check-image-version
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: check-image-version } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: check-image-version } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: check-image-version } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: check-image-version } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            passed: [ build-image ]
+          - get: ci-build-image
+            params:
+              format: rootfs
+            passed: [ build-image ]
+          - get: pinniped-ci
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: check-image-version } }
+      - task: confirm-version
+        file: pinniped-ci/pipelines/shared-tasks/confirm-version/task.yml
+        input_mapping:
+          image: ci-build-image
+          pinniped: pinniped-pr
+
+  # this job builds pinniped using a different dockerfile
+  # to test that it is fips compatible.
+  # it uses go-boringcrypto rather than base go.
+  - name: build-fips-image
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: build-fips-image } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: build-fips-image } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: build-fips-image } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: build-fips-image } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: build-fips-image } }
+      - task: build-fips-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: pinniped-ci
+            - name: pinniped-pr
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: pinniped-pr
+            UNPACK_ROOTFS: true
+            DOCKERFILE: pinniped-pr/hack/Dockerfile_fips
+      - task: confirm-built-with-fips
+        file: pinniped-ci/pipelines/shared-tasks/confirm-built-with-fips/task.yml
+      - put: ci-fips-build-image
+        get_params: { skip_download: true }
+        params:
+          image: image/image.tar
+
+  - name: build-test-image
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: build-test-binaries } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: build-test-binaries } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: build-test-binaries } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: build-test-binaries } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+      - in_parallel:
+          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: build-test-binaries } }
+          - task: build-test-image
+            privileged: true
+            config:
+              platform: linux
+              image_resource:
+                type: registry-image
+                source:
+                  repository: concourse/oci-build-task
+              inputs:
+                - name: pinniped-pr
+                - name: pinniped-ci
+              outputs:
+                - name: image
+              run:
+                path: build
+              caches:
+                - path: cache
+              params:
+                CONTEXT: pinniped-pr
+                DOCKERFILE: pinniped-ci/pipelines/shared-helpers/test-binaries-image/Dockerfile
+      - put: ci-test-image
+        get_params: { skip_download: true }
+        params:
+          image: image/image.tar
+
+  - name: build-test-fips-image
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: build-test-fips-image } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: build-test-fips-image } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: build-test-fips-image } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: build-test-fips-image } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            trigger: true
+            version: every
+            passed: [ start ]
+          - get: pinniped-ci
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: build-test-fips-image } }
+      - in_parallel:
+          - task: build-test-fips-image
+            privileged: true
+            config:
+              platform: linux
+              image_resource:
+                type: registry-image
+                source:
+                  repository: concourse/oci-build-task
+              inputs:
+                - name: pinniped-pr
+                - name: pinniped-ci
+              outputs:
+                - name: image
+              run:
+                path: build
+              caches:
+                - path: cache
+              params:
+                CONTEXT: pinniped-pr
+                DOCKERFILE: pinniped-ci/pipelines/shared-helpers/test-binaries-image/Dockerfile_fips
+      - put: ci-fips-test-image
+        get_params: { skip_download: true }
+        params:
+          image: image/image.tar
+
+  - name: ready-for-int # fan-in to make pass constraints for the rest of the pipeline easier to reason about
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed:
+              - lint
+              - unit-test
+              - verify-codegen
+              - check-image-version
+              - build-test-image
+              - build-cli
+              - scan-dependencies
+              - build-fips-image
+              - build-test-fips-image
+              - run-go-vuln-scan
+            trigger: true
+          - get: ci-build-image
+            passed: [ check-image-version ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ build-test-image ]
+            params:
+              skip_download: true
+          - get: ci-fips-build-image
+            passed: [ build-fips-image ]
+            params:
+              skip_download: true
+          - get: ci-fips-test-image
+            passed: [ build-test-fips-image ]
+            params:
+              skip_download: true
+
+  - name: scan-image
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: scan-image } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: scan-image } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: scan-image } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: scan-image } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              format: oci
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: scan-image } }
+      - task: trivy
+        file: pinniped-ci/pipelines/shared-tasks/scan-image-trivy/task.yml
+        input_mapping:
+          image: ci-build-image
+        params:
+          GITHUB_TOKEN: ((ci-bot-access-token-with-read-user-permission))
+          IGNORE_VULNERABILITY_IDS: |
+            # Trivy thinks this is a HIGH CVE in go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc.
+            # That is an indirect dependency of our project, which we inherit from our direct dep k8s.io/apiserver.
+            # Therefore, we will inherit a solution for this CVE from k8s.io/apiserver when they fix it. Ignore it for now.
+            CVE-2023-47108
+
+  - name: integration-test-oldest
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-oldest } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-oldest } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-oldest } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-oldest } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-oldest } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *oldest_kind_kube_version
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        <<: *pinniped-pr-input-mapping
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-latest
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-latest } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-latest } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-latest } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-latest } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-latest } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        <<: *pinniped-pr-input-mapping
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-latest-arm64
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-latest-arm64 } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-latest-arm64 } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-latest-arm64 } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-latest-arm64 } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-latest-arm64 } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+          INSTANCE_ARCH: arm64 # deploy on an arm64 VM to have a Kind cluster with arm64 nodes
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        <<: *pinniped-pr-input-mapping
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-latest-with-external-idps
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-latest-with-external-idps } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-latest-with-external-idps } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-latest-with-external-idps } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-latest-with-external-idps } }
+    public: true # all logs are publicly visible
+    serial_groups:
+    - github
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-latest-with-external-idps } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+          # The following Okta params will cause the integration tests to use Okta instead of Dex.
+          # We don't need to run these on every version of Kubernetes for Kind in this pipeline, so we choose to run
+          # them on one version to get some coverage.
+          <<: *okta_integration_env_vars
+          # The following Jumpcloud params will cause the integration tests to use Jumpcloud instead of OpenLDAP.
+          # We don't need to run these on every version of Kubernetes for Kind in this pipeline, so we choose to run
+          # them on one version to get some coverage.
+          <<: *jumpcloud_integration_env_vars
+          # The following AD params enable the ActiveDirectory integration tests. We don't need to run these on every
+          # version of Kubernetes for Kind in this pipeline, so we choose to run them on one version to get some coverage.
+          <<: *active_directory_integration_env_vars
+          # The following params enable the GitHub integration tests. We don't need to run these on every
+          # version of Kubernetes for Kind in this pipeline, so we choose to run them on one version to get some coverage.
+          <<: *github_integration_env_vars
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        <<: *pinniped-pr-input-mapping
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-idps-firewalled
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-idps-firewalled } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-idps-firewalled } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-idps-firewalled } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-idps-firewalled } }
+    public: true # all logs are publicly visible
+    serial_groups:
+    - github
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-idps-firewalled } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+          # Prevent direct connections from the Concierge and Supervisor to each other and to Dex,
+          # local user authenticator, and GitHub. Also configures the Concierge and Supervisor to
+          # make https requests through the Squid web proxy server. Tests the HTTPS_PROXY feature
+          # for sending requests through a corporate proxy for OIDCIdentityProvider (Supervisor->Dex),
+          # GitHubIdentityProvider (Supervisor->GitHub), JWTAuthenticator (Concierge->Supervisor),
+          # and WebhookAuthenticator (Concierge->local user authenticator).
+          FIREWALL_IDPS: "yes"
+          # Enable GitHub integration tests, to test using GitHubIdentityProviders through a proxy.
+          <<: *github_integration_env_vars
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        <<: *pinniped-pr-input-mapping
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-latest-fips
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-latest-fips } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-latest-fips } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-latest-fips } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-latest-fips } }
+    public: true # all logs are publicly visible
+    serial_groups:
+    - github
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-fips-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-fips-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-latest-fips } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          ci-build-image: ci-fips-build-image
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+          # The following AD params enable the ActiveDirectory integration tests. We don't need to run these on every
+          # version of Kubernetes for Kind in this pipeline, but it is useful to know if we can communicate with our
+          # AD server when using FIPS cipher suites.
+          <<: *active_directory_integration_env_vars
+          # The following params enable the GitHub integration tests. We don't need to run these on every
+          # version of Kubernetes for Kind in this pipeline, but it is useful to know if we can communicate with
+          # GitHub when using FIPS cipher suites.
+          <<: *github_integration_env_vars
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        input_mapping:
+          ci-test-image: ci-fips-test-image
+          pinniped: pinniped-pr
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        ci-build-image: ci-fips-build-image
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-k8s-main
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-k8s-main } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-k8s-main } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-k8s-main } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-k8s-main } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-k8s-main } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *kube_version_k8s-main
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        <<: *pinniped-pr-input-mapping
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: kubectl-apply-test
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: kubectl-apply-test } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: kubectl-apply-test } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: kubectl-apply-test } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: kubectl-apply-test } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: kubectl-apply-test } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration-kubectl-apply/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+        input_mapping:
+          pinniped: pinniped-pr
+      - task: uninstall
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        file: pinniped-ci/pipelines/shared-tasks/run-kubectl-uninstall/task.yaml
+        image: integration-test-runner-image
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  # Run the changed-api-group test on the oldest and the newest versions of Kubernetes that we support to give
+  # us confidence that the middleware code works for versions within that range, without needing to pay the
+  # cost of running it on every version within the range.
+  - name: integration-test-changed-api-group-oldest
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-changed-api-group-oldest } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-changed-api-group-oldest } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-changed-api-group-oldest } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-changed-api-group-oldest } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-changed-api-group-oldest } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *oldest_kind_kube_version
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          PINNIPED_API_GROUP_SUFFIX: walrus.tld
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        <<: *pinniped-pr-input-mapping
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  # Run the changed-api-group test on the oldest and the newest versions of Kubernetes that we support to give
+  # us confidence that the middleware code works for versions within that range, without needing to pay the
+  # cost of running it on every version within the range.
+  - name: integration-test-changed-api-group-latest
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-changed-api-group-latest } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-changed-api-group-latest } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-changed-api-group-latest } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-changed-api-group-latest } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-changed-api-group-latest } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          PINNIPED_API_GROUP_SUFFIX: walrus.tld
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        <<: *pinniped-pr-input-mapping
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-multiple-pinnipeds
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-multiple-pinnipeds } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-multiple-pinnipeds } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-multiple-pinnipeds } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-multiple-pinnipeds } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-multiple-pinnipeds } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+      - do: # deploy sequentially so when the second deploy starts, it can assume that dex and local-user-authenticator are already deployed
+          - task: generate-pinniped-password
+            file: pinniped-ci/pipelines/shared-tasks/generate-pinniped-password/task.yml
+            image: integration-test-runner-image
+          - task: deploy-pinniped-with-default-api-group
+            input_mapping:
+              cluster-pool: deploy-kind-cluster-vm-output
+              pinniped: pinniped-pr
+            output_mapping:
+              integration-test-env-vars: integration-test-env-vars-with-default-api-group
+              kubeconfig: kubeconfig-with-default-api-group
+            params:
+              CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+              SECONDARY_SUPERVISOR_APP_NAME: secondary-supervisor
+              SECONDARY_SUPERVISOR_NAMESPACE: secondary-supervisor
+            file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+            image: integration-test-runner-image
+          - task: deploy-pinniped-with-custom-api-group
+            input_mapping:
+              cluster-pool: deploy-kind-cluster-vm-output
+              pinniped: pinniped-pr
+            output_mapping:
+              integration-test-env-vars: integration-test-env-vars-with-custom-api-group
+              kubeconfig: kubeconfig-with-custom-api-group
+            params:
+              CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+              PINNIPED_API_GROUP_SUFFIX: walrus.tld
+              SECONDARY_DEPLOY: "yes" # don't deploy dex and the local-user-authenticator a second time into the cluster
+              PINNIPED_CONCIERGE_APP_NAME: secondary-concierge
+              PINNIPED_SUPERVISOR_APP_NAME: secondary-supervisor
+              PINNIPED_SUPERVISOR_HTTP_NODEPORT: 30234
+              PINNIPED_SUPERVISOR_HTTPS_NODEPORT: 30243
+            file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+            image: integration-test-runner-image
+      - do: # once we have proper locking inside our tests, we can convert this back to an "in_parallel:" block
+          - task: run-integration-tests-on-pinniped-with-default-api-group
+            input_mapping:
+              pinniped: pinniped-pr
+              integration-test-env-vars: integration-test-env-vars-with-default-api-group
+              kubeconfig: kubeconfig-with-default-api-group
+            timeout: 75m
+            file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+            image: integration-test-runner-image
+            params:
+              START_GCLOUD_PROXY: "yes"
+              <<: *gcp_account_params
+          - task: run-integration-tests-on-pinniped-with-custom-api-group
+            input_mapping:
+              pinniped: pinniped-pr
+              integration-test-env-vars: integration-test-env-vars-with-custom-api-group
+              kubeconfig: kubeconfig-with-custom-api-group
+            timeout: 75m
+            file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+            image: integration-test-runner-image
+            params:
+              START_GCLOUD_PROXY: "yes"
+              <<: *gcp_account_params
+              PINNIPED_SUPERVISOR_NAMESPACE: secondary-supervisor
+              PINNIPED_SUPERVISOR_NODEPORT_SERVICE: secondary-supervisor-nodeport
+              PINNIPED_SUPERVISOR_HTTPS_HOST_PORT: 11344 # see gce-init.sh for the meaning of this port
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: uninstall-test
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: uninstall-test } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: uninstall-test } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: uninstall-test } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: uninstall-test } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: uninstall-test } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+      - task: test
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+          TEST_SCRIPT: pinniped-ci/pipelines/shared-tasks/run-uninstall-test/run-uninstall-test.sh
+        file: pinniped-ci/pipelines/shared-tasks/run-uninstall-test/task.yml
+        image: integration-test-runner-image
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: uninstall-existing-ns-test
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: uninstall-from-existing-namespace-test } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: uninstall-from-existing-namespace-test } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: uninstall-from-existing-namespace-test } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: uninstall-from-existing-namespace-test } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: integration-test-runner-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: uninstall-from-existing-namespace-test } }
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *latest_kind_kube_version
+          <<: *gcp_account_params
+      - task: test
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+          TEST_SCRIPT: pinniped-ci/pipelines/shared-tasks/run-uninstall-test/run-uninstall-from-existing-namespace-test.sh
+        file: pinniped-ci/pipelines/shared-tasks/run-uninstall-test/task.yml
+        image: integration-test-runner-image
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-gke-rapid
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-gke-rapid } }
+    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-gke-rapid } }
+    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-gke-rapid } }
+    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-gke-rapid } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed: [ ready-for-int ]
+            trigger: true
+          - get: pinniped-ci
+          - get: ci-build-image
+            passed: [ ready-for-int ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ ready-for-int ]
+          - get: integration-test-runner-image
+          - get: k8s-app-deployer-image
+      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-gke-rapid } }
+      - task: deploy-cluster
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-gke-cluster/task.yml
+        image: k8s-app-deployer-image
+        params:
+          GKE_CHANNEL: rapid
+          <<: *gke_account_params
+      - task: pre-warm-cluster
+        timeout: 10m
+        file: pinniped-ci/pipelines/shared-tasks/pre-warm-cluster/task.yml
+        image: k8s-app-deployer-image
+        input_mapping:
+          cluster-pool: deploy-gke-cluster-output
+        attempts: 3
+      - task: deploy
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+        timeout: 15m
+        input_mapping:
+          cluster-pool: deploy-gke-cluster-output
+          pinniped: pinniped-pr
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/gke.yaml
+          USE_LOAD_BALANCERS_FOR_DEX_AND_SUPERVISOR: "yes"
+      - task: run-integration-tests
+        <<: *pinniped-pr-input-mapping
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-gke-cluster-output
+      ensure:
+        task: cleanup-kapp
+        timeout: 5m
+        file: pinniped-ci/pipelines/shared-tasks/kapp-delete/task.yml
+        image: k8s-app-deployer-image
+        input_mapping:
+          cluster: deploy-gke-cluster-output
+        ensure:
+          task: remove-cluster
+          timeout: 10m
+          file: pinniped-ci/pipelines/shared-tasks/remove-gke-cluster/task.yml
+          image: k8s-app-deployer-image
+          input_mapping:
+            gke-cluster-pool: deploy-gke-cluster-output
+          params:
+            <<: *gke_account_params
+
+  - name: finish
+    # "ci-passed" only appears here at the end of the pipeline and is marked in the branch protection settings for
+    # the main branch as a required status, so a PR cannot be merged until this status shows up as a success.
+    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: ci-passed } }
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed:
+              - scan-image
+              - integration-test-oldest
+              - integration-test-latest
+              - integration-test-latest-arm64
+              - integration-test-latest-with-external-idps
+              - integration-test-idps-firewalled
+              - integration-test-gke-rapid
+              - kubectl-apply-test
+              # integration-test-k8s-main is purposefully excluded. Failures are informational, not blocking.
+              - integration-test-latest-fips
+              - integration-test-changed-api-group-oldest
+              - integration-test-changed-api-group-latest
+              - integration-test-multiple-pinnipeds
+              - uninstall-test
+              - uninstall-existing-ns-test
+            trigger: true

@@ -1,0 +1,79 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Helps decide the name of the Deployment along with other resources and labels. Will be suffixed with "-worker".
+fullnameOverride: concourse
+
+web:
+  enabled: false
+
+postgresql:
+  enabled: false
+
+worker:
+  # In an effort to save money, default to 1 worker.
+  replicas: 1
+  nodeSelector: { cloud.google.com/gke-nodepool: workers-2 } # the name of the nodepool from terraform
+  hardAntiAffinity: true
+  minAvailable: 0
+  terminationGracePeriodSeconds: 3600
+  livenessProbe:
+    periodSeconds: 60
+    failureThreshold: 10
+    timeoutSeconds: 45
+  resources:
+    # Inspired by https://github.com/concourse/hush-house/blob/16f52e57c273282ebace68051b0fe9133dc3a04e/deployments/with-creds/workers/values.yaml#L30-L32
+    #
+    # Note that Kubernetes uses Ki (Kibibytes) and Gi (Gibibytes). You can do conversions by doing google
+    # searches using the more commonly used names for those units, e.g. searching "29061248 KiB to GiB".
+    #
+    # Limit to using all available CPUs and most of the available memory in our e2-standard-8 VM nodes.
+    # According to the "Allocatable" section of the "kubectl describe nodes -l cloud.google.com/gke-nodepool=workers-2" output,
+    # each node has 29061248 Ki, which is equal to 27.7149658203 Gi of memory allocatable,
+    # and each node has 7910m cpu allocatable.
+    #
+    # By making our requests equal to our limits, we should be assigned "Guaranteed" QoS.
+    # But we need to leave enough space for all other pods' requests too, because GKE runs several pods on each node automatically.
+    # The first node in the node pool has the most pods scheduled on it, so we will choose our values based on the first node
+    # by looking at its "Allocated resources" section of the describe output.
+    # CPU:
+    #   - On the first node, the other pods' CPU requests total 1324m (16%).
+    #   - The available CPU for our pod is 7910m allocatable - 1324m allocated = 6586m remaining.
+    # Memory:
+    #   - On the first node, the other pods' memory requests total 1394740096 (bytes) (4%) = 1.298952937126 Gi.
+    #   - The available memory for our pod is 27.7149658203 Gi - 1.298952937126 Gi = 26.4160128832 Gi.
+    # However, Google can change these values over time, so we need to leave a little extra room
+    # in case Google's pods take a little more later.
+    #
+    # In order for the pod to be assigned "Guaranteed" QoS, all the containers need to
+    # have requests equal to limits, so the initContainer also has similar settings applied
+    # by the init-container-overlay.yaml overlay.
+    limits:
+      cpu: 6480m
+      memory: 26Gi
+    requests:
+      cpu: 6480m
+      memory: 26Gi
+
+persistence:
+  worker:
+    size: 375Gi
+    storageClass: premium-rwo
+
+concourse:
+  worker:
+    # rebalanceInterval: 2h
+    baggageclaim:
+      driver: overlay
+    healthcheckTimeout: 40s
+    runtime: containerd
+    containerd:
+      # networkPool: "10.254.0.0/16"
+      # maxContainers is usually set to 250, but increasing it to see if we can squeeze more from each worker.
+      maxContainers: 300
+      restrictedNetworks:
+        - 169.254.169.254/32
+    tsa:
+      hosts:
+        # This service name must match the name decided by the web deployment
+        - concourse-web-worker-gateway.concourse-web.svc.cluster.local:2222

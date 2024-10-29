@@ -1,0 +1,20 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+image_resource:
+  type: registry-image
+  source:
+    repository: quay.io/rebuy/aws-nuke
+inputs:
+  - name: pinniped-ci
+params:
+  AWS_ACCOUNT_NUMBER:
+  AWS_SECRET_ACCESS_KEY:
+  AWS_ACCESS_KEY_ID:
+  REALLY_CLEANUP: "no"
+  ALL_RESOURCES: "no"
+  AWS_ROLE_ARN:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/cleanup-aws/task.sh

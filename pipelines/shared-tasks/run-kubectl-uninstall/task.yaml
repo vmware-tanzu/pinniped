@@ -1,0 +1,12 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped
+  - name: pinniped-ci
+  - name: deployment-yamls
+  - name: cluster-pool
+run:
+  path: pinniped-ci/pipelines/shared-tasks/run-kubectl-uninstall/task.sh

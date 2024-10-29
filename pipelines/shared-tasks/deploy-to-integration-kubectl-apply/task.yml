@@ -1,0 +1,22 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped
+  - name: pinniped-ci
+  - name: ci-build-image
+  - name: cluster-pool
+  - name: pinniped-password
+    optional: true
+outputs:
+  - name: integration-test-env-vars
+  - name: kubeconfig
+  - name: deployment-yamls
+params:
+  # one of these should be set
+  CLUSTER_CAPABILITIES:
+  CLUSTER_CAPABILITIES_PATH:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/deploy-to-integration-kubectl-apply/task.sh

@@ -1,0 +1,17 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+  - name: pinniped-ci-pool
+    optional: true
+outputs:
+params:
+  INSTANCE_ZONE:
+  GCP_PROJECT:
+  GCP_USERNAME:
+  GCP_JSON_KEY:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/remove-orphaned-kind-cluster-vms/task.sh

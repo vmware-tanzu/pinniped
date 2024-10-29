@@ -1,0 +1,219 @@
+#!/bin/sh
+# vim: set ft=sh
+
+set -e
+
+exec 3>&1 # make stdout available as fd 3 for the result
+exec 1>&2 # redirect all output to stderr for logging
+
+# shellcheck source=./common.sh
+. "$(dirname "$0")"/common.sh
+
+# for jq
+PATH=/usr/local/bin:$PATH
+
+payload=$TMPDIR/git-resource-request
+
+cat > "$payload" <&0
+
+
+uri=$(jq -r '.source.uri // ""' < "$payload")
+branch=$(jq -r '.source.branch // ""' < "$payload")
+pool_name=$(jq -r '.source.pool // ""' < "$payload")
+ref=$(jq -r '.version.ref // ""' < "$payload")
+
+if [ -z "$uri" ]; then
+  config_errors="${config_errors}invalid payload (missing uri)
+"
+fi
+
+if [ -z "$branch" ]; then
+  config_errors="${config_errors}invalid payload (missing branch)
+"
+fi
+
+if [ -z "$pool_name" ]; then
+  config_errors="${config_errors}invalid payload (missing pool)
+"
+fi
+
+if [ -n "$config_errors" ]; then
+  echo "$config_errors"
+  exit 1
+fi
+
+###########
+#
+# end processing inputs
+#
+###########
+
+###########
+#
+# start git setup
+#
+###########
+
+load_pubkey "$payload"
+
+destination=$TMPDIR/git-resource-repo-cache
+
+if [ -d "$destination" ]; then
+  cd "$destination"
+  git fetch
+  git reset --hard FETCH_HEAD
+else
+  branchflag=""
+  if [ -n "$branch" ]; then
+    branchflag="--branch $branch"
+  fi
+
+  git clone "$uri" $branchflag "$destination"
+  cd "$destination"
+fi
+
+
+git config user.name "CI Pool Trigger Resource"
+git config user.email "ci-pool-trigger@localhost"
+
+###########
+#
+# end git setup
+#
+###########
+
+
+###########
+#
+# start calculating pending triggers
+#
+###########
+
+if [ -n "$ref" ] && git cat-file -e "$ref"; then
+  ref_exists_and_is_valid=yes
+fi
+
+if [ -e "$pool_name/.pending-triggers" ] && [ -e "$pool_name/.pending-removals" ]; then
+  tally_files_exist=yes
+
+  #check validity of tally files
+fi
+
+if [ -n "$ref_exists_and_is_valid" ] && [ -n "$tally_files_exist" ]; then
+  files_changed=$(git show --pretty="format:" --name-status -r "$ref"..HEAD -- "$pool_name"/unclaimed/)
+
+  set +e
+  added_items=$(echo "$files_changed" | grep "^A")
+  removed_items=$(echo "$files_changed" | grep "^D")
+  set -e
+
+  if [ -n "$added_items" ]; then
+    num_added_items=$(echo "$added_items" | wc -l)
+  else
+    num_added_items=0
+  fi
+
+  if [ -n "$removed_items" ]; then
+    num_removed_items=$(echo "$removed_items" | wc -l)
+  else
+    num_removed_items=0
+  fi
+
+  old_pending_triggers=$(cat "$pool_name"/.pending-triggers)
+  old_pending_removals=$(cat "$pool_name"/.pending-removals)
+
+  pending_triggers=$(( old_pending_triggers + num_added_items ))
+
+  if [ "$num_removed_items" -gt "$old_pending_removals" ]; then
+    extra_removals=$(( num_removed_items - old_pending_removals ))
+    pending_removals=0
+    pending_triggers=$(( pending_triggers - extra_removals ))
+  else
+    pending_removals=$(( old_pending_removals - num_removed_items ))
+  fi
+else
+  pending_triggers=$(find "$pool_name"/unclaimed -not -path "*/\.*" -path "$pool_name/unclaimed/*"| wc -l)
+  pending_removals=0
+fi
+###########
+#
+# end calculating pending triggers
+#
+###########
+
+
+###########
+#
+# start handling results
+#
+###########
+
+if [ "$pending_triggers" -gt 0 ]; then 
+  last_commit=$(git log -1 --pretty='format:%H')
+  result=$(echo "$last_commit" | jq -R '.' | jq -s "map({ref: .})")
+else 
+  result="[]"
+fi
+
+###########
+#
+# end handling results
+#
+###########
+
+
+
+###########
+#
+# start updating triggers
+#
+###########
+
+if [ "$pending_triggers" -gt 0 ]; then 
+  new_pending_triggers=$(( pending_triggers - 1 ))
+  new_pending_removals=$(( pending_removals + 1 ))
+  echo "$new_pending_triggers" > "$pool_name"/.pending-triggers
+  echo "$new_pending_removals" > "$pool_name"/.pending-removals
+  git add "$pool_name"/.pending*
+
+  commit_message="triggering build with pending triggers: $new_pending_triggers; pending removals: $new_pending_removals"
+
+  if [ -n "$ref_exists_and_is_valid" ] && [ -z "$tally_files_exist" ]; then
+    commit_message="$commit_message
+
+    .pending-triggers and/or .pending-removals are missing - re-initializing resource"
+  elif [ -z "$ref_exists_and_is_valid" ] && [ -n "$tally_files_exist" ]; then
+    commit_message="$commit_message
+
+    resource initialized with pre-existing .pending-triggers and .pending-removals - ignoring"
+  elif [ -z "$ref_exists_and_is_valid" ]; then
+    commit_message="$commit_message
+
+    initializing tally files"
+  fi
+
+  if [ -n "$added_items" ]; then
+    commit_message="$commit_message
+
+    additions:
+    $added_items"
+  fi
+  
+  if [ -n "$removed_items" ]; then
+    commit_message="$commit_message
+    
+    removals:
+    $removed_items"
+  fi
+
+  git commit --allow-empty -m "$commit_message"
+  git push
+fi
+
+###########
+#
+# end updating triggers
+#
+###########
+
+echo "$result" >&3

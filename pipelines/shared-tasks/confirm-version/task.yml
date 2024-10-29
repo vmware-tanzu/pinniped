@@ -1,0 +1,38 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped
+  - name: image
+image_resource:
+  type: registry-image
+  source:
+    repository: golang
+    tag: '1.23.2'
+run:
+  # Confirm that the correct git sha was baked into the executables and that they log the version as their
+  # first line of output. Do this by directly running the server binary from the rootfs of the built image.
+  path: bash
+  args:
+    - -ceux
+    - |
+      set -o pipefail
+      pushd pinniped >/dev/null
+        expected_sha=$(git rev-parse HEAD)
+        expected_date=$(git --no-pager log -1 --format='%ct' | xargs -I {} date --date='TZ="UTC" @{}' +"%Y-%m-%dT%H:%M:%SZ")
+      popd >/dev/null
+      if [[ "$expected_sha" == "" ]]; then exit 1; fi
+
+      server_binary="$PWD/image/rootfs/usr/local/bin/pinniped-server"
+      ln -s "$server_binary" /usr/local/bin/pinniped-concierge
+      ln -s "$server_binary" /usr/local/bin/pinniped-supervisor
+
+      # These commands should log the version within the first 10 lines of output, and then exit with an error because there is no yaml config file to load.
+      set +e
+      concierge_output=$(/usr/local/bin/pinniped-concierge 2>&1 >/dev/null | head -10)
+      supervisor_output=$(/usr/local/bin/pinniped-supervisor 2>&1 >/dev/null | head -10)
+      set -e
+      echo $concierge_output | grep ",\"gitCommit\":\"$expected_sha\",\"gitTreeState\":\"clean\",\"buildDate\":\"$expected_date"
+      echo $supervisor_output | grep ",\"gitCommit\":\"$expected_sha\",\"gitTreeState\":\"clean\",\"buildDate\":\"$expected_date"

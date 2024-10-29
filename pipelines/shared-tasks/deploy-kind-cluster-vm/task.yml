@@ -1,0 +1,21 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+  - name: kind-release
+outputs:
+  - name: deploy-kind-cluster-vm-output
+params:
+  INSTANCE_ZONE:
+  INSTANCE_ARCH: # Can choose arm64. Defaults to amd64.
+  KUBE_VERSION: # Choose the version of Kube to install.
+  KIND_NODE_IMAGE: # When specified, must still specify KUBE_VERSION, which will only be used as a label in this case.
+  GCP_PROJECT:
+  GCP_USERNAME:
+  GCP_JSON_KEY:
+  STARTUP_SCRIPT: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/gce-init.sh
+run:
+  path: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.sh

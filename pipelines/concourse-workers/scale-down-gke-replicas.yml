@@ -1,0 +1,13 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+- name: pinniped-ci
+params:
+  PINNIPED_GCP_PROJECT:
+  GCP_SERVICE_ACCOUNT:
+  GCP_JSON_KEY:
+run:
+  path: pinniped-ci/infra/concourse-install/scale-down-concourse-internal-workers.sh

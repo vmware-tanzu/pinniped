@@ -1,0 +1,37 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+image_resource:
+  type: registry-image
+  source:
+    repository: ghcr.io/aquasecurity/trivy
+inputs:
+  - name: image
+outputs:
+params:
+  GITHUB_TOKEN:
+  # For format see https://aquasecurity.github.io/trivy/v0.24.2/vulnerability/examples/filter/#by-vulnerability-ids
+  IGNORE_VULNERABILITY_IDS: ""
+run:
+  path: ash
+  args:
+    - -c
+    - |
+      set -euo pipefail
+
+      cat <<EOF >.trivyignore
+      ${IGNORE_VULNERABILITY_IDS}
+      EOF
+
+      echo ".trivyignore file contents:"
+      cat .trivyignore
+      echo
+
+      trivy image \
+        --input=image/image.tar \
+        --exit-code=1 \
+        --severity=HIGH,CRITICAL \
+        --ignore-unfixed \
+        --timeout=10m0s

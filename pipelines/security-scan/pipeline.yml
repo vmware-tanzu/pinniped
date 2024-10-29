@@ -1,0 +1,267 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+display:
+
+  background_image: https://upload.wikimedia.org/wikipedia/commons/d/d0/KelpforestI2500ppx.JPG
+
+meta:
+
+  notify_on_failure: &notify_on_failure
+    on_failure:
+      put: gchat
+      timeout: 5m
+      params:
+        text: |
+          Job `${BUILD_PIPELINE_NAME}/${BUILD_JOB_NAME}` *FAILED* :(
+          ${ATC_EXTERNAL_URL}/teams/${BUILD_TEAM_NAME}/pipelines/${BUILD_PIPELINE_NAME}/jobs/${BUILD_JOB_NAME}/builds/${BUILD_NAME}
+
+resource_types:
+
+  # Try using the latest version of the registry-image resource because of this problem:
+  # https://vmware.slack.com/archives/C6TL2PMC7/p1702052766131149
+  - name: registry-image
+    type: registry-image
+    source:
+      repository: concourse/registry-image-resource
+      tag: latest
+      # We are only doing pulls of this resource type, but add the username and password to avoid
+      # hitting a rate limit. Our free account is only allowed to have one access token, so we
+      # cannot make a read-only token for performing pulls.
+      username: getpinniped
+      password: ((getpinniped-dockerhub-image-push-access-token))
+
+  - name: google-chat-notify-resource
+    type: docker-image
+    source:
+      repository: springio/google-chat-notify-resource
+      tag: 0.0.1-SNAPSHOT # see https://hub.docker.com/r/springio/google-chat-notify-resource/tags
+      # We are only doing pulls of this resource type, but add the username and password to avoid
+      # hitting a rate limit. Our free account is only allowed to have one access token, so we
+      # cannot make a read-only token for performing pulls.
+      username: getpinniped
+      password: ((getpinniped-dockerhub-image-push-access-token))
+
+resources:
+
+  - name: pinniped-source
+    type: git
+    icon: github
+    source:
+      uri: https://github.com/vmware-tanzu/pinniped.git
+      branch: main
+
+  - name: pinniped-ci
+    type: git
+    icon: github
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+
+  - name: pinniped-latest-release-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ghcr.io/vmware-tanzu/pinniped/pinniped-server
+      tag: latest
+
+  - name: pinniped-latest-main-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/ci-build
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+      tag: latest
+
+  - name: gh-cli-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/gh-cli
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+      tag: latest
+
+  - name: golang-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: docker.io/golang
+
+  - name: crane-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/crane
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
+  - name: weekdays
+    type: time
+    icon: calendar-clock
+    source:
+      location: America/Los_Angeles
+      start: 6:00 AM
+      stop: 7:00 AM
+      days: [ Monday, Tuesday, Wednesday, Thursday, Friday ]
+
+  - name: gchat
+    type: google-chat-notify-resource
+    icon: chat-outline
+    source:
+      url: ((gchat-project-pinniped-bots-webhook-url))
+
+jobs:
+
+  - name: nancy-main
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - in_parallel:
+          - get: weekdays
+            trigger: true
+          - get: pinniped-source
+      - task: get-modules
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: docker.io/golang
+          inputs:
+            - name: pinniped-source
+          outputs:
+            - name: pinniped-modules
+          run:
+            dir: "pinniped-source"
+            path: sh
+            args:
+              - "-c"
+              - |
+                set -e
+                echo "Installing jq..."
+                ( apt-get update -y && apt-get install -y jq ) 2>&1 > install.log || cat install.log
+
+                # Use 'go list' to find package dependencies, then select the associated module versions.
+                # See https://github.com/sonatype-nexus-community/nancy/issues/228 for details about why
+                # we can't just use 'go list -mod -json all'.
+                echo "Listing Go module dependencies..."
+                go list -deps -json all | jq -s 'unique_by(.Module.Path)|.[]|select(has("Module"))|.Module' > ../pinniped-modules/modules.json
+      - task: scan
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: docker.io/sonatypecommunity/nancy
+              tag: alpine
+          inputs:
+            - name: pinniped-modules
+          run:
+            path: 'sh'
+            args:
+              - '-c'
+              - |
+                set -e
+                cat <<EOF > exclusions.txt
+                # Vulnerability exclusions for Nancy:
+                # https://github.com/sonatype-nexus-community/nancy#exclude-vulnerabilities
+                #
+                # When editing this, please add an `until=` tag on each entry so we remember to revisit
+                # and clean this file later.
+                # CVE-0000-00000 until=2022-01-01
+                #
+                # CVE-2020-8561 is in k8s.io/apiserver@v0.27.1,
+                # which is the latest version as of 2023-05-10.
+                # From the comments on this issue https://github.com/kubernetes/kubernetes/issues/104720
+                # it seems like the Kubernetes maintainers are never going to fix it.
+                # Removing the "until" date on the next line to ignore this CVE forever.
+                CVE-2020-8561
+                EOF
+
+                nancy sleuth --exclude-vulnerability-file=exclusions.txt < pinniped-modules/modules.json
+
+  - name: trivy-release
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - in_parallel:
+          - get: weekdays
+            trigger: true
+          - get: pinniped-latest-release-image
+            params:
+              format: oci
+          - get: pinniped-ci
+      - task: scan
+        file: pinniped-ci/pipelines/shared-tasks/scan-image-trivy/task.yml
+        params:
+          GITHUB_TOKEN: ((ci-bot-access-token-with-read-user-permission))
+        input_mapping:
+          image: pinniped-latest-release-image
+
+  - name: trivy-main
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - in_parallel:
+          - get: weekdays
+            trigger: true
+          - get: pinniped-latest-main-image
+            params:
+              format: oci
+          - get: pinniped-ci
+      - task: scan
+        file: pinniped-ci/pipelines/shared-tasks/scan-image-trivy/task.yml
+        params:
+          GITHUB_TOKEN: ((ci-bot-access-token-with-read-user-permission))
+        input_mapping:
+          image: pinniped-latest-main-image
+
+  - name: all-golang-deps-updated
+    public: true # all logs are publicly visible
+    <<: *notify_on_failure
+    serial: true
+    plan:
+      - in_parallel:
+          - get: weekdays
+            trigger: true
+          - get: pinniped-source
+          - get: pinniped-ci
+          - get: gh-cli-image
+          - get: crane-image
+          - get: golang-image
+            params:
+              skip_download: true
+      - task: check-golang-deps-updated
+        file: pinniped-ci/pipelines/shared-tasks/check-golang-deps-updated/task.yml
+        input_mapping:
+          pinniped-in: pinniped-source
+      - task: check-dockerfile-deps-updated
+        image: crane-image
+        file: pinniped-ci/pipelines/shared-tasks/check-dockerfile-deps-updated/task.yml
+        input_mapping:
+          pinniped-in: pinniped-out # the output of the previous task
+      - task: create-or-update-pr
+        image: gh-cli-image
+        file: pinniped-ci/pipelines/shared-tasks/create-or-update-pr/task.yml
+        params:
+          DEPLOY_KEY: ((source-repo-deploy-key))
+          GH_TOKEN: ((ci-bot-access-token-with-public-repo-write-permission))
+        input_mapping:
+          pinniped: pinniped-out
+
+  - name: run-go-vuln-scan
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-source
+            trigger: true
+          - get: pinniped-ci
+      - task: run-go-vuln-scan
+        file: pinniped-ci/pipelines/shared-tasks/run-go-vuln-scan/task.yml
+        input_mapping:
+          pinniped: pinniped-source
+        params:
+          BUILD_TAGS:

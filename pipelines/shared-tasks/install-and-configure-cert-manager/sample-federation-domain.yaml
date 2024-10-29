@@ -1,0 +1,26 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Here is an example FederationDomain which will use the letsencrypt certs created by this task.
+#
+# Use `kubectl apply -f sample-federation-domain.yaml` to apply it to the acceptance cluster.
+#
+# Don't forget to `kubectl delete -f sample-federation-domain.yaml` when you are done
+# with manual testing, otherwise it will interfere with the integration tests when
+# CI runs them on the acceptance cluster.
+#
+# You should be able to curl this FederationDomain's discovery endpoint
+# with cert verification like this:
+# curl -v https://le.test.pinniped.dev/test-fd/.well-known/openid-configuration
+
+---
+apiVersion: config.supervisor.pinniped.dev/v1alpha1
+kind: FederationDomain
+metadata:
+  name: federation-domain-for-manual-testing
+  namespace: supervisor-acceptance
+spec:
+  # Using a path here is optional and allows multiple FederationDomains at the same DNS name.
+  issuer: https://le.test.pinniped.dev/test-fd
+  tls:
+    secretName: supervisor-letsencrypt-tls-certificate

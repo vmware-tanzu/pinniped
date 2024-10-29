@@ -1,0 +1,119 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Helps decide the name of the Deployment along with other resources and labels. Will be suffixed with "-web".
+fullnameOverride: concourse
+
+worker:
+  enabled: false
+
+postgresql:
+  enabled: false
+
+web:
+  # In an effort to save money, default to 1 web server.
+  replicas: 1
+  nodeSelector: { cloud.google.com/gke-nodepool: generic-1 } # the name of the nodepool from terraform
+  additionalAffinities:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app: concourse-web # see comment on fullnameOverride above
+                release: concourse-web # this must be the same name as the helm release in deploy-concourse-web.sh
+  service:
+    api:
+      type: LoadBalancer
+    workerGateway:
+      type: LoadBalancer
+  # The first node in the generic-1 nodepool (using e2-highcpu-8 VM) has lots of GKE and Kubernetes pods running on it.
+  # According to the "allocatable" section of the "kubectl get node -o yaml" output, the first node has
+  # 7910m cpu and 6179084 Ki memory (which is about 5.893 Gi).
+  # The total requests from the GKE/Kube pods is 1017m cpu and 1046766976 (bytes) memory (which is about 0.975 Gi).
+  # The difference between the allocatable memory and the requested memory is 4.918 Gi, so we will request slightly
+  # less than that to leave a little headroom on the cluster in case some of these pods get upgraded and decide
+  # to request more in the future. Similarly, the cpu difference is 6893m.
+  resources:
+    requests:
+      cpu: 6400m
+      memory: 4.7Gi
+    limits:
+      cpu: 6400m
+      memory: 4.7Gi
+  strategy:
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 1
+
+concourse:
+  web:
+    localAuth:
+      enabled: false
+    auth:
+      mainTeam:
+        localUser: ""
+        github:
+          # From https://concourse-ci.org/github-auth.html...
+          # "Note that the client must be created under an organization if you want to authorize users based on
+          # organization/team membership. In addition, the GitHub application must have at least read access on
+          # the organization's members. If the client is created under a personal account, only individual users
+          # can be authorized."
+          # We requested that the owner of the vmware-tanzu org create an OIDC client for us.
+          # Because it was created in the org, it should have permissions to read team memberships during a login.
+          # The client ID and client secret are stored in the bootstrap secret in the Secrets Manager
+          # (see infra/README.md for more info about the bootstrap secret).
+          team: vmware-tanzu:pinniped-owners
+      github:
+        enabled: true
+    bindPort: 80
+    clusterName: pinniped-ci
+    # containerPlacementStrategy: random
+    defaultDaysToRetainBuildLogs: 60
+    # enableAcrossStep: true
+    # enablePipelineInstances: true
+    # enableBuildAuditing: true
+    # enableContainerAuditing: true
+    # enableGlobalResources: true
+    # enableJobAuditing: true
+    # enablePipelineAuditing: true
+    # enableResourceAuditing: true
+    # enableSystemAuditing: true
+    # enableTeamAuditing: true
+    # enableVolumeAuditing: true
+    # enableWorkerAuditing: true
+    enableCacheStreamedVolumes: true
+    enableResourceCausality: true
+    enableRedactSecrets: true
+    baggageclaimResponseHeaderTimeout: 10m
+    encryption:
+      enabled: true
+    kubernetes:
+      keepNamespaces: true
+    letsEncrypt:
+      enabled: true
+      acmeURL: "https://acme-v02.api.letsencrypt.org/directory"
+    tls:
+      enabled: true
+      bindPort: 443
+    postgres:
+      database: atc
+      sslmode: verify-ca
+    gc:
+      # See https://concourse-ci.org/performance-tuning.html#concourse_gc_failed_grace_period.
+      # Defaults to 5 days. This means that when lots of jobs in a pipeline fail, all of those
+      # containers will stick around for 5 days, causing you to quickly reach the max containers
+      # per worker and start seeing orange jobs complaining that they cannot start containers.
+      # Its nice for debugging when you can hijack a container of a job that failed a long time
+      # ago, but it comes at the cost of needing more workers to hold on to those containers.
+      failedGracePeriod: 10m
+    # logLevel: debug
+  tsa:
+  # logLevel: debug
+
+secrets:
+  localUsers: ""

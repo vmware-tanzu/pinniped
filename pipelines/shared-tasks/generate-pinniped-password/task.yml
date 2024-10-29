@@ -1,0 +1,12 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+outputs:
+  - name: pinniped-password
+params:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/generate-pinniped-password/task.sh

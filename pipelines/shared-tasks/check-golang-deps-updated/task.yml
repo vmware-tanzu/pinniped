@@ -1,0 +1,19 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+image_resource:
+  type: registry-image
+  source:
+    repository: golang
+    # Always use the latest version of Go for this job, so it can update the toolchain directives to match that version.
+    tag: latest
+inputs:
+  - name: pinniped-in
+  - name: pinniped-ci
+outputs:
+  - name: pinniped-out
+params:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/check-golang-deps-updated/task.sh

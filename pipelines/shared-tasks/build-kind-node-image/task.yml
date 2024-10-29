@@ -1,0 +1,22 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+  - name: instance
+outputs:
+params:
+  # Docker push destination location and credentials
+  PUSH_TO_IMAGE_REGISTRY:
+  PUSH_TO_IMAGE_REPO:
+  DOCKER_USERNAME:
+  DOCKER_PASSWORD:
+  # GCP VM location and credentials
+  INSTANCE_ZONE:
+  GCP_PROJECT:
+  GCP_USERNAME:
+  GCP_JSON_KEY:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/build-kind-node-image/task.sh

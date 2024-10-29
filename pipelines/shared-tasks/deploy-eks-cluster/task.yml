@@ -1,0 +1,17 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+outputs:
+  - name: deploy-eks-cluster-output
+params:
+  KUBE_VERSION:
+  AWS_DEFAULT_REGION:
+  AWS_ACCESS_KEY_ID:
+  AWS_SECRET_ACCESS_KEY:
+  AWS_ROLE_ARN:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/deploy-eks-cluster/task.sh

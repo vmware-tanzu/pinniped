@@ -1,0 +1,24 @@
+#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+#! SPDX-License-Identifier: Apache-2.0
+
+#@ load("@ytt:overlay", "overlay")
+
+#! Add resource requests and limits to the initContainer so the whole pod can be assigned "Guaranteed" QoS.
+#! All containers must have requests equal to limits, including the initContainers.
+
+#@overlay/match by=overlay.subset({"kind": "Deployment", "metadata":{"name":"concourse-web"}}), expects=1
+---
+spec:
+  template:
+    spec:
+      initContainers:
+        - #@overlay/match by="name"
+          name: concourse-migration
+          #@overlay/match missing_ok=True
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+            requests:
+              cpu: 1000m
+              memory: 1Gi

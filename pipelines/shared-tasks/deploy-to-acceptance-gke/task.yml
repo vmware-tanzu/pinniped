@@ -1,0 +1,106 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped
+  - name: pinniped-ci
+  - name: ci-build-image
+outputs:
+  - name: integration-test-env-vars
+  - name: kubeconfig
+params:
+  # Used to get and manipulate the GKE acceptance cluster's kubeconfig.
+  PINNIPED_GCP_PROJECT: # project name
+  GKE_CLUSTER_NAME: # The name of the GKE cluster in gcloud.
+  GKE_USERNAME:
+  GKE_JSON_KEY:
+
+  # Where to get the build image. Used to create an image pull Secret.
+  CI_BUILD_IMAGE_NAME:
+  CI_BUILD_IMAGE_SERVER:
+  CI_BUILD_IMAGE_USERNAME:
+  CI_BUILD_IMAGE_PASSWORD:
+
+  # Use TMC's real webhook endpoint for some WebhookAuthenticator tests.
+  TMC_API_TOKEN:
+  TMC_CLUSTER_NAME:
+
+  # Set up a LoadBalancer for the Supervisor.
+  RESERVED_LOAD_BALANCER_STATIC_IP: # An IP reserved for this purpose in our GCP project.
+  LOAD_BALANCER_DNS_NAME: # A DNS entry in our GCP project for the above IP address.
+  # Set up an Ingress for the Supervisor, as an alternate way to access it.
+  INGRESS_STATIC_IP_GCLOUD_NAME: # The name of a static IP reservation in our GCP project used for this purpose.
+  INGRESS_DNS_ENTRY_GCLOUD_NAME: # A DNS entry in our GCP project for the IP address represented by the above static IP reservation name.
+
+  # Set to a non-empty value to remove the CPU requests from these deployments.
+  SUPERVISOR_AND_CONCIERGE_NO_CPU_REQUEST:
+
+  # needed when we are testing against active directory.
+  TEST_ACTIVE_DIRECTORY:
+  AWS_AD_HOST:
+  AWS_AD_DOMAIN:
+  AWS_AD_BIND_ACCOUNT_USERNAME:
+  AWS_AD_BIND_ACCOUNT_PASSWORD:
+  AWS_AD_USER_USER_PRINCIPAL_NAME:
+  AWS_AD_USER_PASSWORD:
+  AWS_AD_USER_UNIQUE_ID_ATTRIBUTE_NAME:
+  AWS_AD_USER_UNIQUE_ID_ATTRIBUTE_VALUE:
+  AWS_AD_USER_EXPECTED_GROUPS_DN:
+  AWS_AD_USER_EXPECTED_GROUPS_CN:
+  AWS_AD_LDAPS_CA_BUNDLE:
+  AWS_AD_DEACTIVATED_USER_SAMACCOUNTNAME:
+  AWS_AD_DEACTIVATED_USER_PASSWORD:
+  AWS_AD_USER_EMAIL_ATTRIBUTE_VALUE:
+  AWS_AD_USER_DEFAULTNAMINGCONTEXT_DN:
+  AWS_AD_USERS_DN:
+
+  # Only needed when wanting to test using Okta instead of Dex.
+  OKTA_CLI_CALLBACK:
+  OKTA_CLI_CLIENT_ID:
+  OKTA_ADDITIONAL_SCOPES:
+  OKTA_USERNAME_CLAIM:
+  OKTA_GROUPS_CLAIM:
+  OKTA_ISSUER:
+  OKTA_PASSWORD:
+  OKTA_SUPERVISOR_CLIENT_ID:
+  OKTA_SUPERVISOR_CLIENT_SECRET:
+  OKTA_USERNAME:
+  OKTA_GROUPS:
+  OKTA_SUPERVISOR_CALLBACK:
+
+  # only needed when wanting to test using Jumpcloud instead of OpenLDAP.
+  JUMPCLOUD_LDAP_HOST:
+  JUMPCLOUD_LDAP_STARTTLS_ONLY_HOST:
+  JUMPCLOUD_LDAP_BIND_ACCOUNT_USERNAME:
+  JUMPCLOUD_LDAP_BIND_ACCOUNT_PASSWORD:
+  JUMPCLOUD_LDAP_USERS_SEARCH_BASE:
+  JUMPCLOUD_LDAP_GROUPS_SEARCH_BASE:
+  JUMPCLOUD_LDAP_USER_DN:
+  JUMPCLOUD_LDAP_USER_CN:
+  JUMPCLOUD_LDAP_USER_PASSWORD:
+  JUMPCLOUD_LDAP_USER_UNIQUE_ID_ATTRIBUTE_NAME:
+  JUMPCLOUD_LDAP_USER_UNIQUE_ID_ATTRIBUTE_VALUE:
+  JUMPCLOUD_LDAP_USER_EMAIL_ATTRIBUTE_NAME:
+  JUMPCLOUD_LDAP_USER_EMAIL_ATTRIBUTE_VALUE:
+  JUMPCLOUD_LDAP_EXPECTED_DIRECT_GROUPS_DN:
+  JUMPCLOUD_LDAP_EXPECTED_DIRECT_GROUPS_CN:
+  JUMPCLOUD_LDAP_EXPECTED_DIRECT_POSIX_GROUPS_CN:
+
+  # only needed when wanting to test using GitHub as an identity provider
+  PINNIPED_TEST_GITHUB_APP_CLIENT_ID:
+  PINNIPED_TEST_GITHUB_APP_CLIENT_SECRET:
+  PINNIPED_TEST_GITHUB_OAUTH_APP_CLIENT_ID:
+  PINNIPED_TEST_GITHUB_OAUTH_APP_CLIENT_SECRET:
+  PINNIPED_TEST_GITHUB_OAUTH_APP_ALLOWED_CALLBACK_URL:
+  PINNIPED_TEST_GITHUB_USER_USERNAME:
+  PINNIPED_TEST_GITHUB_USER_PASSWORD:
+  PINNIPED_TEST_GITHUB_USER_OTP_SECRET:
+  PINNIPED_TEST_GITHUB_USERID:
+  PINNIPED_TEST_GITHUB_ORG:
+  PINNIPED_TEST_GITHUB_EXPECTED_TEAM_NAMES:
+  PINNIPED_TEST_GITHUB_EXPECTED_TEAM_SLUGS:
+
+run:
+  path: pinniped-ci/pipelines/shared-tasks/deploy-to-acceptance-gke/task.sh

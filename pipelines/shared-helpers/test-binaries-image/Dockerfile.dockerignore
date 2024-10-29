@@ -1,0 +1,10 @@
+./.*
+./*.md
+./*.yaml
+./apis
+./deploy
+./Dockerfile
+./generated/1.1*
+./internal/mocks
+./LICENSE
+./site/

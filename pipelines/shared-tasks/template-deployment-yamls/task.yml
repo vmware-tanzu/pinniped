@@ -1,0 +1,16 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped
+  - name: pinniped-ci
+  - name: release-semver
+  - name: ci-build-image
+outputs:
+  - name: deployment-yamls
+params:
+  IMAGE_REPO:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/template-deployment-yamls/task.sh

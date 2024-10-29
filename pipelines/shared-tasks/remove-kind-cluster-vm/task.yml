@@ -1,0 +1,16 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+  - name: kind-cluster-pool
+outputs:
+params:
+  INSTANCE_ZONE:
+  GCP_PROJECT:
+  GCP_USERNAME:
+  GCP_JSON_KEY:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.sh

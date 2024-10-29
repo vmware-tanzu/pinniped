@@ -1,0 +1,15 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: image
+  - name: pinniped-ci
+image_resource:
+  type: registry-image
+  source:
+    repository: golang
+    tag: '1.23.2'
+run:
+  path: pinniped-ci/pipelines/shared-tasks/confirm-built-with-fips/task.sh

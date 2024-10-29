@@ -1,0 +1,18 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+image_resource:
+  type: registry-image
+  source:
+    repository: golang
+    tag: '1.23.2'
+inputs:
+  - name: pinniped-ci
+  - name: github-final-release
+  - name: pinniped-in
+outputs:
+  - name: pinniped-out
+run:
+  path: pinniped-ci/pipelines/shared-tasks/update-version-and-cli-docs/task.sh

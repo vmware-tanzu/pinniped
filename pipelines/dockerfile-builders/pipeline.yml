@@ -1,0 +1,1167 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+display:
+
+  background_image: https://upload.wikimedia.org/wikipedia/commons/6/64/Lobo_marino_%28Zalophus_californianus_wollebaeki%29%2C_Punta_Pitt%2C_isla_de_San_Crist%C3%B3bal%2C_islas_Gal%C3%A1pagos%2C_Ecuador%2C_2015-07-24%2C_DD_11.JPG
+
+groups:
+  - name: other
+    jobs:
+      - build-k8s-app-deployer-dockerfile
+      - build-deployment-yaml-formatter-dockerfile
+      - build-integration-test-runner-dockerfile
+      - build-integration-test-runner-beta-dockerfile
+      - build-code-coverage-uploader
+      - build-eks-deployer-dockerfile
+      - build-pool-trigger-resource-dockerfile
+      - build-github-pr-resource
+      - build-gh-cli
+      - build-crane
+  - name: test
+    jobs:
+      - "build-test-*"
+  - name: k8s-codegen
+    jobs:
+      - "build-k8s-code-generator-*"
+
+meta:
+
+  # This pipeline has a lot of resources, so it causes a lot of checks.
+  # The default interval is 1m. We will try checking less often to put less
+  # load on the workers.
+  check-every-for-dockerfile: &check-every-for-dockerfile
+    check_every: 3m
+  check-every-for-image: &check-every-for-image
+    check_every: 10m
+
+  # These version numbers should be updated periodically.
+  codegen-versions: &codegen-versions
+    # Choose which version of Golang to use in the codegen container images.
+    BUILD_ARG_GO_VERSION: '1.23.2'
+    # Choose which version of sigs.k8s.io/controller-tools/cmd/controller-gen to install
+    # in the codegen container images.
+    BUILD_ARG_CONTROLLER_GEN_VERSION: 0.16.4
+    # Choose which version of github.com/elastic/crd-ref-docs to install in the codegen
+    # container images. We use a commit sha instead of a release semver because this project
+    # does not create releases very often. They seem to only release 1-2 times per year, but
+    # commit to main more often.
+    BUILD_ARG_CRD_REF_DOCS_COMMIT_SHA: 95ad38c
+
+resources:
+
+  - name: k8s-app-deployer-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/k8s-app-deployer/Dockerfile ]
+
+  - name: k8s-app-deployer-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/k8s-app-deployer
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: deployment-yaml-formatter-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/deployment-yaml-formatter/Dockerfile ]
+
+  - name: deployment-yaml-formatter-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/deployment-yaml-formatter
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: integration-test-runner-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/integration-test-runner/Dockerfile ]
+
+  - name: integration-test-runner-beta-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/integration-test-runner-beta/Dockerfile ]
+
+  - name: integration-test-runner-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/integration-test-runner
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: integration-test-runner-beta-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/integration-test-runner-beta
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: code-coverage-uploader-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/code-coverage-uploader/Dockerfile ]
+
+  - name: code-coverage-uploader-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/code-coverage-uploader
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: pool-trigger-resource-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths:
+        - dockerfiles/pool-trigger-resource/Dockerfile
+        - "dockerfiles/pool-trigger-resource/assets/*"
+
+  - name: pool-trigger-resource-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/pool-trigger-resource
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: k8s-code-generator-1.25-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.25
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: k8s-code-generator-1.26-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.26
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: k8s-code-generator-1.27-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.27
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: k8s-code-generator-1.28-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.28
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: k8s-code-generator-1.29-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.29
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: k8s-code-generator-1.30-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.30
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: k8s-code-generator-1.31-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.31
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: k8s-code-generator-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/k8s-code-generator/* ]
+
+  - name: test-forward-proxy-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/test-forward-proxy
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: test-forward-proxy-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/test-forward-proxy/* ]
+
+  - name: test-bitnami-ldap-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/test-bitnami-ldap
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: test-bitnami-ldap-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/test-bitnami-ldap/Dockerfile ]
+
+  - name: test-dex-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/test-dex
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: test-dex-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/test-dex/Dockerfile ]
+
+  - name: test-cfssl-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/test-cfssl
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: test-cfssl-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/test-cfssl/Dockerfile ]
+
+  - name: test-kubectl-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/test-kubectl
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: test-kubectl-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/test-kubectl/Dockerfile ]
+
+  - name: gh-cli-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/gh-cli
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: gh-cli-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/gh-cli/Dockerfile ]
+
+  - name: crane-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/crane
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: crane-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/crane/Dockerfile ]
+
+  - name: eks-deployer-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+      paths: [ dockerfiles/eks-deployer/Dockerfile ]
+
+  - name: eks-deployer-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/eks-deployer
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: github-pr-resource-dockerfile
+    type: git
+    icon: github
+    <<: *check-every-for-dockerfile
+    source:
+      uri: https://github.com/pinniped-ci-bot/github-pr-resource.git
+      branch: pinniped_owners
+
+  - name: github-pr-resource-image
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/github-pr-resource
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: daily
+    type: time
+    icon: calendar-clock
+    check_every: 10m
+    source:
+      location: America/Los_Angeles
+      start: 2:00 AM
+      stop: 3:00 AM
+      days: [ Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday ]
+
+jobs:
+
+  - name: build-k8s-app-deployer-dockerfile
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: k8s-app-deployer-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: k8s-app-deployer-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: k8s-app-deployer-dockerfile/dockerfiles/k8s-app-deployer
+      - put: k8s-app-deployer-image
+        params:
+          image: image/image.tar
+
+  - name: build-deployment-yaml-formatter-dockerfile
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: deployment-yaml-formatter-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: deployment-yaml-formatter-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: deployment-yaml-formatter-dockerfile/dockerfiles/deployment-yaml-formatter
+      - put: deployment-yaml-formatter-image
+        params:
+          image: image/image.tar
+
+  - name: build-integration-test-runner-dockerfile
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: integration-test-runner-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: integration-test-runner-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          # Do not cache so we get the latest version of Chrome during nightly runs.
+          #caches:
+          #  - path: cache
+          params:
+            CONTEXT: integration-test-runner-dockerfile/dockerfiles/integration-test-runner
+      - put: integration-test-runner-image
+        params:
+          image: image/image.tar
+
+  - name: build-integration-test-runner-beta-dockerfile
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: integration-test-runner-beta-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: integration-test-runner-beta-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          # Do not cache so we get the latest version of Chrome during nightly runs.
+          #caches:
+          #  - path: cache
+          params:
+            CONTEXT: integration-test-runner-beta-dockerfile/dockerfiles/integration-test-runner-beta
+      - put: integration-test-runner-beta-image
+        params:
+          image: image/image.tar
+
+  - name: build-code-coverage-uploader
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: code-coverage-uploader-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: code-coverage-uploader-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: code-coverage-uploader-dockerfile/dockerfiles/code-coverage-uploader
+      - put: code-coverage-uploader-image
+        params:
+          image: image/image.tar
+
+  - name: build-pool-trigger-resource-dockerfile
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: pool-trigger-resource-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: pool-trigger-resource-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: pool-trigger-resource-dockerfile/dockerfiles/pool-trigger-resource
+      - put: pool-trigger-resource-image
+        params:
+          image: image/image.tar
+
+  - name: build-k8s-code-generator-1.25
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: k8s-code-generator-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: k8s-code-generator-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
+            BUILD_ARG_K8S_PKG_VERSION: 0.25.16
+            <<: *codegen-versions
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: k8s-code-generator-1.25-image-ghcr
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-k8s-code-generator-1.26
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: k8s-code-generator-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: k8s-code-generator-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
+            BUILD_ARG_K8S_PKG_VERSION: 0.26.15
+            <<: *codegen-versions
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: k8s-code-generator-1.26-image-ghcr
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-k8s-code-generator-1.27
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: k8s-code-generator-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: k8s-code-generator-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
+            BUILD_ARG_K8S_PKG_VERSION: 0.27.16
+            <<: *codegen-versions
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: k8s-code-generator-1.27-image-ghcr
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-k8s-code-generator-1.28
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: k8s-code-generator-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: k8s-code-generator-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
+            BUILD_ARG_K8S_PKG_VERSION: 0.28.14
+            <<: *codegen-versions
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: k8s-code-generator-1.28-image-ghcr
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-k8s-code-generator-1.29
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: k8s-code-generator-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: k8s-code-generator-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
+            BUILD_ARG_K8S_PKG_VERSION: 0.29.9
+            <<: *codegen-versions
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: k8s-code-generator-1.29-image-ghcr
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-k8s-code-generator-1.30
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: k8s-code-generator-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: k8s-code-generator-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
+            BUILD_ARG_K8S_PKG_VERSION: 0.30.5
+            <<: *codegen-versions
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: k8s-code-generator-1.30-image-ghcr
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-k8s-code-generator-1.31
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: k8s-code-generator-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: k8s-code-generator-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
+            BUILD_ARG_K8S_PKG_VERSION: 0.31.1
+            <<: *codegen-versions
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: k8s-code-generator-1.31-image-ghcr
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-test-forward-proxy
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: test-forward-proxy-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: test-forward-proxy-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: test-forward-proxy-dockerfile/dockerfiles/test-forward-proxy
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: test-forward-proxy-image-ghcr
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-test-bitnami-ldap
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: test-bitnami-ldap-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: test-bitnami-ldap-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: test-bitnami-ldap-dockerfile/dockerfiles/test-bitnami-ldap
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: test-bitnami-ldap-image-ghcr
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-test-dex
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: test-dex-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: test-dex-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: test-dex-dockerfile/dockerfiles/test-dex
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: test-dex-image
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-test-cfssl
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: test-cfssl-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: test-cfssl-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: test-cfssl-dockerfile/dockerfiles/test-cfssl
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: test-cfssl-image
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-test-kubectl
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: test-kubectl-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: test-kubectl-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: test-kubectl-dockerfile/dockerfiles/test-kubectl
+            OUTPUT_OCI: true # needed for building multi-arch images
+            IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+      - put: test-kubectl-image
+        get_params:
+          format: oci # needed for multi-arch images
+        params:
+          image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-eks-deployer-dockerfile
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: eks-deployer-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: eks-deployer-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: eks-deployer-dockerfile/dockerfiles/eks-deployer
+      - put: eks-deployer-image
+        params:
+          image: image/image.tar
+
+  - name: build-github-pr-resource
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: github-pr-resource-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: github-pr-resource-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: github-pr-resource-dockerfile
+      - put: github-pr-resource-image
+        params:
+          image: image/image.tar
+
+  - name: build-crane
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: crane-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: crane-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: crane-dockerfile/dockerfiles/crane
+      - put: crane-image
+        params:
+          image: image/image.tar
+
+  - name: build-gh-cli
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+      - get: gh-cli-dockerfile
+        trigger: true
+      - get: daily
+        trigger: true
+      - task: build-image
+        privileged: true
+        config:
+          platform: linux
+          image_resource:
+            type: registry-image
+            source:
+              repository: concourse/oci-build-task
+          inputs:
+            - name: gh-cli-dockerfile
+          outputs:
+            - name: image
+          run:
+            path: build
+          caches:
+            - path: cache
+          params:
+            CONTEXT: gh-cli-dockerfile/dockerfiles/gh-cli
+      - put: gh-cli-image
+        params:
+          image: image/image.tar

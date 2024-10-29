@@ -1,0 +1,68 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+display:
+
+  background_image: https://upload.wikimedia.org/wikipedia/commons/9/9d/Seal_cleaning_itself.jpg
+
+resources:
+
+  - name: pinniped-ci
+    type: git
+    icon: github
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+
+jobs:
+
+  # Here is a recommendation for how to use these tasks to clean up our AWS
+  # environment.
+  #
+  # 1. Run dryrun-cleanup-aws and look at the listed resources to make sure you aren't
+  #    deleting anything that you don't want to.
+  # 2. Run danger-danger-cleanup-aws to actually delete resources.
+  # 3. Run list-all-aws-resources to view ALL resources left in our AWS account.
+  #    Consider if we want to add any of those resources to our cleanup task's config.
+
+  - name: danger-danger-cleanup-aws
+    public: false # hide logs
+    serial: true
+    plan:
+      - get: pinniped-ci
+      - task: cleanup-aws
+        file: pinniped-ci/pipelines/shared-tasks/cleanup-aws/task.yml
+        params:
+          AWS_ACCOUNT_NUMBER: ((aws-cleanup-account-number))
+          AWS_ACCESS_KEY_ID: ((aws-cleanup-iam-key-id))
+          AWS_SECRET_ACCESS_KEY: ((aws-cleanup-iam-key-secret))
+          AWS_ROLE_ARN: ((aws-cleanup-role-arn))
+          REALLY_CLEANUP: "yes"
+
+  - name: dryrun-cleanup-aws
+    public: false # hide logs
+    serial: true
+    plan:
+      - get: pinniped-ci
+      - task: preview-cleanup-aws-without-actually-deleting-anything
+        file: pinniped-ci/pipelines/shared-tasks/cleanup-aws/task.yml
+        params:
+          AWS_ACCOUNT_NUMBER: ((aws-cleanup-account-number))
+          AWS_ACCESS_KEY_ID: ((aws-cleanup-iam-key-id))
+          AWS_SECRET_ACCESS_KEY: ((aws-cleanup-iam-key-secret))
+          AWS_ROLE_ARN: ((aws-cleanup-role-arn))
+
+  - name: list-all-aws-resources
+    public: false # hide logs
+    serial: true
+    plan:
+      - get: pinniped-ci
+      - task: list-all-aws-resources
+        file: pinniped-ci/pipelines/shared-tasks/cleanup-aws/task.yml
+        params:
+          AWS_ACCOUNT_NUMBER: ((aws-cleanup-account-number))
+          AWS_ACCESS_KEY_ID: ((aws-cleanup-iam-key-id))
+          AWS_SECRET_ACCESS_KEY: ((aws-cleanup-iam-key-secret))
+          AWS_ROLE_ARN: ((aws-cleanup-role-arn))
+          ALL_RESOURCES: "yes"

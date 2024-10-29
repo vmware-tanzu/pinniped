@@ -1,0 +1,18 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+  - name: ci-build-image # the source image - this directory should contain files "repository" (e.g. containing "ghcr.io/pinniped-ci-bot/ci-build") and "digest" (e.g. containing "sha256:1bc5db19e45c3ad109e996e8c7f632a9e537557e78f9be3cb29b3fd01612f77a")
+  - name: release-info # additional destination tags will be read from each line of release-info/image-tags, one tag per line
+params:
+  SOURCE_REPOSITORY_USERNAME: # required
+  SOURCE_REPOSITORY_PASSWORD: # required
+  DESTINATION_REPOSITORY: # required
+  DESTINATION_TAG: # optional, as long as there is at least one tag input file release-info/image-tags
+  DESTINATION_REPOSITORY_USERNAME: # required
+  DESTINATION_REPOSITORY_PASSWORD: # required
+run:
+  path: pinniped-ci/pipelines/shared-tasks/copy-image/task.sh

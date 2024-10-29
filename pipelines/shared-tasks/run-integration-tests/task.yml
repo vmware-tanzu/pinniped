@@ -1,0 +1,31 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped
+  - name: pinniped-ci
+  - name: integration-test-env-vars
+  - name: kubeconfig
+  - name: ci-test-image
+    optional: true
+outputs:
+  - name: test-output
+params:
+  GCP_ZONE:
+  GCP_PROJECT:
+  GCP_USERNAME:
+  GCP_JSON_KEY:
+  PINNIPED_SUPERVISOR_NAMESPACE:
+  PINNIPED_SUPERVISOR_NODEPORT_SERVICE:
+  PINNIPED_SUPERVISOR_HTTPS_HOST_PORT:
+  TEST_RUN_REGEX:
+
+  # Only set one of these to "yes":
+  START_GCLOUD_PROXY:
+  START_KUBECTL_PROXY:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.sh
+caches:
+  - path: cache

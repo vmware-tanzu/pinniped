@@ -1,0 +1,122 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+display:
+
+  background_image: https://cdn.pixabay.com/photo/2020/09/16/22/09/pool-5577567_1280.jpg
+
+meta:
+
+  # GCP account info and which zone the workers should be created in and deleted from.
+  gke_admin_params: &gke_admin_params
+    INSTANCE_ZONE: us-west1-b
+    PINNIPED_GCP_PROJECT: ((gcp-project-name))
+    GCP_USERNAME: ((gke-cluster-developer-username))
+    GCP_JSON_KEY: ((gke-cluster-developer-json-key))
+
+  # GCP account info and which zone the workers should be created in and deleted from.
+  gcp_account_params: &gcp_account_params
+    INSTANCE_ZONE: us-central1-b
+    GCP_PROJECT: ((gcp-project-name))
+    GCP_USERNAME: ((gcp-instance-admin-username))
+    GCP_JSON_KEY: ((gcp-instance-admin-json-key))
+
+resources:
+
+  - name: pinniped-ci
+    type: git
+    icon: github
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+
+  - name: k8s-app-deployer-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: ((ci-ghcr-registry))/k8s-app-deployer
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
+  - name: gcloud-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: google/cloud-sdk
+      tag: slim
+
+  - name: hourly
+    type: time
+    icon: calendar-clock
+    source:
+      interval: 1h
+
+# In an effort to save money, no longer automatically scale our workers up and down on a schedule.
+
+#  - name: end-of-business-day
+#    type: time
+#    icon: calendar-clock
+#    source:
+#      location: America/Los_Angeles
+#      start: 7:00 PM
+#      stop: 8:00 PM
+#      days: [ Monday, Tuesday, Wednesday, Thursday, Friday ]
+#
+#  - name: start-of-business-day
+#    type: time
+#    icon: calendar-clock
+#    source:
+#      location: America/New_York
+#      start: 5:30 AM
+#      stop: 6:30 AM
+#      days: [ Monday, Tuesday, Wednesday, Thursday, Friday ]
+
+jobs:
+
+  - name: scale-up-internal-workers
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-ci
+          - get: k8s-app-deployer-image
+#          - get: start-of-business-day
+#            trigger: true
+      - task: scale-up
+        timeout: 30m
+        file: pinniped-ci/pipelines/concourse-workers/scale-up-gke-replicas.yml
+        image: k8s-app-deployer-image
+        params:
+          <<: *gke_admin_params
+
+  - name: scale-down-internal-workers
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-ci
+          - get: k8s-app-deployer-image
+#          - get: end-of-business-day
+#            trigger: true
+      - task: scale-down
+        timeout: 30m
+        file: pinniped-ci/pipelines/concourse-workers/scale-down-gke-replicas.yml
+        image: k8s-app-deployer-image
+        params:
+          <<: *gke_admin_params
+
+  - name: remove-orphaned-vms
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-ci
+          - get: gcloud-image
+          - get: hourly
+            trigger: true
+      - task: remove-orphaned-kind-cluster-vms
+        attempts: 2
+        timeout: 25m
+        file: pinniped-ci/pipelines/shared-tasks/remove-orphaned-kind-cluster-vms/task.yml
+        image: gcloud-image
+        params:
+          <<: *gcp_account_params

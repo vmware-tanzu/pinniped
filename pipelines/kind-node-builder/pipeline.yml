@@ -1,0 +1,109 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+display:
+
+  background_image: https://upload.wikimedia.org/wikipedia/commons/2/2b/Grey_seal_animal_halichoerus_grypus.jpg
+
+meta:
+
+  notify_on_failure: &notify_on_failure
+    on_failure:
+      put: gchat
+      timeout: 5m
+      params:
+        text: |
+          Job `${BUILD_PIPELINE_NAME}/${BUILD_JOB_NAME}` *FAILED* :(
+          ${ATC_EXTERNAL_URL}/teams/${BUILD_TEAM_NAME}/pipelines/${BUILD_PIPELINE_NAME}/jobs/${BUILD_JOB_NAME}/builds/${BUILD_NAME}
+
+  # GCP account info and which zone the workers should be created in and deleted from.
+  gcp_account_params: &gcp_account_params
+    INSTANCE_ZONE: us-central1-b
+    GCP_PROJECT: ((gcp-project-name))
+    GCP_USERNAME: ((gcp-instance-admin-username))
+    GCP_JSON_KEY: ((gcp-instance-admin-json-key))
+
+resource_types:
+
+  - name: google-chat-notify-resource
+    type: docker-image
+    source:
+      repository: springio/google-chat-notify-resource
+      tag: 0.0.1-SNAPSHOT # see https://hub.docker.com/r/springio/google-chat-notify-resource/tags
+      # We are only doing pulls of this resource type, but add the username and password to avoid
+      # hitting a rate limit. Our free account is only allowed to have one access token, so we
+      # cannot make a read-only token for performing pulls.
+      username: getpinniped
+      password: ((getpinniped-dockerhub-image-push-access-token))
+
+resources:
+
+  - name: gcloud-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: google/cloud-sdk
+      tag: slim
+
+  - name: pinniped-ci
+    type: git
+    icon: github
+    source:
+      uri: git@github.com:vmware-tanzu/pinniped.git
+      branch: ci
+      private_key: ((source-repo-deploy-key))
+
+  - name: daily
+    type: time
+    icon: calendar-clock
+    source:
+      location: America/Los_Angeles
+      start: 1:00 AM
+      stop: 2:00 AM
+      days: [ Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday ]
+
+  - name: gchat
+    type: google-chat-notify-resource
+    icon: chat-outline
+    source:
+      url: ((gchat-project-pinniped-bots-webhook-url))
+
+jobs:
+
+  - name: build-kind-node-image-kube-main-latest
+    public: true # all logs are publicly visible
+    <<: *notify_on_failure
+    plan:
+      - in_parallel:
+          - get: pinniped-ci
+          - get: gcloud-image
+          - get: daily
+            trigger: true
+      - task: create-kind-node-builder-vm
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/create-kind-node-builder-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *gcp_account_params
+      - task: build-kind-node-image
+        timeout: 90m
+        file: pinniped-ci/pipelines/shared-tasks/build-kind-node-image/task.yml
+        image: gcloud-image
+        input_mapping:
+          instance: create-kind-node-builder-vm-output
+        params:
+          PUSH_TO_IMAGE_REGISTRY: "ghcr.io"
+          PUSH_TO_IMAGE_REPO: "pinniped-ci-bot/kind-node-image"
+          DOCKER_USERNAME: ((ci-ghcr-pusher-username))
+          DOCKER_PASSWORD: ((ci-ghcr-pusher-token))
+          <<: *gcp_account_params
+        ensure:
+          task: remove-instance
+          attempts: 2
+          timeout: 20m
+          file: pinniped-ci/pipelines/shared-tasks/remove-gce-worker-vm/task.yml
+          image: gcloud-image
+          input_mapping:
+            concourse-worker-pool: create-kind-node-builder-vm-output
+          params:
+            <<: *gcp_account_params

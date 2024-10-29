@@ -1,0 +1,18 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+image_resource:
+  type: registry-image
+  source:
+    repository: debian
+    tag: 10.8
+inputs:
+  - name: pinniped-ci
+  - name: github-release
+  - name: homebrew-pinniped-in
+outputs:
+  - name: homebrew-pinniped-out
+run:
+  path: pinniped-ci/pipelines/shared-tasks/update-homebrew-formula/task.sh

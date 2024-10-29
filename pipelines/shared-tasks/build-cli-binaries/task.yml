@@ -1,0 +1,23 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+image_resource:
+  type: registry-image
+  source:
+    repository: golang
+    tag: '1.23.2'
+inputs:
+  - name: pinniped
+  - name: pinniped-ci
+  - name: release-info
+    optional: true # only really optional when DRY_RUN == "yes"
+outputs:
+  - name: cli-binaries
+params:
+  DRY_RUN:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/build-cli-binaries/task.sh
+caches:
+  - path: cache

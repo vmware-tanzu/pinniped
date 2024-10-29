@@ -1,0 +1,16 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+  - name: kubeconfig
+  - name: integration-test-env-vars
+outputs:
+params:
+  PINNIPED_GCP_PROJECT: # project name
+  CERT_MANAGER_DNS_ADMIN_JSON_KEY:
+
+run:
+  path: pinniped-ci/pipelines/shared-tasks/install-and-configure-cert-manager/task.sh

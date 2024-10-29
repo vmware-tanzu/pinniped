@@ -1,0 +1,89 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+image_resource:
+  type: registry-image
+  source:
+    repository: debian
+    tag: 10.8-slim
+inputs:
+  - name: pinniped
+  - name: release-semver
+  - name: previous-release-semver
+  - name: ci-build-image
+outputs:
+  - name: release-info
+params:
+  RELEASE_TYPE: minor
+run:
+  path: bash
+  args:
+    - -xeuc
+    - |
+      ( apt update && apt install -y git ) 2>&1 > install.log || cat install.log
+
+      THIS_VERSION="v$(cat release-semver/version)"
+      PREVIOUS_VERSION="v$(cat previous-release-semver/version)"
+
+      echo "$THIS_VERSION" >> release-info/version-with-v
+
+      echo "$THIS_VERSION" >> release-info/image-tags
+      echo "v$(cat release-semver/version | cut -d'.' -f1-2)" >> release-info/image-tags
+      if [[ $RELEASE_TYPE == "minor" ]]; then
+        # When cutting a patch release, it is not safe to assume that it will become the newest
+        # release overall for that major line, because there could be a newer minor release already,
+        # so skip tagging with the major line for patch releases.
+        echo "v$(cat release-semver/version | cut -d'.' -f1)" >> release-info/image-tags
+      fi
+
+      cat <<EOT | tee release-info/body
+      # Release $THIS_VERSION
+
+      ## Release Image
+
+      | Image          | Registry      |
+      | -------------- | ------------- |
+      | \`ghcr.io/vmware-tanzu/pinniped/pinniped-server:$THIS_VERSION\`  | GitHub Container Registry |
+      | \`docker.io/getpinniped/pinniped-server:$THIS_VERSION\`          | DockerHub                 |
+
+      These images can also be referenced by their digest: \`$(cat ci-build-image/digest)\`.
+
+      ## Changes
+
+      *TODO*: Summarize the release's purpose in a brief headline here.
+
+      ### Major Changes
+
+      - *TODO*: Summarize the major changes here as a bulleted list. Remove the section if there are no major changes.
+
+      ### Minor Changes
+
+      - *TODO*: Summarize the minor changes here as a bulleted list. Remove the section if there are no minor changes.
+
+      ### Bug Fixes
+
+      - *TODO*: Summarize the bug fixes here as a bulleted list. Remove the section if there are no bug fixes.
+
+      ### Diffs
+
+      *TODO*: Make sure the following references the correct version tags. Note that the link will not work until the release is published (made public):<br/>
+      A complete list of changes can be found [here](https://github.com/vmware-tanzu/pinniped/compare/$PREVIOUS_VERSION...$THIS_VERSION).
+
+      ## Acknowledgements
+
+      - *TODO*: Did anyone outside the core team contribute code, bug reports, ideas, advice, etc. to this release? Thank them here and "at mention" them if possible.
+
+      ## Note: All Commits (TODO: remove this section)
+
+      *TODO*: Remove this section before making this draft public. This list of commits is only intended to help edit the sections above.
+
+      EOT
+
+      LAST_REF="$PREVIOUS_VERSION"
+      if ! git -C pinniped show-ref "$LAST_REF" ; then
+        LAST_REF="$(git -C pinniped rev-list --max-parents=0 HEAD)"
+      fi
+
+      git -C pinniped log --no-decorate --pretty='format:%h - %an - %s' "$LAST_REF..HEAD" | tee -a release-info/body

@@ -1,0 +1,15 @@
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped
+  - name: pinniped-ci
+  - name: ci-build-image
+  - name: cluster-pool
+outputs:
+params:
+  TEST_SCRIPT:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/run-uninstall-test/task.sh

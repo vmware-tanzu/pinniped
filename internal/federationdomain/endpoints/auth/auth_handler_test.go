@@ -4,7 +4,10 @@
 package auth
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html"
@@ -657,6 +660,11 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 	prefixUsernameAndGroupsPipeline := transformtestutil.NewPrefixingPipeline(t, transformationUsernamePrefix, transformationGroupsPrefix)
 	rejectAuthPipeline := transformtestutil.NewRejectAllAuthPipeline(t)
 
+	generateAuthorizeId := func(encodedStateParam string) string {
+		upstreamStateHash := sha256.Sum256([]byte(encodedStateParam))
+		return hex.EncodeToString(upstreamStateHash[:])
+	}
+
 	type testCase struct {
 		name string
 
@@ -684,6 +692,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		wantBodyStringWithLocationInHref       bool
 		wantLocationHeader                     string
 		wantUpstreamStateParamInLocationHeader bool
+		wantAuditLogs                          func(encodedStateParam string) []string
 
 		// Assertions for when an authcode should be returned, i.e. the request was authenticated by an
 		// upstream LDAP provider or an upstream OIDC password grant flow.
@@ -720,6 +729,14 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
+			wantAuditLogs: func(encodedStateParam string) []string {
+				return []string{
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditEvent":true,"displayName":"some-oidc-idp","resourceName":"some-oidc-idp","resourceUID":"oidc-resource-uid","type":"oidc"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).authorize","message":"Upstream Authorize Redirect","auditEvent":true,"authorizeID":"` + generateAuthorizeId(encodedStateParam) + `"}`,
+				}
+			},
 		},
 		{
 			name:                                   "OIDC upstream browser flow happy path using GET without a CSRF cookie using a dynamic client",
@@ -738,6 +755,14 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
+			wantAuditLogs: func(encodedStateParam string) []string {
+				return []string{
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditEvent":true,"params":"client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditEvent":true,"displayName":"some-oidc-idp","resourceName":"some-oidc-idp","resourceUID":"oidc-resource-uid","type":"oidc"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).authorize","message":"Upstream Authorize Redirect","auditEvent":true,"authorizeID":"` + generateAuthorizeId(encodedStateParam) + `"}`,
+				}
+			},
 		},
 		{
 			name:                                   "GitHub upstream browser flow happy path using GET without a CSRF cookie",
@@ -755,6 +780,14 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamGithub(expectedUpstreamStateParam(nil, "", githubUpstreamName, "github")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
+			wantAuditLogs: func(encodedStateParam string) []string {
+				return []string{
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditEvent":true,"displayName":"some-github-idp","resourceName":"some-github-idp","resourceUID":"github-resource-uid","type":"github"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).authorize","message":"Upstream Authorize Redirect","auditEvent":true,"authorizeID":"` + generateAuthorizeId(encodedStateParam) + `"}`,
+				}
+			},
 		},
 		{
 			name:                                   "GitHub upstream browser flow happy path using GET without a CSRF cookie using a dynamic client",
@@ -773,6 +806,14 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamGithub(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", githubUpstreamName, "github")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
+			wantAuditLogs: func(encodedStateParam string) []string {
+				return []string{
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditEvent":true,"params":"client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditEvent":true,"displayName":"some-github-idp","resourceName":"some-github-idp","resourceUID":"github-resource-uid","type":"github"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).authorize","message":"Upstream Authorize Redirect","auditEvent":true,"authorizeID":"` + generateAuthorizeId(encodedStateParam) + `"}`,
+				}
+			},
 		},
 		{
 			name:                                   "LDAP upstream browser flow happy path using GET without a CSRF cookie",
@@ -1065,6 +1106,13 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
+			wantAuditLogs: func(encodedStateParam string) []string {
+				return []string{
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditEvent":true,"Pinniped-Username":true,"Pinniped-Password":true}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditEvent":true,"displayName":"some-ldap-idp","resourceName":"some-ldap-idp","resourceUID":"ldap-resource-uid","type":"ldap"}`,
+				}
+			},
 		},
 		{
 			name: "LDAP cli upstream happy path using GET with identity transformations which change username and groups",
@@ -1092,6 +1140,13 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 				happyLDAPUsernameFromAuthenticator,
 				happyLDAPGroups,
 			),
+			wantAuditLogs: func(encodedStateParam string) []string {
+				return []string{
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditEvent":true,"Pinniped-Username":true,"Pinniped-Password":true}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
+					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditEvent":true,"displayName":"some-ldap-idp","resourceName":"some-ldap-idp","resourceUID":"ldap-resource-uid","type":"ldap"}`,
+				}
+			},
 		},
 		{
 			name: "LDAP cli upstream with identity transformations which reject auth",
@@ -3479,7 +3534,16 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		},
 	}
 
-	runOneTestCase := func(t *testing.T, test testCase, subject http.Handler, kubeOauthStore *storage.KubeStorage, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset, secretsClient v1.SecretInterface) {
+	runOneTestCase := func(
+		t *testing.T,
+		test testCase,
+		subject http.Handler,
+		kubeOauthStore *storage.KubeStorage,
+		supervisorClient *supervisorfake.Clientset,
+		kubeClient *fake.Clientset,
+		secretsClient v1.SecretInterface,
+		auditLog *bytes.Buffer,
+	) {
 		if test.kubeResources != nil {
 			test.kubeResources(t, supervisorClient, kubeClient)
 		}
@@ -3520,12 +3584,16 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		switch {
 		case test.wantLocationHeader != "":
 			if test.wantUpstreamStateParamInLocationHeader {
-				requireEqualDecodedStateParams(t, actualLocation, test.wantLocationHeader, test.stateEncoder)
+				actualQueryStateParam := requireEqualDecodedStateParams(t, actualLocation, test.wantLocationHeader, test.stateEncoder)
+				// Ignore the state, since it was encoded with a randomly-generated initialization vector that cannot be reproduced.
+				requireEqualURLsIgnoringState(t, actualLocation, test.wantLocationHeader)
+				if test.wantAuditLogs != nil {
+					wantAuditLogs := test.wantAuditLogs(actualQueryStateParam)
+					testutil.RequireLogLines(t, wantAuditLogs, auditLog)
+				}
+			} else {
+				require.Equal(t, test.wantLocationHeader, actualLocation)
 			}
-			// The upstream state param is encoded using a timestamp at the beginning so we don't want to
-			// compare those states since they may be different, but we do want to compare the downstream
-			// state param that should be exactly the same.
-			requireEqualURLs(t, actualLocation, test.wantLocationHeader, test.wantUpstreamStateParamInLocationHeader)
 
 			// Authorization requests for either a successful OIDC upstream or for an error with any upstream
 			// should never use Kube storage. There is only one exception to this rule, which is that certain
@@ -3618,21 +3686,24 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			if len(test.wantDownstreamAdditionalClaims) > 0 {
 				require.True(t, oidcIDPsCount > 0, "wantDownstreamAdditionalClaims requires at least one OIDC IDP")
 			}
-
+			var auditLog bytes.Buffer
+			auditLogger := plog.TestLogger(t, &auditLog)
 			subject := NewHandler(
 				downstreamIssuer,
 				idps,
 				oauthHelperWithNullStorage, oauthHelperWithRealStorage,
 				test.generateCSRF, test.generatePKCE, test.generateNonce,
 				test.stateEncoder, test.cookieEncoder,
-				plog.New(),
+				auditLogger,
 			)
-			runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient)
+			runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient, &auditLog)
 		})
 	}
 
 	t.Run("allows upstream provider configuration to change between requests", func(t *testing.T) {
 		test := tests[0]
+		// TODO: check to see if it's easy to verify audit logs
+		test.wantAuditLogs = nil
 		// Double-check that we are re-using the happy path test case here as we intend.
 		require.Equal(t, "OIDC upstream browser flow happy path using GET without a CSRF cookie", test.name)
 
@@ -3643,16 +3714,18 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		oauthHelperWithRealStorage, kubeOauthStore := createOauthHelperWithRealStorage(secretsClient, oidcClientsClient)
 		oauthHelperWithNullStorage, _ := createOauthHelperWithNullStorage(secretsClient, oidcClientsClient)
 		idpLister := test.idps.BuildFederationDomainIdentityProvidersListerFinder()
+		var auditLog bytes.Buffer
+		auditLogger := plog.TestLogger(t, &auditLog)
 		subject := NewHandler(
 			downstreamIssuer,
 			idpLister,
 			oauthHelperWithNullStorage, oauthHelperWithRealStorage,
 			test.generateCSRF, test.generatePKCE, test.generateNonce,
 			test.stateEncoder, test.cookieEncoder,
-			plog.New(),
+			auditLogger,
 		)
 
-		runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient)
+		runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient, &auditLog)
 
 		// Call the idpLister's setter to change the upstream IDP settings.
 		newProviderSettings := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
@@ -3695,7 +3768,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		// modified expectations. This should ensure that the implementation is using the in-memory cache
 		// of upstream IDP settings appropriately in terms of always getting the values from the cache
 		// on every request.
-		runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient)
+		runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient, &auditLog)
 	})
 }
 
@@ -3712,7 +3785,7 @@ type expectedPasswordGrant struct {
 	args                    *oidctestutil.PasswordCredentialsGrantAndValidateTokensArgs
 }
 
-func requireEqualDecodedStateParams(t *testing.T, actualURL string, expectedURL string, stateParamDecoder oidc.Codec) {
+func requireEqualDecodedStateParams(t *testing.T, actualURL string, expectedURL string, stateParamDecoder oidc.Codec) string {
 	t.Helper()
 	actualLocationURL, err := url.Parse(actualURL)
 	require.NoError(t, err)
@@ -3732,9 +3805,11 @@ func requireEqualDecodedStateParams(t *testing.T, actualURL string, expectedURL 
 	require.NoError(t, err)
 
 	require.Equal(t, expectedDecodedStateParam, actualDecodedStateParam)
+
+	return actualQueryStateParam
 }
 
-func requireEqualURLs(t *testing.T, actualURL string, expectedURL string, ignoreState bool) {
+func requireEqualURLsIgnoringState(t *testing.T, actualURL string, expectedURL string) {
 	t.Helper()
 	actualLocationURL, err := url.Parse(actualURL)
 	require.NoError(t, err)
@@ -3757,11 +3832,9 @@ func requireEqualURLs(t *testing.T, actualURL string, expectedURL string, ignore
 
 	expectedLocationQuery := expectedLocationURL.Query()
 	actualLocationQuery := actualLocationURL.Query()
-	// Let the caller ignore the state, since it may contain a digest at the end that is difficult to
-	// predict because it depends on a time.Now() timestamp.
-	if ignoreState {
-		expectedLocationQuery.Del("state")
-		actualLocationQuery.Del("state")
-	}
+	// Ignore the state, since it was encoded with a randomly-generated initialization vector that cannot be reproduced.
+	expectedLocationQuery.Del("state")
+	actualLocationQuery.Del("state")
+
 	require.Equal(t, expectedLocationQuery, actualLocationQuery)
 }

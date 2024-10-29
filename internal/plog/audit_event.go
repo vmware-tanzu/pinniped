@@ -25,6 +25,7 @@ const (
 	AuditEventUpstreamOIDCTokenRevoked           AuditEventMessage = "Upstream OIDC Token Revoked" //nolint:gosec // this is not a credential
 	AuditEventSessionGarbageCollected            AuditEventMessage = "Session Garbage Collected"
 	AuditEventTokenCredentialRequest             AuditEventMessage = "TokenCredentialRequest" //nolint:gosec // this is not a credential
+	AuditEventUpstreamAuthorizeRedirect          AuditEventMessage = "Upstream Authorize Redirect"
 )
 
 // SanitizeParams can be used to redact all params not included in the allowedKeys set.

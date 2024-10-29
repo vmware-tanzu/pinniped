@@ -5,6 +5,8 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -210,7 +212,11 @@ func (h *authorizeHandler) authorize(
 	if requestedBrowserlessFlow {
 		err = h.authorizeWithoutBrowser(r, w, oauthHelper, authorizeRequester, idp)
 	} else {
-		err = h.authorizeWithBrowser(r, w, oauthHelper, authorizeRequester, idp)
+		var authorizeID string
+		authorizeID, err = h.authorizeWithBrowser(r, w, oauthHelper, authorizeRequester, idp)
+
+		h.auditLogger.Audit(plog.AuditEventUpstreamAuthorizeRedirect, r.Context(), nil,
+			"authorizeID", authorizeID)
 	}
 	if err != nil {
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, requestedBrowserlessFlow)
@@ -261,7 +267,7 @@ func (h *authorizeHandler) authorizeWithBrowser(
 	oauthHelper fosite.OAuth2Provider,
 	authorizeRequester fosite.AuthorizeRequester,
 	idp resolvedprovider.FederationDomainResolvedIdentityProvider,
-) error {
+) (string, error) {
 	authRequestState, err := generateUpstreamAuthorizeRequestState(r, w,
 		authorizeRequester,
 		oauthHelper,
@@ -274,19 +280,21 @@ func (h *authorizeHandler) authorizeWithBrowser(
 		h.upstreamStateEncoder,
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	redirectURL, err := idp.UpstreamAuthorizeRedirectURL(authRequestState, h.downstreamIssuerURL)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	http.Redirect(w, r, redirectURL,
 		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
 	)
 
-	return nil
+	upstreamStateHash := sha256.Sum256([]byte(authRequestState.EncodedStateParam))
+	authorizeID := hex.EncodeToString(upstreamStateHash[:])
+	return authorizeID, nil
 }
 
 func shouldShowIDPChooser(

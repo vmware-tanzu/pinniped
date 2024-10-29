@@ -184,6 +184,11 @@ the progress and results will appear on the Github page for that
 [pull request](https://github.com/vmware-tanzu/pinniped/pulls) as checks. Links
 will appear to view the details of each check.
 
+## CI
+
+Pinniped's CI configuration and code is in the [`ci`](https://github.com/vmware-tanzu/pinniped/tree/ci)
+branch of this repo. The CI results are visible to the public at https://ci.pinniped.dev.
+
 ## Documentation
 
 Any pull request which adds a new feature or changes the behavior of any feature which was previously documented

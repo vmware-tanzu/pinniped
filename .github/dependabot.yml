@@ -40,3 +40,106 @@ updates:
 #    directory: "/hack"  # this should keep the FIPS dockerfile updated per https://github.com/dependabot/feedback/issues/145#issuecomment-414738498
 #    schedule:
 #      interval: "daily"
+
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/code-coverage-uploader/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/crane/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/deployment-yaml-formatter/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/eks-deployer/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/gh-cli/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/go-lint-runner/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/integration-test-runner/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/integration-test-runner-beta/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/k8s-app-deployer/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/k8s-code-generator/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/pool-trigger-resource/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/test-bitnami-ldap/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/test-cfssl/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/test-dex/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/test-forward-proxy/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/dockerfiles/test-kubectl/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci
+  - package-ecosystem: "docker"
+    directory: "/pipelines/shared-helpers/test-binaries-image/"
+    open-pull-requests-limit: 100
+    schedule:
+      interval: "daily"
+    target-branch: ci

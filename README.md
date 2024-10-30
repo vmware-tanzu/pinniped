@@ -13,7 +13,7 @@ for these files was not copied from the private repository at the time of this m
 ## Reporting an issue in this branch
 
 Found a bug or would like to make an enhancement request?
-Please report issues in the [this repo](https://github.com/vmware-tanzu/pinniped).
+Please report issues in [this repo](https://github.com/vmware-tanzu/pinniped).
 
 ## Reporting security vulnerabilities
 

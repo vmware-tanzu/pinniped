@@ -4,3 +4,4 @@
 *.tfstate
 kubeconfig.yaml
 .DS_Store
+site/

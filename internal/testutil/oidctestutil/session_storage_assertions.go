@@ -47,7 +47,7 @@ func RequireAuthCodeRegexpMatch(
 	wantDownstreamRedirectURI string,
 	wantCustomSessionData *psession.CustomSessionData,
 	wantDownstreamAdditionalClaims map[string]any,
-) {
+) string {
 	t.Helper()
 
 	// Assert that Location header matches regular expression.
@@ -73,7 +73,7 @@ func RequireAuthCodeRegexpMatch(
 	// One authcode should have been stored.
 	testutil.RequireNumberOfSecretsMatchingLabelSelector(t, secretsClient, labels.Set{crud.SecretLabelKey: authorizationcode.TypeLabelValue}, 1)
 
-	storedRequestFromAuthcode, storedSessionFromAuthcode := validateAuthcodeStorage(
+	sessionID, storedRequestFromAuthcode, storedSessionFromAuthcode := validateAuthcodeStorage(
 		t,
 		oauthStore,
 		authcodeDataAndSignature[1], // Authcode store key is authcode signature
@@ -114,6 +114,8 @@ func RequireAuthCodeRegexpMatch(
 			wantDownstreamNonce,
 		)
 	}
+
+	return sessionID
 }
 
 func includesOpenIDScope(scopes []string) bool {
@@ -139,7 +141,7 @@ func validateAuthcodeStorage(
 	wantDownstreamRedirectURI string,
 	wantCustomSessionData *psession.CustomSessionData,
 	wantDownstreamAdditionalClaims map[string]any,
-) (*fosite.Request, *psession.PinnipedSession) {
+) (string, *fosite.Request, *psession.PinnipedSession) {
 	t.Helper()
 
 	const (
@@ -150,6 +152,8 @@ func validateAuthcodeStorage(
 	// Get the authcode session back from storage so we can require that it was stored correctly.
 	storedAuthorizeRequestFromAuthcode, err := oauthStore.GetAuthorizeCodeSession(context.Background(), storeKey, nil)
 	require.NoError(t, err)
+
+	sessionID := storedAuthorizeRequestFromAuthcode.GetID()
 
 	// Check that storage returned the expected concrete data types.
 	storedRequestFromAuthcode, storedSessionFromAuthcode := castStoredAuthorizeRequest(t, storedAuthorizeRequestFromAuthcode)
@@ -258,7 +262,7 @@ func validateAuthcodeStorage(
 	// Check that the custom Pinniped session data matches.
 	require.Equal(t, wantCustomSessionData, storedSessionFromAuthcode.Custom)
 
-	return storedRequestFromAuthcode, storedSessionFromAuthcode
+	return sessionID, storedRequestFromAuthcode, storedSessionFromAuthcode
 }
 
 func validatePKCEStorage(

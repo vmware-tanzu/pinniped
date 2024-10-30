@@ -1806,7 +1806,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 			// Else if we want a body that contains a regex-matched auth code, assert that (for "response_mode=form_post").
 			case test.wantBodyFormResponseRegexp != "":
-				oidctestutil.RequireAuthCodeRegexpMatch(
+				_ = oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					rsp.Body.String(),
 					test.wantBodyFormResponseRegexp,
@@ -1834,7 +1834,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 			if test.wantRedirectLocationRegexp != "" {
 				require.Len(t, rsp.Header().Values("Location"), 1)
-				oidctestutil.RequireAuthCodeRegexpMatch(
+				_ = oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					rsp.Header().Get("Location"),
 					test.wantRedirectLocationRegexp,

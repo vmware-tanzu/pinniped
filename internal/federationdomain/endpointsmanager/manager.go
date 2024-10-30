@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
@@ -190,9 +191,14 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 }
 
 func (m *Manager) buildHandlerChain(nextHandler http.Handler) {
-	handler := m.buildManagerHandler(nextHandler)                               // build the basic handler for FederationDomain endpoints
-	handler = requestlogger.WithHTTPRequestAuditLogging(handler, m.auditLogger) // log all requests, including audit ID
-	handler = requestlogger.WithAuditID(handler)                                // add random audit ID to request context and response headers
+	// build the basic handler for FederationDomain endpoints
+	handler := m.buildManagerHandler(nextHandler)
+	// log all requests, including audit ID
+	handler = requestlogger.WithHTTPRequestAuditLogging(handler, m.auditLogger)
+	// add random audit ID to request context and response headers
+	handler = requestlogger.WithAuditID(handler, func() string {
+		return uuid.New().String()
+	})
 	m.handlerChain = handler
 }
 

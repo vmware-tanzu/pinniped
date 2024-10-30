@@ -1168,7 +1168,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 				// Expecting a success redirect to the client.
 				require.Equal(t, tt.wantBodyString, rsp.Body.String())
 				require.Len(t, rsp.Header().Values("Location"), 1)
-				oidctestutil.RequireAuthCodeRegexpMatch(
+				_ = oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					actualLocation,
 					tt.wantRedirectLocationRegexp,
@@ -1204,7 +1204,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 				// Expecting the body of the response to be a html page with a form (for "response_mode=form_post").
 				_, hasLocationHeader := rsp.Header()["Location"]
 				require.False(t, hasLocationHeader)
-				oidctestutil.RequireAuthCodeRegexpMatch(
+				_ = oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					rsp.Body.String(),
 					tt.wantBodyFormResponseRegexp,

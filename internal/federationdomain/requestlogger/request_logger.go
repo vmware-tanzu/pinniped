@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/types"
 	apisaudit "k8s.io/apiserver/pkg/apis/audit"
 	"k8s.io/apiserver/pkg/audit"
@@ -19,19 +18,19 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-func WithAuditID(handler http.Handler) http.Handler {
-	return withAuditID(handler, func() string {
-		return uuid.New().String()
-	})
+func NewRequestWithAuditID(r *http.Request, newAuditIDFunc func() string) (*http.Request, string) {
+	ctx := audit.WithAuditContext(r.Context())
+	r = r.WithContext(ctx)
+
+	auditID := newAuditIDFunc()
+	audit.WithAuditID(ctx, types.UID(auditID))
+
+	return r, auditID
 }
 
-func withAuditID(handler http.Handler, newAuditIDFunc func() string) http.Handler {
+func WithAuditID(handler http.Handler, newAuditIDFunc func() string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := audit.WithAuditContext(r.Context())
-		r = r.WithContext(ctx)
-
-		auditID := newAuditIDFunc()
-		audit.WithAuditID(ctx, types.UID(auditID))
+		r, auditID := NewRequestWithAuditID(r, newAuditIDFunc)
 
 		// Send the Audit-ID response header.
 		w.Header().Set(apisaudit.HeaderAuditID, auditID)

@@ -21,7 +21,7 @@ const (
 	AuditEventIdentityRefreshedFromUpstreamIDP   AuditEventMessage = "Identity Refreshed From Upstream IDP"
 	AuditEventSessionStarted                     AuditEventMessage = "Session Started"
 	AuditEventSessionRefreshed                   AuditEventMessage = "Session Refreshed"
-	AuditEventAuthenticationRejectedByTransforms AuditEventMessage = "Authentication RejectedBy Transforms"
+	AuditEventAuthenticationRejectedByTransforms AuditEventMessage = "Authentication Rejected By Transforms"
 	AuditEventUpstreamOIDCTokenRevoked           AuditEventMessage = "Upstream OIDC Token Revoked" //nolint:gosec // this is not a credential
 	AuditEventSessionGarbageCollected            AuditEventMessage = "Session Garbage Collected"
 	AuditEventTokenCredentialRequest             AuditEventMessage = "TokenCredentialRequest" //nolint:gosec // this is not a credential

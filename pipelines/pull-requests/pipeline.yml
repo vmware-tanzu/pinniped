@@ -844,13 +844,58 @@ jobs:
               - lint
               - unit-test
               - verify-codegen
-              - check-image-version
-              - build-test-image
               - build-cli
               - scan-dependencies
+              - run-go-vuln-scan
+              - check-image-version
+              - build-test-image
               - build-fips-image
               - build-test-fips-image
-              - run-go-vuln-scan
+            trigger: true
+          - get: ci-build-image
+            passed: [ check-image-version ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ build-test-image ]
+            params:
+              skip_download: true
+          - get: ci-fips-build-image
+            passed: [ build-fips-image ]
+            params:
+              skip_download: true
+          - get: ci-fips-test-image
+            passed: [ build-test-fips-image ]
+            params:
+              skip_download: true
+
+  # Splitting the integration tests into two columns to reduce parallelism of those jobs,
+  # so we can have a single worker to reduce costs, and to reduce the number of jobs
+  # that simultaneously test GitHub logins (too many cause errors from GitHub).
+  # Of course, the downside is that the pipeline will take longer to run.
+  - name: ready-for-int2 # fan-in to make pass constraints for the rest of the pipeline easier to reason about
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-pr
+            version: every
+            passed:
+              # First we list everything that should be triggered by the first ready-for-int.
+              - scan-image
+              - integration-test-oldest
+              - integration-test-latest
+              - integration-test-latest-arm64
+              - integration-test-latest-with-external-idps
+              - integration-test-gke-rapid
+              - integration-test-changed-api-group-oldest
+              - integration-test-changed-api-group-latest
+              # Then repeat these from ready-for-int because we want to refer to them also in the "passed"
+              # constraints for the other resources below, so we can be sure that the pinniped-pr resource
+              # version has passed these jobs *together* with the other resource versions below.
+              - check-image-version
+              - build-test-image
+              - build-fips-image
+              - build-test-fips-image
             trigger: true
           - get: ci-build-image
             passed: [ check-image-version ]
@@ -1098,8 +1143,6 @@ jobs:
     on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-latest-with-external-idps } }
     on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-latest-with-external-idps } }
     public: true # all logs are publicly visible
-    serial_groups:
-    - github
     plan:
       - in_parallel:
           - get: pinniped-pr
@@ -1178,24 +1221,22 @@ jobs:
     on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-idps-firewalled } }
     on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-idps-firewalled } }
     public: true # all logs are publicly visible
-    serial_groups:
-    - github
     plan:
       - in_parallel:
           - get: pinniped-pr
             version: every
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
           - get: integration-test-runner-image
       - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-idps-firewalled } }
       - task: deploy-kind-instance
@@ -1253,24 +1294,22 @@ jobs:
     on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-latest-fips } }
     on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-latest-fips } }
     public: true # all logs are publicly visible
-    serial_groups:
-    - github
     plan:
       - in_parallel:
           - get: pinniped-pr
             version: every
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-fips-build-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             params:
               skip_download: true
           - get: ci-fips-test-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
           - get: integration-test-runner-image
       - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-latest-fips } }
       - task: deploy-kind-instance
@@ -1335,18 +1374,18 @@ jobs:
       - in_parallel:
           - get: pinniped-pr
             version: every
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
           - get: integration-test-runner-image
       - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-k8s-main } }
       - task: deploy-kind-instance
@@ -1398,18 +1437,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped-pr
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
           - get: integration-test-runner-image
       - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: kubectl-apply-test } }
       - task: deploy-kind-instance
@@ -1605,18 +1644,18 @@ jobs:
       - in_parallel:
           - get: pinniped-pr
             version: every
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
           - get: integration-test-runner-image
       - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-multiple-pinnipeds } }
       - task: deploy-kind-instance
@@ -1713,14 +1752,14 @@ jobs:
       - in_parallel:
           - get: pinniped-pr
             version: every
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             params:
               skip_download: true
           - get: integration-test-runner-image
@@ -1768,14 +1807,14 @@ jobs:
       - in_parallel:
           - get: pinniped-pr
             version: every
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ ready-for-int2 ]
             params:
               skip_download: true
           - get: integration-test-runner-image
@@ -1896,19 +1935,13 @@ jobs:
           - get: pinniped-pr
             version: every
             passed:
-              - scan-image
-              - integration-test-oldest
-              - integration-test-latest
-              - integration-test-latest-arm64
-              - integration-test-latest-with-external-idps
-              - integration-test-idps-firewalled
-              - integration-test-gke-rapid
+              # This list should be exactly every job that is kicked off by ready-for-int2.
+              # Visually, these are the jobs in the second column of integration tests in the Concourse UI for this pipeline.
               - kubectl-apply-test
-              # integration-test-k8s-main is purposefully excluded. Failures are informational, not blocking.
-              - integration-test-latest-fips
-              - integration-test-changed-api-group-oldest
-              - integration-test-changed-api-group-latest
+              - integration-test-idps-firewalled
               - integration-test-multiple-pinnipeds
+              - integration-test-latest-fips
               - uninstall-test
               - uninstall-existing-ns-test
+              # integration-test-k8s-main is purposefully excluded. Failures are informational, not blocking.
             trigger: true

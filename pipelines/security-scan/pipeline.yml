@@ -16,6 +16,14 @@ meta:
           Job `${BUILD_PIPELINE_NAME}/${BUILD_JOB_NAME}` *FAILED* :(
           ${ATC_EXTERNAL_URL}/teams/${BUILD_TEAM_NAME}/pipelines/${BUILD_PIPELINE_NAME}/jobs/${BUILD_JOB_NAME}/builds/${BUILD_NAME}
 
+  trivy_ignores: &trivy_ignores
+    IGNORE_VULNERABILITY_IDS: |
+      # Medium CVE in gopkg.in/square/go-jose.v2. That project is archived, so they will never fix this.
+      # That is an indirect dependency of our project, which we inherit from our direct dep of k8s.io/apiserver@v0.31.2.
+      # However, the Kubernetes maintainers say that k8s is not impacted and they won't upgrade to v3.
+      # See https://github.com/kubernetes/kubernetes/issues/128039. So we will ignore this for now.
+      CVE-2024-28180
+
 resource_types:
 
   # Try using the latest version of the registry-image resource because of this problem:
@@ -198,6 +206,7 @@ jobs:
         file: pinniped-ci/pipelines/shared-tasks/scan-image-trivy/task.yml
         params:
           GITHUB_TOKEN: ((ci-bot-access-token-with-read-user-permission))
+          <<: *trivy_ignores
         input_mapping:
           image: pinniped-latest-release-image
 
@@ -216,6 +225,7 @@ jobs:
         file: pinniped-ci/pipelines/shared-tasks/scan-image-trivy/task.yml
         params:
           GITHUB_TOKEN: ((ci-bot-access-token-with-read-user-permission))
+          <<: *trivy_ignores
         input_mapping:
           image: pinniped-latest-main-image
 

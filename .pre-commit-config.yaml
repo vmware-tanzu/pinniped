@@ -1,10 +1,23 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
+# This is a configuration for https://pre-commit.com/.
+# On macOS, try `brew install pre-commit` and then run `pre-commit install`.
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.2.0
-    hooks:
-    -   id: trailing-whitespace
-    -   id: end-of-file-fixer
-    -   id: check-yaml
-    -   id: check-added-large-files
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v5.0.0
+      hooks:
+          # TODO: find a version of this to validate ytt templates?
+          # - id: check-yaml
+          #   args: ['--allow-multiple-documents']
+          - id: check-json
+          - id: end-of-file-fixer
+          - id: trailing-whitespace
+          - id: check-merge-conflict
+          - id: check-added-large-files
+          - id: check-byte-order-marker
+          - id: detect-private-key
+          - id: mixed-line-ending
+    - repo: local
+      hooks:
+          - id: validate-copyright-year
+            name: Validate copyright year
+            entry: hack/check-copyright-year.sh
+            language: script

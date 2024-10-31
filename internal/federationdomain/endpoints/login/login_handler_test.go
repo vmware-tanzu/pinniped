@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package login
@@ -14,7 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 	"go.pinniped.dev/internal/testutil/oidctestutil"
 )
@@ -118,7 +120,7 @@ func TestLoginEndpoint(t *testing.T) {
 		wantStatus       int
 		wantContentType  string
 		wantBody         string
-		wantEncodedState string
+		wantEncodedState stateparam.Encoded
 		wantDecodedState *oidc.UpstreamStateParamData
 	}{
 		{
@@ -381,12 +383,12 @@ func TestLoginEndpoint(t *testing.T) {
 			testGetHandler := func(
 				w http.ResponseWriter,
 				r *http.Request,
-				encodedState string,
+				encodedState stateparam.Encoded,
 				decodedState *oidc.UpstreamStateParamData,
 			) error {
 				require.Equal(t, req, r)
 				require.Equal(t, rsp, w)
-				require.Equal(t, tt.wantEncodedState, encodedState)
+				require.Equal(t, stateparam.Encoded(tt.wantEncodedState), encodedState)
 				require.Equal(t, tt.wantDecodedState, decodedState)
 				if tt.getHandlerErr == nil {
 					_, err := w.Write([]byte(happyGetResult))
@@ -398,12 +400,12 @@ func TestLoginEndpoint(t *testing.T) {
 			testPostHandler := func(
 				w http.ResponseWriter,
 				r *http.Request,
-				encodedState string,
+				encodedState stateparam.Encoded,
 				decodedState *oidc.UpstreamStateParamData,
 			) error {
 				require.Equal(t, req, r)
 				require.Equal(t, rsp, w)
-				require.Equal(t, tt.wantEncodedState, encodedState)
+				require.Equal(t, stateparam.Encoded(tt.wantEncodedState), encodedState)
 				require.Equal(t, tt.wantDecodedState, decodedState)
 				if tt.postHandlerErr == nil {
 					_, err := w.Write([]byte(happyPostResult))
@@ -412,7 +414,7 @@ func TestLoginEndpoint(t *testing.T) {
 				return tt.postHandlerErr
 			}
 
-			subject := NewHandler(happyStateCodec, happyCookieCodec, testGetHandler, testPostHandler)
+			subject := NewHandler(happyStateCodec, happyCookieCodec, testGetHandler, testPostHandler, plog.New())
 
 			subject.ServeHTTP(rsp, req)
 
@@ -430,14 +432,14 @@ func TestLoginEndpoint(t *testing.T) {
 }
 
 type requestPath struct {
-	state *string
+	state *stateparam.Encoded
 }
 
 func newRequestPath() *requestPath {
 	return &requestPath{}
 }
 
-func (r *requestPath) WithState(state string) *requestPath {
+func (r *requestPath) WithState(state stateparam.Encoded) *requestPath {
 	r.state = &state
 	return r
 }
@@ -451,7 +453,7 @@ func (r *requestPath) String() string {
 	path := "/login?"
 	params := url.Values{}
 	if r.state != nil {
-		params.Add("state", *r.state)
+		params.Add("state", r.state.String())
 	}
 	return path + params.Encode()
 }

@@ -49,18 +49,18 @@ func NewPinnipedSession(
 ) (*psession.PinnipedSession, error) {
 	now := time.Now().UTC()
 
-	// Do not associate this audit event with a session ID.
-	// The session has not yet "started" and may not be persisted to permanent storage.
-	auditLogger.Audit(plog.AuditEventIdentityFromUpstreamIDP, ctx, nil,
+	auditLogger.Audit(plog.AuditEventIdentityFromUpstreamIDP, ctx, plog.NoSessionPersisted(),
+		"upstreamIDPDisplayName", c.IdentityProvider.GetDisplayName(),
+		"upstreamIDPType", c.IdentityProvider.GetSessionProviderType(),
+		"upstreamIDPResourceName", c.IdentityProvider.GetProvider().GetResourceName(),
+		"upstreamIDPResourceUID", c.IdentityProvider.GetProvider().GetResourceUID(),
 		"upstreamUsername", c.UpstreamIdentity.UpstreamUsername,
 		"upstreamGroups", c.UpstreamIdentity.UpstreamGroups)
 
 	downstreamUsername, downstreamGroups, err := applyIdentityTransformations(ctx,
 		c.IdentityProvider.GetTransforms(), c.UpstreamIdentity.UpstreamUsername, c.UpstreamIdentity.UpstreamGroups)
 	if err != nil {
-		// Do not associate this audit event with a session ID.
-		// This session is being rejected and will never be persisted to permanent storage.
-		auditLogger.Audit(plog.AuditEventAuthenticationRejectedByTransforms, ctx, nil,
+		auditLogger.Audit(plog.AuditEventAuthenticationRejectedByTransforms, ctx, plog.NoSessionPersisted(),
 			"reason", err)
 		return nil, err
 	}

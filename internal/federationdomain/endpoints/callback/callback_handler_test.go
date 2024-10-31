@@ -25,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/plog"
@@ -1870,12 +1871,13 @@ type expectedGitHubAuthcodeExchange struct {
 }
 
 type requestPath struct {
-	code, state *string
+	code  *string
+	state *stateparam.Encoded
 }
 
 func newRequestPath() *requestPath {
 	c := happyUpstreamAuthcode
-	s := "4321"
+	s := stateparam.Encoded("4321")
 	return &requestPath{
 		code:  &c,
 		state: &s,
@@ -1892,7 +1894,7 @@ func (r *requestPath) WithoutCode() *requestPath {
 	return r
 }
 
-func (r *requestPath) WithState(state string) *requestPath {
+func (r *requestPath) WithState(state stateparam.Encoded) *requestPath {
 	r.state = &state
 	return r
 }
@@ -1909,7 +1911,7 @@ func (r *requestPath) String() string {
 		params.Add("code", *r.code)
 	}
 	if r.state != nil {
-		params.Add("state", *r.state)
+		params.Add("state", r.state.String())
 	}
 	return path + params.Encode()
 }

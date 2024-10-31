@@ -14,6 +14,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/plog"
@@ -27,18 +28,21 @@ func NewHandler(
 	auditLogger plog.AuditLogger,
 ) http.Handler {
 	handler := httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-		state, err := validateRequest(r, stateDecoder, cookieDecoder)
+		encodedState, decodedState, err := validateRequest(r, stateDecoder, cookieDecoder)
 		if err != nil {
 			return err
 		}
 
-		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(state.UpstreamName)
+		auditLogger.Audit(plog.AuditEventAuthorizeIDFromParameters, r.Context(), plog.NoSessionPersisted(),
+			"authorizeID", encodedState.AuthorizeID())
+
+		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
 		if err != nil || idp == nil {
 			plog.Warning("upstream provider not found")
 			return httperr.New(http.StatusUnprocessableEntity, "upstream provider not found")
 		}
 
-		downstreamAuthParams, err := url.ParseQuery(state.AuthParams)
+		downstreamAuthParams, err := url.ParseQuery(decodedState.AuthParams)
 		if err != nil {
 			plog.Error("error reading state downstream auth params", err)
 			return httperr.New(http.StatusBadRequest, "error reading state downstream auth params")
@@ -61,7 +65,7 @@ func NewHandler(
 		// an error if the client requested a scope that they are not allowed to request, so we don't need to worry about that here.
 		downstreamsession.AutoApproveScopes(authorizeRequester)
 
-		identity, loginExtras, err := idp.LoginFromCallback(r.Context(), authcode(r), state.PKCECode, state.Nonce, redirectURI)
+		identity, loginExtras, err := idp.LoginFromCallback(r.Context(), authcode(r), decodedState.PKCECode, decodedState.Nonce, redirectURI)
 		if err != nil {
 			plog.WarningErr("unable to complete login from callback", err,
 				"identityProviderDisplayName", idp.GetDisplayName(),
@@ -107,21 +111,21 @@ func authcode(r *http.Request) string {
 	return r.FormValue("code")
 }
 
-func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) (*oidc.UpstreamStateParamData, error) {
+func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) (stateparam.Encoded, *oidc.UpstreamStateParamData, error) {
 	if r.Method != http.MethodGet {
-		return nil, httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET)", r.Method)
+		return "", nil, httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET)", r.Method)
 	}
 
-	_, decodedState, err := oidc.ReadStateParamAndValidateCSRFCookie(r, cookieDecoder, stateDecoder)
+	encodedState, decodedState, err := oidc.ReadStateParamAndValidateCSRFCookie(r, cookieDecoder, stateDecoder)
 	if err != nil {
 		plog.InfoErr("state or CSRF error", err)
-		return nil, err
+		return "", nil, err
 	}
 
 	if authcode(r) == "" {
 		plog.Info("code param not found")
-		return nil, httperr.New(http.StatusBadRequest, "code param not found")
+		return "", nil, httperr.New(http.StatusBadRequest, "code param not found")
 	}
 
-	return decodedState, nil
+	return encodedState, decodedState, nil
 }

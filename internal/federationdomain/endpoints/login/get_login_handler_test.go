@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package login
@@ -13,6 +13,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/login/loginhtml"
 	"go.pinniped.dev/internal/federationdomain/idplister"
 	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -27,7 +28,7 @@ func TestGetLogin(t *testing.T) {
 	tests := []struct {
 		name            string
 		decodedState    *oidc.UpstreamStateParamData
-		encodedState    string
+		encodedState    stateparam.Encoded
 		errParam        string
 		idps            idplister.UpstreamIdentityProvidersLister
 		wantStatus      int
@@ -98,7 +99,7 @@ func TestGetLogin(t *testing.T) {
 			t.Parallel()
 
 			handler := NewGetHandler(testPath)
-			target := testPath + "?state=" + tt.encodedState
+			target := testPath + "?state=" + tt.encodedState.String()
 			if tt.errParam != "" {
 				target += "&err=" + tt.errParam
 			}

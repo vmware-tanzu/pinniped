@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 )
 
 const (
@@ -27,7 +28,7 @@ type ErrorParamValue string
 // provider.FederationDomainIssuer when the issuer string comes from that type.
 func URL(
 	downstreamIssuer string,
-	encodedStateParamValue string,
+	encodedStateParamValue stateparam.Encoded,
 	errToDisplay ErrorParamValue,
 ) (string, error) {
 	loginURL, err := url.Parse(downstreamIssuer + oidc.PinnipedLoginPath)
@@ -36,7 +37,7 @@ func URL(
 	}
 
 	q := loginURL.Query()
-	q.Set(StateParamName, encodedStateParamValue)
+	q.Set(StateParamName, encodedStateParamValue.String())
 	if errToDisplay != ShowNoError {
 		q.Set(ErrParamName, string(errToDisplay))
 	}

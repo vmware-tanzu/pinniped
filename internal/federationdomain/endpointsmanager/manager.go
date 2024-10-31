@@ -184,6 +184,7 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 			csrfCookieEncoder,
 			login.NewGetHandler(incomingFederationDomain.IssuerPath()+oidc.PinnipedLoginPath),
 			login.NewPostHandler(issuerURL, idpLister, oauthHelperWithKubeStorage, m.auditLogger),
+			m.auditLogger,
 		)
 
 		plog.Debug("oidc provider manager added or updated issuer", "issuer", issuerURL)

@@ -15,6 +15,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/plog"
 )
@@ -25,7 +26,7 @@ func NewPostHandler(
 	oauthHelper fosite.OAuth2Provider,
 	auditLogger plog.AuditLogger,
 ) HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
+	return func(w http.ResponseWriter, r *http.Request, encodedState stateparam.Encoded, decodedState *oidc.UpstreamStateParamData) error {
 		// Note that the login handler prevents this handler from being called with OIDC upstreams.
 		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
 		if err != nil {
@@ -114,7 +115,7 @@ func redirectToLoginPage(
 	r *http.Request,
 	w http.ResponseWriter,
 	downstreamIssuer string,
-	encodedStateParamValue string,
+	encodedStateParamValue stateparam.Encoded,
 	errToDisplay loginurl.ErrorParamValue,
 ) error {
 	loginURL, err := loginurl.URL(downstreamIssuer, encodedStateParamValue, errToDisplay)

@@ -81,7 +81,7 @@ func (p *FederationDomainResolvedGitHubIdentityProvider) UpstreamAuthorizeRedire
 		RedirectURL: fmt.Sprintf("%s/callback", downstreamIssuerURL),
 		Scopes:      p.Provider.GetScopes(),
 	}
-	redirectURL := upstreamOAuthConfig.AuthCodeURL(state.EncodedStateParam)
+	redirectURL := upstreamOAuthConfig.AuthCodeURL(state.EncodedStateParam.String())
 	return redirectURL, nil
 }
 

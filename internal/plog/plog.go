@@ -42,6 +42,18 @@ type SessionIDGetter interface {
 	GetID() string
 }
 
+// NoSessionPersisted means do not associate this audit event with a session ID.
+// The session has not yet "started" and may or may not ever be persisted to permanent storage.
+func NoSessionPersisted() SessionIDGetter {
+	return nil
+}
+
+// NoHTTPRequestAvailable means there is no request context for this audit event.
+// Use this when an audit event is emitted from a controller or some other place that does not have a request context.
+func NoHTTPRequestAvailable() context.Context {
+	return nil
+}
+
 // AuditLogger is only the audit logging part of Logger. There is no global function for Audit because
 // that would make unit testing of audit logs harder.
 type AuditLogger interface {

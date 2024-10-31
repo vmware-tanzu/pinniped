@@ -5,8 +5,6 @@
 package auth
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -24,6 +22,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/responseutil"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/plog"
@@ -136,11 +135,11 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Log if these headers were present, but don't log the actual values. The password is obviously sensitive,
 	// and sometimes users use their password as their username by mistake.
-	h.auditLogger.Audit(plog.AuditEventHTTPRequestCustomHeadersUsed, r.Context(), nil,
+	h.auditLogger.Audit(plog.AuditEventHTTPRequestCustomHeadersUsed, r.Context(), plog.NoSessionPersisted(),
 		oidcapi.AuthorizeUsernameHeaderName, hadUsernameHeader,
 		oidcapi.AuthorizePasswordHeaderName, hadPasswordHeader)
 
-	h.auditLogger.Audit(plog.AuditEventHTTPRequestParameters, r.Context(), nil,
+	h.auditLogger.Audit(plog.AuditEventHTTPRequestParameters, r.Context(), plog.NoSessionPersisted(),
 		"params", plog.SanitizeParams(r.Form, paramsSafeToLog))
 
 	// Note that the client might have used oidcapi.AuthorizeUpstreamIDPNameParamName and
@@ -172,7 +171,7 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.auditLogger.Audit(plog.AuditEventUsingUpstreamIDP, r.Context(), nil,
+	h.auditLogger.Audit(plog.AuditEventUsingUpstreamIDP, r.Context(), plog.NoSessionPersisted(),
 		"displayName", idp.GetDisplayName(),
 		"resourceName", idp.GetProvider().GetResourceName(),
 		"resourceUID", idp.GetProvider().GetResourceUID(),
@@ -216,7 +215,7 @@ func (h *authorizeHandler) authorize(
 		authorizeID, err = h.authorizeWithBrowser(r, w, oauthHelper, authorizeRequester, idp)
 
 		if err == nil {
-			h.auditLogger.Audit(plog.AuditEventUpstreamAuthorizeRedirect, r.Context(), nil,
+			h.auditLogger.Audit(plog.AuditEventUpstreamAuthorizeRedirect, r.Context(), plog.NoSessionPersisted(),
 				"authorizeID", authorizeID)
 		}
 	}
@@ -295,9 +294,7 @@ func (h *authorizeHandler) authorizeWithBrowser(
 		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
 	)
 
-	upstreamStateHash := sha256.Sum256([]byte(authRequestState.EncodedStateParam))
-	authorizeID := hex.EncodeToString(upstreamStateHash[:])
-	return authorizeID, nil
+	return authRequestState.EncodedStateParam.AuthorizeID(), nil
 }
 
 func shouldShowIDPChooser(
@@ -473,7 +470,7 @@ func upstreamStateParam(
 	csrfValue csrftoken.CSRFToken,
 	pkceValue pkce.Code,
 	encoder oidc.Encoder,
-) (string, error) {
+) (stateparam.Encoded, error) {
 	stateParamData := oidc.UpstreamStateParamData{
 		// The auth params might have included oidcapi.AuthorizeUpstreamIDPNameParamName and
 		// oidcapi.AuthorizeUpstreamIDPTypeParamName, but those can be ignored by other handlers
@@ -492,7 +489,7 @@ func upstreamStateParam(
 	if err != nil {
 		return "", fmt.Errorf("error encoding upstream state param: %w", err)
 	}
-	return encodedStateParamValue, nil
+	return stateparam.Encoded(encodedStateParamValue), nil
 }
 
 func removeCustomIDPParams(params url.Values) url.Values {

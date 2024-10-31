@@ -25,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/tokenexchange"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/federationdomain/idtokenlifespan"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/federationdomain/strategy"
 	"go.pinniped.dev/internal/federationdomain/timeouts"
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -326,7 +327,7 @@ func ScopeWasRequested(authorizeRequester fosite.AuthorizeRequester, scopeName s
 	return false
 }
 
-func ReadStateParamAndValidateCSRFCookie(r *http.Request, cookieDecoder Decoder, stateDecoder Decoder) (string, *UpstreamStateParamData, error) {
+func ReadStateParamAndValidateCSRFCookie(r *http.Request, cookieDecoder Decoder, stateDecoder Decoder) (stateparam.Encoded, *UpstreamStateParamData, error) {
 	csrfValue, err := readCSRFCookie(r, cookieDecoder)
 	if err != nil {
 		return "", nil, err
@@ -342,7 +343,7 @@ func ReadStateParamAndValidateCSRFCookie(r *http.Request, cookieDecoder Decoder,
 		return "", nil, err
 	}
 
-	return encodedState, decodedState, nil
+	return stateparam.Encoded(encodedState), decodedState, nil
 }
 
 func readCSRFCookie(r *http.Request, cookieDecoder Decoder) (csrftoken.CSRFToken, error) {

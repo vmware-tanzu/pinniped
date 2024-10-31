@@ -7,9 +7,11 @@ import (
 	"bufio"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	apisaudit "k8s.io/apiserver/pkg/apis/audit"
 	"k8s.io/apiserver/pkg/audit"
 	"k8s.io/apiserver/pkg/endpoints/responsewriter"
@@ -92,12 +94,27 @@ func (rl *requestLogger) LogRequestReceived() {
 
 func (rl *requestLogger) LogRequestComplete() {
 	r := rl.req
+	location := rl.w.Header().Get("Location")
+	if location == "" {
+		location = "no location header"
+	} else {
+		parsedLocation, err := url.Parse(location)
+		if err != nil {
+			location = "unparsable location header"
+		} else {
+			redactAllParams := sets.New[string]()
+			parsedLocation.RawQuery = plog.SanitizeParams(parsedLocation.Query(), redactAllParams)
+			location = parsedLocation.String()
+		}
+	}
+
 	rl.auditLogger.Audit(plog.AuditEventHTTPRequestCompleted,
 		r.Context(),
 		nil,                // no session available yet in this context
 		"path", r.URL.Path, // include the path again to make it easy to "grep -v healthz" to watch all other audit events
 		"latency", time.Since(rl.startTime),
 		"responseStatus", rl.status,
+		"location", location,
 	)
 }
 

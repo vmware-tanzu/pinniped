@@ -27,9 +27,16 @@ type WantedAuditLog struct {
 	Params  map[string]any
 }
 
-//"message":"HTTP Request Custom Headers Used",
-//"auditID":"some-audit-id",
-//"Pinniped-Username":false,"Pinniped-Password":false}`,
+func WantAuditLog(message string, params map[string]any, auditID string) WantedAuditLog {
+	result := WantedAuditLog{
+		Message: message,
+		Params:  params,
+	}
+	if auditID != "" {
+		result.Params["auditID"] = auditID
+	}
+	return result
+}
 
 func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditLogsOneLiner string) {
 	t.Helper()
@@ -42,6 +49,7 @@ func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditL
 		wantJsonAuditLog["message"] = wantAuditLog.Message
 		wantMessages = append(wantMessages, wantAuditLog.Message)
 		wantJsonAuditLog["auditEvent"] = true
+		wantJsonAuditLog["timestamp"] = "2099-08-08T13:57:36.123456Z"
 		for k, v := range wantAuditLog.Params {
 			wantJsonAuditLog[k] = v
 		}
@@ -58,7 +66,10 @@ func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditL
 		err := json.Unmarshal([]byte(actualAuditLog), &actualJsonAuditLog)
 		require.NoError(t, err)
 
-		// we don't care to test the caller
+		// we don't care to test exact equality on the caller - just make sure it is a non-empty string
+		caller, ok := actualJsonAuditLog["caller"]
+		require.True(t, ok)
+		require.NotEmpty(t, caller, "caller for message %q must not be empty", actualJsonAuditLog["message"])
 		delete(actualJsonAuditLog, "caller")
 		actualJsonAuditLogs = append(actualJsonAuditLogs, actualJsonAuditLog)
 
@@ -66,6 +77,9 @@ func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditL
 		require.True(t, ok, "actual message is not a string, instead %+v", actualJsonAuditLog["message"])
 		actualMessages = append(actualMessages, actualMessage)
 	}
+
+	// TODO: remove this
+	t.Logf("LAST AUDIT EVENT: %s", actualAuditLogs[len(actualAuditLogs)-1])
 
 	// We should check array indices first so that we don't exceed any boundaries.
 	// But we also want to be sure to indicate to the caller what went wrong, so compare the messages.
@@ -75,6 +89,6 @@ func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditL
 	for i := range len(wantJsonAuditLogs) {
 		// compare each item individually so we know which message it is
 		require.Equal(t, wantJsonAuditLogs[i], actualJsonAuditLogs[i],
-			"audit log for message %q does not match", wantJsonAuditLogs[i]["message"])
+			"audit event for message %q does not match", wantJsonAuditLogs[i]["message"])
 	}
 }

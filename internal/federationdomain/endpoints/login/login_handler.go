@@ -10,6 +10,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/login/loginhtml"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/plog"
@@ -19,7 +20,7 @@ import (
 type HandlerFunc func(
 	w http.ResponseWriter,
 	r *http.Request,
-	encodedState string,
+	encodedState stateparam.Encoded,
 	decodedState *oidc.UpstreamStateParamData,
 ) error
 
@@ -38,6 +39,7 @@ func NewHandler(
 	cookieDecoder oidc.Decoder,
 	getHandler HandlerFunc, // use NewGetHandler() for production
 	postHandler HandlerFunc, // use NewPostHandler() for production
+	auditLogger plog.AuditLogger,
 ) http.Handler {
 	loginHandler := httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
 		var handler HandlerFunc
@@ -55,6 +57,9 @@ func NewHandler(
 			plog.InfoErr("state or CSRF error", err)
 			return err
 		}
+
+		auditLogger.Audit(plog.AuditEventAuthorizeIDFromParameters, r.Context(), plog.NoSessionPersisted(),
+			"authorizeID", encodedState.AuthorizeID())
 
 		switch decodedState.UpstreamType {
 		case string(idpdiscoveryv1alpha1.IDPTypeLDAP), string(idpdiscoveryv1alpha1.IDPTypeActiveDirectory):

@@ -17,6 +17,7 @@ const (
 	AuditEventHTTPRequestParameters              AuditEventMessage = "HTTP Request Parameters"
 	AuditEventHTTPRequestCustomHeadersUsed       AuditEventMessage = "HTTP Request Custom Headers Used"
 	AuditEventUsingUpstreamIDP                   AuditEventMessage = "Using Upstream IDP"
+	AuditEventAuthorizeIDFromParameters          AuditEventMessage = "AuthorizeID From Parameters"
 	AuditEventIdentityFromUpstreamIDP            AuditEventMessage = "Identity From Upstream IDP"
 	AuditEventIdentityRefreshedFromUpstreamIDP   AuditEventMessage = "Identity Refreshed From Upstream IDP"
 	AuditEventSessionStarted                     AuditEventMessage = "Session Started"

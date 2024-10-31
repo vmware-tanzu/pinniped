@@ -33,6 +33,5 @@ run:
         --input=image/image.tar \
         --db-repository public.ecr.aws/aquasecurity/trivy-db \
         --exit-code=1 \
-        --severity=HIGH,CRITICAL \
-        --ignore-unfixed \
+        --scanners vuln \
         --timeout=10m0s

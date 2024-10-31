@@ -6,7 +6,7 @@ platform: linux
 image_resource:
   type: registry-image
   source:
-    repository: ghcr.io/aquasecurity/trivy
+    repository: docker.io/aquasec/trivy # alternatively could use ghcr.io/aquasecurity/trivy
 inputs:
   - name: image
 outputs:

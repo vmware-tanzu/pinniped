@@ -7,6 +7,14 @@ display:
 
 meta:
 
+  trivy_ignores: &trivy_ignores
+    IGNORE_VULNERABILITY_IDS: |
+      # Medium CVE in gopkg.in/square/go-jose.v2. That project is archived, so they will never fix this.
+      # That is an indirect dependency of our project, which we inherit from our direct dep of k8s.io/apiserver@v0.31.2.
+      # However, the Kubernetes maintainers say that k8s is not impacted and they won't upgrade to v3.
+      # See https://github.com/kubernetes/kubernetes/issues/128039. So we will ignore this for now.
+      CVE-2024-28180
+
   # Save some work by skipping the full download in the implicit "get" after each of these "put" operations,
   # as mentioned in the docs here: https://github.com/telia-oss/github-pr-resource#get
   pr-status-handlers:
@@ -938,11 +946,7 @@ jobs:
           image: ci-build-image
         params:
           GITHUB_TOKEN: ((ci-bot-access-token-with-read-user-permission))
-          IGNORE_VULNERABILITY_IDS: |
-            # Trivy thinks this is a HIGH CVE in go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc.
-            # That is an indirect dependency of our project, which we inherit from our direct dep k8s.io/apiserver.
-            # Therefore, we will inherit a solution for this CVE from k8s.io/apiserver when they fix it. Ignore it for now.
-            CVE-2023-47108
+          <<: *trivy_ignores
 
   - name: integration-test-oldest
     on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-oldest } }

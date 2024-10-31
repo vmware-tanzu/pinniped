@@ -7,7 +7,9 @@ toolchain go1.23.2
 // This version taken from https://github.com/kubernetes/apiserver/blob/v0.31.0/go.mod#L14 to avoid compile failures.
 replace github.com/google/cel-go => github.com/google/cel-go v0.20.1
 
-replace github.com/ory/x => github.com/ory/x v0.0.649
+// Use a newer version of this indirect dependency because the version that would be selected by default causes
+// a compilation error related to an API in go.opentelemetry.io/otel/trace.
+replace github.com/ory/x => github.com/ory/x v0.0.655
 
 // ory/fosite depends on ory/x which depends on opentelemetry. kubernetes/apiserver also depends on opentelemetry.
 // Where they clash and cause "go mod tidy" to fail, use replace directives to make it work.
@@ -20,16 +22,6 @@ replace (
 	go.opentelemetry.io/otel/sdk => go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/trace => go.opentelemetry.io/otel/trace v1.28.0
 )
-
-// https://github.com/kubernetes/apiserver/blob/v0.31.0/go.mod does not include this one, but it is also needed
-// to resolve the clashes with ory/x, so use the same version that kubernetes/apiserver chooses for opentelemetry.
-replace go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp => go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.28.0
-
-// This is an indirect dep which has CVE-2023-45142, so replace it with the fixed version.
-replace go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace => go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.44.0
-
-// This is an indirect dep which has CVE-2024-6104, so replace it with the fixed version.
-replace github.com/hashicorp/go-retryablehttp => github.com/hashicorp/go-retryablehttp v0.7.7
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1

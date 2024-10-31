@@ -337,7 +337,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 	}
 
 	happyLDAPUsername := "some-ldap-user"
-	happyLDAPUsernameFromAuthenticator := "some-mapped-ldap-username"
+	happyLDAPUsernameFromAuthenticator := "some-ldap-username-from-authenticator"
 	happyLDAPPassword := "some-ldap-password" //nolint:gosec
 	happyLDAPUID := "some-ldap-uid"
 	happyLDAPUserDN := "cn=foo,dn=bar"
@@ -666,6 +666,16 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		return hex.EncodeToString(upstreamStateHash[:])
 	}
 
+	buildWantedAuditLog := func(message string, params map[string]any) testutil.WantedAuditLog {
+		wantedAuditLog := testutil.WantedAuditLog{
+			Message: message,
+			Params:  params,
+		}
+		wantedAuditLog.Params["auditID"] = "some-audit-id"
+		wantedAuditLog.Params["timestamp"] = "2099-08-08T13:57:36.123456Z"
+		return wantedAuditLog
+	}
+
 	type testCase struct {
 		name string
 
@@ -693,7 +703,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		wantBodyStringWithLocationInHref       bool
 		wantLocationHeader                     string
 		wantUpstreamStateParamInLocationHeader bool
-		wantAuditLogs                          func(encodedStateParam, sessionID string) []string
+		wantAuditLogs                          func(encodedStateParam, sessionID string) []testutil.WantedAuditLog
 
 		// Assertions for when an authcode should be returned, i.e. the request was authenticated by an
 		// upstream LDAP provider or an upstream OIDC password grant flow.
@@ -730,12 +740,24 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
-			wantAuditLogs: func(encodedStateParam, sessionID string) []string {
-				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditID":"some-audit-id","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditID":"some-audit-id","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditID":"some-audit-id","auditEvent":true,"displayName":"some-oidc-idp","resourceName":"some-oidc-idp","resourceUID":"oidc-resource-uid","type":"oidc"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).authorize","message":"Upstream Authorize Redirect","auditID":"some-audit-id","auditEvent":true,"authorizeID":"` + generateAuthorizeId(encodedStateParam) + `"}`,
+			wantAuditLogs: func(encodedStateParam, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					buildWantedAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
+					}),
+					buildWantedAuditLog("HTTP Request Parameters", map[string]any{
+						"params": "client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted",
+					}),
+					buildWantedAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-oidc-idp",
+						"resourceName": "some-oidc-idp",
+						"resourceUID":  "oidc-resource-uid",
+						"type":         "oidc",
+					}),
+					buildWantedAuditLog("Upstream Authorize Redirect", map[string]any{
+						"authorizeID": generateAuthorizeId(encodedStateParam),
+					}),
 				}
 			},
 		},
@@ -756,12 +778,24 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", oidcUpstreamName, "oidc"), nil),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
-			wantAuditLogs: func(encodedStateParam, sessionID string) []string {
-				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditID":"some-audit-id","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditID":"some-audit-id","auditEvent":true,"params":"client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditID":"some-audit-id","auditEvent":true,"displayName":"some-oidc-idp","resourceName":"some-oidc-idp","resourceUID":"oidc-resource-uid","type":"oidc"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).authorize","message":"Upstream Authorize Redirect","auditID":"some-audit-id","auditEvent":true,"authorizeID":"` + generateAuthorizeId(encodedStateParam) + `"}`,
+			wantAuditLogs: func(encodedStateParam, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					buildWantedAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
+					}),
+					buildWantedAuditLog("HTTP Request Parameters", map[string]any{
+						"params": `client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted`,
+					}),
+					buildWantedAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-oidc-idp",
+						"resourceName": "some-oidc-idp",
+						"resourceUID":  "oidc-resource-uid",
+						"type":         "oidc",
+					}),
+					buildWantedAuditLog("Upstream Authorize Redirect", map[string]any{
+						"authorizeID": generateAuthorizeId(encodedStateParam),
+					}),
 				}
 			},
 		},
@@ -781,12 +815,24 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamGithub(expectedUpstreamStateParam(nil, "", githubUpstreamName, "github")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
-			wantAuditLogs: func(encodedStateParam, sessionID string) []string {
-				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditID":"some-audit-id","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditID":"some-audit-id","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditID":"some-audit-id","auditEvent":true,"displayName":"some-github-idp","resourceName":"some-github-idp","resourceUID":"github-resource-uid","type":"github"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).authorize","message":"Upstream Authorize Redirect","auditID":"some-audit-id","auditEvent":true,"authorizeID":"` + generateAuthorizeId(encodedStateParam) + `"}`,
+			wantAuditLogs: func(encodedStateParam, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					buildWantedAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
+					}),
+					buildWantedAuditLog("HTTP Request Parameters", map[string]any{
+						"params": "client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted",
+					}),
+					buildWantedAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-github-idp",
+						"resourceName": "some-github-idp",
+						"resourceUID":  "github-resource-uid",
+						"type":         "github",
+					}),
+					buildWantedAuditLog("Upstream Authorize Redirect", map[string]any{
+						"authorizeID": generateAuthorizeId(encodedStateParam),
+					}),
 				}
 			},
 		},
@@ -807,12 +853,24 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamGithub(expectedUpstreamStateParam(map[string]string{"client_id": dynamicClientID, "scope": testutil.AllDynamicClientScopesSpaceSep}, "", githubUpstreamName, "github")),
 			wantUpstreamStateParamInLocationHeader: true,
 			wantBodyStringWithLocationInHref:       true,
-			wantAuditLogs: func(encodedStateParam, sessionID string) []string {
-				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditID":"some-audit-id","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditID":"some-audit-id","auditEvent":true,"params":"client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditID":"some-audit-id","auditEvent":true,"displayName":"some-github-idp","resourceName":"some-github-idp","resourceUID":"github-resource-uid","type":"github"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).authorize","message":"Upstream Authorize Redirect","auditID":"some-audit-id","auditEvent":true,"authorizeID":"` + generateAuthorizeId(encodedStateParam) + `"}`,
+			wantAuditLogs: func(encodedStateParam, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					buildWantedAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
+					}),
+					buildWantedAuditLog("HTTP Request Parameters", map[string]any{
+						"params": `client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted`,
+					}),
+					buildWantedAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-github-idp",
+						"resourceName": "some-github-idp",
+						"resourceUID":  "github-resource-uid",
+						"type":         "github",
+					}),
+					buildWantedAuditLog("Upstream Authorize Redirect", map[string]any{
+						"authorizeID": generateAuthorizeId(encodedStateParam),
+					}),
 				}
 			},
 		},
@@ -982,13 +1040,33 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
-			wantAuditLogs: func(encodedStateParam, sessionID string) []string {
-				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditID":"some-audit-id","auditEvent":true,"Pinniped-Username":true,"Pinniped-Password":true}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditID":"some-audit-id","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-password-granting-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditID":"some-audit-id","auditEvent":true,"displayName":"some-password-granting-oidc-idp","resourceName":"some-password-granting-oidc-idp","resourceUID":"some-password-granting-resource-uid","type":"oidc"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"downstreamsession/downstream_session.go:<line>$downstreamsession.NewPinnipedSession","message":"Identity From Upstream IDP","auditID":"some-audit-id","auditEvent":true,"upstreamUsername":"test-oidc-pinniped-username","upstreamGroups":["test-pinniped-group-0","test-pinniped-group-1"]}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"downstreamsession/downstream_session.go:<line>$downstreamsession.NewPinnipedSession","message":"Session Started","sessionID":"` + sessionID + `","auditID":"some-audit-id","auditEvent":true,"username":"test-oidc-pinniped-username","groups":["test-pinniped-group-0","test-pinniped-group-1"],"subject":"https://my-upstream-issuer.com?idpName=some-password-granting-oidc-idp&sub=abc123-some+guid","additionalClaims":{},"warnings":[]}`,
+			wantAuditLogs: func(encodedStateParam, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					buildWantedAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
+					}),
+					buildWantedAuditLog("HTTP Request Parameters", map[string]any{
+						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-password-granting-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+					}),
+					buildWantedAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-password-granting-oidc-idp",
+						"resourceName": "some-password-granting-oidc-idp",
+						"resourceUID":  "some-password-granting-resource-uid",
+						"type":         "oidc",
+					}),
+					buildWantedAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamUsername": "test-oidc-pinniped-username",
+						"upstreamGroups":   []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+					}),
+					buildWantedAuditLog("Session Started", map[string]any{
+						"sessionID":        sessionID,
+						"username":         "test-oidc-pinniped-username",
+						"groups":           []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						"subject":          "https://my-upstream-issuer.com?idpName=some-password-granting-oidc-idp&sub=abc123-some+guid",
+						"additionalClaims": map[string]any{}, // json: {}
+						"warnings":         []any{},          // json: []
+					}),
 				}
 			},
 		},
@@ -1033,13 +1111,28 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantContentType:       jsonContentType,
 			wantLocationHeader:    urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithConfiguredPolicyRejectionHintErrorQuery),
 			wantBodyString:        "",
-			wantAuditLogs: func(encodedStateParam, sessionID string) []string {
-				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditID":"some-audit-id","auditEvent":true,"Pinniped-Username":true,"Pinniped-Password":true}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditID":"some-audit-id","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-password-granting-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditID":"some-audit-id","auditEvent":true,"displayName":"some-password-granting-oidc-idp","resourceName":"some-password-granting-oidc-idp","resourceUID":"some-password-granting-resource-uid","type":"oidc"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"downstreamsession/downstream_session.go:<line>$downstreamsession.NewPinnipedSession","message":"Identity From Upstream IDP","auditID":"some-audit-id","auditEvent":true,"upstreamUsername":"test-oidc-pinniped-username","upstreamGroups":["test-pinniped-group-0","test-pinniped-group-1"]}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"downstreamsession/downstream_session.go:<line>$downstreamsession.NewPinnipedSession","message":"Authentication Rejected By Transforms","auditID":"some-audit-id","auditEvent":true,"err":"configured identity policy rejected this authentication: authentication was rejected by a configured policy"}`,
+			wantAuditLogs: func(encodedStateParam, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					buildWantedAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
+					}),
+					buildWantedAuditLog("HTTP Request Parameters", map[string]any{
+						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-password-granting-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+					}),
+					buildWantedAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-password-granting-oidc-idp",
+						"resourceName": "some-password-granting-oidc-idp",
+						"resourceUID":  "some-password-granting-resource-uid",
+						"type":         "oidc",
+					}),
+					buildWantedAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamUsername": "test-oidc-pinniped-username",
+						"upstreamGroups":   []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+					}),
+					buildWantedAuditLog("Authentication Rejected By Transforms", map[string]any{
+						"reason": "configured identity policy rejected this authentication: authentication was rejected by a configured policy",
+					}),
 				}
 			},
 		},
@@ -1125,13 +1218,33 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
-			wantAuditLogs: func(encodedStateParam, sessionID string) []string {
-				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditID":"some-audit-id","auditEvent":true,"Pinniped-Username":true,"Pinniped-Password":true}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditID":"some-audit-id","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditID":"some-audit-id","auditEvent":true,"displayName":"some-ldap-idp","resourceName":"some-ldap-idp","resourceUID":"ldap-resource-uid","type":"ldap"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"downstreamsession/downstream_session.go:<line>$downstreamsession.NewPinnipedSession","message":"Identity From Upstream IDP","auditID":"some-audit-id","auditEvent":true,"upstreamUsername":"some-mapped-ldap-username","upstreamGroups":["group1","group2","group3"]}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"downstreamsession/downstream_session.go:<line>$downstreamsession.NewPinnipedSession","message":"Session Started","sessionID":"` + sessionID + `","auditID":"some-audit-id","auditEvent":true,"username":"some-mapped-ldap-username","groups":["group1","group2","group3"],"subject":"ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid","additionalClaims":null,"warnings":[]}`,
+			wantAuditLogs: func(encodedStateParam, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					buildWantedAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
+					}),
+					buildWantedAuditLog("HTTP Request Parameters", map[string]any{
+						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+					}),
+					buildWantedAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
+					buildWantedAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamUsername": "some-ldap-username-from-authenticator",
+						"upstreamGroups":   []any{"group1", "group2", "group3"},
+					}),
+					buildWantedAuditLog("Session Started", map[string]any{
+						"sessionID":        sessionID,
+						"username":         "some-ldap-username-from-authenticator",
+						"groups":           []any{"group1", "group2", "group3"},
+						"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid",
+						"additionalClaims": nil,     // json: null
+						"warnings":         []any{}, // json: []
+					}),
 				}
 			},
 		},
@@ -1161,13 +1274,33 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 				happyLDAPUsernameFromAuthenticator,
 				happyLDAPGroups,
 			),
-			wantAuditLogs: func(encodedStateParam, sessionID string) []string {
-				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditID":"some-audit-id","auditEvent":true,"Pinniped-Username":true,"Pinniped-Password":true}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditID":"some-audit-id","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditID":"some-audit-id","auditEvent":true,"displayName":"some-ldap-idp","resourceName":"some-ldap-idp","resourceUID":"ldap-resource-uid","type":"ldap"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"downstreamsession/downstream_session.go:<line>$downstreamsession.NewPinnipedSession","message":"Identity From Upstream IDP","auditID":"some-audit-id","auditEvent":true,"upstreamUsername":"some-mapped-ldap-username","upstreamGroups":["group1","group2","group3"]}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"downstreamsession/downstream_session.go:<line>$downstreamsession.NewPinnipedSession","message":"Session Started","sessionID":"` + sessionID + `","auditID":"some-audit-id","auditEvent":true,"username":"username_prefix:some-mapped-ldap-username","groups":["groups_prefix:group1","groups_prefix:group2","groups_prefix:group3"],"subject":"ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid","additionalClaims":null,"warnings":[]}`,
+			wantAuditLogs: func(encodedStateParam, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					buildWantedAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
+					}),
+					buildWantedAuditLog("HTTP Request Parameters", map[string]any{
+						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+					}),
+					buildWantedAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
+					buildWantedAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamUsername": "some-ldap-username-from-authenticator",
+						"upstreamGroups":   []any{"group1", "group2", "group3"},
+					}),
+					buildWantedAuditLog("Session Started", map[string]any{
+						"sessionID":        sessionID,
+						"username":         "username_prefix:some-ldap-username-from-authenticator",
+						"groups":           []any{"groups_prefix:group1", "groups_prefix:group2", "groups_prefix:group3"},
+						"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid",
+						"additionalClaims": nil,     // json: null
+						"warnings":         []any{}, // json: []
+					}),
 				}
 			},
 		},
@@ -1509,12 +1642,21 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeLoginRequiredErrorQuery),
 			wantBodyString:     "",
-			wantAuditLogs: func(encodedStateParam, sessionID string) []string {
-				return []string{
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Custom Headers Used","auditID":"some-audit-id","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"HTTP Request Parameters","auditID":"some-audit-id","auditEvent":true,"params":"client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&prompt=none&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).ServeHTTP","message":"Using Upstream IDP","auditID":"some-audit-id","auditEvent":true,"displayName":"some-oidc-idp","resourceName":"some-oidc-idp","resourceUID":"oidc-resource-uid","type":"oidc"}`,
-					`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"auth/auth_handler.go:<line>$auth.(*authorizeHandler).authorize","message":"Upstream Authorize Redirect","auditID":"some-audit-id","auditEvent":true,"authorizeID":""}`,
+			wantAuditLogs: func(encodedStateParam, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					buildWantedAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
+					}),
+					buildWantedAuditLog("HTTP Request Parameters", map[string]any{
+						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&prompt=none&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+					}),
+					buildWantedAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-oidc-idp",
+						"resourceName": "some-oidc-idp",
+						"resourceUID":  "oidc-resource-uid",
+						"type":         "oidc",
+					}),
 				}
 			},
 		},
@@ -3665,7 +3807,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 
 		if test.wantAuditLogs != nil {
 			wantAuditLogs := test.wantAuditLogs(actualQueryStateParam, sessionID)
-			testutil.RequireLogLines(t, wantAuditLogs, auditLog)
+			testutil.CompareAuditLogs(t, wantAuditLogs, auditLog.String())
 		}
 
 		switch {

@@ -215,10 +215,13 @@ func (h *authorizeHandler) authorize(
 		var authorizeID string
 		authorizeID, err = h.authorizeWithBrowser(r, w, oauthHelper, authorizeRequester, idp)
 
-		h.auditLogger.Audit(plog.AuditEventUpstreamAuthorizeRedirect, r.Context(), nil,
-			"authorizeID", authorizeID)
+		if err == nil {
+			h.auditLogger.Audit(plog.AuditEventUpstreamAuthorizeRedirect, r.Context(), nil,
+				"authorizeID", authorizeID)
+		}
 	}
 	if err != nil {
+		// TODO: Consider an audit event here
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, requestedBrowserlessFlow)
 	}
 }

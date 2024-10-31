@@ -234,7 +234,7 @@ func upstreamRefresh(
 	)
 	if err != nil {
 		auditLogger.Audit(plog.AuditEventAuthenticationRejectedByTransforms, ctx, accessRequest,
-			"err", err)
+			"reason", err)
 		return err
 	}
 

@@ -762,6 +762,105 @@ jobs:
             params:
               skip_download: true
 
+  - name: run-int-misc
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped
+            version: every
+            passed:
+              - ready-for-acceptance
+              # Repeat these from ready-for-int because we want to refer to them also in the "passed"
+              # constraints for the other resources below, so we can be sure that the pinniped resource
+              # version has passed these jobs *together* with the other resource versions below.
+              - check-image-version
+              - build-test-image
+              - build-fips-image
+              - build-test-fips-image
+            trigger: false # only run on-demand when a human asks for it, e.g. while preparing a release
+          - get: ci-build-image
+            passed: [ check-image-version ]
+            params:
+              skip_download: true
+          - get: ci-fips-build-image
+            passed: [ build-fips-image ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ build-test-image ]
+            params:
+              skip_download: true
+          - get: ci-fips-test-image
+            passed: [ build-test-fips-image ]
+            params:
+              skip_download: true
+
+  - name: run-int-k8s-versions
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped
+            version: every
+            passed:
+              - ready-for-acceptance
+              # Repeat these from ready-for-int because we want to refer to them also in the "passed"
+              # constraints for the other resources below, so we can be sure that the pinniped resource
+              # version has passed these jobs *together* with the other resource versions below.
+              - check-image-version
+              - build-test-image
+              - build-fips-image
+              - build-test-fips-image
+            trigger: false # only run on-demand when a human asks for it, e.g. while preparing a release
+          - get: ci-build-image
+            passed: [ check-image-version ]
+            params:
+              skip_download: true
+          - get: ci-fips-build-image
+            passed: [ build-fips-image ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ build-test-image ]
+            params:
+              skip_download: true
+          - get: ci-fips-test-image
+            passed: [ build-test-fips-image ]
+            params:
+              skip_download: true
+
+  - name: run-int-cloud-providers
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped
+            version: every
+            passed:
+              - ready-for-acceptance
+              # Repeat these from ready-for-int because we want to refer to them also in the "passed"
+              # constraints for the other resources below, so we can be sure that the pinniped resource
+              # version has passed these jobs *together* with the other resource versions below.
+              - check-image-version
+              - build-test-image
+              - build-fips-image
+              - build-test-fips-image
+            trigger: false # only run on-demand when a human asks for it, e.g. while preparing a release
+          - get: ci-build-image
+            passed: [ check-image-version ]
+            params:
+              skip_download: true
+          - get: ci-fips-build-image
+            passed: [ build-fips-image ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ build-test-image ]
+            params:
+              skip_download: true
+          - get: ci-fips-test-image
+            passed: [ build-test-fips-image ]
+            params:
+              skip_download: true
+
   - name: scan-image
     public: false # hide security scan results
     plan:
@@ -785,7 +884,7 @@ jobs:
           <<: *trivy_ignores
         <<: *notify_on_failure
 
-  - name: integration-test-1.21
+  - name: integration-test-oldest
     public: true # all logs are publicly visible
     plan:
       - in_parallel:
@@ -809,7 +908,7 @@ jobs:
         file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
         image: gcloud-image
         params:
-          <<: *kube_version_v1-21-x
+          <<: *oldest_kind_kube_version
           <<: *gcp_account_params
       - task: deploy
         input_mapping:
@@ -846,18 +945,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -902,18 +1001,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -958,18 +1057,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1014,18 +1113,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1070,18 +1169,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1126,18 +1225,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1182,18 +1281,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1238,18 +1337,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1294,18 +1393,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-k8s-versions ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1345,7 +1444,7 @@ jobs:
         params:
           <<: *gcp_account_params
 
-  - name: integration-test-1.31
+  - name: integration-test-latest
     public: true # all logs are publicly visible
     plan:
       - in_parallel:
@@ -1369,7 +1468,7 @@ jobs:
         file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
         image: gcloud-image
         params:
-          <<: *kube_version_v1-31-x
+          <<: *latest_kind_kube_version
           <<: *gcp_account_params
       - task: deploy
         input_mapping:
@@ -1406,18 +1505,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1535,18 +1634,18 @@ jobs:
       - in_parallel:
           - get: pinniped
             version: every
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1600,18 +1699,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-fips-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-fips-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1668,18 +1767,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1724,18 +1823,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1788,18 +1887,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1848,18 +1947,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -1905,18 +2004,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -2003,18 +2102,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -2053,18 +2152,18 @@ jobs:
     plan:
       - in_parallel:
           - get: pinniped
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             trigger: true
           - get: pinniped-ci
           - get: kind-release
           - get: gcloud-image
           - get: k8s-app-deployer-image
           - get: ci-build-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
             params:
               skip_download: true
           - get: ci-test-image
-            passed: [ ready-for-int ]
+            passed: [ run-int-misc ]
           - get: integration-test-runner-image
       - task: deploy-kind-instance
         attempts: 5
@@ -2104,79 +2203,22 @@ jobs:
       - in_parallel:
           - get: pinniped
             passed:
-              - integration-test-1.21
-              - integration-test-1.22
-              - integration-test-1.23
-              - integration-test-1.24
-              - integration-test-1.25
-              - integration-test-1.26
-              - integration-test-1.27
-              - integration-test-1.28
-              - integration-test-1.29
-              - integration-test-1.30
-              - integration-test-1.31
-              - integration-test-latest-arm64
+              - integration-test-oldest
+              - integration-test-latest
               - integration-test-latest-with-external-idps
-              - integration-test-idps-firewalled
-              - integration-test-latest-fips
-              - kubectl-apply-test
-              # integration-test-k8s-main is purposefully excluded. Failures are informational, not blocking.
-              - integration-test-changed-api-group-oldest
-              - integration-test-changed-api-group-latest
-              - integration-test-multiple-pinnipeds
-              - uninstall-test
-              - uninstall-existing-ns-test
             trigger: true
           - get: ci-build-image
             passed:
-              - integration-test-1.21
-              - integration-test-1.22
-              - integration-test-1.23
-              - integration-test-1.24
-              - integration-test-1.25
-              - integration-test-1.26
-              - integration-test-1.27
-              - integration-test-1.28
-              - integration-test-1.29
-              - integration-test-1.30
-              - integration-test-1.31
-              - integration-test-latest-arm64
+              - integration-test-oldest
+              - integration-test-latest
               - integration-test-latest-with-external-idps
-              - integration-test-idps-firewalled
-              # integration-test-latest-fips uses a different build image, so it is skipped.
-              - kubectl-apply-test
-              # integration-test-k8s-main is purposefully excluded. Failures are informational, not blocking.
-              - integration-test-changed-api-group-oldest
-              - integration-test-changed-api-group-latest
-              - integration-test-multiple-pinnipeds
-              - uninstall-test
-              - uninstall-existing-ns-test
             params:
               skip_download: true
           - get: ci-test-image
             passed:
-              - integration-test-1.21
-              - integration-test-1.22
-              - integration-test-1.23
-              - integration-test-1.24
-              - integration-test-1.25
-              - integration-test-1.26
-              - integration-test-1.27
-              - integration-test-1.28
-              - integration-test-1.29
-              - integration-test-1.30
-              - integration-test-1.31
-              - integration-test-latest-arm64
+              - integration-test-oldest
+              - integration-test-latest
               - integration-test-latest-with-external-idps
-              - integration-test-idps-firewalled
-              # integration-test-latest-fips uses a different build image, so it is skipped.
-              - kubectl-apply-test
-              # integration-test-k8s-main is purposefully excluded. Failures are informational, not blocking.
-              - integration-test-changed-api-group-oldest
-              - integration-test-changed-api-group-latest
-              - integration-test-multiple-pinnipeds
-              - uninstall-test
-              - uninstall-existing-ns-test
             params:
               skip_download: true
 
@@ -2391,11 +2433,11 @@ jobs:
     plan:
       - in_parallel:
           - get: ci-build-image
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
           - get: ci-test-image
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
           - get: pinniped
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
             trigger: true
           - get: pinniped-ci
           - get: integration-test-runner-image
@@ -2458,11 +2500,11 @@ jobs:
     plan:
       - in_parallel:
           - get: ci-build-image
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
           - get: ci-test-image
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
           - get: pinniped
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
             trigger: true
           - get: pinniped-ci
           - get: integration-test-runner-image
@@ -2525,11 +2567,11 @@ jobs:
     plan:
       - in_parallel:
           - get: ci-build-image
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
           - get: ci-test-image
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
           - get: pinniped
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
             trigger: true
           - get: pinniped-ci
           - get: integration-test-runner-image
@@ -2661,11 +2703,11 @@ jobs:
     plan:
       - in_parallel:
           - get: ci-build-image
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
           - get: ci-test-image
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
           - get: pinniped
-            passed: [ ready-for-acceptance ]
+            passed: [ run-int-cloud-providers ]
             trigger: true
           - get: pinniped-ci
           - get: integration-test-runner-image

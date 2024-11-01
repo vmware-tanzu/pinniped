@@ -464,15 +464,7 @@ func TestLoginEndpoint(t *testing.T) {
 			require.Equal(t, test.wantBody, rsp.Body.String())
 
 			if test.wantAuditLogs != nil {
-				var encodedStateParam stateparam.Encoded
-				if test.path != "" {
-					var path *url.URL
-					path, err = url.Parse(test.path)
-					require.NoError(t, err)
-					encodedStateParam = stateparam.Encoded(path.Query().Get("state"))
-				}
-
-				wantAuditLogs := test.wantAuditLogs(encodedStateParam)
+				wantAuditLogs := test.wantAuditLogs(testutil.GetStateParam(t, test.path))
 				testutil.CompareAuditLogs(t, wantAuditLogs, log.String())
 			}
 		})

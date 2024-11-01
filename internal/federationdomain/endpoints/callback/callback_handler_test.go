@@ -1955,15 +1955,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			}
 
 			if test.wantAuditLogs != nil {
-				var encodedStateParam stateparam.Encoded
-				if test.path != "" {
-					var path *url.URL
-					path, err = url.Parse(test.path)
-					require.NoError(t, err)
-					encodedStateParam = stateparam.Encoded(path.Query().Get("state"))
-				}
-
-				wantAuditLogs := test.wantAuditLogs(encodedStateParam, sessionID)
+				wantAuditLogs := test.wantAuditLogs(testutil.GetStateParam(t, test.path), sessionID)
 				testutil.CompareAuditLogs(t, wantAuditLogs, log.String())
 			}
 		})

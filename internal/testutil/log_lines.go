@@ -6,10 +6,13 @@ package testutil
 import (
 	"bytes"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 )
 
 func RequireLogLines(t *testing.T, wantLogs []string, log *bytes.Buffer) {
@@ -36,6 +39,17 @@ func WantAuditLog(message string, params map[string]any, auditID ...string) Want
 		result.Params["auditID"] = auditID[0]
 	}
 	return result
+}
+
+func GetStateParam(t *testing.T, fullURL string) stateparam.Encoded {
+	var encodedStateParam stateparam.Encoded
+	if fullURL != "" {
+		path, err := url.Parse(fullURL)
+		require.NoError(t, err)
+		encodedStateParam = stateparam.Encoded(path.Query().Get("state"))
+	}
+
+	return encodedStateParam
 }
 
 func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditLogsOneLiner string) {

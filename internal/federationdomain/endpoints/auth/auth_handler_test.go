@@ -35,7 +35,6 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
-	"go.pinniped.dev/internal/federationdomain/requestlogger"
 	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/here"
@@ -660,10 +659,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 	prefixUsernameAndGroupsPipeline := transformtestutil.NewPrefixingPipeline(t, transformationUsernamePrefix, transformationGroupsPrefix)
 	rejectAuthPipeline := transformtestutil.NewRejectAllAuthPipeline(t)
 
-	wantAuditLog := func(message string, params map[string]any) testutil.WantedAuditLog {
-		return testutil.WantAuditLog(message, params, "some-audit-id")
-	}
-
 	type testCase struct {
 		name string
 
@@ -730,20 +725,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": false,
 						"Pinniped-Password": false,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": "client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted",
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
 						"resourceName": "some-oidc-idp",
 						"resourceUID":  "oidc-resource-uid",
 						"type":         "oidc",
 					}),
-					wantAuditLog("Upstream Authorize Redirect", map[string]any{
+					testutil.WantAuditLog("Upstream Authorize Redirect", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
 				}
@@ -768,20 +763,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": false,
 						"Pinniped-Password": false,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
 						"resourceName": "some-oidc-idp",
 						"resourceUID":  "oidc-resource-uid",
 						"type":         "oidc",
 					}),
-					wantAuditLog("Upstream Authorize Redirect", map[string]any{
+					testutil.WantAuditLog("Upstream Authorize Redirect", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
 				}
@@ -805,20 +800,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": false,
 						"Pinniped-Password": false,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": "client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted",
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-github-idp",
 						"resourceName": "some-github-idp",
 						"resourceUID":  "github-resource-uid",
 						"type":         "github",
 					}),
-					wantAuditLog("Upstream Authorize Redirect", map[string]any{
+					testutil.WantAuditLog("Upstream Authorize Redirect", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
 				}
@@ -843,20 +838,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": false,
 						"Pinniped-Password": false,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-github-idp",
 						"resourceName": "some-github-idp",
 						"resourceUID":  "github-resource-uid",
 						"type":         "github",
 					}),
-					wantAuditLog("Upstream Authorize Redirect", map[string]any{
+					testutil.WantAuditLog("Upstream Authorize Redirect", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
 				}
@@ -880,20 +875,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": false,
 						"Pinniped-Password": false,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
 						"resourceName": "some-ldap-idp",
 						"resourceUID":  "ldap-resource-uid",
 						"type":         "ldap",
 					}),
-					wantAuditLog("Upstream Authorize Redirect", map[string]any{
+					testutil.WantAuditLog("Upstream Authorize Redirect", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
 				}
@@ -918,20 +913,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": false,
 						"Pinniped-Password": false,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
 						"resourceName": "some-oidc-idp",
 						"resourceUID":  "oidc-resource-uid",
 						"type":         "oidc",
 					}),
-					wantAuditLog("Upstream Authorize Redirect", map[string]any{
+					testutil.WantAuditLog("Upstream Authorize Redirect", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
 				}
@@ -957,11 +952,11 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": false,
 						"Pinniped-Password": false,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
 					}),
 				}
@@ -987,20 +982,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": false,
 						"Pinniped-Password": false,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
 						"resourceName": "some-oidc-idp",
 						"resourceUID":  "oidc-resource-uid",
 						"type":         "oidc",
 					}),
-					wantAuditLog("Upstream Authorize Redirect", map[string]any{
+					testutil.WantAuditLog("Upstream Authorize Redirect", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
 				}
@@ -1101,20 +1096,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": true,
 						"Pinniped-Password": true,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-password-granting-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-password-granting-oidc-idp",
 						"resourceName": "some-password-granting-oidc-idp",
 						"resourceUID":  "some-password-granting-resource-uid",
 						"type":         "oidc",
 					}),
-					wantAuditLog("Identity From Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "some-password-granting-oidc-idp",
 						"upstreamIDPResourceName": "some-password-granting-oidc-idp",
 						"upstreamIDPResourceUID":  "some-password-granting-resource-uid",
@@ -1122,7 +1117,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"upstreamUsername":        "test-oidc-pinniped-username",
 						"upstreamGroups":          []any{"test-pinniped-group-0", "test-pinniped-group-1"},
 					}),
-					wantAuditLog("Session Started", map[string]any{
+					testutil.WantAuditLog("Session Started", map[string]any{
 						"sessionID":        sessionID,
 						"username":         "test-oidc-pinniped-username",
 						"groups":           []any{"test-pinniped-group-0", "test-pinniped-group-1"},
@@ -1176,20 +1171,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:        "",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": true,
 						"Pinniped-Password": true,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-password-granting-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-password-granting-oidc-idp",
 						"resourceName": "some-password-granting-oidc-idp",
 						"resourceUID":  "some-password-granting-resource-uid",
 						"type":         "oidc",
 					}),
-					wantAuditLog("Identity From Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "some-password-granting-oidc-idp",
 						"upstreamIDPResourceName": "some-password-granting-oidc-idp",
 						"upstreamIDPResourceUID":  "some-password-granting-resource-uid",
@@ -1197,7 +1192,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"upstreamUsername":        "test-oidc-pinniped-username",
 						"upstreamGroups":          []any{"test-pinniped-group-0", "test-pinniped-group-1"},
 					}),
-					wantAuditLog("Authentication Rejected By Transforms", map[string]any{
+					testutil.WantAuditLog("Authentication Rejected By Transforms", map[string]any{
 						"reason": "configured identity policy rejected this authentication: authentication was rejected by a configured policy",
 					}),
 				}
@@ -1287,20 +1282,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": true,
 						"Pinniped-Password": true,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
 						"resourceName": "some-ldap-idp",
 						"resourceUID":  "ldap-resource-uid",
 						"type":         "ldap",
 					}),
-					wantAuditLog("Identity From Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "some-ldap-idp",
 						"upstreamIDPResourceName": "some-ldap-idp",
 						"upstreamIDPResourceUID":  "ldap-resource-uid",
@@ -1308,7 +1303,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"upstreamUsername":        "some-ldap-username-from-authenticator",
 						"upstreamGroups":          []any{"group1", "group2", "group3"},
 					}),
-					wantAuditLog("Session Started", map[string]any{
+					testutil.WantAuditLog("Session Started", map[string]any{
 						"sessionID":        sessionID,
 						"username":         "some-ldap-username-from-authenticator",
 						"groups":           []any{"group1", "group2", "group3"},
@@ -1347,20 +1342,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			),
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": true,
 						"Pinniped-Password": true,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
 						"resourceName": "some-ldap-idp",
 						"resourceUID":  "ldap-resource-uid",
 						"type":         "ldap",
 					}),
-					wantAuditLog("Identity From Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "some-ldap-idp",
 						"upstreamIDPResourceName": "some-ldap-idp",
 						"upstreamIDPResourceUID":  "ldap-resource-uid",
@@ -1368,7 +1363,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"upstreamUsername":        "some-ldap-username-from-authenticator",
 						"upstreamGroups":          []any{"group1", "group2", "group3"},
 					}),
-					wantAuditLog("Session Started", map[string]any{
+					testutil.WantAuditLog("Session Started", map[string]any{
 						"sessionID":        sessionID,
 						"username":         "username_prefix:some-ldap-username-from-authenticator",
 						"groups":           []any{"groups_prefix:group1", "groups_prefix:group2", "groups_prefix:group3"},
@@ -1719,14 +1714,14 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:     "",
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					wantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
 						"Pinniped-Username": false,
 						"Pinniped-Password": false,
 					}),
-					wantAuditLog("HTTP Request Parameters", map[string]any{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&prompt=none&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
 					}),
-					wantAuditLog("Using Upstream IDP", map[string]any{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
 						"resourceName": "some-oidc-idp",
 						"resourceUID":  "oidc-resource-uid",
@@ -3810,9 +3805,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		}
 		rsp := httptest.NewRecorder()
 
-		req, _ = requestlogger.NewRequestWithAuditID(req, func() string {
-			return "some-audit-id"
-		})
 		subject.ServeHTTP(rsp, req)
 		t.Logf("response: %#v", rsp)
 		t.Logf("response body: %q", rsp.Body.String())

@@ -27,19 +27,25 @@ type WantedAuditLog struct {
 	Params  map[string]any
 }
 
-func WantAuditLog(message string, params map[string]any, auditID string) WantedAuditLog {
+func WantAuditLog(message string, params map[string]any, auditID ...string) WantedAuditLog {
 	result := WantedAuditLog{
 		Message: message,
 		Params:  params,
 	}
-	if auditID != "" {
-		result.Params["auditID"] = auditID
+	if len(auditID) > 0 {
+		result.Params["auditID"] = auditID[0]
 	}
 	return result
 }
 
 func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditLogsOneLiner string) {
 	t.Helper()
+
+	// There are tests that verify that no audit events were emitted
+	if len(wantAuditLogs) == 0 {
+		require.Empty(t, actualAuditLogsOneLiner, "no audit events were expected, but some were found")
+		return
+	}
 
 	wantJsonAuditLogs := make([]map[string]any, 0)
 	wantMessages := make([]string, 0)

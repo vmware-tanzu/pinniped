@@ -247,6 +247,7 @@ func TestCallbackEndpoint(t *testing.T) {
 		wantDownstreamAdditionalClaims    map[string]any
 		wantOIDCAuthcodeExchangeCall      *expectedOIDCAuthcodeExchange
 		wantGitHubAuthcodeExchangeCall    *expectedGitHubAuthcodeExchange
+		wantAuditLogs                     func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog
 	}{
 		{
 			name:   "OIDC: GET with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
@@ -278,6 +279,29 @@ func TestCallbackEndpoint(t *testing.T) {
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
 			},
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "upstream-oidc-idp-name",
+						"upstreamIDPType":         "oidc",
+						"upstreamIDPResourceName": "upstream-oidc-idp-name",
+						"upstreamIDPResourceUID":  "upstream-oidc-resource-uid",
+						"upstreamUsername":        "test-pinniped-username",
+						"upstreamGroups":          []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+					}),
+					testutil.WantAuditLog("Session Started", map[string]any{
+						"sessionID":        sessionID,
+						"username":         "test-pinniped-username",
+						"groups":           []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						"subject":          "https://my-upstream-issuer.com?idpName=upstream-oidc-idp-name&sub=abc123-some+guid",
+						"additionalClaims": map[string]any{}, // json: {}
+						"warnings":         []any{},          // json: []
+					}),
+				}
+			},
 		},
 		{
 			name:   "GitHub: GET with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
@@ -308,6 +332,29 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
 				performedByUpstreamName: happyGithubIDPName,
 				args:                    happyGitHubUpstreamExchangeAuthcodeArgs,
+			},
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "upstream-github-idp-name",
+						"upstreamIDPType":         "github",
+						"upstreamIDPResourceName": "upstream-github-idp-name",
+						"upstreamIDPResourceUID":  "upstream-github-idp-resource-uid",
+						"upstreamUsername":        "some-github-login",
+						"upstreamGroups":          []any{"org1/team1", "org2/team2"},
+					}),
+					testutil.WantAuditLog("Session Started", map[string]any{
+						"sessionID":        sessionID,
+						"username":         "some-github-login",
+						"groups":           []any{"org1/team1", "org2/team2"},
+						"subject":          "https://github.com?idpName=upstream-github-idp-name&sub=some-github-login",
+						"additionalClaims": nil,     // json: null
+						"warnings":         []any{}, // json: []
+					}),
+				}
 			},
 		},
 		{
@@ -656,6 +703,13 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
+			},
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, _ string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+				}
 			},
 		},
 		{
@@ -1088,6 +1142,9 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: htmlContentType,
 			wantBody:        "Bad Request: state param not found\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{}
+			},
 		},
 		{
 			name:            "state param was not signed correctly, has expired, or otherwise cannot be decoded for any reason",
@@ -1720,6 +1777,24 @@ func TestCallbackEndpoint(t *testing.T) {
 				performedByUpstreamName: happyOIDCUpstreamIDPName,
 				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
 			},
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "upstream-oidc-idp-name",
+						"upstreamIDPType":         "oidc",
+						"upstreamIDPResourceName": "upstream-oidc-idp-name",
+						"upstreamIDPResourceUID":  "upstream-oidc-resource-uid",
+						"upstreamUsername":        "test-pinniped-username",
+						"upstreamGroups":          []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+					}),
+					testutil.WantAuditLog("Authentication Rejected By Transforms", map[string]any{
+						"reason": "configured identity policy rejected this authentication: authentication was rejected by a configured policy",
+					}),
+				}
+			},
 		},
 		{
 			name: "GitHub: using identity transformations which reject the authentication",
@@ -1734,6 +1809,24 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantGitHubAuthcodeExchangeCall: &expectedGitHubAuthcodeExchange{
 				performedByUpstreamName: happyGithubIDPName,
 				args:                    happyGitHubUpstreamExchangeAuthcodeArgs,
+			},
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "upstream-github-idp-name",
+						"upstreamIDPType":         "github",
+						"upstreamIDPResourceName": "upstream-github-idp-name",
+						"upstreamIDPResourceUID":  "upstream-github-idp-resource-uid",
+						"upstreamUsername":        "some-github-login",
+						"upstreamGroups":          []any{"org1/team1", "org2/team2"},
+					}),
+					testutil.WantAuditLog("Authentication Rejected By Transforms", map[string]any{
+						"reason": "configured identity policy rejected this authentication: authentication was rejected by a configured policy",
+					}),
+				}
 			},
 		},
 	}
@@ -1759,13 +1852,15 @@ func TestCallbackEndpoint(t *testing.T) {
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration)
 
+			logger, log := plog.TestLogger(t)
+
 			subject := NewHandler(
 				test.idps.BuildFederationDomainIdentityProvidersListerFinder(),
 				oauthHelper,
 				happyStateCodec,
 				happyCookieCodec,
 				happyUpstreamRedirectURI,
-				plog.New(),
+				logger,
 			)
 
 			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
@@ -1800,6 +1895,8 @@ func TestCallbackEndpoint(t *testing.T) {
 			require.Equal(t, test.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
 
+			sessionID := ""
+
 			switch {
 			// If we want a specific static response body, assert that.
 			case test.wantBody != "":
@@ -1807,7 +1904,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 			// Else if we want a body that contains a regex-matched auth code, assert that (for "response_mode=form_post").
 			case test.wantBodyFormResponseRegexp != "":
-				_ = oidctestutil.RequireAuthCodeRegexpMatch(
+				sessionID = oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					rsp.Body.String(),
 					test.wantBodyFormResponseRegexp,
@@ -1835,7 +1932,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 			if test.wantRedirectLocationRegexp != "" {
 				require.Len(t, rsp.Header().Values("Location"), 1)
-				_ = oidctestutil.RequireAuthCodeRegexpMatch(
+				sessionID = oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					rsp.Header().Get("Location"),
 					test.wantRedirectLocationRegexp,
@@ -1855,6 +1952,19 @@ func TestCallbackEndpoint(t *testing.T) {
 					test.wantDownstreamCustomSessionData,
 					test.wantDownstreamAdditionalClaims,
 				)
+			}
+
+			if test.wantAuditLogs != nil {
+				var encodedStateParam stateparam.Encoded
+				if test.path != "" {
+					var path *url.URL
+					path, err = url.Parse(test.path)
+					require.NoError(t, err)
+					encodedStateParam = stateparam.Encoded(path.Query().Get("state"))
+				}
+
+				wantAuditLogs := test.wantAuditLogs(encodedStateParam, sessionID)
+				testutil.CompareAuditLogs(t, wantAuditLogs, log.String())
 			}
 		})
 	}

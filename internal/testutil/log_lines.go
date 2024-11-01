@@ -41,8 +41,8 @@ func WantAuditLog(message string, params map[string]any, auditID string) WantedA
 func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditLogsOneLiner string) {
 	t.Helper()
 
-	var wantJsonAuditLogs []map[string]any
-	var wantMessages []string
+	wantJsonAuditLogs := make([]map[string]any, 0)
+	wantMessages := make([]string, 0)
 	for _, wantAuditLog := range wantAuditLogs {
 		wantJsonAuditLog := make(map[string]any)
 		wantJsonAuditLog["level"] = "info"
@@ -56,8 +56,8 @@ func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditL
 		wantJsonAuditLogs = append(wantJsonAuditLogs, wantJsonAuditLog)
 	}
 
-	var actualJsonAuditLogs []map[string]any
-	var actualMessages []string
+	actualJsonAuditLogs := make([]map[string]any, 0)
+	actualMessages := make([]string, 0)
 	actualAuditLogs := strings.Split(actualAuditLogsOneLiner, "\n")
 	require.GreaterOrEqual(t, len(actualAuditLogs), 2)
 	actualAuditLogs = actualAuditLogs[:len(actualAuditLogs)-1] // trim off the last ""
@@ -78,15 +78,12 @@ func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditL
 		actualMessages = append(actualMessages, actualMessage)
 	}
 
-	// TODO: remove this
-	t.Logf("LAST AUDIT EVENT: %s", actualAuditLogs[len(actualAuditLogs)-1])
-
 	// We should check array indices first so that we don't exceed any boundaries.
 	// But we also want to be sure to indicate to the caller what went wrong, so compare the messages.
 	require.Equal(t, wantMessages, actualMessages)
 
 	// We can expect the audit logs to be ordered deterministically.
-	for i := range len(wantJsonAuditLogs) {
+	for i := range wantJsonAuditLogs {
 		// compare each item individually so we know which message it is
 		require.Equal(t, wantJsonAuditLogs[i], actualJsonAuditLogs[i],
 			"audit event for message %q does not match", wantJsonAuditLogs[i]["message"])

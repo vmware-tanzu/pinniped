@@ -388,7 +388,7 @@ func TestLoginEndpoint(t *testing.T) {
 			) error {
 				require.Equal(t, req, r)
 				require.Equal(t, rsp, w)
-				require.Equal(t, stateparam.Encoded(tt.wantEncodedState), encodedState)
+				require.Equal(t, tt.wantEncodedState, encodedState)
 				require.Equal(t, tt.wantDecodedState, decodedState)
 				if tt.getHandlerErr == nil {
 					_, err := w.Write([]byte(happyGetResult))
@@ -405,7 +405,7 @@ func TestLoginEndpoint(t *testing.T) {
 			) error {
 				require.Equal(t, req, r)
 				require.Equal(t, rsp, w)
-				require.Equal(t, stateparam.Encoded(tt.wantEncodedState), encodedState)
+				require.Equal(t, tt.wantEncodedState, encodedState)
 				require.Equal(t, tt.wantDecodedState, decodedState)
 				if tt.postHandlerErr == nil {
 					_, err := w.Write([]byte(happyPostResult))

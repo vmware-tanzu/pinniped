@@ -369,14 +369,12 @@ func TestLoginEndpoint(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		tt := test
-
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			if tt.csrfCookie != "" {
-				req.Header.Set("Cookie", tt.csrfCookie)
+			req := httptest.NewRequest(test.method, test.path, nil)
+			if test.csrfCookie != "" {
+				req.Header.Set("Cookie", test.csrfCookie)
 			}
 			rsp := httptest.NewRecorder()
 
@@ -388,13 +386,13 @@ func TestLoginEndpoint(t *testing.T) {
 			) error {
 				require.Equal(t, req, r)
 				require.Equal(t, rsp, w)
-				require.Equal(t, tt.wantEncodedState, encodedState)
-				require.Equal(t, tt.wantDecodedState, decodedState)
-				if tt.getHandlerErr == nil {
+				require.Equal(t, test.wantEncodedState, encodedState)
+				require.Equal(t, test.wantDecodedState, decodedState)
+				if test.getHandlerErr == nil {
 					_, err := w.Write([]byte(happyGetResult))
 					require.NoError(t, err)
 				}
-				return tt.getHandlerErr
+				return test.getHandlerErr
 			}
 
 			testPostHandler := func(
@@ -405,28 +403,28 @@ func TestLoginEndpoint(t *testing.T) {
 			) error {
 				require.Equal(t, req, r)
 				require.Equal(t, rsp, w)
-				require.Equal(t, tt.wantEncodedState, encodedState)
-				require.Equal(t, tt.wantDecodedState, decodedState)
-				if tt.postHandlerErr == nil {
+				require.Equal(t, test.wantEncodedState, encodedState)
+				require.Equal(t, test.wantDecodedState, decodedState)
+				if test.postHandlerErr == nil {
 					_, err := w.Write([]byte(happyPostResult))
 					require.NoError(t, err)
 				}
-				return tt.postHandlerErr
+				return test.postHandlerErr
 			}
 
 			subject := NewHandler(happyStateCodec, happyCookieCodec, testGetHandler, testPostHandler, plog.New())
 
 			subject.ServeHTTP(rsp, req)
 
-			if tt.method == http.MethodPost {
+			if test.method == http.MethodPost {
 				testutil.RequireSecurityHeadersWithFormPostPageCSPs(t, rsp)
 			} else {
 				testutil.RequireSecurityHeadersWithLoginPageCSPs(t, rsp)
 			}
 
-			require.Equal(t, tt.wantStatus, rsp.Code)
-			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), tt.wantContentType)
-			require.Equal(t, tt.wantBody, rsp.Body.String())
+			require.Equal(t, test.wantStatus, rsp.Code)
+			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), test.wantContentType)
+			require.Equal(t, test.wantBody, rsp.Body.String())
 		})
 	}
 }

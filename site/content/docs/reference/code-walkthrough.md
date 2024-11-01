@@ -166,7 +166,7 @@ as aggregated API endpoints, which makes them appear to a client almost as if th
   as that user.
   It is in [internal/registry/credentialrequest/rest.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/registry/credentialrequest/rest.go).
 
-- `WhoAmI` will return basic details about the currently authenticated user.
+- `WhoAmIRequest` will return basic details about the currently authenticated user.
   It is in [internal/registry/whoamirequest/rest.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/registry/whoamirequest/rest.go).
 
 The Concierge may also run an impersonation proxy service. This is not an aggregated API endpoint, so it needs to be

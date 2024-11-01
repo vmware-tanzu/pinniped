@@ -3941,8 +3941,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			if len(test.wantDownstreamAdditionalClaims) > 0 {
 				require.True(t, oidcIDPsCount > 0, "wantDownstreamAdditionalClaims requires at least one OIDC IDP")
 			}
-			var auditLog bytes.Buffer
-			auditLogger := plog.TestLogger(t, &auditLog)
+			auditLogger, auditLog := plog.TestLogger(t)
 			subject := NewHandler(
 				downstreamIssuer,
 				idps,
@@ -3951,7 +3950,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 				test.stateEncoder, test.cookieEncoder,
 				auditLogger,
 			)
-			runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient, &auditLog)
+			runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient, auditLog)
 		})
 	}
 
@@ -3969,8 +3968,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		oauthHelperWithRealStorage, kubeOauthStore := createOauthHelperWithRealStorage(secretsClient, oidcClientsClient)
 		oauthHelperWithNullStorage, _ := createOauthHelperWithNullStorage(secretsClient, oidcClientsClient)
 		idpLister := test.idps.BuildFederationDomainIdentityProvidersListerFinder()
-		var auditLog bytes.Buffer
-		auditLogger := plog.TestLogger(t, &auditLog)
+		auditLogger, auditLog := plog.TestLogger(t)
 		subject := NewHandler(
 			downstreamIssuer,
 			idpLister,
@@ -3980,7 +3978,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			auditLogger,
 		)
 
-		runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient, &auditLog)
+		runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient, auditLog)
 
 		// Call the idpLister's setter to change the upstream IDP settings.
 		newProviderSettings := oidctestutil.NewTestUpstreamOIDCIdentityProviderBuilder().
@@ -4023,7 +4021,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		// modified expectations. This should ensure that the implementation is using the in-memory cache
 		// of upstream IDP settings appropriately in terms of always getting the values from the cache
 		// on every request.
-		runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient, &auditLog)
+		runOneTestCase(t, test, subject, kubeOauthStore, supervisorClient, kubeClient, secretsClient, auditLog)
 	})
 }
 

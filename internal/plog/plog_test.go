@@ -4,6 +4,7 @@
 package plog
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
 	"strings"
@@ -355,14 +356,14 @@ func TestPlog(t *testing.T) {
 `,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			subjectLogger, log := TestLogger(t)
-			tt.run(subjectLogger)
+			testLogger, log := TestLogger(t)
+			test.run(testLogger)
 
-			require.Equal(t, strings.TrimSpace(tt.want), strings.TrimSpace(log.String()))
+			require.Equal(t, strings.TrimSpace(test.want), strings.TrimSpace(log.String()))
 		})
 	}
 }

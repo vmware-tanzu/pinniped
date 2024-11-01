@@ -2555,7 +2555,7 @@ func TestController(t *testing.T) {
 				require.Len(t, actualIDP.Status.Conditions, countExpectedConditions)
 				require.Equal(t, tt.wantResultingUpstreams[i], *actualIDP)
 			}
-			testutil.RequireLogLines(t, tt.wantLogs, &log)
+			testutil.RequireLogLines(t, tt.wantLogs, log)
 
 			// This needs to happen after the expected condition LastTransitionTime has been updated.
 			wantActions := make([]coretesting.Action, 3+len(tt.wantResultingUpstreams))

@@ -32,7 +32,7 @@ import (
 
 //nolint:gochecknoglobals // please treat this as a readonly const, do not mutate
 var paramsSafeToLog = sets.New[string](
-	// Standard params from https://openid.net/specs/openid-connect-core-1_0.html for authcde and refresh grants.
+	// Standard params from https://openid.net/specs/openid-connect-core-1_0.html for authcode and refresh grants.
 	// Redacting code, client_secret, refresh_token, and PKCE code_verifier params.
 	"grant_type", "client_id", "redirect_uri", "scope",
 	// Token exchange params from https://datatracker.ietf.org/doc/html/rfc8693.

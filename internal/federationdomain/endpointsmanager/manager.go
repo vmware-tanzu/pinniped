@@ -12,6 +12,7 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
+	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
 	"go.pinniped.dev/internal/federationdomain/dynamiccodec"
 	"go.pinniped.dev/internal/federationdomain/endpoints/auth"
@@ -63,6 +64,7 @@ func NewManager(
 	secretsClient corev1client.SecretInterface,
 	oidcClientsClient v1alpha1.OIDCClientInterface,
 	auditLogger plog.AuditLogger,
+	auditCfg supervisor.AuditSpec,
 ) *Manager {
 	m := &Manager{
 		providerHandlers:    make(map[string]http.Handler),
@@ -74,7 +76,7 @@ func NewManager(
 		auditLogger:         auditLogger,
 	}
 	// nextHandler is the next handler in the chain, called when this manager didn't know how to handle a request
-	m.buildHandlerChain(nextHandler)
+	m.buildHandlerChain(nextHandler, auditCfg)
 	return m
 }
 
@@ -191,11 +193,11 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 	}
 }
 
-func (m *Manager) buildHandlerChain(nextHandler http.Handler) {
+func (m *Manager) buildHandlerChain(nextHandler http.Handler, auditCfg supervisor.AuditSpec) {
 	// build the basic handler for FederationDomain endpoints
 	handler := m.buildManagerHandler(nextHandler)
 	// log all requests, including audit ID
-	handler = requestlogger.WithHTTPRequestAuditLogging(handler, m.auditLogger)
+	handler = requestlogger.WithHTTPRequestAuditLogging(handler, m.auditLogger, auditCfg)
 	// add random audit ID to request context and response headers
 	handler = requestlogger.WithAuditID(handler, func() string {
 		return uuid.New().String()

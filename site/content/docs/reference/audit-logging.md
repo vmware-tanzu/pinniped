@@ -116,7 +116,7 @@ TODO: Document this configuration, probably something like so:
 ```yaml
 audit:
   show_personally_identifiable_information: enabled
-  audit_internal_endpoints: enabled
+  internal_endpoints: enabled
 ```
 
 #</TODO>

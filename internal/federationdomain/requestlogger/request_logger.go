@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -15,7 +16,9 @@ import (
 	apisaudit "k8s.io/apiserver/pkg/apis/audit"
 	"k8s.io/apiserver/pkg/audit"
 	"k8s.io/apiserver/pkg/endpoints/responsewriter"
+	"k8s.io/utils/clock"
 
+	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/httputil/requestutil"
 	"go.pinniped.dev/internal/plog"
 )
@@ -41,9 +44,9 @@ func WithAuditID(handler http.Handler, newAuditIDFunc func() string) http.Handle
 	})
 }
 
-func WithHTTPRequestAuditLogging(handler http.Handler, auditLogger plog.AuditLogger) http.Handler {
+func WithHTTPRequestAuditLogging(handler http.Handler, auditLogger plog.AuditLogger, auditCfg supervisor.AuditSpec) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		rl := newRequestLogger(req, w, auditLogger, time.Now())
+		rl := newRequestLogger(req, w, auditLogger, time.Now(), auditCfg)
 
 		rl.LogRequestReceived()
 		defer rl.LogRequestComplete()
@@ -55,6 +58,7 @@ func WithHTTPRequestAuditLogging(handler http.Handler, auditLogger plog.AuditLog
 
 type requestLogger struct {
 	startTime time.Time
+	clock     clock.Clock // clock is used to calculate the response latency, and useful for unit tests.
 
 	hijacked       bool
 	statusRecorded bool
@@ -65,23 +69,37 @@ type requestLogger struct {
 	w         http.ResponseWriter
 
 	auditLogger plog.AuditLogger
+	auditCfg    supervisor.AuditSpec
 }
 
-func newRequestLogger(req *http.Request, w http.ResponseWriter, auditLogger plog.AuditLogger, startTime time.Time) *requestLogger {
+func newRequestLogger(req *http.Request, w http.ResponseWriter, auditLogger plog.AuditLogger, startTime time.Time, auditCfg supervisor.AuditSpec) *requestLogger {
 	return &requestLogger{
 		req:         req,
 		w:           w,
 		startTime:   startTime,
+		clock:       clock.RealClock{},
 		userAgent:   req.UserAgent(), // cache this from the req to avoid any possibility of concurrent read/write problems with headers map
 		auditLogger: auditLogger,
+		auditCfg:    auditCfg,
+	}
+}
+
+func internalPaths() []string {
+	return []string{
+		"/healthz",
 	}
 }
 
 func (rl *requestLogger) LogRequestReceived() {
 	r := rl.req
+
+	if rl.auditCfg.InternalPaths != supervisor.AuditInternalPathsEnabled && slices.Contains(internalPaths(), r.URL.Path) {
+		return
+	}
+
 	rl.auditLogger.Audit(plog.AuditEventHTTPRequestReceived,
 		r.Context(),
-		nil, // no session available yet in this context
+		plog.NoSessionPersisted(),
 		"proto", r.Proto,
 		"method", r.Method,
 		"host", r.Host,
@@ -94,7 +112,12 @@ func (rl *requestLogger) LogRequestReceived() {
 
 func (rl *requestLogger) LogRequestComplete() {
 	r := rl.req
-	location := rl.w.Header().Get("Location")
+
+	if rl.auditCfg.InternalPaths != supervisor.AuditInternalPathsEnabled && slices.Contains(internalPaths(), r.URL.Path) {
+		return
+	}
+
+	location := rl.Header().Get("Location")
 	if location == "" {
 		location = "no location header"
 	} else {
@@ -110,9 +133,9 @@ func (rl *requestLogger) LogRequestComplete() {
 
 	rl.auditLogger.Audit(plog.AuditEventHTTPRequestCompleted,
 		r.Context(),
-		nil,                // no session available yet in this context
+		plog.NoSessionPersisted(),
 		"path", r.URL.Path, // include the path again to make it easy to "grep -v healthz" to watch all other audit events
-		"latency", time.Since(rl.startTime),
+		"latency", rl.clock.Since(rl.startTime),
 		"responseStatus", rl.status,
 		"location", location,
 	)

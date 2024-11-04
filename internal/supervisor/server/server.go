@@ -485,6 +485,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace), // writes to kube storage are allowed for non-leaders
 		client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
 		plog.New(),
+		cfg.Audit,
 	)
 
 	// Get the "real" name of the client secret supervisor API group (i.e., the API group name with the

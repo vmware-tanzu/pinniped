@@ -7,7 +7,7 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-// Config contains knobs to setup an instance of the Pinniped Supervisor.
+// Config contains knobs to set up an instance of the Pinniped Supervisor.
 type Config struct {
 	APIGroupSuffix          *string           `json:"apiGroupSuffix,omitempty"`
 	Labels                  map[string]string `json:"labels"`
@@ -16,6 +16,15 @@ type Config struct {
 	Endpoints               *Endpoints        `json:"endpoints"`
 	AggregatedAPIServerPort *int64            `json:"aggregatedAPIServerPort"`
 	TLS                     TLSSpec           `json:"tls"`
+	Audit                   AuditSpec         `json:"audit"`
+}
+
+type AuditInternalPaths string
+
+const AuditInternalPathsEnabled = "Enabled"
+
+type AuditSpec struct {
+	InternalPaths AuditInternalPaths `json:"internalPaths"`
 }
 
 type TLSSpec struct {

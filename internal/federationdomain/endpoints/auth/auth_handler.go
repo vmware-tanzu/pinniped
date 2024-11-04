@@ -36,20 +36,21 @@ const (
 	promptParamNone = "none"
 )
 
-//nolint:gochecknoglobals // please treat this as a readonly const, do not mutate
-var paramsSafeToLog = sets.New[string](
-	// Standard params from https://openid.net/specs/openid-connect-core-1_0.html, some of which are ignored.
-	// Redacting state and nonce params, in case they contain any info that the client considers sensitive.
-	"scope", "response_type", "client_id", "redirect_uri", "response_mode", "display", "prompt",
-	"max_age", "ui_locales", "id_token_hint", "login_hint", "acr_values", "claims_locales", "claims",
-	"request", "request_uri", "registration",
-	// PKCE params from https://datatracker.ietf.org/doc/html/rfc7636. Let code_challenge be redacted.
-	"code_challenge_method",
-	// Custom Pinniped authorization params.
-	oidcapi.AuthorizeUpstreamIDPNameParamName, oidcapi.AuthorizeUpstreamIDPTypeParamName,
-	// Google-specific param that some client libraries will send anyway. Ignored by Pinniped but safe to log.
-	"access_type",
-)
+func paramsSafeToLog() sets.Set[string] {
+	return sets.New[string](
+		// Standard params from https://openid.net/specs/openid-connect-core-1_0.html, some of which are ignored.
+		// Redacting state and nonce params, in case they contain any info that the client considers sensitive.
+		"scope", "response_type", "client_id", "redirect_uri", "response_mode", "display", "prompt",
+		"max_age", "ui_locales", "id_token_hint", "login_hint", "acr_values", "claims_locales", "claims",
+		"request", "request_uri", "registration",
+		// PKCE params from https://datatracker.ietf.org/doc/html/rfc7636. Let code_challenge be redacted.
+		"code_challenge_method",
+		// Custom Pinniped authorization params.
+		oidcapi.AuthorizeUpstreamIDPNameParamName, oidcapi.AuthorizeUpstreamIDPTypeParamName,
+		// Google-specific param that some client libraries will send anyway. Ignored by Pinniped but safe to log.
+		"access_type",
+	)
+}
 
 type authorizeHandler struct {
 	downstreamIssuerURL       string
@@ -140,7 +141,7 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		oidcapi.AuthorizePasswordHeaderName, hadPasswordHeader)
 
 	h.auditLogger.Audit(plog.AuditEventHTTPRequestParameters, r.Context(), plog.NoSessionPersisted(),
-		"params", plog.SanitizeParams(r.Form, paramsSafeToLog))
+		"params", plog.SanitizeParams(r.Form, paramsSafeToLog()))
 
 	// Note that the client might have used oidcapi.AuthorizeUpstreamIDPNameParamName and
 	// oidcapi.AuthorizeUpstreamIDPTypeParamName query (or form) params to request a certain upstream IDP.

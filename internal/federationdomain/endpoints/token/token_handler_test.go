@@ -4,6 +4,7 @@
 package token
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -310,6 +311,7 @@ type tokenEndpointResponseExpectedValues struct {
 	// The expected lifetime of the ID tokens issued by authcode exchange and refresh, but not token exchange.
 	// When zero, will assume that the test wants the default value for ID token lifetime.
 	wantIDTokenLifetimeSeconds int
+	wantAuditLogs              func(sessionID string) []testutil.WantedAuditLog
 }
 
 func withWantCustomIDTokenLifetime(wantIDTokenLifetimeSeconds int, w tokenEndpointResponseExpectedValues) tokenEndpointResponseExpectedValues {
@@ -384,6 +386,14 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"openid", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
+					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"sessionID": sessionID,
+								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+							}),
+						}
+					},
 				},
 			},
 		},
@@ -441,6 +451,14 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
+					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"sessionID": sessionID,
+								"params":    "code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+							}),
+						}
+					},
 				},
 			},
 		},
@@ -519,6 +537,14 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"username", "groups"}, // username and groups were not requested, but granted anyway for backwards compatibility
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
+					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"sessionID": sessionID,
+								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+							}),
+						}
+					},
 				},
 			},
 		},
@@ -980,7 +1006,7 @@ func TestTokenEndpointWhenAuthcodeIsUsedTwice(t *testing.T) {
 
 			// First call - should be successful.
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
-			subject, rsp, authCode, _, secrets, oauthStore := exchangeAuthcodeForTokens(t,
+			subject, rsp, authCode, _, secrets, oauthStore, _, _ := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, testidplister.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
@@ -1075,6 +1101,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		wantStatus            int
 		wantErrorType         string
 		wantErrorDescContains string
+		wantAuditLogs         func(sessionID string) []testutil.WantedAuditLog
 	}{
 		{
 			name:              "happy path",
@@ -1118,10 +1145,35 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 							"name": "value",
 						},
 					},
+					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"sessionID": sessionID,
+								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+							}),
+						}
+					},
 				},
 			},
 			requestedAudience: "some-workload-cluster",
 			wantStatus:        http.StatusOK,
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"sessionID": sessionID,
+						"params": func() string {
+							params := url.Values{}
+							params.Set("audience", "some-workload-cluster")
+							params.Set("client_id", "pinniped-cli")
+							params.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
+							params.Set("requested_token_type", "urn:ietf:params:oauth:token-type:jwt")
+							params.Set("subject_token", "redacted")
+							params.Set("subject_token_type", "urn:ietf:params:oauth:token-type:access_token")
+							return params.Encode()
+						}(),
+					}),
+				}
+			},
 		},
 		{
 			name: "happy path without requesting username and groups scopes",
@@ -1658,14 +1710,14 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			t.Parallel()
 
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
-			subject, rsp, _, _, secrets, storage := exchangeAuthcodeForTokens(t,
+			subject, rsp, _, _, secrets, oauthStore, log, sessionID := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, testidplister.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
 
 			request := happyTokenExchangeRequest(test.requestedAudience, parsedAuthcodeExchangeResponseBody["access_token"].(string))
 			if test.modifyStorage != nil {
-				test.modifyStorage(t, storage, secrets, request)
+				test.modifyStorage(t, oauthStore, secrets, request)
 			}
 			if test.modifyRequestParams != nil {
 				test.modifyRequestParams(t, request.Form)
@@ -1689,12 +1741,17 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			// Perform the token exchange.
 			approxRequestTime := time.Now()
+			log.Reset()
 			subject.ServeHTTP(rsp, req)
 			t.Logf("response: %#v", rsp)
 			t.Logf("response body: %q", rsp.Body.String())
 
 			require.Equal(t, test.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
+
+			if test.wantAuditLogs != nil {
+				testutil.CompareAuditLogs(t, test.wantAuditLogs(sessionID), log.String())
+			}
 
 			var parsedResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
@@ -2047,6 +2104,14 @@ func TestRefreshGrant(t *testing.T) {
 		if expectToValidateToken != nil {
 			want.wantUpstreamOIDCValidateTokenCall = happyUpstreamValidateTokenCall(expectToValidateToken, true)
 		}
+		want.wantAuditLogs = func(sessionID string) []testutil.WantedAuditLog {
+			return []testutil.WantedAuditLog{
+				testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+					"sessionID": sessionID,
+					"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+				}),
+			}
+		}
 		return want
 	}
 
@@ -2364,6 +2429,14 @@ func TestRefreshGrant(t *testing.T) {
 							"error_description": "Error during upstream refresh. Upstream refresh rejected by configured identity policy: authentication was rejected by a configured policy."
 						}
 					`),
+					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"sessionID": sessionID,
+								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+							}),
+						}
+					},
 				},
 			},
 		},
@@ -2410,6 +2483,14 @@ func TestRefreshGrant(t *testing.T) {
 						"upstreamObj": map[string]any{
 							"name": "value",
 						},
+					},
+					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"sessionID": sessionID,
+								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+							}),
+						}
 					},
 				},
 			},
@@ -4707,9 +4788,9 @@ func TestRefreshGrant(t *testing.T) {
 			t.Parallel()
 
 			// First exchange the authcode for tokens, including a refresh token.
-			// its actually fine to use this function even when simulating ldap (which uses a different flow) because it's
+			// It's actually fine to use this function even when simulating LDAP (which uses a different flow) because it's
 			// just populating a secret in storage.
-			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore := exchangeAuthcodeForTokens(t,
+			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, _, _ := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, test.idps.BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
@@ -4883,6 +4964,8 @@ func exchangeAuthcodeForTokens(
 	jwtSigningKey *ecdsa.PrivateKey,
 	secrets v1.SecretInterface,
 	oauthStore *storage.KubeStorage,
+	log *bytes.Buffer,
+	sessionID string,
 ) {
 	authRequest := deepCopyRequestForm(happyAuthRequest)
 	if test.modifyAuthRequest != nil {
@@ -4912,12 +4995,14 @@ func exchangeAuthcodeForTokens(
 	// Note that makeHappyOauthHelper() calls simulateAuthEndpointHavingAlreadyRun() to preload the session storage.
 	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession)
 
+	logger, log := plog.TestLogger(t)
+
 	subject = NewHandler(
 		idps,
 		oauthHelper,
 		timeoutsConfiguration.OverrideDefaultAccessTokenLifespan,
 		timeoutsConfiguration.OverrideDefaultIDTokenLifespan,
-		plog.New(),
+		logger,
 	)
 
 	authorizeEndpointGrantedOpenIDScope := strings.Contains(authRequest.Form.Get("scope"), "openid")
@@ -4944,6 +5029,19 @@ func exchangeAuthcodeForTokens(
 	t.Logf("response: %#v", rsp)
 	t.Logf("response body: %q", rsp.Body.String())
 
+	if test.want.wantAuditLogs != nil {
+		authCodeLabelSelector := fmt.Sprintf("%s=%s", crud.SecretLabelKey, authorizationcode.TypeLabelValue)
+		allAuthCodeSecrets, _ := secrets.List(context.Background(), metav1.ListOptions{
+			LabelSelector: authCodeLabelSelector,
+		})
+		require.NotNil(t, allAuthCodeSecrets)
+		require.Len(t, allAuthCodeSecrets.Items, 1, "expected exactly one secret with label %s", authCodeLabelSelector)
+		session, err := authorizationcode.ReadFromSecret(&allAuthCodeSecrets.Items[0])
+		require.NoError(t, err)
+		sessionID = session.Request.GetID()
+		testutil.CompareAuditLogs(t, test.want.wantAuditLogs(sessionID), log.String())
+	}
+
 	wantNonceValueInIDToken := true // ID tokens returned by the authcode exchange must include the nonce from the auth request (unlike refreshed ID tokens)
 
 	requireTokenEndpointBehavior(
@@ -4958,7 +5056,7 @@ func exchangeAuthcodeForTokens(
 		approxRequestTime,
 	)
 
-	return subject, rsp, authCode, jwtSigningKey, secrets, oauthStore
+	return subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, log, sessionID
 }
 
 func requireTokenEndpointBehavior(

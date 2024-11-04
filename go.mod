@@ -4,25 +4,6 @@ go 1.23
 
 toolchain go1.23.2
 
-// This version taken from https://github.com/kubernetes/apiserver/blob/v0.31.0/go.mod#L14 to avoid compile failures.
-replace github.com/google/cel-go => github.com/google/cel-go v0.20.1
-
-// Use a newer version of this indirect dependency because the version that would be selected by default causes
-// a compilation error related to an API in go.opentelemetry.io/otel/trace.
-replace github.com/ory/x => github.com/ory/x v0.0.655
-
-// ory/fosite depends on ory/x which depends on opentelemetry. kubernetes/apiserver also depends on opentelemetry.
-// Where they clash and cause "go mod tidy" to fail, use replace directives to make it work.
-// Copied from https://github.com/kubernetes/apiserver/blob/v0.31.0/go.mod#L29-L34.
-replace (
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp => go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0
-	go.opentelemetry.io/otel => go.opentelemetry.io/otel v1.28.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc => go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.27.0
-	go.opentelemetry.io/otel/sdk => go.opentelemetry.io/otel/sdk v1.28.0
-	go.opentelemetry.io/otel/trace => go.opentelemetry.io/otel/trace v1.28.0
-)
-
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/chromedp/cdproto v0.0.0-20241030022559-23c28aebe8cb

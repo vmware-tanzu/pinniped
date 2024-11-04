@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/federationdomain/endpoints/discovery"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
@@ -359,7 +360,16 @@ func TestManager(t *testing.T) {
 			cache.SetStateEncoderHashKey(issuer2, []byte("some-state-encoder-hash-key-2"))
 			cache.SetStateEncoderBlockKey(issuer2, []byte("16-bytes-STATE02"))
 
-			subject = NewManager(nextHandler, dynamicJWKSProvider, idpLister, &cache, secretsClient, oidcClientsClient, plog.New())
+			subject = NewManager(
+				nextHandler,
+				dynamicJWKSProvider,
+				idpLister,
+				&cache,
+				secretsClient,
+				oidcClientsClient,
+				plog.New(),
+				supervisor.AuditSpec{},
+			)
 		})
 
 		when("given no providers via SetFederationDomains()", func() {

@@ -298,6 +298,10 @@ func (c *webhookCacheFillerController) havePreviouslyValidated(
 	if authenticatorFromCache == nil {
 		return false, false
 	}
+	// Compare all spec fields to check if they have changed since we cached the authenticator.
+	// Instead of directly comparing spec.TLS, compare the effective result of spec.TLS,
+	// which is the CA bundle that was dynamically loaded.
+	// If any spec field has changed, then we need a new in-memory authenticator.
 	if authenticatorFromCache.endpoint == endpoint &&
 		tlsBundleOk && // if there was any error while validating the latest CA bundle, then do not consider it previously validated
 		authenticatorFromCache.caBundleHash.Equal(caBundleHash) {

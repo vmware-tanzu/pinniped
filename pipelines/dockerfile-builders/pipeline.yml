@@ -41,12 +41,12 @@ meta:
     BUILD_ARG_GO_VERSION: '1.23.2'
     # Choose which version of sigs.k8s.io/controller-tools/cmd/controller-gen to install
     # in the codegen container images.
-    BUILD_ARG_CONTROLLER_GEN_VERSION: 0.16.4
+    BUILD_ARG_CONTROLLER_GEN_VERSION: 0.16.5
     # Choose which version of github.com/elastic/crd-ref-docs to install in the codegen
     # container images. We use a commit sha instead of a release semver because this project
     # does not create releases very often. They seem to only release 1-2 times per year, but
     # commit to main more often.
-    BUILD_ARG_CRD_REF_DOCS_COMMIT_SHA: 95ad38c
+    BUILD_ARG_CRD_REF_DOCS_COMMIT_SHA: 69dc361
 
 resources:
 
@@ -758,7 +758,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.28.14
+            BUILD_ARG_K8S_PKG_VERSION: 0.28.15
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
@@ -794,7 +794,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.29.9
+            BUILD_ARG_K8S_PKG_VERSION: 0.29.10
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
@@ -830,7 +830,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.30.5
+            BUILD_ARG_K8S_PKG_VERSION: 0.30.6
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
@@ -866,7 +866,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.31.1
+            BUILD_ARG_K8S_PKG_VERSION: 0.31.2
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms

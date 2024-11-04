@@ -35,6 +35,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/requestlogger"
 	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/here"
@@ -3803,6 +3804,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		if test.customPasswordHeader != nil {
 			req.Header.Set("Pinniped-Password", *test.customPasswordHeader)
 		}
+		req, _ = requestlogger.NewRequestWithAuditID(req, func() string { return "fake-audit-id" })
 		rsp := httptest.NewRecorder()
 
 		subject.ServeHTTP(rsp, req)
@@ -3874,6 +3876,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 
 		if test.wantAuditLogs != nil {
 			wantAuditLogs := test.wantAuditLogs(stateparam.Encoded(actualQueryStateParam), sessionID)
+			testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-audit-id")
 			testutil.CompareAuditLogs(t, wantAuditLogs, auditLog.String())
 		}
 

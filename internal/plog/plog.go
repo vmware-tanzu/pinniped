@@ -126,7 +126,6 @@ func (p pLogger) Error(msg string, err error, keysAndValues ...any) {
 // by their own separate configuration. This is because Audit logs should always be printed when they are desired
 // by the admin, regardless of global log level, yet the admin should also have a way to entirely disable them
 // when they want to avoid potential PII (e.g. usernames) in their pod logs.
-// TODO: Add a way to disable output of audit logs, separate from the log level config.
 func (p pLogger) Audit(msg AuditEventMessage, reqCtx context.Context, session SessionIDGetter, keysAndValues ...any) {
 	// Always add a key/value auditEvent=true.
 	keysAndValues = slices.Concat([]any{"auditEvent", true}, keysAndValues)

@@ -64,7 +64,7 @@ Every log line in a Supervisor or Concierge pod log is a JSON object. Only those
 key/value pair `"auditEvent": true` are audit events. Other lines are for errors, warnings, and
 debugging information.
 
-Every audit log contains the following keys, and audit event lines also contain these common keys/values:
+Every line in the pod logs contains the following common keys/values, including audit event log lines:
 
 - `timestamp`, whose value is in UTC time, e.g. `2024-07-10T20:03:26.164470Z`
 - `level`, which for an audit event will always have the value `info`

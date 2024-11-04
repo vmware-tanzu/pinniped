@@ -98,7 +98,7 @@ func TestLogRequestReceived(t *testing.T) {
 				auditCfg:  test.auditCfg,
 			}
 
-			subject.LogRequestReceived()
+			subject.logRequestReceived()
 
 			testutil.CompareAuditLogs(t, test.wantAuditLogs, log.String())
 		})
@@ -217,7 +217,7 @@ func TestLogRequestComplete(t *testing.T) {
 				auditCfg: test.auditCfg,
 			}
 
-			subject.LogRequestComplete()
+			subject.logRequestComplete()
 
 			testutil.CompareAuditLogs(t, test.wantAuditLogs, log.String())
 		})

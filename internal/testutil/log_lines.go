@@ -30,15 +30,18 @@ type WantedAuditLog struct {
 	Params  map[string]any
 }
 
-func WantAuditLog(message string, params map[string]any, auditID ...string) WantedAuditLog {
+func WantAuditLog(message string, params map[string]any) WantedAuditLog {
 	result := WantedAuditLog{
 		Message: message,
 		Params:  params,
 	}
-	if len(auditID) > 0 {
-		result.Params["auditID"] = auditID[0]
-	}
 	return result
+}
+
+func WantAuditIDOnEveryAuditLog(wantedAuditLogs []WantedAuditLog, wantAuditID string) {
+	for _, wantedAuditLog := range wantedAuditLogs {
+		wantedAuditLog.Params["auditID"] = wantAuditID
+	}
 }
 
 func GetStateParam(t *testing.T, fullURL string) stateparam.Encoded {

@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/requestlogger"
 	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/plog"
@@ -411,6 +412,7 @@ func TestLoginEndpoint(t *testing.T) {
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
 			}
+			req, _ = requestlogger.NewRequestWithAuditID(req, func() string { return "fake-audit-id" })
 			rsp := httptest.NewRecorder()
 
 			testGetHandler := func(
@@ -465,6 +467,7 @@ func TestLoginEndpoint(t *testing.T) {
 
 			if test.wantAuditLogs != nil {
 				wantAuditLogs := test.wantAuditLogs(testutil.GetStateParam(t, test.path))
+				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-audit-id")
 				testutil.CompareAuditLogs(t, wantAuditLogs, log.String())
 			}
 		})

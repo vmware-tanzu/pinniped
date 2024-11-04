@@ -11,6 +11,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	apisaudit "k8s.io/apiserver/pkg/apis/audit"
@@ -23,6 +24,7 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+// NewRequestWithAuditID is public for use in unit tests. Production code should use WithAuditID().
 func NewRequestWithAuditID(r *http.Request, newAuditIDFunc func() string) (*http.Request, string) {
 	ctx := audit.WithAuditContext(r.Context())
 	r = r.WithContext(ctx)
@@ -33,9 +35,12 @@ func NewRequestWithAuditID(r *http.Request, newAuditIDFunc func() string) (*http
 	return r, auditID
 }
 
-func WithAuditID(handler http.Handler, newAuditIDFunc func() string) http.Handler {
+func WithAuditID(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r, auditID := NewRequestWithAuditID(r, newAuditIDFunc)
+		// Add a randomly generated request ID to the context for this request.
+		r, auditID := NewRequestWithAuditID(r, func() string {
+			return uuid.New().String()
+		})
 
 		// Send the Audit-ID response header.
 		w.Header().Set(apisaudit.HeaderAuditID, auditID)
@@ -48,8 +53,8 @@ func WithHTTPRequestAuditLogging(handler http.Handler, auditLogger plog.AuditLog
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		rl := newRequestLogger(req, w, auditLogger, time.Now(), auditCfg)
 
-		rl.LogRequestReceived()
-		defer rl.LogRequestComplete()
+		rl.logRequestReceived()
+		defer rl.logRequestComplete()
 
 		statusCodeCapturingResponseWriter := responsewriter.WrapForHTTP1Or2(rl)
 		handler.ServeHTTP(statusCodeCapturingResponseWriter, req)
@@ -90,13 +95,14 @@ func internalPaths() []string {
 	}
 }
 
-func (rl *requestLogger) LogRequestReceived() {
+func (rl *requestLogger) logRequestReceived() {
 	r := rl.req
 
 	if rl.auditCfg.InternalPaths != supervisor.AuditInternalPathsEnabled && slices.Contains(internalPaths(), r.URL.Path) {
 		return
 	}
 
+	// Always log all other requests, including 404's caused by bad paths, for debugging purposes.
 	rl.auditLogger.Audit(plog.AuditEventHTTPRequestReceived,
 		r.Context(),
 		plog.NoSessionPersisted(),
@@ -110,7 +116,7 @@ func (rl *requestLogger) LogRequestReceived() {
 	)
 }
 
-func (rl *requestLogger) LogRequestComplete() {
+func (rl *requestLogger) logRequestComplete() {
 	r := rl.req
 
 	if rl.auditCfg.InternalPaths != supervisor.AuditInternalPathsEnabled && slices.Contains(internalPaths(), r.URL.Path) {

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/google/uuid"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
@@ -29,7 +28,6 @@ import (
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
 	"go.pinniped.dev/internal/federationdomain/requestlogger"
 	"go.pinniped.dev/internal/federationdomain/storage"
-	"go.pinniped.dev/internal/httputil/requestutil"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/secret"
 	"go.pinniped.dev/pkg/oidcclient/nonce"
@@ -194,36 +192,24 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 }
 
 func (m *Manager) buildHandlerChain(nextHandler http.Handler, auditCfg supervisor.AuditSpec) {
-	// build the basic handler for FederationDomain endpoints
+	// Build the basic handler for FederationDomain endpoints.
 	handler := m.buildManagerHandler(nextHandler)
-	// log all requests, including audit ID
+	// Log all requests, including audit ID.
 	handler = requestlogger.WithHTTPRequestAuditLogging(handler, m.auditLogger, auditCfg)
-	// add random audit ID to request context and response headers
-	handler = requestlogger.WithAuditID(handler, func() string {
-		return uuid.New().String()
-	})
+	// Add random audit ID to request context and response headers.
+	handler = requestlogger.WithAuditID(handler)
 	m.handlerChain = handler
 }
 
 func (m *Manager) buildManagerHandler(nextHandler http.Handler) http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 		requestHandler := m.findHandler(req)
-
-		// TODO: Should this old log message change in light of the new audit logs? Or do we not want to force people to enable audit logs to debug this SNI stuff?
-		// Using Info level so the user can safely configure a production Supervisor to show this message if they choose.
-		plog.Info("received incoming request",
-			"proto", req.Proto,
-			"method", req.Method,
-			"host", req.Host,
-			"requestSNIServerName", requestutil.SNIServerName(req),
-			"path", req.URL.Path,
-			"remoteAddr", req.RemoteAddr,
-			"userAgent", req.UserAgent(),
-			"foundFederationDomainRequestHandler", requestHandler != nil,
-		)
-
 		if requestHandler == nil {
-			requestHandler = nextHandler // couldn't find an issuer to handle the request
+			// Couldn't find any FederationDomain to handle this request based on the request's host and path.
+			// It could be a bad request to a path that does not exist. Or it could be because something in
+			// front of the Supervisor is not passing the SNI of the original request through to the Supervisor.
+			// All 404's will be logged by request_logger.go, so we don't need to log it here.
+			requestHandler = nextHandler
 		}
 		requestHandler.ServeHTTP(resp, req)
 	})

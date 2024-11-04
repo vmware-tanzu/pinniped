@@ -283,7 +283,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(
 		if err != nil {
 			return err
 		}
-		c.auditLogger.Audit(plog.AuditEventUpstreamOIDCTokenRevoked, nil, request,
+		c.auditLogger.Audit(plog.AuditEventUpstreamOIDCTokenRevoked, plog.NoHTTPRequestAvailable(), request,
 			"type", upstreamprovider.RefreshTokenType)
 		plog.Trace("garbage collector successfully revoked upstream OIDC refresh token (or provider has no revocation endpoint)", logKV(secret)...)
 	}
@@ -293,7 +293,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(
 		if err != nil {
 			return err
 		}
-		c.auditLogger.Audit(plog.AuditEventUpstreamOIDCTokenRevoked, nil, request,
+		c.auditLogger.Audit(plog.AuditEventUpstreamOIDCTokenRevoked, plog.NoHTTPRequestAvailable(), request,
 			"type", upstreamprovider.AccessTokenType)
 		plog.Trace("garbage collector successfully revoked upstream OIDC access token (or provider has no revocation endpoint)", logKV(secret)...)
 	}
@@ -304,7 +304,8 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(
 func (c *garbageCollectorController) maybeAuditLogGC(storageType string, secret *corev1.Secret) {
 	r, err := c.requestFromSecret(storageType, secret)
 	if err == nil && r != nil {
-		c.auditLogger.Audit(plog.AuditEventSessionGarbageCollected, nil, r, "storageType", storageType)
+		c.auditLogger.Audit(plog.AuditEventSessionGarbageCollected, plog.NoHTTPRequestAvailable(), r,
+			"storageType", storageType)
 	}
 }
 

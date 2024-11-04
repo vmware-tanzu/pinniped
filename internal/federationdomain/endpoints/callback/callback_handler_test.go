@@ -25,6 +25,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/requestlogger"
 	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -1868,6 +1869,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
 			}
+			req, _ = requestlogger.NewRequestWithAuditID(req, func() string { return "fake-audit-id" })
 			rsp := httptest.NewRecorder()
 			subject.ServeHTTP(rsp, req)
 			t.Logf("response: %#v", rsp)
@@ -1877,13 +1879,13 @@ func TestCallbackEndpoint(t *testing.T) {
 
 			switch {
 			case test.wantOIDCAuthcodeExchangeCall != nil:
-				test.wantOIDCAuthcodeExchangeCall.args.Ctx = reqContext
+				test.wantOIDCAuthcodeExchangeCall.args.Ctx = req.Context()
 				test.idps.RequireExactlyOneOIDCAuthcodeExchange(t,
 					test.wantOIDCAuthcodeExchangeCall.performedByUpstreamName,
 					test.wantOIDCAuthcodeExchangeCall.args,
 				)
 			case test.wantGitHubAuthcodeExchangeCall != nil:
-				test.wantGitHubAuthcodeExchangeCall.args.Ctx = reqContext
+				test.wantGitHubAuthcodeExchangeCall.args.Ctx = req.Context()
 				test.idps.RequireExactlyOneGitHubAuthcodeExchange(t,
 					test.wantGitHubAuthcodeExchangeCall.performedByUpstreamName,
 					test.wantGitHubAuthcodeExchangeCall.args,
@@ -1956,6 +1958,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 			if test.wantAuditLogs != nil {
 				wantAuditLogs := test.wantAuditLogs(testutil.GetStateParam(t, test.path), sessionID)
+				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-audit-id")
 				testutil.CompareAuditLogs(t, wantAuditLogs, log.String())
 			}
 		})

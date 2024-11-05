@@ -4,6 +4,9 @@ go 1.23
 
 toolchain go1.23.2
 
+// see https://github.com/kubernetes/apimachinery/blob/v0.31.2/go.mod#L30
+replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.1
+
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/chromedp/cdproto v0.0.0-20241030022559-23c28aebe8cb
@@ -30,7 +33,7 @@ require (
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/migueleliasweb/go-github-mock v1.1.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/ory/fosite v0.47.1-0.20241104095633-f34ee269e9ef
+	github.com/ory/fosite v0.47.1-0.20241104161457-6335f90b7d2c
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/spec v1.4.0
@@ -55,8 +58,8 @@ require (
 	k8s.io/gengo v0.0.0-20240911193312-2b36238f13e9
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.31.2
-	k8s.io/kube-openapi v0.0.0-20241009091222-67ed5848f094
-	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
+	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
+	k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -175,5 +178,5 @@ require (
 	k8s.io/kms v0.31.2 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 )

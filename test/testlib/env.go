@@ -85,7 +85,7 @@ type TestOIDCUpstream struct {
 }
 
 // InferSupervisorIssuerURL infers the downstream issuer URL from the callback associated with the upstream test client registration.
-func (e *TestEnv) InferSupervisorIssuerURL(t *testing.T) SupervisorIssuer {
+func (e *TestEnv) InferSupervisorIssuerURL(t *testing.T) *SupervisorIssuer {
 	t.Helper()
 	supervisorIssuer := NewSupervisorIssuer(t, e.SupervisorUpstreamOIDC.CallbackURL)
 	require.True(t, strings.HasSuffix(supervisorIssuer.issuerURL.Path, "/callback"))

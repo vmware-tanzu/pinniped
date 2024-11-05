@@ -53,12 +53,18 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx, t, env.SupervisorNamespace, env.DefaultTLSCertSecretName(), client, testlib.NewKubernetesClientset(t))
-	defaultCA := createTLSServingCertSecretForSupervisor(
-		ctx,
+	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(ctx,
+		t, env.SupervisorNamespace, env.DefaultTLSCertSecretName(), client, kubeClient)
+
+	supervisorIssuer := testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress)
+	if env.SupervisorHTTPSIngressAddress != "" {
+		// Since this cert could be used for either server name in the tests below, make it valid for both names.
+		supervisorIssuer.AddAlternativeName(env.SupervisorHTTPSIngressAddress)
+	}
+	defaultCA := createTLSServingCertSecretForSupervisor(ctx,
 		t,
 		env,
-		testlib.NewSupervisorIssuer(t, env.SupervisorHTTPSAddress),
+		supervisorIssuer,
 		env.DefaultTLSCertSecretName(),
 		kubeClient,
 	)
@@ -367,7 +373,7 @@ func createTLSServingCertSecretForSupervisor(
 	ctx context.Context,
 	t *testing.T,
 	env *testlib.TestEnv,
-	supervisorIssuer testlib.SupervisorIssuer,
+	supervisorIssuer *testlib.SupervisorIssuer,
 	secretName string,
 	kubeClient kubernetes.Interface,
 ) *certauthority.CA {

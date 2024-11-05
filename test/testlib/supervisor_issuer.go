@@ -15,11 +15,12 @@ import (
 )
 
 type SupervisorIssuer struct {
-	issuerURL *url.URL
-	ip        net.IP
+	issuerURL        *url.URL
+	ip               net.IP
+	alternativeNames []string
 }
 
-func NewSupervisorIssuer(t *testing.T, issuer string) SupervisorIssuer {
+func NewSupervisorIssuer(t *testing.T, issuer string) *SupervisorIssuer {
 	t.Helper()
 
 	t.Logf("NewSupervisorIssuer: %s", issuer)
@@ -30,25 +31,30 @@ func NewSupervisorIssuer(t *testing.T, issuer string) SupervisorIssuer {
 
 	ip := net.ParseIP(issuerURL.Hostname())
 
-	return SupervisorIssuer{
+	return &SupervisorIssuer{
 		issuerURL: issuerURL,
 		ip:        ip,
 	}
 }
 
-func (s SupervisorIssuer) Issuer() string {
+// AddAlternativeName adds a SAN for the cert. It is not intended to take an IP address as its argument.
+func (s *SupervisorIssuer) AddAlternativeName(san string) {
+	s.alternativeNames = append(s.alternativeNames, san)
+}
+
+func (s *SupervisorIssuer) Issuer() string {
 	return s.issuerURL.String()
 }
 
-func (s SupervisorIssuer) Address() string {
+func (s *SupervisorIssuer) Address() string {
 	return s.issuerURL.Host
 }
 
-func (s SupervisorIssuer) Hostname() string {
+func (s *SupervisorIssuer) Hostname() string {
 	return s.issuerURL.Hostname()
 }
 
-func (s SupervisorIssuer) Port(defaultPort string) string {
+func (s *SupervisorIssuer) Port(defaultPort string) string {
 	port := s.issuerURL.Port()
 	if port == "" {
 		return defaultPort
@@ -56,36 +62,40 @@ func (s SupervisorIssuer) Port(defaultPort string) string {
 	return s.issuerURL.Port()
 }
 
-func (s SupervisorIssuer) Hostnames() []string {
-	if s.IsIPAddress() {
-		return nil // don't want DNS records in the cert when using IP address
+func (s *SupervisorIssuer) hostnamesForCert() []string {
+	var hostnames []string
+	if !s.IsIPAddress() {
+		hostnames = append(hostnames, s.issuerURL.Hostname())
 	}
-	return []string{s.issuerURL.Hostname()}
+	if s.alternativeNames != nil {
+		hostnames = append(hostnames, s.alternativeNames...)
+	}
+	return hostnames
 }
 
-func (s SupervisorIssuer) IPs() []net.IP {
+func (s *SupervisorIssuer) ipsForCert() []net.IP {
 	if !s.IsIPAddress() {
 		return nil
 	}
 	return []net.IP{s.ip}
 }
 
-func (s SupervisorIssuer) IssuerServerCert(
+func (s *SupervisorIssuer) IssuerServerCert(
 	t *testing.T,
 	ca *certauthority.CA,
 ) ([]byte, []byte) {
 	t.Helper()
 
-	cert, err := ca.IssueServerCert(s.Hostnames(), s.IPs(), 24*time.Hour)
+	cert, err := ca.IssueServerCert(s.hostnamesForCert(), s.ipsForCert(), 24*time.Hour)
 	require.NoError(t, err)
 	certPEM, keyPEM, err := certauthority.ToPEM(cert)
 	require.NoError(t, err)
 	t.Logf("issued server cert for Supervisor: hostname=%+v, ips=%+v\n%s",
-		s.Hostnames(), s.IPs(),
+		s.hostnamesForCert(), s.ipsForCert(),
 		certPEM)
 	return certPEM, keyPEM
 }
 
-func (s SupervisorIssuer) IsIPAddress() bool {
+func (s *SupervisorIssuer) IsIPAddress() bool {
 	return s.ip != nil
 }

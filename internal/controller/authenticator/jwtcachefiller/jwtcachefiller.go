@@ -109,6 +109,8 @@ type tokenAuthenticatorCloser interface {
 type cachedJWTAuthenticator struct {
 	authenticator.Token
 	issuer       string
+	audience     string
+	claims       authenticationv1alpha1.JWTTokenClaims
 	caBundleHash tlsconfigutil.CABundleHash
 	cancel       context.CancelFunc
 }
@@ -239,7 +241,7 @@ func (c *jwtCacheFillerController) syncIndividualJWTAuthenticator(ctx context.Co
 	// are for administrator convenience at the time of a configuration change, to catch typos and blatant
 	// misconfigurations, rather than to constantly monitor for external issues.
 	foundAuthenticatorInCache, previouslyValidatedWithSameEndpointAndBundle := c.havePreviouslyValidated(
-		cacheKey, jwtAuthenticator.Spec.Issuer, tlsBundleOk, caBundle.Hash(), logger)
+		cacheKey, jwtAuthenticator.Spec, tlsBundleOk, caBundle.Hash(), logger)
 	if previouslyValidatedWithSameEndpointAndBundle {
 		// Because the authenticator was previously cached, that implies that the following conditions were
 		// previously validated. These are the expensive validations to repeat, so skip them this time.
@@ -331,7 +333,7 @@ func (c *jwtCacheFillerController) doExpensiveValidations(
 
 func (c *jwtCacheFillerController) havePreviouslyValidated(
 	cacheKey authncache.Key,
-	issuer string,
+	spec authenticationv1alpha1.JWTAuthenticatorSpec,
 	tlsBundleOk bool,
 	caBundleHash tlsconfigutil.CABundleHash,
 	logger plog.Logger,
@@ -345,7 +347,13 @@ func (c *jwtCacheFillerController) havePreviouslyValidated(
 	if authenticatorFromCache == nil {
 		return false, false
 	}
-	if authenticatorFromCache.issuer == issuer &&
+	// Compare all spec fields to check if they have changed since we cached the authenticator.
+	// Instead of directly comparing spec.TLS, compare the effective result of spec.TLS,
+	// which is the CA bundle that was dynamically loaded.
+	// If any spec field has changed, then we need a new in-memory authenticator.
+	if authenticatorFromCache.issuer == spec.Issuer &&
+		authenticatorFromCache.audience == spec.Audience &&
+		authenticatorFromCache.claims == spec.Claims &&
 		tlsBundleOk && // if there was any error while validating the latest CA bundle, then do not consider it previously validated
 		authenticatorFromCache.caBundleHash.Equal(caBundleHash) {
 		return true, true
@@ -702,6 +710,8 @@ func (c *jwtCacheFillerController) newCachedJWTAuthenticator(
 	return &cachedJWTAuthenticator{
 		Token:        oidcAuthenticator,
 		issuer:       spec.Issuer,
+		audience:     spec.Audience,
+		claims:       spec.Claims,
 		caBundleHash: caBundleHash,
 		cancel:       cancel,
 	}, conditions, nil

@@ -563,17 +563,21 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 	t.Cleanup(cancel)
 
 	adminClient := testlib.NewKubernetesClientset(t)
-	usingOldKubeVersionInCluster := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 23)
-	usingReallyOldKubeVersionInCluster := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 19)
+	usingKubeVersionInCluster23OrOlder := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 23)
+	usingKubeVersionInCluster24Through31Inclusive := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 24, 31)
+	usingKubeVersionInCluster32OrNewer := !usingKubeVersionInCluster23OrOlder && !usingKubeVersionInCluster24Through31Inclusive
 
 	objectMeta := testlib.ObjectMetaWithRandomName(t, "federation-domain")
 
 	tests := []struct {
-		name                 string
-		fd                   *supervisorconfigv1alpha1.FederationDomain
-		wantErr              string
-		wantOldKubeErr       string
-		wantReallyOldKubeErr string
+		name    string
+		fd      *supervisorconfigv1alpha1.FederationDomain
+		wantErr string
+
+		// optionally override wantErr for one or more specific versions of Kube, due to changing validation error text
+		wantKube23OrOlderErr            string
+		wantKube24Through31InclusiveErr string
+		wantKube32OrNewerErr            string
 	}{
 		{
 			name: "issuer cannot be empty",
@@ -630,7 +634,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+			wantKube23OrOlderErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
 				`spec.identityProviders[0].transforms.constants[1]: Duplicate value: map[string]interface {}{"name":"notUnique"}`,
 				env.APIGroupSuffix, objectMeta.Name),
 			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
@@ -684,16 +688,15 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantReallyOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders.transforms.constants.name: Invalid value: "": `+
-				`spec.identityProviders.transforms.constants.name in body should be at most 64 chars long`,
-				env.APIGroupSuffix, objectMeta.Name),
-			wantOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+			wantKube23OrOlderErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
 				`spec.identityProviders.transforms.constants.name: Invalid value: "12345678901234567890123456789012345678901234567890123456789012345": `+
 				`spec.identityProviders.transforms.constants.name in body should be at most 64 chars long`,
 				env.APIGroupSuffix, objectMeta.Name),
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+			wantKube24Through31InclusiveErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
 				`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be longer than 64`,
+				env.APIGroupSuffix, objectMeta.Name),
+			wantKube32OrNewerErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+				`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be more than 64 bytes`,
 				env.APIGroupSuffix, objectMeta.Name),
 		},
 		{
@@ -721,11 +724,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantReallyOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders.transforms.constants.name: Invalid value: "": `+
-				`spec.identityProviders.transforms.constants.name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`,
-				env.APIGroupSuffix, objectMeta.Name),
-			wantOldKubeErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
+			wantKube23OrOlderErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
 				`spec.identityProviders.transforms.constants.name: Invalid value: "cannot have spaces": `+
 				`spec.identityProviders.transforms.constants.name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`,
 				env.APIGroupSuffix, objectMeta.Name),
@@ -919,30 +918,37 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 				}
 			})
 
-			if tt.wantErr == "" && tt.wantOldKubeErr == "" && tt.wantReallyOldKubeErr == "" {
+			if tt.wantErr != "" && tt.wantKube23OrOlderErr != "" && tt.wantKube24Through31InclusiveErr != "" && tt.wantKube32OrNewerErr != "" {
+				require.Fail(t, "test setup problem: wanted every possible kind of error, which would cause tt.wantErr to be unused")
+			}
+
+			if tt.wantErr == "" && tt.wantKube23OrOlderErr == "" && tt.wantKube24Through31InclusiveErr == "" && tt.wantKube32OrNewerErr == "" { //nolint:nestif
+				// Did not want any error.
 				require.NoError(t, createErr)
 			} else {
 				wantErr := tt.wantErr
-				if usingOldKubeVersionInCluster || usingReallyOldKubeVersionInCluster {
+				if usingKubeVersionInCluster23OrOlder {
 					// Old versions of Kubernetes did not show the index where the error occurred in some of the messages,
 					// so remove the indices from the expected messages when running against an old version of Kube.
 					// For the above tests, it should be enough to assume that there will only be indices up to 10.
 					// This is useful when the only difference in the message between old and new is the missing indices.
-					// Otherwise, use wantOldKubeErr to say what the expected message should be for old versions.
+					// Otherwise, use wantKube23OrOlderErr to say what the expected message should be for old versions.
 					for i := range 10 {
 						wantErr = strings.ReplaceAll(wantErr, fmt.Sprintf("[%d]", i), "")
 					}
 				}
-				if usingOldKubeVersionInCluster && tt.wantOldKubeErr != "" {
+				if usingKubeVersionInCluster23OrOlder && tt.wantKube23OrOlderErr != "" {
 					// Sometimes there are other difference in older Kubernetes messages, so also allow exact
-					// expectation strings for those cases in wantOldKubeErr. When provided, use it on old Kube clusters.
-					wantErr = tt.wantOldKubeErr
+					// expectation strings for those cases in wantKube23OrOlderErr. When provided, use it on these Kube clusters.
+					wantErr = tt.wantKube23OrOlderErr
 				}
-				if usingReallyOldKubeVersionInCluster && tt.wantReallyOldKubeErr != "" {
-					// Sometimes there are other difference in really old Kubernetes messages, so also allow exact
-					// expectation strings for those cases in wantOldKubeErr. When provided, use it on
-					// really old Kube clusters.
-					wantErr = tt.wantReallyOldKubeErr
+				if usingKubeVersionInCluster24Through31Inclusive && tt.wantKube24Through31InclusiveErr != "" {
+					// Also allow overriding with an exact expected error for these Kube versions.
+					wantErr = tt.wantKube24Through31InclusiveErr
+				}
+				if usingKubeVersionInCluster32OrNewer && tt.wantKube32OrNewerErr != "" {
+					// Also allow overriding with an exact expected error for these Kube versions.
+					wantErr = tt.wantKube32OrNewerErr
 				}
 				require.EqualError(t, createErr, wantErr)
 			}

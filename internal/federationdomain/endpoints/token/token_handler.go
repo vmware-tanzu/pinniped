@@ -30,18 +30,6 @@ import (
 	"go.pinniped.dev/internal/psession"
 )
 
-func paramsSafeToLog() sets.Set[string] {
-	return sets.New(
-		// Standard params from https://openid.net/specs/openid-connect-core-1_0.html for authcode and refresh grants.
-		// Redacting code, client_secret, refresh_token, and PKCE code_verifier params.
-		"grant_type", "client_id", "redirect_uri", "scope",
-		// Token exchange params from https://datatracker.ietf.org/doc/html/rfc8693.
-		// Redact subject_token and actor_token.
-		// We don't allow all of these, but they should be safe to log.
-		"audience", "resource", "scope", "requested_token_type", "actor_token_type", "subject_token_type",
-	)
-}
-
 func NewHandler(
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	oauthHelper fosite.OAuth2Provider,
@@ -57,10 +45,6 @@ func NewHandler(
 			oauthHelper.WriteAccessError(r.Context(), w, accessRequest, err)
 			return nil
 		}
-
-		// Note that r.PostForm and accessRequest were populated by NewAccessRequest().
-		auditLogger.Audit(plog.AuditEventHTTPRequestParameters, r.Context(), accessRequest,
-			"params", plog.SanitizeParams(r.PostForm, paramsSafeToLog()))
 
 		// Check if we are performing a refresh grant.
 		if accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeRefreshToken) {
@@ -226,17 +210,19 @@ func upstreamRefresh(
 		refreshedIdentity.UpstreamGroups = oldUntransformedGroups
 	}
 
-	refreshedTransformedUsername, refreshedTransformedGroups, err := applyIdentityTransformationsDuringRefresh(ctx,
+	refreshedTransformedUsername, refreshedTransformedGroups, fositeErr := applyIdentityTransformationsDuringRefresh(ctx,
 		idp.GetTransforms(),
 		refreshedIdentity.UpstreamUsername,
 		refreshedIdentity.UpstreamGroups,
 		providerName,
 		providerType,
 	)
-	if err != nil {
+	if fositeErr != nil {
+		// The HintField is always populated by applyIdentityTransformationsDuringRefresh,
+		// and more descriptive than fositeErr.Error() which is just "error".
 		auditLogger.Audit(plog.AuditEventAuthenticationRejectedByTransforms, ctx, accessRequest,
-			"reason", err)
-		return err
+			"reason", fositeErr.HintField)
+		return fositeErr
 	}
 
 	if oldTransformedUsername != refreshedTransformedUsername {
@@ -299,7 +285,7 @@ func applyIdentityTransformationsDuringRefresh(
 	upstreamGroups []string,
 	providerName string,
 	providerType psession.ProviderType,
-) (string, []string, error) {
+) (string, []string, *fosite.RFC6749Error) {
 	transformationResult, err := transforms.Evaluate(ctx, upstreamUsername, upstreamGroups)
 	if err != nil {
 		return "", nil, errUpstreamRefreshError().WithHintf(

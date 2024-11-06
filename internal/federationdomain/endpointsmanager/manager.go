@@ -119,6 +119,7 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 			tokenHMACKeyGetter,
 			nil,
 			timeoutsConfiguration,
+			m.auditLogger,
 		)
 
 		// For all the other endpoints, make another oauth helper with exactly the same settings except use real storage.
@@ -128,6 +129,7 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 			tokenHMACKeyGetter,
 			m.dynamicJWKSProvider,
 			timeoutsConfiguration,
+			m.auditLogger,
 		)
 
 		upstreamStateEncoder := dynamiccodec.New(

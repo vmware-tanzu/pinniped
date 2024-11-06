@@ -389,8 +389,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"sessionID": sessionID,
-								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
 							}),
 						}
 					},
@@ -454,8 +453,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"sessionID": sessionID,
-								"params":    "code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": "code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
 							}),
 						}
 					},
@@ -540,8 +538,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"sessionID": sessionID,
-								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
 							}),
 						}
 					},
@@ -937,6 +934,13 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
 					wantErrorResponseBody: fositeMissingPKCEVerifierErrorBody,
+					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"params": "client_id=pinniped-cli&code=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+							}),
+						}
+					},
 				},
 			},
 		},
@@ -951,6 +955,13 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
 					wantErrorResponseBody: fositeWrongPKCEVerifierErrorBody,
+					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+							}),
+						}
+					},
 				},
 			},
 		},
@@ -1148,8 +1159,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"sessionID": sessionID,
-								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
 							}),
 						}
 					},
@@ -1160,7 +1170,6 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"sessionID": sessionID,
 						"params": func() string {
 							params := url.Values{}
 							params.Set("audience", "some-workload-cluster")
@@ -1347,6 +1356,21 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantStatus:            http.StatusBadRequest,
 			wantErrorType:         "unauthorized_client",
 			wantErrorDescContains: `The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use token exchange grant 'urn:ietf:params:oauth:grant-type:token-exchange'.`,
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": func() string {
+							params := url.Values{}
+							params.Set("audience", "some-workload-cluster")
+							params.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
+							params.Set("requested_token_type", "urn:ietf:params:oauth:token-type:jwt")
+							params.Set("subject_token", "redacted")
+							params.Set("subject_token_type", "urn:ietf:params:oauth:token-type:access_token")
+							return params.Encode()
+						}(),
+					}),
+				}
+			},
 		},
 		{
 			name:          "dynamic client did not ask for the pinniped:request-audience scope in the original authorization request, so the access token submitted during token exchange lacks the scope",
@@ -1445,6 +1469,22 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantStatus:            http.StatusBadRequest,
 			wantErrorType:         "invalid_request",
 			wantErrorDescContains: "Missing 'audience' parameter.",
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": func() string {
+							params := url.Values{}
+							params.Set("audience", "") // make it obvious
+							params.Set("client_id", "pinniped-cli")
+							params.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
+							params.Set("requested_token_type", "urn:ietf:params:oauth:token-type:jwt")
+							params.Set("subject_token", "redacted")
+							params.Set("subject_token_type", "urn:ietf:params:oauth:token-type:access_token")
+							return params.Encode()
+						}(),
+					}),
+				}
+			},
 		},
 		{
 			name:                  "bad requested audience when it looks like the name of an OIDCClient CR",
@@ -1710,7 +1750,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			t.Parallel()
 
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
-			subject, rsp, _, _, secrets, oauthStore, log, sessionID := exchangeAuthcodeForTokens(t,
+			subject, rsp, _, _, secrets, oauthStore, actualAuditLog, sessionID := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, testidplister.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
@@ -1741,7 +1781,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			// Perform the token exchange.
 			approxRequestTime := time.Now()
-			log.Reset()
+			actualAuditLog.Reset() // Clear audit logs from the authcode exchange
 			subject.ServeHTTP(rsp, req)
 			t.Logf("response: %#v", rsp)
 			t.Logf("response body: %q", rsp.Body.String())
@@ -1750,7 +1790,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
 
 			if test.wantAuditLogs != nil {
-				testutil.CompareAuditLogs(t, test.wantAuditLogs(sessionID), log.String())
+				testutil.CompareAuditLogs(t, test.wantAuditLogs(sessionID), actualAuditLog.String())
 			}
 
 			var parsedResponseBody map[string]any
@@ -2104,15 +2144,12 @@ func TestRefreshGrant(t *testing.T) {
 		if expectToValidateToken != nil {
 			want.wantUpstreamOIDCValidateTokenCall = happyUpstreamValidateTokenCall(expectToValidateToken, true)
 		}
-		want.wantAuditLogs = func(sessionID string) []testutil.WantedAuditLog {
-			return []testutil.WantedAuditLog{
-				testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-					"sessionID": sessionID,
-					"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
-				}),
-			}
-		}
 		return want
+	}
+
+	refreshResponseWithAuditLogs := func(expectedValues tokenEndpointResponseExpectedValues, wantAuditLogs func(sessionID string) []testutil.WantedAuditLog) tokenEndpointResponseExpectedValues {
+		expectedValues.wantAuditLogs = wantAuditLogs
+		return expectedValues
 	}
 
 	happyRefreshTokenResponseForOpenIDAndOfflineAccessWithUsernameAndGroups := func(wantCustomSessionDataStored *psession.CustomSessionData, expectToValidateToken *oauth2.Token, wantDownstreamUsername string, wantDownstreamGroups []string) tokenEndpointResponseExpectedValues {
@@ -2259,9 +2296,39 @@ func TestRefreshGrant(t *testing.T) {
 				}).WithRefreshedTokens(refreshedUpstreamTokensWithIDAndRefreshTokens()).Build()),
 			authcodeExchange: happyAuthcodeExchangeInputsForOIDCUpstream,
 			refreshRequest: refreshRequestInputs{
-				want: happyRefreshTokenResponseForOpenIDAndOfflineAccess(
-					upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
-					refreshedUpstreamTokensWithIDAndRefreshTokens(),
+				want: refreshResponseWithAuditLogs(
+					happyRefreshTokenResponseForOpenIDAndOfflineAccess(
+						upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
+						refreshedUpstreamTokensWithIDAndRefreshTokens(),
+					),
+					func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"params": func() string {
+									params := url.Values{}
+									params.Set("client_id", "pinniped-cli")
+									params.Set("grant_type", "refresh_token")
+									params.Set("refresh_token", "redacted")
+									params.Set("scope", "openid")
+									return params.Encode()
+								}(),
+							}),
+							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
+								"sessionID":        sessionID,
+								"upstreamGroups":   []any{},
+								"upstreamUsername": "some-username",
+							}),
+							testutil.WantAuditLog("Session Refreshed", map[string]any{
+								"sessionID": sessionID,
+								"username":  "some-username",
+								"groups": []any{
+									"group1",
+									"groups2",
+								},
+								"subject": "https://issuer?sub=some-subject",
+							}),
+						}
+					},
 				),
 			},
 		},
@@ -2432,8 +2499,23 @@ func TestRefreshGrant(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"params": func() string {
+									params := url.Values{}
+									params.Set("client_id", "pinniped-cli")
+									params.Set("grant_type", "refresh_token")
+									params.Set("refresh_token", "redacted")
+									params.Set("scope", "openid")
+									return params.Encode()
+								}(),
+							}),
+							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
+								"sessionID":        sessionID,
+								"upstreamGroups":   []any{},
+								"upstreamUsername": "some-username",
+							}),
+							testutil.WantAuditLog("Authentication Rejected By Transforms", map[string]any{
 								"sessionID": sessionID,
-								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"reason":    "Upstream refresh rejected by configured identity policy: authentication was rejected by a configured policy.",
 							}),
 						}
 					},
@@ -2487,8 +2569,7 @@ func TestRefreshGrant(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"sessionID": sessionID,
-								"params":    "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
 							}),
 						}
 					},
@@ -4790,7 +4871,7 @@ func TestRefreshGrant(t *testing.T) {
 			// First exchange the authcode for tokens, including a refresh token.
 			// It's actually fine to use this function even when simulating LDAP (which uses a different flow) because it's
 			// just populating a secret in storage.
-			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, _, _ := exchangeAuthcodeForTokens(t,
+			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, actualAuditLog, sessionID := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, test.idps.BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
@@ -4823,11 +4904,16 @@ func TestRefreshGrant(t *testing.T) {
 				test.refreshRequest.modifyTokenRequest(req, firstRefreshToken, parsedAuthcodeExchangeResponseBody["access_token"].(string))
 			}
 
+			actualAuditLog.Reset() // Clear audit logs from the authcode exchange
 			refreshResponse := httptest.NewRecorder()
 			approxRequestTime := time.Now()
 			subject.ServeHTTP(refreshResponse, req)
 			t.Logf("second response: %#v", refreshResponse)
 			t.Logf("second response body: %q", refreshResponse.Body.String())
+
+			if test.refreshRequest.want.wantAuditLogs != nil {
+				testutil.CompareAuditLogs(t, test.refreshRequest.want.wantAuditLogs(sessionID), actualAuditLog.String())
+			}
 
 			// Test that we did or did not make a call to the upstream provider's interface to perform refresh.
 			switch {
@@ -4964,7 +5050,7 @@ func exchangeAuthcodeForTokens(
 	jwtSigningKey *ecdsa.PrivateKey,
 	secrets v1.SecretInterface,
 	oauthStore *storage.KubeStorage,
-	log *bytes.Buffer,
+	actualAuditLog *bytes.Buffer,
 	sessionID string,
 ) {
 	authRequest := deepCopyRequestForm(happyAuthRequest)
@@ -4991,11 +5077,11 @@ func exchangeAuthcodeForTokens(
 		test.makeJwksSigningKeyAndProvider = generateJWTSigningKeyAndJWKSProvider
 	}
 
+	logger, actualAuditLog := plog.TestLogger(t)
+
 	var oauthHelper fosite.OAuth2Provider
 	// Note that makeHappyOauthHelper() calls simulateAuthEndpointHavingAlreadyRun() to preload the session storage.
-	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession)
-
-	logger, log := plog.TestLogger(t)
+	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession, logger)
 
 	subject = NewHandler(
 		idps,
@@ -5029,17 +5115,10 @@ func exchangeAuthcodeForTokens(
 	t.Logf("response: %#v", rsp)
 	t.Logf("response body: %q", rsp.Body.String())
 
+	sessionID = getSessionID(t, secrets)
+
 	if test.want.wantAuditLogs != nil {
-		authCodeLabelSelector := fmt.Sprintf("%s=%s", crud.SecretLabelKey, authorizationcode.TypeLabelValue)
-		allAuthCodeSecrets, _ := secrets.List(context.Background(), metav1.ListOptions{
-			LabelSelector: authCodeLabelSelector,
-		})
-		require.NotNil(t, allAuthCodeSecrets)
-		require.Len(t, allAuthCodeSecrets.Items, 1, "expected exactly one secret with label %s", authCodeLabelSelector)
-		session, err := authorizationcode.ReadFromSecret(&allAuthCodeSecrets.Items[0])
-		require.NoError(t, err)
-		sessionID = session.Request.GetID()
-		testutil.CompareAuditLogs(t, test.want.wantAuditLogs(sessionID), log.String())
+		testutil.CompareAuditLogs(t, test.want.wantAuditLogs(sessionID), actualAuditLog.String())
 	}
 
 	wantNonceValueInIDToken := true // ID tokens returned by the authcode exchange must include the nonce from the auth request (unlike refreshed ID tokens)
@@ -5056,7 +5135,21 @@ func exchangeAuthcodeForTokens(
 		approxRequestTime,
 	)
 
-	return subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, log, sessionID
+	return subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, actualAuditLog, sessionID
+}
+
+func getSessionID(t *testing.T, secrets v1.SecretInterface) string {
+	t.Helper()
+
+	authCodeLabelSelector := fmt.Sprintf("%s=%s", crud.SecretLabelKey, authorizationcode.TypeLabelValue)
+	allAuthCodeSecrets, _ := secrets.List(context.Background(), metav1.ListOptions{
+		LabelSelector: authCodeLabelSelector,
+	})
+	require.NotNil(t, allAuthCodeSecrets)
+	require.Len(t, allAuthCodeSecrets.Items, 1, "expected exactly one secret with label %s", authCodeLabelSelector)
+	session, err := authorizationcode.ReadFromSecret(&allAuthCodeSecrets.Items[0])
+	require.NoError(t, err)
+	return session.Request.GetID()
 }
 
 func requireTokenEndpointBehavior(
@@ -5207,11 +5300,12 @@ func makeHappyOauthHelper(
 	makeJwksSigningKeyAndProvider MakeJwksSigningKeyAndProviderFunc,
 	initialCustomSessionData *psession.CustomSessionData,
 	modifySession func(session *psession.PinnipedSession),
+	auditLogger plog.AuditLogger,
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := makeJwksSigningKeyAndProvider(t, goodIssuer)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration(), auditLogger)
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper, initialCustomSessionData, modifySession)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }

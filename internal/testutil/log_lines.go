@@ -68,10 +68,13 @@ func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditL
 	wantMessages := make([]string, 0)
 	for _, wantAuditLog := range wantAuditLogs {
 		wantJsonAuditLog := make(map[string]any)
+		require.Empty(t, wantAuditLog.Params["level"], "do not specify level in audit log expectations")
 		wantJsonAuditLog["level"] = "info"
+		require.Empty(t, wantAuditLog.Params["message"], "do not specify message in audit log expectations")
 		wantJsonAuditLog["message"] = wantAuditLog.Message
 		wantMessages = append(wantMessages, wantAuditLog.Message)
 		wantJsonAuditLog["auditEvent"] = true
+		require.Empty(t, wantAuditLog.Params["timestamp"], "do not specify timestamp in audit log expectations")
 		wantJsonAuditLog["timestamp"] = "2099-08-08T13:57:36.123456Z"
 		for k, v := range wantAuditLog.Params {
 			wantJsonAuditLog[k] = v
@@ -82,7 +85,8 @@ func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditL
 	actualJsonAuditLogs := make([]map[string]any, 0)
 	actualMessages := make([]string, 0)
 	actualAuditLogs := strings.Split(actualAuditLogsOneLiner, "\n")
-	require.GreaterOrEqual(t, len(actualAuditLogs), 2)
+	require.GreaterOrEqual(t, len(actualAuditLogs), 2,
+		"expected %d log lines, found %d", len(wantAuditLogs), len(actualAuditLogs)-1)
 	actualAuditLogs = actualAuditLogs[:len(actualAuditLogs)-1] // trim off the last ""
 	for _, actualAuditLog := range actualAuditLogs {
 		actualJsonAuditLog := make(map[string]any)

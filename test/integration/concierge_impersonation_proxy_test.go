@@ -41,7 +41,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured/unstructuredscheme"
 	"k8s.io/apimachinery/pkg/labels"
@@ -1095,16 +1094,6 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				Command:         []string{"bash", "-c", `while true; do read VAR; echo "VAR: $VAR"; done`},
 				Stdin:           true,
-				Resources: corev1.ResourceRequirements{
-					Limits: corev1.ResourceList{
-						corev1.ResourceMemory: resource.MustParse("16Mi"),
-						corev1.ResourceCPU:    resource.MustParse("10m"),
-					},
-					Requests: corev1.ResourceList{
-						corev1.ResourceMemory: resource.MustParse("16Mi"),
-						corev1.ResourceCPU:    resource.MustParse("10m"),
-					},
-				},
 				// Use a restrictive security context just in case the test cluster has PSAs enabled.
 				SecurityContext: testlib.RestrictiveSecurityContext(),
 			}}})

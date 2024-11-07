@@ -18,6 +18,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/responsewriter"
 	"k8s.io/utils/clock"
 
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/httputil/requestutil"
 	"go.pinniped.dev/internal/plog"
@@ -102,7 +103,7 @@ func (rl *requestLogger) logRequestReceived() {
 	}
 
 	// Always log all other requests, including 404's caused by bad paths, for debugging purposes.
-	rl.auditLogger.Audit(plog.AuditEventHTTPRequestReceived,
+	rl.auditLogger.Audit(auditevent.HTTPRequestReceived,
 		r.Context(),
 		plog.NoSessionPersisted(),
 		"proto", r.Proto,
@@ -142,7 +143,7 @@ func (rl *requestLogger) logRequestComplete() {
 		}
 	}
 
-	rl.auditLogger.Audit(plog.AuditEventHTTPRequestCompleted,
+	rl.auditLogger.Audit(auditevent.HTTPRequestCompleted,
 		r.Context(),
 		plog.NoSessionPersisted(),
 		"path", r.URL.Path, // include the path again to make it easy to "grep -v healthz" to watch all other audit events

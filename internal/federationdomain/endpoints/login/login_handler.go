@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/endpoints/login/loginhtml"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -58,7 +59,7 @@ func NewHandler(
 			return err
 		}
 
-		auditLogger.Audit(plog.AuditEventAuthorizeIDFromParameters, r.Context(), plog.NoSessionPersisted(),
+		auditLogger.Audit(auditevent.AuthorizeIDFromParameters, r.Context(), plog.NoSessionPersisted(),
 			"authorizeID", encodedState.AuthorizeID())
 
 		switch decodedState.UpstreamType {

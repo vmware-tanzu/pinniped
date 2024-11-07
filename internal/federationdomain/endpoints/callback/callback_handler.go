@@ -10,6 +10,7 @@ import (
 
 	"github.com/ory/fosite"
 
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
@@ -33,7 +34,7 @@ func NewHandler(
 			return err
 		}
 
-		auditLogger.Audit(plog.AuditEventAuthorizeIDFromParameters, r.Context(), plog.NoSessionPersisted(),
+		auditLogger.Audit(auditevent.AuthorizeIDFromParameters, r.Context(), plog.NoSessionPersisted(),
 			"authorizeID", encodedState.AuthorizeID())
 
 		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)

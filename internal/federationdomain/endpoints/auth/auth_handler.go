@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
@@ -111,12 +112,12 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Log if these headers were present, but don't log the actual values. The password is obviously sensitive,
 	// and sometimes users use their password as their username by mistake.
-	h.auditLogger.Audit(plog.AuditEventHTTPRequestCustomHeadersUsed, r.Context(), plog.NoSessionPersisted(),
+	h.auditLogger.Audit(auditevent.HTTPRequestCustomHeadersUsed, r.Context(), plog.NoSessionPersisted(),
 		oidcapi.AuthorizeUsernameHeaderName, hadUsernameHeader,
 		oidcapi.AuthorizePasswordHeaderName, hadPasswordHeader)
 
-	h.auditLogger.Audit(plog.AuditEventHTTPRequestParameters, r.Context(), plog.NoSessionPersisted(),
-		plog.SanitizeParams(r.Form, paramsSafeToLog())...)
+	h.auditLogger.Audit(auditevent.HTTPRequestParameters, r.Context(), plog.NoSessionPersisted(),
+		auditevent.SanitizeParams(r.Form, paramsSafeToLog())...)
 
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		// https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
@@ -155,7 +156,7 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.auditLogger.Audit(plog.AuditEventUsingUpstreamIDP, r.Context(), plog.NoSessionPersisted(),
+	h.auditLogger.Audit(auditevent.UsingUpstreamIDP, r.Context(), plog.NoSessionPersisted(),
 		"displayName", idp.GetDisplayName(),
 		"resourceName", idp.GetProvider().GetResourceName(),
 		"resourceUID", idp.GetProvider().GetResourceUID(),
@@ -220,7 +221,7 @@ func (h *authorizeHandler) authorize(
 		authorizeID, err = h.authorizeWithBrowser(r, w, oauthHelper, authorizeRequester, idp)
 
 		if err == nil {
-			h.auditLogger.Audit(plog.AuditEventUpstreamAuthorizeRedirect, r.Context(), plog.NoSessionPersisted(),
+			h.auditLogger.Audit(auditevent.UpstreamAuthorizeRedirect, r.Context(), plog.NoSessionPersisted(),
 				"authorizeID", authorizeID)
 		}
 	}

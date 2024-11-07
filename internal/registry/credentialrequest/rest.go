@@ -21,6 +21,7 @@ import (
 	"k8s.io/utils/trace"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/clientcertissuer"
 	"go.pinniped.dev/internal/plog"
 )
@@ -131,7 +132,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	traceSuccess(t, userInfo, true)
 
-	r.auditLogger.Audit(plog.AuditEventTokenCredentialRequest, ctx, nil,
+	r.auditLogger.Audit(auditevent.TokenCredentialRequest, ctx, nil,
 		"username", userInfo.GetName(),
 		"groups", userInfo.GetGroups(),
 		"authenticated", true,

@@ -19,6 +19,7 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/auditevent"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crud"
@@ -283,7 +284,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(
 		if err != nil {
 			return err
 		}
-		c.auditLogger.Audit(plog.AuditEventUpstreamOIDCTokenRevoked, plog.NoHTTPRequestAvailable(), request,
+		c.auditLogger.Audit(auditevent.UpstreamOIDCTokenRevoked, plog.NoHTTPRequestAvailable(), request,
 			"type", upstreamprovider.RefreshTokenType)
 		plog.Trace("garbage collector successfully revoked upstream OIDC refresh token (or provider has no revocation endpoint)", logKV(secret)...)
 	}
@@ -293,7 +294,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(
 		if err != nil {
 			return err
 		}
-		c.auditLogger.Audit(plog.AuditEventUpstreamOIDCTokenRevoked, plog.NoHTTPRequestAvailable(), request,
+		c.auditLogger.Audit(auditevent.UpstreamOIDCTokenRevoked, plog.NoHTTPRequestAvailable(), request,
 			"type", upstreamprovider.AccessTokenType)
 		plog.Trace("garbage collector successfully revoked upstream OIDC access token (or provider has no revocation endpoint)", logKV(secret)...)
 	}
@@ -304,7 +305,7 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(
 func (c *garbageCollectorController) maybeAuditLogGC(storageType string, secret *corev1.Secret) {
 	r, err := c.requestFromSecret(storageType, secret)
 	if err == nil && r != nil {
-		c.auditLogger.Audit(plog.AuditEventSessionGarbageCollected, plog.NoHTTPRequestAvailable(), r,
+		c.auditLogger.Audit(auditevent.SessionGarbageCollected, plog.NoHTTPRequestAvailable(), r,
 			"storageType", storageType)
 	}
 }

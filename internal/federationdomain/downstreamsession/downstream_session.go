@@ -15,6 +15,7 @@ import (
 	fositejwt "github.com/ory/fosite/token/jwt"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
@@ -49,7 +50,7 @@ func NewPinnipedSession(
 ) (*psession.PinnipedSession, error) {
 	now := time.Now().UTC()
 
-	auditLogger.Audit(plog.AuditEventIdentityFromUpstreamIDP, ctx, plog.NoSessionPersisted(),
+	auditLogger.Audit(auditevent.IdentityFromUpstreamIDP, ctx, plog.NoSessionPersisted(),
 		"upstreamIDPDisplayName", c.IdentityProvider.GetDisplayName(),
 		"upstreamIDPType", c.IdentityProvider.GetSessionProviderType(),
 		"upstreamIDPResourceName", c.IdentityProvider.GetProvider().GetResourceName(),
@@ -60,7 +61,7 @@ func NewPinnipedSession(
 	downstreamUsername, downstreamGroups, err := applyIdentityTransformations(ctx,
 		c.IdentityProvider.GetTransforms(), c.UpstreamIdentity.UpstreamUsername, c.UpstreamIdentity.UpstreamGroups)
 	if err != nil {
-		auditLogger.Audit(plog.AuditEventAuthenticationRejectedByTransforms, ctx, plog.NoSessionPersisted(),
+		auditLogger.Audit(auditevent.AuthenticationRejectedByTransforms, ctx, plog.NoSessionPersisted(),
 			"reason", err)
 		return nil, err
 	}
@@ -108,7 +109,7 @@ func NewPinnipedSession(
 
 	pinnipedSession.IDTokenClaims().Extra = extras
 
-	auditLogger.Audit(plog.AuditEventSessionStarted, ctx, c.SessionIDGetter,
+	auditLogger.Audit(auditevent.SessionStarted, ctx, c.SessionIDGetter,
 		"username", downstreamUsername,
 		"groups", downstreamGroups,
 		"subject", c.UpstreamIdentity.DownstreamSubject,

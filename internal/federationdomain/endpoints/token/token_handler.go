@@ -19,6 +19,7 @@ import (
 	"k8s.io/apiserver/pkg/warning"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/idtokenlifespan"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -191,7 +192,7 @@ func upstreamRefresh(
 		return err
 	}
 
-	auditLogger.Audit(plog.AuditEventIdentityRefreshedFromUpstreamIDP, ctx, accessRequest,
+	auditLogger.Audit(auditevent.IdentityRefreshedFromUpstreamIDP, ctx, accessRequest,
 		"upstreamUsername", refreshedIdentity.UpstreamUsername,
 		"upstreamGroups", refreshedIdentity.UpstreamGroups)
 
@@ -220,7 +221,7 @@ func upstreamRefresh(
 	if fositeErr != nil {
 		// The HintField is always populated by applyIdentityTransformationsDuringRefresh,
 		// and more descriptive than fositeErr.Error() which is just "error".
-		auditLogger.Audit(plog.AuditEventAuthenticationRejectedByTransforms, ctx, accessRequest,
+		auditLogger.Audit(auditevent.AuthenticationRejectedByTransforms, ctx, accessRequest,
 			"reason", fositeErr.HintField)
 		return fositeErr
 	}
@@ -238,7 +239,7 @@ func upstreamRefresh(
 		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = refreshedTransformedGroups
 	}
 
-	auditLogger.Audit(plog.AuditEventSessionRefreshed, ctx, accessRequest,
+	auditLogger.Audit(auditevent.SessionRefreshed, ctx, accessRequest,
 		"username", oldTransformedUsername, // not allowed to change above so must be the same as old
 		"groups", refreshedTransformedGroups,
 		"subject", previousIdentity.DownstreamSubject)

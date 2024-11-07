@@ -33,6 +33,7 @@ import (
 	"slices"
 
 	"github.com/go-logr/logr"
+	"go.pinniped.dev/internal/auditevent"
 	"k8s.io/apiserver/pkg/audit"
 )
 
@@ -61,7 +62,7 @@ type AuditLogger interface {
 	// reqCtx and session may be null.
 	// When possible, pass the http request's context as reqCtx, so we may read the audit ID from the context.
 	// When possible, pass the fosite.Requester or fosite.Request as the session, so we can log the session ID.
-	Audit(msg AuditEventMessage, reqCtx context.Context, session SessionIDGetter, keysAndValues ...any)
+	Audit(msg auditevent.Message, reqCtx context.Context, session SessionIDGetter, keysAndValues ...any)
 }
 
 // Logger implements the plog logging convention described above.  The global functions in this package
@@ -126,7 +127,7 @@ func (p pLogger) Error(msg string, err error, keysAndValues ...any) {
 // by their own separate configuration. This is because Audit logs should always be printed when they are desired
 // by the admin, regardless of global log level, yet the admin should also have a way to entirely disable them
 // when they want to avoid potential PII (e.g. usernames) in their pod logs.
-func (p pLogger) Audit(msg AuditEventMessage, reqCtx context.Context, session SessionIDGetter, keysAndValues ...any) {
+func (p pLogger) Audit(msg auditevent.Message, reqCtx context.Context, session SessionIDGetter, keysAndValues ...any) {
 	// Always add a key/value auditEvent=true.
 	keysAndValues = slices.Concat([]any{"auditEvent", true}, keysAndValues)
 

@@ -10,6 +10,7 @@ import (
 	"github.com/ory/fosite/compose"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/plog"
 )
 
@@ -52,8 +53,8 @@ func paramsSafeToLogTokenEndpoint() sets.Set[string] {
 }
 
 func (p parameterAuditorHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester fosite.AccessRequester) bool {
-	p.auditLogger.Audit(plog.AuditEventHTTPRequestParameters, ctx, plog.NoSessionPersisted(),
-		plog.SanitizeParams(requester.GetRequestForm(), paramsSafeToLogTokenEndpoint())...)
+	p.auditLogger.Audit(auditevent.HTTPRequestParameters, ctx, plog.NoSessionPersisted(),
+		auditevent.SanitizeParams(requester.GetRequestForm(), paramsSafeToLogTokenEndpoint())...)
 
 	return false
 }

@@ -141,7 +141,7 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		oidcapi.AuthorizePasswordHeaderName, hadPasswordHeader)
 
 	h.auditLogger.Audit(plog.AuditEventHTTPRequestParameters, r.Context(), plog.NoSessionPersisted(),
-		"params", plog.SanitizeParams(r.Form, paramsSafeToLog()))
+		plog.SanitizeParams(r.Form, paramsSafeToLog())...)
 
 	// Note that the client might have used oidcapi.AuthorizeUpstreamIDPNameParamName and
 	// oidcapi.AuthorizeUpstreamIDPTypeParamName query (or form) params to request a certain upstream IDP.

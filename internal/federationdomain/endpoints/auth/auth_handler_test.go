@@ -731,7 +731,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": "client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted",
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-oidc-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
@@ -769,7 +779,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             dynamicClientID,
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-oidc-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid offline_access pinniped:request-audience username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
@@ -806,7 +826,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": "client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted",
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-github-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-github-idp",
@@ -844,7 +874,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=` + dynamicClientID + `&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-github-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+offline_access+pinniped%3Arequest-audience+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             dynamicClientID,
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-github-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid offline_access pinniped:request-audience username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-github-idp",
@@ -881,7 +921,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-ldap-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
@@ -919,7 +969,16 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
@@ -958,7 +1017,16 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 				}
 			},
@@ -988,7 +1056,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-oidc-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
@@ -1102,7 +1180,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-password-granting-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-password-granting-oidc-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-password-granting-oidc-idp",
@@ -1177,7 +1265,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-password-granting-oidc-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-password-granting-oidc-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-password-granting-oidc-idp",
@@ -1288,7 +1386,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-ldap-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
@@ -1348,7 +1456,17 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-ldap-idp&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-ldap-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
@@ -1720,7 +1838,18 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": `client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=some-oidc-idp&prompt=none&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback&response_type=code&scope=openid+profile+email+username+groups&state=redacted`,
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-oidc-idp",
+							"prompt":                "none",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",

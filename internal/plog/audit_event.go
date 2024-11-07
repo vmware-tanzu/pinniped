@@ -31,19 +31,39 @@ const (
 
 // SanitizeParams can be used to redact all params not included in the allowedKeys set.
 // Useful when audit logging AuditEventHTTPRequestParameters events.
-func SanitizeParams(params url.Values, allowedKeys sets.Set[string]) string {
-	if len(params) == 0 {
-		return ""
+func SanitizeParams(inputParams url.Values, allowedKeys sets.Set[string]) []any {
+	params := make(map[string]string)
+	multiValueParams := make(url.Values)
+
+	transform := func(key, value string) string {
+		if !allowedKeys.Has(key) {
+			return "redacted"
+		}
+
+		unescape, err := url.QueryUnescape(value)
+		if err != nil {
+			// ignore these errors and just use the original query parameter
+			unescape = value
+		}
+		return unescape
 	}
-	sanitized := url.Values{}
-	for key := range params {
-		if allowedKeys.Has(key) {
-			sanitized[key] = params[key]
-		} else {
-			for range params[key] {
-				sanitized.Add(key, "redacted")
+
+	for key := range inputParams {
+		for i, p := range inputParams[key] {
+			transformed := transform(key, p)
+			if i == 0 {
+				params[key] = transformed
+			}
+
+			if len(inputParams[key]) > 1 {
+				multiValueParams[key] = append(multiValueParams[key], transformed)
 			}
 		}
 	}
-	return sanitized.Encode()
+
+	if len(multiValueParams) > 0 {
+		return []any{"params", params, "multiValueParams", multiValueParams}
+
+	}
+	return []any{"params", params}
 }

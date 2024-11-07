@@ -389,7 +389,13 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": map[string]any{
+									"client_id":     "pinniped-cli",
+									"code":          "redacted",
+									"code_verifier": "redacted",
+									"grant_type":    "authorization_code",
+									"redirect_uri":  "http://127.0.0.1/callback",
+								},
 							}),
 						}
 					},
@@ -453,7 +459,12 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"params": "code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": map[string]any{
+									"code":          "redacted",
+									"code_verifier": "redacted",
+									"grant_type":    "authorization_code",
+									"redirect_uri":  "http://127.0.0.1/callback",
+								},
 							}),
 						}
 					},
@@ -538,7 +549,13 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": map[string]any{
+									"client_id":     "pinniped-cli",
+									"code":          "redacted",
+									"code_verifier": "redacted",
+									"grant_type":    "authorization_code",
+									"redirect_uri":  "http://127.0.0.1/callback",
+								},
 							}),
 						}
 					},
@@ -937,7 +954,12 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"params": "client_id=pinniped-cli&code=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": map[string]any{
+									"client_id":    "pinniped-cli",
+									"code":         "redacted",
+									"grant_type":   "authorization_code",
+									"redirect_uri": "http://127.0.0.1/callback",
+								},
 							}),
 						}
 					},
@@ -958,7 +980,13 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": map[string]any{
+									"client_id":     "pinniped-cli",
+									"code":          "redacted",
+									"code_verifier": "redacted",
+									"grant_type":    "authorization_code",
+									"redirect_uri":  "http://127.0.0.1/callback",
+								},
 							}),
 						}
 					},
@@ -1159,7 +1187,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": map[string]any{
+									"client_id":     "pinniped-cli",
+									"code":          "redacted",
+									"code_verifier": "redacted",
+									"grant_type":    "authorization_code",
+									"redirect_uri":  "http://127.0.0.1/callback",
+								},
 							}),
 						}
 					},
@@ -1170,16 +1204,14 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": func() string {
-							params := url.Values{}
-							params.Set("audience", "some-workload-cluster")
-							params.Set("client_id", "pinniped-cli")
-							params.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
-							params.Set("requested_token_type", "urn:ietf:params:oauth:token-type:jwt")
-							params.Set("subject_token", "redacted")
-							params.Set("subject_token_type", "urn:ietf:params:oauth:token-type:access_token")
-							return params.Encode()
-						}(),
+						"params": map[string]any{
+							"audience":             "some-workload-cluster",
+							"client_id":            "pinniped-cli",
+							"grant_type":           "urn:ietf:params:oauth:grant-type:token-exchange",
+							"requested_token_type": "urn:ietf:params:oauth:token-type:jwt",
+							"subject_token":        "redacted",
+							"subject_token_type":   "urn:ietf:params:oauth:token-type:access_token",
+						},
 					}),
 				}
 			},
@@ -1359,15 +1391,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": func() string {
-							params := url.Values{}
-							params.Set("audience", "some-workload-cluster")
-							params.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
-							params.Set("requested_token_type", "urn:ietf:params:oauth:token-type:jwt")
-							params.Set("subject_token", "redacted")
-							params.Set("subject_token_type", "urn:ietf:params:oauth:token-type:access_token")
-							return params.Encode()
-						}(),
+						"params": map[string]any{
+							"audience":             "some-workload-cluster",
+							"grant_type":           "urn:ietf:params:oauth:grant-type:token-exchange",
+							"requested_token_type": "urn:ietf:params:oauth:token-type:jwt",
+							"subject_token":        "redacted",
+							"subject_token_type":   "urn:ietf:params:oauth:token-type:access_token",
+						},
 					}),
 				}
 			},
@@ -1472,16 +1502,14 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": func() string {
-							params := url.Values{}
-							params.Set("audience", "") // make it obvious
-							params.Set("client_id", "pinniped-cli")
-							params.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
-							params.Set("requested_token_type", "urn:ietf:params:oauth:token-type:jwt")
-							params.Set("subject_token", "redacted")
-							params.Set("subject_token_type", "urn:ietf:params:oauth:token-type:access_token")
-							return params.Encode()
-						}(),
+						"params": map[string]any{
+							"audience":             "", // make it obvious
+							"client_id":            "pinniped-cli",
+							"grant_type":           "urn:ietf:params:oauth:grant-type:token-exchange",
+							"requested_token_type": "urn:ietf:params:oauth:token-type:jwt",
+							"subject_token":        "redacted",
+							"subject_token_type":   "urn:ietf:params:oauth:token-type:access_token",
+						},
 					}),
 				}
 			},
@@ -2304,14 +2332,12 @@ func TestRefreshGrant(t *testing.T) {
 					func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"params": func() string {
-									params := url.Values{}
-									params.Set("client_id", "pinniped-cli")
-									params.Set("grant_type", "refresh_token")
-									params.Set("refresh_token", "redacted")
-									params.Set("scope", "openid")
-									return params.Encode()
-								}(),
+								"params": map[string]any{
+									"client_id":     "pinniped-cli",
+									"grant_type":    "refresh_token",
+									"refresh_token": "redacted",
+									"scope":         "openid",
+								},
 							}),
 							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
 								"sessionID":        sessionID,
@@ -2499,14 +2525,12 @@ func TestRefreshGrant(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"params": func() string {
-									params := url.Values{}
-									params.Set("client_id", "pinniped-cli")
-									params.Set("grant_type", "refresh_token")
-									params.Set("refresh_token", "redacted")
-									params.Set("scope", "openid")
-									return params.Encode()
-								}(),
+								"params": map[string]any{
+									"client_id":     "pinniped-cli",
+									"grant_type":    "refresh_token",
+									"refresh_token": "redacted",
+									"scope":         "openid",
+								},
 							}),
 							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
 								"sessionID":        sessionID,
@@ -2569,7 +2593,13 @@ func TestRefreshGrant(t *testing.T) {
 					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-								"params": "client_id=pinniped-cli&code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback",
+								"params": map[string]any{
+									"client_id":     "pinniped-cli",
+									"code":          "redacted",
+									"code_verifier": "redacted",
+									"grant_type":    "authorization_code",
+									"redirect_uri":  "http://127.0.0.1/callback",
+								},
 							}),
 						}
 					},

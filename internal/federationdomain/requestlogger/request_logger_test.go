@@ -142,13 +142,13 @@ func TestLogRequestComplete(t *testing.T) {
 			wantAuditLogs: noAuditEventsWanted,
 		},
 		{
-			name:     "when internal paths are not Enabled, audits external path with location",
+			name:     "when internal paths are not Enabled, audits external path with location (redacting all query params)",
 			path:     "/pretend-to-login",
-			location: "some-location",
+			location: "http://127.0.0.1?foo=bar&foo=quz&lorem=ipsum",
 			auditCfg: supervisor.AuditSpec{
 				InternalPaths: "Disabled",
 			},
-			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "some-location"),
+			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "http://127.0.0.1?foo=redacted&foo=redacted&lorem=redacted"),
 		},
 		{
 			name:     "when internal paths are not Enabled, audits external path without location",

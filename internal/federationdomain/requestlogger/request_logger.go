@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	apisaudit "k8s.io/apiserver/pkg/apis/audit"
 	"k8s.io/apiserver/pkg/audit"
 	"k8s.io/apiserver/pkg/endpoints/responsewriter"
@@ -131,8 +130,14 @@ func (rl *requestLogger) logRequestComplete() {
 		if err != nil {
 			location = "unparsable location header"
 		} else {
-			redactAllParams := sets.New[string]()
-			parsedLocation.RawQuery = plog.SanitizeParams(parsedLocation.Query(), redactAllParams)
+			// We don't know what this `Location` header is used for, so redact all query params
+			redactedParams := parsedLocation.Query()
+			for k, v := range redactedParams {
+				for i := range v {
+					redactedParams[k][i] = "redacted"
+				}
+			}
+			parsedLocation.RawQuery = redactedParams.Encode()
 			location = parsedLocation.String()
 		}
 	}

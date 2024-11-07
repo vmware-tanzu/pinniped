@@ -38,7 +38,7 @@ meta:
   # These version numbers should be updated periodically.
   codegen-versions: &codegen-versions
     # Choose which version of Golang to use in the codegen container images.
-    BUILD_ARG_GO_VERSION: '1.23.2'
+    BUILD_ARG_GO_VERSION: '1.23.3'
     # Choose which version of sigs.k8s.io/controller-tools/cmd/controller-gen to install
     # in the codegen container images.
     BUILD_ARG_CONTROLLER_GEN_VERSION: 0.16.5

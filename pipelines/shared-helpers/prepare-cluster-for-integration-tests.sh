@@ -297,25 +297,6 @@ if [[ "${TMC_API_TOKEN:-}" != "" ]]; then
   webhook_ca_bundle="$(echo "$tmc_server_config" | jq -r .status.authenticationWebhook.certificateAuthorityData)"
 fi
 
-# Save this file for possible later use. Sometimes we want to remove the CPU requests,
-# which also means that we need to remove the limits or else Kubernetes will use the limit as
-# an implicit request amount.
-cat <<EOF >>/tmp/remove-cpu-request-overlay.yaml
-#@ load("@ytt:overlay", "overlay")
-#@overlay/match by=overlay.subset({"kind": "Deployment"}), expects=1
----
-spec:
-  template:
-    spec:
-      containers:
-        - #@overlay/match by=overlay.all, expects=1
-          resources:
-            requests:
-              cpu:
-            limits:
-              cpu:
-EOF
-
 # Print for debugging
 kubectl config current-context
 kubectl version
@@ -337,6 +318,49 @@ test_user_token="${test_username}:${test_password}"
 
 dex_test_password="${PINNIPED_DEX_TEST_USER_PASSWORD:-$(openssl rand -hex 16)}"
 ldap_test_password="${PINNIPED_LDAP_TEST_USER_PASSWORD:-$(openssl rand -hex 16)}"
+
+# Check if the BackendConfig resource exists (i.e. if it is a GKE cluster).
+cluster_has_gke_backend_config="no"
+if kubectl api-resources --api-group cloud.google.com -o name | grep -q backendconfigs.cloud.google.com; then
+  cluster_has_gke_backend_config="yes"
+fi
+
+# Save this file for possible later use. Sometimes we want to remove the CPU requests,
+# which also means that we need to remove the limits or else Kubernetes will use the limit as
+# an implicit request amount.
+cat <<EOF >>/tmp/remove-cpu-request-overlay.yaml
+#@ load("@ytt:overlay", "overlay")
+#@overlay/match by=overlay.subset({"kind": "Deployment"}), expects=1
+---
+spec:
+  template:
+    spec:
+      containers:
+        - #@overlay/match by=overlay.all, expects=1
+          resources:
+            requests:
+              cpu:
+            limits:
+              cpu:
+EOF
+
+# Save this file for possible later use. For our GKE Ingress, we need to apply these extra
+# annotations every time. Losing these annotations from the Service for even just a few seconds during a
+# redeploy causes the Ingress health checks to revert to defaults, which causes them to fail, which causes
+# the Ingress to start returning 502's for a few minutes until it picks up these annotations again.
+# To configure GKE Ingress health checks, we annotate the Service to tell it to use our BackendConfig.
+# Also annotate the service so that GKE ingress knows to use HTTP2 for the backend connection.
+cat <<EOF >>/tmp/add-annotations-for-gke-ingress-overlay.yaml
+#@ load("@ytt:overlay", "overlay")
+#@overlay/match by=overlay.subset({"kind": "Service", "metadata":{"name":"${supervisor_app_name}-nodeport"}}), expects=1
+---
+metadata:
+  annotations:
+    #@overlay/match missing_ok=True
+    cloud.google.com/app-protocols: '{"https":"HTTP2"}'
+    #@overlay/match missing_ok=True
+    cloud.google.com/backend-config: '{"default":"healthcheck-backendconfig"}'
+EOF
 
 if [[ "${DEPLOY_LOCAL_USER_AUTHENTICATOR:-no}" == "yes" ]]; then
   #
@@ -875,6 +899,9 @@ fi
 if [[ -n "${SUPERVISOR_AND_CONCIERGE_NO_CPU_REQUEST:-}" ]]; then
   supervisor_optional_ytt_values+=("--file=/tmp/remove-cpu-request-overlay.yaml")
 fi
+if [[ "${SUPERVISOR_INGRESS:-no}" == "yes" && "$cluster_has_gke_backend_config" == "yes" ]]; then
+  supervisor_optional_ytt_values+=("--file=/tmp/add-annotations-for-gke-ingress-overlay.yaml")
+fi
 if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
   # Configure the web proxy on the Supervisor pods. Note that .svc and .cluster.local are not included,
   # so requests for things like dex.tools.svc.cluster.local will go through the web proxy.
@@ -1121,13 +1148,13 @@ EOF
     static_ip_annotation="kubernetes.io/ingress.global-static-ip-name: ${SUPERVISOR_INGRESS_STATIC_IP_NAME}"
   fi
 
-  # If the BackendConfig resource exists (i.e. if it is a GKE cluster)...
-  if kubectl api-resources --api-group cloud.google.com -o name | grep -q backendconfigs.cloud.google.com; then
+  if [[ "$cluster_has_gke_backend_config" == "yes" ]]; then
     # Get the nodePort port number that was dynamically assigned to the nodeport service.
     nodeport_service_port=$(kubectl get service -n "${supervisor_namespace}" "${supervisor_app_name}-nodeport" -o jsonpath='{.spec.ports[0].nodePort}')
     echo "${supervisor_app_name}-nodeport Service was assigned nodePort $nodeport_service_port"
 
     # Create or update a BackendConfig to configure the health checks that will be used by the Ingress for its backend Service.
+    # The annotation already added to the Service by an overlay above tells the Service to use this BackendConfig.
     cat <<EOF | kubectl apply --wait -f -
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
@@ -1145,14 +1172,6 @@ spec:
     port: ${nodeport_service_port}
 EOF
   fi
-
-  # Annotate the Service to tell it to use the BackendConfig, which will be picked up by the Ingress on GKE.
-  # Also annotate the service so that GKE ingress knows to use HTTP2 for the backend connection.
-  # These annotations should be ignored on other platforms.
-  kubectl annotate --overwrite service \
-    "${supervisor_app_name}-nodeport" -n "${supervisor_namespace}" \
-    'cloud.google.com/backend-config={"default":"healthcheck-backendconfig"}' \
-    'cloud.google.com/app-protocols={"https":"HTTP2"}'
 
   # Create or update an Ingress to sit in front of our supervisor-nodeport service.
   cat <<EOF | kubectl apply --wait -f -

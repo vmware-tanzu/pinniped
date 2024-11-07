@@ -63,7 +63,6 @@ func SanitizeParams(inputParams url.Values, allowedKeys sets.Set[string]) []any 
 
 	if len(multiValueParams) > 0 {
 		return []any{"params", params, "multiValueParams", multiValueParams}
-
 	}
 	return []any{"params", params}
 }

@@ -3882,28 +3882,70 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			name:            "PUT is a bad method",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			method:          http.MethodPut,
-			path:            "/some/path",
+			path:            "/some/path?foo=bar&client_id=baz",
 			wantStatus:      http.StatusMethodNotAllowed,
 			wantContentType: plainContentType,
 			wantBodyString:  "Method Not Allowed: PUT (try GET or POST)\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
+					}),
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{
+							"client_id": "baz",
+							"foo":       "redacted",
+						},
+					}),
+				}
+			},
 		},
 		{
 			name:            "PATCH is a bad method",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			method:          http.MethodPatch,
-			path:            "/some/path",
+			path:            "/some/path?foo=bar&client_id=baz",
 			wantStatus:      http.StatusMethodNotAllowed,
 			wantContentType: plainContentType,
 			wantBodyString:  "Method Not Allowed: PATCH (try GET or POST)\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
+					}),
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{
+							"client_id": "baz",
+							"foo":       "redacted",
+						},
+					}),
+				}
+			},
 		},
 		{
 			name:            "DELETE is a bad method",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()),
 			method:          http.MethodDelete,
-			path:            "/some/path",
+			path:            "/some/path?foo=bar&client_id=baz",
 			wantStatus:      http.StatusMethodNotAllowed,
 			wantContentType: plainContentType,
 			wantBodyString:  "Method Not Allowed: DELETE (try GET or POST)\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
+					}),
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{
+							"client_id": "baz",
+							"foo":       "redacted",
+						},
+					}),
+				}
+			},
 		},
 	}
 

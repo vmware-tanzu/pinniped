@@ -5,6 +5,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -96,41 +97,15 @@ func NewHandler(
 }
 
 func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodGet {
-		// https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
-		// Authorization Servers MUST support the use of the HTTP GET and POST methods defined in
-		// RFC 2616 [RFC2616] at the Authorization Endpoint.
-		responseutil.HTTPErrorf(w, http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
-		return
-	}
-
 	// If the client set a username or password header, they are trying to log in without using a browser.
 	hadUsernameHeader := len(r.Header.Values(oidcapi.AuthorizeUsernameHeaderName)) > 0
 	hadPasswordHeader := len(r.Header.Values(oidcapi.AuthorizePasswordHeaderName)) > 0
 	requestedBrowserlessFlow := hadUsernameHeader || hadPasswordHeader
 
-	// Need to parse the request params, so we can get the IDP name. The style and text of the error is inspired by
-	// fosite's implementation of NewAuthorizeRequest(). Fosite only calls ParseMultipartForm() there. However,
-	// although ParseMultipartForm() calls ParseForm(), it swallows errors from ParseForm() sometimes. To avoid
-	// having any errors swallowed, we call both. When fosite calls ParseMultipartForm() later, it will be a noop.
-	if err := r.ParseForm(); err != nil {
+	// Need to parse the request params, so we can get the IDP name and audit log the params.
+	if err := parseForm(r); err != nil {
 		oidc.WriteAuthorizeError(r, w,
-			h.oauthHelperWithoutStorage,
-			fosite.NewAuthorizeRequest(),
-			fosite.ErrInvalidRequest.
-				WithHint("Unable to parse form params, make sure to send a properly formatted query params or form request body.").
-				WithWrap(err).WithDebug(err.Error()),
-			requestedBrowserlessFlow)
-		return
-	}
-	if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
-		oidc.WriteAuthorizeError(r, w,
-			h.oauthHelperWithoutStorage,
-			fosite.NewAuthorizeRequest(),
-			fosite.ErrInvalidRequest.
-				WithHint("Unable to parse multipart HTTP body, make sure to send a properly formatted form request body.").
-				WithWrap(err).WithDebug(err.Error()),
-			requestedBrowserlessFlow)
+			h.oauthHelperWithoutStorage, fosite.NewAuthorizeRequest(), err, requestedBrowserlessFlow)
 		return
 	}
 
@@ -142,6 +117,14 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	h.auditLogger.Audit(plog.AuditEventHTTPRequestParameters, r.Context(), plog.NoSessionPersisted(),
 		plog.SanitizeParams(r.Form, paramsSafeToLog())...)
+
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		// https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+		// Authorization Servers MUST support the use of the HTTP GET and POST methods defined in
+		// RFC 2616 [RFC2616] at the Authorization Endpoint.
+		responseutil.HTTPErrorf(w, http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
+		return
+	}
 
 	// Note that the client might have used oidcapi.AuthorizeUpstreamIDPNameParamName and
 	// oidcapi.AuthorizeUpstreamIDPTypeParamName query (or form) params to request a certain upstream IDP.
@@ -179,6 +162,27 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"type", idp.GetSessionProviderType())
 
 	h.authorize(w, r, requestedBrowserlessFlow, idp)
+}
+
+// parseForm parses the query params and/or POST body form params. It returns an error, or in the case of success it
+// has the side-effect of leaving the parsed form params on the http.Request in the Form field. Request body
+// parameters take precedence over URL query string values.
+func parseForm(r *http.Request) error {
+	// The style of form parsing and the text of the error is inspired by fosite's implementation of NewAuthorizeRequest().
+	// Fosite only calls ParseMultipartForm() there. However, although ParseMultipartForm() calls ParseForm(),
+	// it swallows errors from ParseForm() sometimes. To avoid having any errors swallowed, we call both.
+	// When fosite calls ParseMultipartForm() later, it will be a noop.
+	if err := r.ParseForm(); err != nil {
+		return fosite.ErrInvalidRequest.
+			WithHint("Unable to parse form params, make sure to send a properly formatted query params or form request body.").
+			WithWrap(err).WithDebug(err.Error())
+	}
+	if err := r.ParseMultipartForm(1 << 20); err != nil && !errors.Is(err, http.ErrNotMultipart) {
+		return fosite.ErrInvalidRequest.
+			WithHint("Unable to parse multipart HTTP body, make sure to send a properly formatted form request body.").
+			WithWrap(err).WithDebug(err.Error())
+	}
+	return nil
 }
 
 func (h *authorizeHandler) authorize(

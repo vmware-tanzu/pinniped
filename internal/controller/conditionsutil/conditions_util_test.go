@@ -4,7 +4,6 @@
 package conditionsutil
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 	"time"
@@ -167,8 +166,7 @@ func TestMergeIDPConditions(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, log := plog.TestLogger(t)
 
 			result := MergeConditions(
 				test.newConditions,

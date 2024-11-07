@@ -4,7 +4,6 @@
 package githubupstreamwatcher
 
 import (
-	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/base64"
@@ -2451,8 +2450,7 @@ func TestController(t *testing.T) {
 				),
 			})
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, log := plog.TestLogger(t)
 
 			gitHubIdentityProviderInformer := supervisorInformers.IDP().V1alpha1().GitHubIdentityProviders()
 
@@ -2846,8 +2844,7 @@ func TestController_OnlyWantActions(t *testing.T) {
 
 			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(tt.secrets...), 0)
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			controller := New(
 				namespace,
@@ -2967,8 +2964,7 @@ func TestGitHubUpstreamWatcherControllerFilterSecret(t *testing.T) {
 
 			kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0)
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			observableInformers := testutil.NewObservableWithInformerOption()
 			secretInformer := kubeInformers.Core().V1().Secrets()
@@ -3024,8 +3020,7 @@ func TestGitHubUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			observableInformers := testutil.NewObservableWithInformerOption()
 			configMapInformer := k8sinformers.NewSharedInformerFactoryWithOptions(kubernetesfake.NewSimpleClientset(), 0).Core().V1().ConfigMaps()
@@ -3081,8 +3076,7 @@ func TestGitHubUpstreamWatcherControllerFilterGitHubIDP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			observableInformers := testutil.NewObservableWithInformerOption()
 			gitHubIdentityProviderInformer := supervisorinformers.NewSharedInformerFactory(supervisorfake.NewSimpleClientset(), 0).IDP().V1alpha1().GitHubIdentityProviders()

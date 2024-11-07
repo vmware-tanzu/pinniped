@@ -4,7 +4,6 @@
 package serviceaccounttokencleanup
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -29,14 +28,14 @@ func TestNewServiceAccountTokenCleanupController(t *testing.T) {
 	observableWithInformerOption := testutil.NewObservableWithInformerOption()
 	secretsInformer := kubeinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
 
-	var log bytes.Buffer
+	logger, _ := plog.TestLogger(t)
 	_ = NewLegacyServiceAccountTokenCleanupController(
 		namespace,
 		legacySecretName,
 		nil, // not needed for this test
 		secretsInformer,
 		observableWithInformerOption.WithInformer,
-		plog.TestLogger(t, &log),
+		logger,
 	)
 
 	secretsInformerFilter := observableWithInformerOption.GetFilterForInformer(secretsInformer)
@@ -138,14 +137,14 @@ func TestSync(t *testing.T) {
 				tt.addReactors(kubeAPIClient)
 			}
 
-			var log bytes.Buffer
+			logger, _ := plog.TestLogger(t)
 			controller := NewLegacyServiceAccountTokenCleanupController(
 				tt.namespace,
 				tt.secretNameToDelete,
 				kubeAPIClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
-				plog.TestLogger(t, &log),
+				logger,
 			)
 
 			ctx, cancel := context.WithCancel(context.Background())

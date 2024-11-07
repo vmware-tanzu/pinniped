@@ -4,7 +4,6 @@
 package kubecertagent
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"slices"
@@ -1156,8 +1155,7 @@ func TestAgentController(t *testing.T) {
 
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, log := plog.TestLogger(t)
 
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()

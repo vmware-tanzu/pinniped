@@ -4,7 +4,6 @@
 package cachecleaner
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -146,8 +145,7 @@ func TestController(t *testing.T) {
 			}
 			webhooks := informers.Authentication().V1alpha1().WebhookAuthenticators()
 			jwtAuthenticators := informers.Authentication().V1alpha1().JWTAuthenticators()
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, log := plog.TestLogger(t)
 
 			controller := New(cache, webhooks, jwtAuthenticators, logger)
 

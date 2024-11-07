@@ -4,7 +4,6 @@
 package kubecertagent
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -149,8 +148,7 @@ func TestLegacyPodCleanerController(t *testing.T) {
 			}
 
 			kubeInformers := informers.NewSharedInformerFactory(kubeClientset, 0)
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, log := plog.TestLogger(t)
 			controller := NewLegacyPodCleanerController(
 				AgentConfig{
 					Namespace: "concierge",

@@ -5,7 +5,6 @@
 package ptls_test
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -63,8 +62,7 @@ func TestDialer(t *testing.T) {
 			t.Parallel()
 			dialer := ptls.NewDialer()
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			err := dialer.IsReachableAndTLSValidationSucceeds(
 				context.Background(),
@@ -135,8 +133,7 @@ func TestDialer_AppliesTimeouts(t *testing.T) {
 			maxTimeForTest := time.After(test.maxTestDuration)
 			testPassed := make(chan bool)
 			go func() {
-				var log bytes.Buffer
-				logger := plog.TestLogger(t, &log)
+				logger, _ := plog.TestLogger(t)
 
 				dialer := ptls.NewDialer()
 				err := dialer.IsReachableAndTLSValidationSucceeds(

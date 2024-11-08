@@ -4,7 +4,6 @@
 package ptls
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
@@ -14,8 +13,7 @@ import (
 )
 
 func TestLogAllProfiles(t *testing.T) {
-	var log bytes.Buffer
-	logger := plog.TestLogger(t, &log)
+	logger, log := plog.TestLogger(t)
 
 	LogAllProfiles(logger)
 

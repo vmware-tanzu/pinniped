@@ -4,14 +4,12 @@
 package apicerts
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"errors"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -96,6 +94,8 @@ func TestExpirerControllerFilters(t *testing.T) {
 				0,
 			).Core().V1().Secrets()
 			withInformer := testutil.NewObservableWithInformerOption()
+
+			logger, _ := plog.TestLogger(t)
 			_ = NewCertsExpirerController(
 				test.namespace,
 				certsSecretResourceName,
@@ -104,7 +104,7 @@ func TestExpirerControllerFilters(t *testing.T) {
 				withInformer.WithInformer,
 				0,  // renewBefore, not needed
 				"", // not needed
-				plog.TestLogger(t, io.Discard),
+				logger,
 			)
 
 			unrelated := corev1.Secret{}
@@ -256,7 +256,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				0,
 			)
 
-			var log bytes.Buffer
+			logger, log := plog.TestLogger(t)
 
 			c := NewCertsExpirerController(
 				namespace,
@@ -266,7 +266,7 @@ func TestExpirerControllerSync(t *testing.T) {
 				controllerlib.WithInformer,
 				test.renewBefore,
 				fakeTestKey,
-				plog.TestLogger(t, &log),
+				logger,
 			)
 
 			// Must start informers before calling TestRunSynchronously().

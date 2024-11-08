@@ -4,7 +4,6 @@
 package impersonatorconfig
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -75,8 +74,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 			servicesInformer := sharedInformerFactory.Core().V1().Services()
 			secretsInformer := sharedInformerFactory.Core().V1().Secrets()
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			_ = NewImpersonatorConfigController(
 				installedInNamespace,
@@ -569,8 +567,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func() {
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			// Set this at the last second to allow for injection of server override.
 			subject = NewImpersonatorConfigController(

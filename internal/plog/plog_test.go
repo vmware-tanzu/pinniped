@@ -4,7 +4,6 @@
 package plog
 
 import (
-	"bytes"
 	"fmt"
 	"runtime"
 	"strings"
@@ -360,8 +359,8 @@ func TestPlog(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var log bytes.Buffer
-			tt.run(TestLogger(t, &log))
+			subjectLogger, log := TestLogger(t)
+			tt.run(subjectLogger)
 
 			require.Equal(t, strings.TrimSpace(tt.want), strings.TrimSpace(log.String()))
 		})

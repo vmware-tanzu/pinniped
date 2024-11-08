@@ -4,7 +4,6 @@
 package tokenclient
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"sync"
@@ -34,8 +33,7 @@ func TestNew(t *testing.T) {
 	mockClient := fake.NewSimpleClientset().CoreV1().ServiceAccounts("")
 	mockTime := time.Now()
 	mockClock := clocktesting.NewFakeClock(mockTime)
-	var log bytes.Buffer
-	testLogger := plog.TestLogger(t, &log)
+	logger, _ := plog.TestLogger(t)
 
 	type args struct {
 		serviceAccountName   string
@@ -56,7 +54,7 @@ func TestNew(t *testing.T) {
 				serviceAccountName:   "serviceAccountName",
 				serviceAccountClient: mockClient,
 				whatToDoWithToken:    mockWhatToDoWithTokenFunc,
-				logger:               testLogger,
+				logger:               logger,
 			},
 			expected: &TokenClient{
 				serviceAccountName:   "serviceAccountName",
@@ -64,7 +62,7 @@ func TestNew(t *testing.T) {
 				whatToDoWithToken:    mockWhatToDoWithTokenFunc,
 				expirationSeconds:    600,
 				clock:                clock.RealClock{},
-				logger:               testLogger,
+				logger:               logger,
 			},
 		},
 		{
@@ -73,7 +71,7 @@ func TestNew(t *testing.T) {
 				serviceAccountName:   "custom-serviceAccountName",
 				serviceAccountClient: mockClient,
 				whatToDoWithToken:    mockWhatToDoWithTokenFunc,
-				logger:               testLogger,
+				logger:               logger,
 				opts: []Opt{
 					WithExpirationSeconds(777),
 					withClock(mockClock),
@@ -85,7 +83,7 @@ func TestNew(t *testing.T) {
 				whatToDoWithToken:    mockWhatToDoWithTokenFunc,
 				expirationSeconds:    777,
 				clock:                mockClock,
-				logger:               testLogger,
+				logger:               logger,
 			},
 		},
 	}
@@ -169,7 +167,7 @@ func TestFetchToken(t *testing.T) {
 			t.Parallel()
 
 			mockClock := clocktesting.NewFakeClock(mockTime.Time)
-			var log bytes.Buffer
+			logger, _ := plog.TestLogger(t)
 
 			require.NotEmpty(t, tt.serviceAccountName)
 
@@ -178,7 +176,7 @@ func TestFetchToken(t *testing.T) {
 				tt.serviceAccountName,
 				mockClient.CoreV1().ServiceAccounts("any-namespace-works"),
 				nil,
-				plog.TestLogger(t, &log),
+				logger,
 				WithExpirationSeconds(tt.expirationSeconds),
 			)
 			tokenClient.clock = mockClock
@@ -325,7 +323,7 @@ func TestStart(t *testing.T) {
 			t.Parallel()
 
 			mockClient := fake.NewSimpleClientset()
-			var logs bytes.Buffer
+			logger, _ := plog.TestLogger(t)
 
 			var mutex sync.Mutex
 			// These variables are accessed by the reactor and by the callback function in the goroutine which is
@@ -344,7 +342,7 @@ func TestStart(t *testing.T) {
 					t.Logf("received token %q with ttl %q", token, ttl)
 					receivedTokens = append(receivedTokens, receivedToken{token: token, ttl: ttl})
 				},
-				plog.TestLogger(t, &logs),
+				logger,
 			)
 
 			mockClient.PrependReactor(verb, resource, func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {

@@ -4,7 +4,6 @@
 package jwtcachefiller
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -2414,8 +2413,7 @@ func TestController(t *testing.T) {
 			kubeInformers := kubeinformers.NewSharedInformerFactory(kubernetesfake.NewSimpleClientset(tt.secretsAndConfigMaps...), 0)
 			cache := authncache.New()
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, log := plog.TestLogger(t)
 
 			if tt.cache != nil {
 				tt.cache(t, cache, tt.wantClose)
@@ -2892,8 +2890,7 @@ func TestControllerFilterSecret(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
 			frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)
@@ -2953,8 +2950,7 @@ func TestControllerFilterConfigMap(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			nowDoesntMatter := time.Date(1122, time.September, 33, 4, 55, 56, 778899, time.Local)
 			frozenClock := clocktesting.NewFakeClock(nowDoesntMatter)

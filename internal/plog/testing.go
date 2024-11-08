@@ -4,6 +4,7 @@
 package plog
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"math"
@@ -59,12 +60,15 @@ func AddZapOverridesToContext(
 	return context.WithValue(ctx, testOverridesContextKey, overrides)
 }
 
-func TestLogger(t *testing.T, w io.Writer) Logger {
+func TestLogger(t *testing.T) (Logger, *bytes.Buffer) {
 	t.Helper()
 
+	var log bytes.Buffer
+
 	return New().withLogrMod(func(l logr.Logger) logr.Logger {
-		return l.WithSink(testZapr(t, w, "json").GetSink())
-	})
+			return l.WithSink(testZapr(t, &log, "json").GetSink())
+		}),
+		&log
 }
 
 func TestConsoleLogger(t *testing.T, w io.Writer) Logger {

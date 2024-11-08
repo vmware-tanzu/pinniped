@@ -3881,10 +3881,10 @@ func TestLoggers(t *testing.T) {
 	}), nil)
 
 	t.Run("with new logger, outputs logs", func(t *testing.T) {
-		var log bytes.Buffer
+		logger, log := plog.TestLogger(t)
 
 		token, err := Login(issuer.URL, "clientID",
-			WithLoginLogger(plog.TestLogger(t, &log)),
+			WithLoginLogger(logger),
 		)
 		// This error is expected, we're testing logs not discovery
 		require.EqualError(t, err, `could not perform OIDC discovery for "`+issuer.URL+`": Get "`+issuer.URL+`/.well-known/openid-configuration": tls: failed to verify certificate: x509: certificate signed by unknown authority`)

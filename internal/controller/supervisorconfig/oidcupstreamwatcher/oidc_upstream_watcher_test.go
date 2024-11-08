@@ -4,7 +4,6 @@
 package oidcupstreamwatcher
 
 import (
-	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/base64"
@@ -113,8 +112,7 @@ func TestOIDCUpstreamWatcherControllerFilterSecret(t *testing.T) {
 			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			New(
 				cache,
@@ -173,8 +171,7 @@ func TestOIDCUpstreamWatcherControllerFilterConfigMaps(t *testing.T) {
 			configMapInformer := kubeInformers.Core().V1().ConfigMaps()
 			withInformer := testutil.NewObservableWithInformerOption()
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, _ := plog.TestLogger(t)
 
 			New(
 				cache,
@@ -1626,8 +1623,7 @@ func TestOIDCUpstreamWatcherControllerSync(t *testing.T) {
 				&upstreamoidc.ProviderConfig{Name: "initial-entry"},
 			})
 
-			var log bytes.Buffer
-			logger := plog.TestLogger(t, &log)
+			logger, log := plog.TestLogger(t)
 
 			validatorCache := expiringcache.NewExpiring()
 			if tt.inputValidatorCache != nil {

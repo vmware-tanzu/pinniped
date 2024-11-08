@@ -142,7 +142,7 @@ func TestLogRequestComplete(t *testing.T) {
 			wantAuditLogs: noAuditEventsWanted,
 		},
 		{
-			name:     "when internal paths are not Enabled, audits external path with location (redacting all query params)",
+			name:     "when internal paths are not Enabled, audits external path with location (redacting unknown query params)",
 			path:     "/pretend-to-login",
 			location: "http://127.0.0.1?foo=bar&foo=quz&lorem=ipsum",
 			auditCfg: supervisor.AuditSpec{
@@ -151,31 +151,12 @@ func TestLogRequestComplete(t *testing.T) {
 			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "http://127.0.0.1?foo=redacted&foo=redacted&lorem=redacted"),
 		},
 		{
-			name:     "when internal paths are not Enabled, audits external path without location",
-			path:     "/pretend-to-login",
-			location: "", // make it obvious
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Disabled",
-			},
-			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "no location header"),
-		},
-		{
-			name:     "when internal paths are not Enabled, audits external path with invalid location",
-			path:     "/pretend-to-login",
-			location: "http://e x a m p l e.com",
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Disabled",
-			},
-			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "unparsable location header"),
-		},
-		{
-			name:     "when internal paths are Enabled, audits internal paths",
-			path:     "/healthz",
-			location: "some-location",
+			name: "when internal paths are Enabled, audits internal paths",
+			path: "/healthz",
 			auditCfg: supervisor.AuditSpec{
 				InternalPaths: "Enabled",
 			},
-			wantAuditLogs: happyAuditEventWanted("/healthz", "some-location"),
+			wantAuditLogs: happyAuditEventWanted("/healthz", ""),
 		},
 		{
 			name:     "when internal paths are Enabled, audits external paths",
@@ -185,6 +166,24 @@ func TestLogRequestComplete(t *testing.T) {
 				InternalPaths: "Enabled",
 			},
 			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "some-location"),
+		},
+		{
+			name:          "audits path without location",
+			path:          "/pretend-to-login",
+			location:      "", // make it obvious
+			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "no location header"),
+		},
+		{
+			name:          "audits path with invalid location",
+			path:          "/pretend-to-login",
+			location:      "http://e x a m p l e.com",
+			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "unparsable location header"),
+		},
+		{
+			name:          "audits path with location redacting all query params except err, error, and error_description",
+			path:          "/pretend-to-login",
+			location:      "http://127.0.0.1:1234?code=pin_ac_FAKE&foo=bar&foo=quz&lorem=ipsum&err=some-err&error=some-error&error_description=some-error-description&zzlast=some-value",
+			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "http://127.0.0.1:1234?code=redacted&err=some-err&error=some-error&error_description=some-error-description&foo=redacted&foo=redacted&lorem=redacted&zzlast=redacted"),
 		},
 	}
 

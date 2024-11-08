@@ -134,6 +134,14 @@ func (rl *requestLogger) logRequestComplete() {
 			// We don't know what this `Location` header is used for, so redact all query params
 			redactedParams := parsedLocation.Query()
 			for k, v := range redactedParams {
+				// Due to https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1,
+				// authorize errors can have an 'error' and an 'error_description' parameter
+				// which should never contain PII and is safe to log.
+				// The 'err' parameter may be populated by the post_login_handler to indicate issues
+				// when using Supervisor's built-in login page.
+				if k == "error" || k == "error_description" || k == "err" {
+					continue
+				}
 				for i := range v {
 					redactedParams[k][i] = "redacted"
 				}

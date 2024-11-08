@@ -322,6 +322,7 @@ ldap_test_password="${PINNIPED_LDAP_TEST_USER_PASSWORD:-$(openssl rand -hex 16)}
 # Check if the BackendConfig resource exists (i.e. if it is a GKE cluster).
 cluster_has_gke_backend_config="no"
 if kubectl api-resources --api-group cloud.google.com -o name | grep -q backendconfigs.cloud.google.com; then
+  echo "Found backendconfigs.cloud.google.com API on this cluster."
   cluster_has_gke_backend_config="yes"
 fi
 
@@ -600,11 +601,13 @@ if [[ "${DEPLOY_TEST_TOOLS:-no}" == "yes" ]]; then
       ]"
     fi
 
-    echo "Deploying Tools to the cluster..."
     dex_optional_ytt_values=()
     if [[ "${USE_LOAD_BALANCERS_FOR_DEX_AND_SUPERVISOR:-no}" == "yes" ]]; then
       dex_optional_ytt_values+=("--data-value=dex_issuer_hostname=${dex_loadbalancer_public_ip_or_hostname}")
     fi
+
+    echo "Deploying Tools to the cluster..."
+    echo "Using ytt optional flags:" "${dex_optional_ytt_values[@]}"
     ytt --file . \
       --data-value-yaml "supervisor_redirect_uris=${supervisor_redirect_uris}" \
       --data-value "pinny_ldap_password=$ldap_test_password" \
@@ -816,9 +819,6 @@ concierge_optional_ytt_values=()
 if [[ -n "${PINNIPED_API_GROUP_SUFFIX:-}" ]]; then
   concierge_optional_ytt_values+=("--data-value-yaml=api_group_suffix=${PINNIPED_API_GROUP_SUFFIX}")
 fi
-if [[ -n "${SUPERVISOR_AND_CONCIERGE_NO_CPU_REQUEST:-}" ]]; then
-  concierge_optional_ytt_values+=("--file=/tmp/remove-cpu-request-overlay.yaml")
-fi
 if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
   # Configure the web proxy on the Concierge pods. Note that .svc and .cluster.local are not included,
   # so requests for things like pinniped-supervisor-clusterip.supervisor.svc.cluster.local and
@@ -826,8 +826,12 @@ if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
   concierge_optional_ytt_values+=("--data-value=https_proxy=http://proxy.tools.svc.cluster.local:3128")
   concierge_optional_ytt_values+=("--data-value=no_proxy=\$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost")
 fi
+if [[ -n "${SUPERVISOR_AND_CONCIERGE_NO_CPU_REQUEST:-}" ]]; then
+  concierge_optional_ytt_values+=("--file=/tmp/remove-cpu-request-overlay.yaml")
+fi
 
 echo "Deploying the Concierge app to the cluster..."
+echo "Using ytt optional flags:" "${concierge_optional_ytt_values[@]}"
 ytt --file . \
   --data-value "app_name=$concierge_app_name" \
   --data-value "namespace=$concierge_namespace" \
@@ -896,20 +900,22 @@ supervisor_optional_ytt_values=()
 if [[ -n "${PINNIPED_API_GROUP_SUFFIX:-}" ]]; then
   supervisor_optional_ytt_values+=("--data-value-yaml=api_group_suffix=${PINNIPED_API_GROUP_SUFFIX}")
 fi
-if [[ -n "${SUPERVISOR_AND_CONCIERGE_NO_CPU_REQUEST:-}" ]]; then
-  supervisor_optional_ytt_values+=("--file=/tmp/remove-cpu-request-overlay.yaml")
-fi
-if [[ "${SUPERVISOR_INGRESS:-no}" == "yes" && "$cluster_has_gke_backend_config" == "yes" ]]; then
-  supervisor_optional_ytt_values+=("--file=/tmp/add-annotations-for-gke-ingress-overlay.yaml")
-fi
 if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
   # Configure the web proxy on the Supervisor pods. Note that .svc and .cluster.local are not included,
   # so requests for things like dex.tools.svc.cluster.local will go through the web proxy.
   supervisor_optional_ytt_values+=("--data-value=https_proxy=http://proxy.tools.svc.cluster.local:3128")
   supervisor_optional_ytt_values+=("--data-value=no_proxy=\$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost")
 fi
+if [[ -n "${SUPERVISOR_AND_CONCIERGE_NO_CPU_REQUEST:-}" ]]; then
+  supervisor_optional_ytt_values+=("--file=/tmp/remove-cpu-request-overlay.yaml")
+fi
+if [[ "${SUPERVISOR_INGRESS:-no}" == "yes" && "$cluster_has_gke_backend_config" == "yes" ]]; then
+  supervisor_optional_ytt_values+=("--file=/tmp/add-annotations-for-gke-ingress-overlay.yaml")
+fi
 
 echo "Deploying the Supervisor app to the cluster..."
+echo "Using ytt service flags:" "${supervisor_ytt_service_flags[@]}"
+echo "Using ytt optional flags:" "${supervisor_optional_ytt_values[@]}"
 ytt --file . \
   --data-value "app_name=$supervisor_app_name" \
   --data-value "namespace=$supervisor_namespace" \

@@ -220,3 +220,23 @@ endpoints: { }
 #! An empty array is perfectly valid, as is any array of strings.
 allowed_ciphers_for_tls_onedottwo:
 - ""
+
+#@schema/title "Audit logging configuration"
+#@schema/desc "Customize the content of audit log events."
+audit:
+
+  #@schema/title "Log usernames and groups"
+  #@ log_usernames_and_groups_desc = "Enables or disables printing usernames and group names in audit logs. Options are 'enabled' or 'disabled'. \
+  #@ If enabled, usernames are group names may be printed in audit log events. \
+  #@ If disabled, usernames and group names will be redacted from audit logs because they might contain personally identifiable information."
+  #@schema/desc log_usernames_and_groups_desc
+  #@schema/validation one_of=["enabled", "disabled"]
+  log_usernames_and_groups: disabled
+
+  #@schema/title "Log HTTPS requests for internal paths"
+  #@ log_internal_paths = "Enables or disables request logging for internal paths in audit logs. Options are 'enabled' or 'disabled'. \
+  #@ If enabled, requests to certain paths that are typically only used internal to the cluster (e.g. /healthz) will be enabled, which can be very verbose. \
+  #@ If disabled, requests to those paths will not be audit logged."
+  #@schema/desc log_internal_paths
+  #@schema/validation one_of=["enabled", "disabled"]
+  log_internal_paths: disabled

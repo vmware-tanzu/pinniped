@@ -5107,18 +5107,18 @@ func exchangeAuthcodeForTokens(
 		test.makeJwksSigningKeyAndProvider = generateJWTSigningKeyAndJWKSProvider
 	}
 
-	logger, actualAuditLog := plog.TestLogger(t)
+	auditLogger, actualAuditLog := plog.TestAuditLogger(t)
 
 	var oauthHelper fosite.OAuth2Provider
 	// Note that makeHappyOauthHelper() calls simulateAuthEndpointHavingAlreadyRun() to preload the session storage.
-	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession, logger)
+	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession, auditLogger)
 
 	subject = NewHandler(
 		idps,
 		oauthHelper,
 		timeoutsConfiguration.OverrideDefaultAccessTokenLifespan,
 		timeoutsConfiguration.OverrideDefaultIDTokenLifespan,
-		logger,
+		auditLogger,
 	)
 
 	authorizeEndpointGrantedOpenIDScope := strings.Contains(authRequest.Form.Get("scope"), "openid")

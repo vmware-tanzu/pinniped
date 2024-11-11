@@ -180,21 +180,9 @@ func (a *App) runServer(ctx context.Context) error {
 		dynamiccertauthority.New(impersonationProxySigningCertProvider), // fallback to our internal CA if we need to
 	}
 
-	// Get the aggregated API server config.
-	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
-		dynamicServingCertProvider,
-		authenticators,
-		certIssuer,
-		buildControllers,
-		*cfg.APIGroupSuffix,
-		*cfg.AggregatedAPIServerPort,
-		scheme,
-		loginGV,
-		identityGV,
-	)
-	if err != nil {
-		return fmt.Errorf("could not configure aggregated API server: %w", err)
-	}
+	auditLogger := plog.NewAuditLogger(plog.AuditLogConfig{
+		LogUsernamesAndGroupNames: cfg.Audit.LogUsernamesAndGroups.Enabled(),
+	})
 
 	// Configure a token client that retrieves relatively short-lived tokens from the API server.
 	// It uses a k8s client without leader election because all pods need tokens.
@@ -206,12 +194,30 @@ func (a *App) runServer(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("could not create default kubernetes client: %w", err)
 	}
-	aggregatedAPIServerConfig.ExtraConfig.TokenClient = tokenclient.New(
+	tokenClient := tokenclient.New(
 		cfg.NamesConfig.ImpersonationProxyServiceAccount,
 		k8sClient.Kubernetes.CoreV1().ServiceAccounts(podInfo.Namespace),
 		impersonationProxyTokenCache.Set,
 		plog.New(),
 		tokenclient.WithExpirationSeconds(oneDayInSeconds))
+
+	// Get the aggregated API server config.
+	aggregatedAPIServerConfig, err := getAggregatedAPIServerConfig(
+		dynamicServingCertProvider,
+		authenticators,
+		certIssuer,
+		buildControllers,
+		*cfg.APIGroupSuffix,
+		*cfg.AggregatedAPIServerPort,
+		scheme,
+		loginGV,
+		identityGV,
+		auditLogger,
+		tokenClient,
+	)
+	if err != nil {
+		return fmt.Errorf("could not configure aggregated API server: %w", err)
+	}
 
 	// Complete the aggregated API server config and make a server instance.
 	server, err := aggregatedAPIServerConfig.Complete().New()
@@ -235,6 +241,8 @@ func getAggregatedAPIServerConfig(
 	aggregatedAPIServerPort int64,
 	scheme *runtime.Scheme,
 	loginConciergeGroupVersion, identityConciergeGroupVersion schema.GroupVersion,
+	auditLogger plog.AuditLogger,
+	tokenClient *tokenclient.TokenClient,
 ) (*apiserver.Config, error) {
 	codecs := serializer.NewCodecFactory(scheme)
 
@@ -301,6 +309,8 @@ func getAggregatedAPIServerConfig(
 			NegotiatedSerializer:          codecs,
 			LoginConciergeGroupVersion:    loginConciergeGroupVersion,
 			IdentityConciergeGroupVersion: identityConciergeGroupVersion,
+			TokenClient:                   tokenClient,
+			AuditLogger:                   auditLogger,
 		},
 	}
 	return apiServerConfig, nil

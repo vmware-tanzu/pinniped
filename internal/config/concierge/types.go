@@ -5,6 +5,11 @@ package concierge
 
 import "go.pinniped.dev/internal/plog"
 
+const (
+	Enabled  = "enabled"
+	Disabled = "disabled"
+)
+
 // Config contains knobs to set up an instance of the Pinniped Concierge.
 type Config struct {
 	DiscoveryInfo                DiscoveryInfoSpec `json:"discovery"`
@@ -17,6 +22,17 @@ type Config struct {
 	Labels                       map[string]string `json:"labels"`
 	Log                          plog.LogSpec      `json:"log"`
 	TLS                          TLSSpec           `json:"tls"`
+	Audit                        AuditSpec         `json:"audit"`
+}
+
+type AuditUsernamesAndGroups string
+
+func (l AuditUsernamesAndGroups) Enabled() bool {
+	return l == Enabled
+}
+
+type AuditSpec struct {
+	LogUsernamesAndGroups AuditUsernamesAndGroups `json:"logUsernamesAndGroups"`
 }
 
 type TLSSpec struct {

@@ -13,7 +13,6 @@ import (
 	"go.uber.org/mock/gomock"
 	clocktesting "k8s.io/utils/clock/testing"
 
-	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/mocks/mockresponsewriter"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
@@ -39,52 +38,44 @@ func TestLogRequestReceived(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		path          string
-		auditCfg      supervisor.AuditSpec
-		wantAuditLogs []testutil.WantedAuditLog
+		name               string
+		path               string
+		auditInternalPaths bool
+		wantAuditLogs      []testutil.WantedAuditLog
 	}{
 		{
-			name: "when internal paths are not Enabled, ignores internal paths",
-			path: "/healthz",
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Disabled",
-			},
-			wantAuditLogs: noAuditEventsWanted,
+			name:               "when internal paths are not enabled, ignores internal paths",
+			path:               "/healthz",
+			auditInternalPaths: false,
+			wantAuditLogs:      noAuditEventsWanted,
 		},
 		{
-			name: "when internal paths are not Enabled, audits external path",
-			path: "/pretend-to-login",
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Disabled",
-			},
-			wantAuditLogs: happyAuditEventWanted("/pretend-to-login"),
+			name:               "when internal paths are not enabled, audits external path",
+			path:               "/pretend-to-login",
+			auditInternalPaths: false,
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login"),
 		},
 		{
-			name: "when internal paths are Enabled, audits internal paths",
-			path: "/healthz",
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Enabled",
-			},
-			wantAuditLogs: happyAuditEventWanted("/healthz"),
+			name:               "when internal paths are enabled, audits internal paths",
+			path:               "/healthz",
+			auditInternalPaths: true,
+			wantAuditLogs:      happyAuditEventWanted("/healthz"),
 		},
 		{
-			name: "when internal paths are Enabled, audits external paths",
-			path: "/pretend-to-login",
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Enabled",
-			},
-			wantAuditLogs: happyAuditEventWanted("/pretend-to-login"),
+			name:               "when internal paths are enabled, audits external paths",
+			path:               "/pretend-to-login",
+			auditInternalPaths: true,
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login"),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			logger, log := plog.TestLogger(t)
+			auditLogger, actualAuditLog := plog.TestAuditLogger(t)
 
 			subject := requestLogger{
-				auditLogger: logger,
+				auditLogger: auditLogger,
 				req: &http.Request{
 					Method: "some-method",
 					Proto:  "some-proto",
@@ -97,13 +88,13 @@ func TestLogRequestReceived(t *testing.T) {
 						ServerName: "some-sni-server-name",
 					},
 				},
-				userAgent: "some-user-agent",
-				auditCfg:  test.auditCfg,
+				userAgent:          "some-user-agent",
+				auditInternalPaths: test.auditInternalPaths,
 			}
 
 			subject.logRequestReceived()
 
-			testutil.CompareAuditLogs(t, test.wantAuditLogs, log.String())
+			testutil.CompareAuditLogs(t, test.wantAuditLogs, actualAuditLog.String())
 		})
 	}
 }
@@ -127,45 +118,37 @@ func TestLogRequestComplete(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		path          string
-		location      string
-		auditCfg      supervisor.AuditSpec
-		wantAuditLogs []testutil.WantedAuditLog
+		name               string
+		path               string
+		location           string
+		auditInternalPaths bool
+		wantAuditLogs      []testutil.WantedAuditLog
 	}{
 		{
-			name: "when internal paths are not Enabled, ignores internal paths",
-			path: "/healthz",
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Disabled",
-			},
-			wantAuditLogs: noAuditEventsWanted,
+			name:               "when internal paths are not enabled, ignores internal paths",
+			path:               "/healthz",
+			auditInternalPaths: false,
+			wantAuditLogs:      noAuditEventsWanted,
 		},
 		{
-			name:     "when internal paths are not Enabled, audits external path with location (redacting unknown query params)",
-			path:     "/pretend-to-login",
-			location: "http://127.0.0.1?foo=bar&foo=quz&lorem=ipsum",
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Disabled",
-			},
-			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "http://127.0.0.1?foo=redacted&foo=redacted&lorem=redacted"),
+			name:               "when internal paths are not enabled, audits external path with location (redacting unknown query params)",
+			path:               "/pretend-to-login",
+			location:           "http://127.0.0.1?foo=bar&foo=quz&lorem=ipsum",
+			auditInternalPaths: false,
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", "http://127.0.0.1?foo=redacted&foo=redacted&lorem=redacted"),
 		},
 		{
-			name: "when internal paths are Enabled, audits internal paths",
-			path: "/healthz",
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Enabled",
-			},
-			wantAuditLogs: happyAuditEventWanted("/healthz", "no location header"),
+			name:               "when internal paths are enabled, audits internal paths",
+			path:               "/healthz",
+			auditInternalPaths: true,
+			wantAuditLogs:      happyAuditEventWanted("/healthz", "no location header"),
 		},
 		{
-			name:     "when internal paths are Enabled, audits external paths",
-			path:     "/pretend-to-login",
-			location: "some-location",
-			auditCfg: supervisor.AuditSpec{
-				InternalPaths: "Enabled",
-			},
-			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "some-location"),
+			name:               "when internal paths are enabled, audits external paths",
+			path:               "/pretend-to-login",
+			location:           "some-location",
+			auditInternalPaths: true,
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", "some-location"),
 		},
 		{
 			name:          "audits path without location",
@@ -203,10 +186,10 @@ func TestLogRequestComplete(t *testing.T) {
 				})
 			}
 
-			logger, log := plog.TestLogger(t)
+			auditLogger, actualAuditLog := plog.TestAuditLogger(t)
 
 			subject := requestLogger{
-				auditLogger: logger,
+				auditLogger: auditLogger,
 				startTime:   startTime,
 				clock:       frozenClock,
 				req: &http.Request{
@@ -214,14 +197,14 @@ func TestLogRequestComplete(t *testing.T) {
 						Path: test.path,
 					},
 				},
-				status:   777,
-				w:        mockResponseWriter,
-				auditCfg: test.auditCfg,
+				status:             777,
+				w:                  mockResponseWriter,
+				auditInternalPaths: test.auditInternalPaths,
 			}
 
 			subject.logRequestComplete()
 
-			testutil.CompareAuditLogs(t, test.wantAuditLogs, log.String())
+			testutil.CompareAuditLogs(t, test.wantAuditLogs, actualAuditLog.String())
 		})
 	}
 }

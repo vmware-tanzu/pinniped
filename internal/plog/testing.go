@@ -71,6 +71,13 @@ func TestLogger(t *testing.T) (Logger, *bytes.Buffer) {
 		&log
 }
 
+func TestAuditLogger(t *testing.T) (AuditLogger, *bytes.Buffer) {
+	t.Helper()
+
+	underlyingLogger, logBuf := TestLogger(t)
+	return &auditLogger{logger: underlyingLogger, cfg: AuditLogConfig{LogUsernamesAndGroupNames: true}}, logBuf
+}
+
 func TestConsoleLogger(t *testing.T, w io.Writer) Logger {
 	t.Helper()
 

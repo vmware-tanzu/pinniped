@@ -149,6 +149,7 @@ func prepareControllers(
 	pinnipedInformers supervisorinformers.SharedInformerFactory,
 	leaderElector controllerinit.RunnerWrapper,
 	podInfo *downward.PodInfo,
+	auditLogger plog.AuditLogger,
 ) controllerinit.RunnerBuilder {
 	const certificateName string = "pinniped-supervisor-api-tls-serving-certificate"
 	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
@@ -167,7 +168,7 @@ func prepareControllers(
 				kubeClient,
 				secretInformer,
 				controllerlib.WithInformer,
-				plog.New(),
+				auditLogger,
 			),
 			singletonWorker,
 		).
@@ -451,6 +452,10 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		return fmt.Errorf("cannot create k8s client without leader election: %w", err)
 	}
 
+	auditLogger := plog.NewAuditLogger(plog.AuditLogConfig{
+		LogUsernamesAndGroupNames: cfg.Audit.LogUsernamesAndGroups.Enabled(),
+	})
+
 	kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(
 		client.Kubernetes,
 		defaultResyncInterval,
@@ -484,8 +489,8 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		&secretCache,
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace), // writes to kube storage are allowed for non-leaders
 		client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
-		plog.New(),
-		cfg.Audit,
+		auditLogger,
+		cfg.Audit.LogInternalPaths,
 	)
 
 	// Get the "real" name of the client secret supervisor API group (i.e., the API group name with the
@@ -508,6 +513,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		pinnipedInformers,
 		leaderElector,
 		podInfo,
+		auditLogger,
 	)
 
 	shutdown := &sync.WaitGroup{}

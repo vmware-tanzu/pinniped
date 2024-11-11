@@ -1147,7 +1147,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 			rsp := httptest.NewRecorder()
 
-			subject := NewPostHandler(downstreamIssuer, tt.idps.BuildFederationDomainIdentityProvidersListerFinder(), oauthHelper, plog.New())
+			auditLogger, _ := plog.TestAuditLogger(t)
+
+			subject := NewPostHandler(downstreamIssuer, tt.idps.BuildFederationDomainIdentityProvidersListerFinder(), oauthHelper, auditLogger)
 
 			err := subject(rsp, req, happyEncodedUpstreamState, tt.decodedState)
 			if tt.wantErr != "" {

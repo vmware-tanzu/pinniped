@@ -88,6 +88,10 @@ func FromPath(ctx context.Context, path string, setAllowedCiphers ptls.SetAllowe
 		return nil, fmt.Errorf("validate tls: %w", err)
 	}
 
+	if err := validateAudit(&config.Audit); err != nil {
+		return nil, fmt.Errorf("validate audit: %w", err)
+	}
+
 	if config.Labels == nil {
 		config.Labels = make(map[string]string)
 	}
@@ -197,6 +201,14 @@ func validateServerPort(port *int64) error {
 	// It cannot be below 1024 because the container is not running as root.
 	if *port < 1024 || *port > 65535 {
 		return constable.Error("must be within range 1024 to 65535")
+	}
+	return nil
+}
+
+func validateAudit(auditConfig *AuditSpec) error {
+	v := auditConfig.LogUsernamesAndGroups
+	if v != "" && v != Enabled && v != Disabled {
+		return constable.Error("invalid logUsernamesAndGroups format, valid choices are 'enabled', 'disabled', or empty string (equivalent to 'disabled')")
 	}
 	return nil
 }

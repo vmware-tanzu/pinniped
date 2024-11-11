@@ -100,6 +100,10 @@ func FromPath(ctx context.Context, path string, setAllowedCiphers ptls.SetAllowe
 		return nil, fmt.Errorf("validate tls: %w", err)
 	}
 
+	if err := validateAudit(&config.Audit); err != nil {
+		return nil, fmt.Errorf("validate audit: %w", err)
+	}
+
 	return &config, nil
 }
 
@@ -212,5 +216,25 @@ func validateServerPort(port *int64) error {
 	if *port < 1024 || *port > 65535 {
 		return constable.Error("must be within range 1024 to 65535")
 	}
+	return nil
+}
+
+func validateAudit(auditConfig *AuditSpec) error {
+	const errFmt = "invalid %s format, valid choices are 'enabled', 'disabled', or empty string (equivalent to 'disabled')"
+
+	switch auditConfig.LogUsernamesAndGroups {
+	case Enabled, Disabled, "":
+		// no-op
+	default:
+		return fmt.Errorf(errFmt, "logUsernamesAndGroups")
+	}
+
+	switch auditConfig.LogInternalPaths {
+	case Enabled, Disabled, "":
+		// no-op
+	default:
+		return fmt.Errorf(errFmt, "logInternalPaths")
+	}
+
 	return nil
 }

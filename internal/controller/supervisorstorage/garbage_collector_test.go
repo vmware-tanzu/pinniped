@@ -57,7 +57,7 @@ func TestGarbageCollectorControllerInformerFilters(t *testing.T) {
 				nil,
 				secretsInformer,
 				observableWithInformerOption.WithInformer, // make it possible to observe the behavior of the Filters
-				plog.New(),
+				nil,
 			)
 			secretsInformerFilter = observableWithInformerOption.GetFilterForInformer(secretsInformer)
 		})
@@ -139,7 +139,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			syncContext             *controllerlib.Context
 			fakeClock               *clocktesting.FakeClock
 			frozenNow               time.Time
-			auditLog                *bytes.Buffer
+			actualAuditLog          *bytes.Buffer
 			wantAuditLogs           []testutil.WantedAuditLog
 		)
 
@@ -148,7 +148,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		var startInformersAndController = func(idpCache dynamicupstreamprovider.DynamicUpstreamIDPProvider) {
 			// Set this at the last second to allow for injection of server override.
 			var auditLogger plog.AuditLogger
-			auditLogger, auditLog = plog.TestLogger(t)
+			auditLogger, actualAuditLog = plog.TestAuditLogger(t)
 			subject = GarbageCollectorController(
 				idpCache,
 				fakeClock,
@@ -198,7 +198,7 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 		it.After(func() {
 			cancelContextCancelFunc()
 
-			testutil.CompareAuditLogs(t, wantAuditLogs, auditLog.String())
+			testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 		})
 
 		when("there are secrets without the garbage-collect-after annotation", func() {

@@ -57,6 +57,10 @@ _: #@ template.replace(data.values.custom_labels)
 #@       "onedottwo": {
 #@         "allowedCiphers": data.values.allowed_ciphers_for_tls_onedottwo
 #@       }
+#@     },
+#@     "audit": {
+#@       "logUsernamesAndGroups": data.values.audit.log_usernames_and_groups,
+#@       "logInternalPaths": data.values.audit.log_internal_paths
 #@     }
 #@   }
 #@   if data.values.log_level:

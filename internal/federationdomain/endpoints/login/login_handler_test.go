@@ -449,9 +449,9 @@ func TestLoginEndpoint(t *testing.T) {
 				return test.postHandlerErr
 			}
 
-			logger, log := plog.TestLogger(t)
+			auditLogger, actualAuditLog := plog.TestAuditLogger(t)
 
-			subject := NewHandler(happyStateCodec, happyCookieCodec, testGetHandler, testPostHandler, logger)
+			subject := NewHandler(happyStateCodec, happyCookieCodec, testGetHandler, testPostHandler, auditLogger)
 
 			subject.ServeHTTP(rsp, req)
 
@@ -468,7 +468,7 @@ func TestLoginEndpoint(t *testing.T) {
 			if test.wantAuditLogs != nil {
 				wantAuditLogs := test.wantAuditLogs(testutil.GetStateParam(t, test.path))
 				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-audit-id")
-				testutil.CompareAuditLogs(t, wantAuditLogs, log.String())
+				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 			}
 		})
 	}

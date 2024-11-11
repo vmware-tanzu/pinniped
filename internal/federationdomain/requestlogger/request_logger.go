@@ -49,9 +49,9 @@ func WithAuditID(handler http.Handler) http.Handler {
 	})
 }
 
-func WithHTTPRequestAuditLogging(handler http.Handler, auditLogger plog.AuditLogger, auditCfg supervisor.AuditSpec) http.Handler {
+func WithHTTPRequestAuditLogging(handler http.Handler, auditLogger plog.AuditLogger, auditInternalPathsCfg supervisor.AuditInternalPaths) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		rl := newRequestLogger(req, w, auditLogger, time.Now(), auditCfg)
+		rl := newRequestLogger(req, w, auditLogger, time.Now(), auditInternalPathsCfg)
 
 		rl.logRequestReceived()
 		defer rl.logRequestComplete()
@@ -73,19 +73,25 @@ type requestLogger struct {
 	userAgent string
 	w         http.ResponseWriter
 
-	auditLogger plog.AuditLogger
-	auditCfg    supervisor.AuditSpec
+	auditLogger        plog.AuditLogger
+	auditInternalPaths bool
 }
 
-func newRequestLogger(req *http.Request, w http.ResponseWriter, auditLogger plog.AuditLogger, startTime time.Time, auditCfg supervisor.AuditSpec) *requestLogger {
+func newRequestLogger(
+	req *http.Request,
+	w http.ResponseWriter,
+	auditLogger plog.AuditLogger,
+	startTime time.Time,
+	auditInternalPathsCfg supervisor.AuditInternalPaths,
+) *requestLogger {
 	return &requestLogger{
-		req:         req,
-		w:           w,
-		startTime:   startTime,
-		clock:       clock.RealClock{},
-		userAgent:   req.UserAgent(), // cache this from the req to avoid any possibility of concurrent read/write problems with headers map
-		auditLogger: auditLogger,
-		auditCfg:    auditCfg,
+		req:                req,
+		w:                  w,
+		startTime:          startTime,
+		clock:              clock.RealClock{},
+		userAgent:          req.UserAgent(), // cache this from the req to avoid any possibility of concurrent read/write problems with headers map
+		auditLogger:        auditLogger,
+		auditInternalPaths: auditInternalPathsCfg.Enabled(),
 	}
 }
 
@@ -98,7 +104,7 @@ func internalPaths() []string {
 func (rl *requestLogger) logRequestReceived() {
 	r := rl.req
 
-	if rl.auditCfg.InternalPaths != supervisor.AuditInternalPathsEnabled && slices.Contains(internalPaths(), r.URL.Path) {
+	if !rl.auditInternalPaths && slices.Contains(internalPaths(), r.URL.Path) {
 		return
 	}
 
@@ -148,7 +154,7 @@ func getLocationForAuditLogs(location string) string {
 func (rl *requestLogger) logRequestComplete() {
 	r := rl.req
 
-	if rl.auditCfg.InternalPaths != supervisor.AuditInternalPathsEnabled && slices.Contains(internalPaths(), r.URL.Path) {
+	if !rl.auditInternalPaths && slices.Contains(internalPaths(), r.URL.Path) {
 		return
 	}
 

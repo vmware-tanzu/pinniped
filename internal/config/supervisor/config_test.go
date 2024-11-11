@@ -52,6 +52,9 @@ func TestFromPath(t *testing.T) {
 				    - foo
 				    - bar
 				    - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+				audit:
+				  logUsernamesAndGroups: enabled
+				  logInternalPaths: enabled
 			`),
 			wantConfig: &Config{
 				APIGroupSuffix: ptr.To("some.suffix.com"),
@@ -85,6 +88,10 @@ func TestFromPath(t *testing.T) {
 							"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
 						},
 					},
+				},
+				Audit: AuditSpec{
+					LogUsernamesAndGroups: "enabled",
+					LogInternalPaths:      "enabled",
 				},
 			},
 		},
@@ -123,6 +130,42 @@ func TestFromPath(t *testing.T) {
 					},
 				},
 				AggregatedAPIServerPort: ptr.To[int64](10250),
+				Audit: AuditSpec{
+					LogInternalPaths:      "",
+					LogUsernamesAndGroups: "",
+				},
+			},
+		},
+		{
+			name: "audit settings can be disabled explicitly",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				audit:
+				  logInternalPaths: disabled
+				  logUsernamesAndGroups: disabled
+			`),
+			wantConfig: &Config{
+				APIGroupSuffix: ptr.To("pinniped.dev"),
+				Labels:         map[string]string{},
+				NamesConfig: NamesConfigSpec{
+					DefaultTLSCertificateSecret: "my-secret-name",
+				},
+				Endpoints: &Endpoints{
+					HTTPS: &Endpoint{
+						Network: "tcp",
+						Address: ":8443",
+					},
+					HTTP: &Endpoint{
+						Network: "disabled",
+					},
+				},
+				AggregatedAPIServerPort: ptr.To[int64](10250),
+				Audit: AuditSpec{
+					LogInternalPaths:      "disabled",
+					LogUsernamesAndGroups: "disabled",
+				},
 			},
 		},
 		{
@@ -266,6 +309,28 @@ func TestFromPath(t *testing.T) {
 				aggregatedAPIServerPort: 65536
 			`),
 			wantError: "validate aggregatedAPIServerPort: must be within range 1024 to 65535",
+		},
+		{
+			name: "invalid audit.logUsernamesAndGroups format",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				audit:
+				  logUsernamesAndGroups: this-is-not-a-valid-value
+			`),
+			wantError: "validate audit: invalid logUsernamesAndGroups format, valid choices are 'enabled', 'disabled', or empty string (equivalent to 'disabled')",
+		},
+		{
+			name: "invalid audit.logInternalPaths format",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				audit:
+				  logInternalPaths: this-is-not-a-valid-value
+			`),
+			wantError: "validate audit: invalid logInternalPaths format, valid choices are 'enabled', 'disabled', or empty string (equivalent to 'disabled')",
 		},
 		{
 			name: "returns setAllowedCiphers errors",

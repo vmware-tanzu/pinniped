@@ -67,6 +67,8 @@ func TestFromPath(t *testing.T) {
 				    - foo
 				    - bar
 					- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+				audit:
+				  logUsernamesAndGroups: enabled
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
@@ -115,6 +117,9 @@ func TestFromPath(t *testing.T) {
 						},
 					},
 				},
+				Audit: AuditSpec{
+					LogUsernamesAndGroups: "enabled",
+				},
 			},
 		},
 		{
@@ -155,6 +160,8 @@ func TestFromPath(t *testing.T) {
 				log:
 				  level: all
 				  format: json
+				audit:
+				  logUsernamesAndGroups: disabled
 			`),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
@@ -194,6 +201,9 @@ func TestFromPath(t *testing.T) {
 				Log: plog.LogSpec{
 					Level:  plog.LevelAll,
 					Format: plog.FormatJSON,
+				},
+				Audit: AuditSpec{
+					LogUsernamesAndGroups: "disabled",
 				},
 			},
 		},
@@ -287,6 +297,7 @@ func TestFromPath(t *testing.T) {
 					NamePrefix: ptr.To("pinniped-kube-cert-agent-"),
 					Image:      ptr.To("debian:latest"),
 				},
+				Audit: AuditSpec{LogUsernamesAndGroups: ""},
 			},
 		},
 		{
@@ -628,6 +639,28 @@ func TestFromPath(t *testing.T) {
 			`),
 			allowedCiphersError: fmt.Errorf("some error from setAllowedCiphers"),
 			wantError:           "validate tls: some error from setAllowedCiphers",
+		},
+		{
+			name: "invalid audit.logUsernamesAndGroups format",
+			yaml: here.Doc(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationClusterIPService: impersonationClusterIPService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  agentServiceAccount: agentServiceAccount-value
+				  impersonationProxyServiceAccount: impersonationProxyServiceAccount-value
+				  impersonationProxyLegacySecret: impersonationProxyLegacySecret-value
+				audit:
+				  logUsernamesAndGroups: this-value-is-not-allowed
+			`),
+			wantError: "validate audit: invalid logUsernamesAndGroups format, valid choices are 'enabled', 'disabled', or empty string (equivalent to 'disabled')",
 		},
 	}
 	for _, test := range tests {

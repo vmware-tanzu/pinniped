@@ -7,6 +7,11 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+const (
+	Enabled  = "enabled"
+	Disabled = "disabled"
+)
+
 // Config contains knobs to set up an instance of the Pinniped Supervisor.
 type Config struct {
 	APIGroupSuffix          *string           `json:"apiGroupSuffix,omitempty"`
@@ -20,11 +25,18 @@ type Config struct {
 }
 
 type AuditInternalPaths string
+type AuditUsernamesAndGroups string
 
-const AuditInternalPathsEnabled = "Enabled"
+func (l AuditInternalPaths) Enabled() bool {
+	return l == Enabled
+}
+func (l AuditUsernamesAndGroups) Enabled() bool {
+	return l == Enabled
+}
 
 type AuditSpec struct {
-	InternalPaths AuditInternalPaths `json:"internalPaths"`
+	LogInternalPaths      AuditInternalPaths      `json:"logInternalPaths"`
+	LogUsernamesAndGroups AuditUsernamesAndGroups `json:"logUsernamesAndGroups"`
 }
 
 type TLSSpec struct {

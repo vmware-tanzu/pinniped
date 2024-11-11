@@ -360,6 +360,8 @@ func TestManager(t *testing.T) {
 			cache.SetStateEncoderHashKey(issuer2, []byte("some-state-encoder-hash-key-2"))
 			cache.SetStateEncoderBlockKey(issuer2, []byte("16-bytes-STATE02"))
 
+			auditLogger, _ := plog.TestAuditLogger(t)
+
 			subject = NewManager(
 				nextHandler,
 				dynamicJWKSProvider,
@@ -367,8 +369,8 @@ func TestManager(t *testing.T) {
 				&cache,
 				secretsClient,
 				oidcClientsClient,
-				plog.New(),
-				supervisor.AuditSpec{},
+				auditLogger,
+				supervisor.Enabled,
 			)
 		})
 

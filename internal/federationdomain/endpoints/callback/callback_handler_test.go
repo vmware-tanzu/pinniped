@@ -1853,7 +1853,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
 			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration, nil)
 
-			logger, log := plog.TestLogger(t)
+			auditLogger, actualAuditLog := plog.TestAuditLogger(t)
 
 			subject := NewHandler(
 				test.idps.BuildFederationDomainIdentityProvidersListerFinder(),
@@ -1861,7 +1861,7 @@ func TestCallbackEndpoint(t *testing.T) {
 				happyStateCodec,
 				happyCookieCodec,
 				happyUpstreamRedirectURI,
-				logger,
+				auditLogger,
 			)
 
 			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
@@ -1959,7 +1959,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			if test.wantAuditLogs != nil {
 				wantAuditLogs := test.wantAuditLogs(testutil.GetStateParam(t, test.path), sessionID)
 				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-audit-id")
-				testutil.CompareAuditLogs(t, wantAuditLogs, log.String())
+				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 			}
 		})
 	}

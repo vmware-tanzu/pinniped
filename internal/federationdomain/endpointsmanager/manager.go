@@ -62,7 +62,7 @@ func NewManager(
 	secretsClient corev1client.SecretInterface,
 	oidcClientsClient v1alpha1.OIDCClientInterface,
 	auditLogger plog.AuditLogger,
-	auditCfg supervisor.AuditSpec,
+	auditInternalPathsCfg supervisor.AuditInternalPaths,
 ) *Manager {
 	m := &Manager{
 		providerHandlers:    make(map[string]http.Handler),
@@ -74,7 +74,7 @@ func NewManager(
 		auditLogger:         auditLogger,
 	}
 	// nextHandler is the next handler in the chain, called when this manager didn't know how to handle a request
-	m.buildHandlerChain(nextHandler, auditCfg)
+	m.buildHandlerChain(nextHandler, auditInternalPathsCfg)
 	return m
 }
 
@@ -193,11 +193,11 @@ func (m *Manager) SetFederationDomains(federationDomains ...*federationdomainpro
 	}
 }
 
-func (m *Manager) buildHandlerChain(nextHandler http.Handler, auditCfg supervisor.AuditSpec) {
+func (m *Manager) buildHandlerChain(nextHandler http.Handler, auditInternalPathsCfg supervisor.AuditInternalPaths) {
 	// Build the basic handler for FederationDomain endpoints.
 	handler := m.buildManagerHandler(nextHandler)
 	// Log all requests, including audit ID.
-	handler = requestlogger.WithHTTPRequestAuditLogging(handler, m.auditLogger, auditCfg)
+	handler = requestlogger.WithHTTPRequestAuditLogging(handler, m.auditLogger, auditInternalPathsCfg)
 	// Add random audit ID to request context and response headers.
 	handler = requestlogger.WithAuditID(handler)
 	m.handlerChain = handler

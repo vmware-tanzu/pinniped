@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/ory/fosite"
@@ -113,6 +115,11 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Sort secrets by name so that audit log tests are deterministic
+	slices.SortStableFunc(listOfSecrets, func(a, b *corev1.Secret) int {
+		return strings.Compare(a.ObjectMeta.Name, b.ObjectMeta.Name)
+	})
 
 	for i := range listOfSecrets {
 		secret := listOfSecrets[i]

@@ -4,6 +4,7 @@
 package supervisorstorage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -138,19 +139,23 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 			syncContext             *controllerlib.Context
 			fakeClock               *clocktesting.FakeClock
 			frozenNow               time.Time
+			auditLog                *bytes.Buffer
+			wantAuditLogs           []testutil.WantedAuditLog
 		)
 
 		// Defer starting the informers until the last possible moment so that the
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func(idpCache dynamicupstreamprovider.DynamicUpstreamIDPProvider) {
 			// Set this at the last second to allow for injection of server override.
+			var auditLogger plog.AuditLogger
+			auditLogger, auditLog = plog.TestLogger(t)
 			subject = GarbageCollectorController(
 				idpCache,
 				fakeClock,
 				kubeClient,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,
-				plog.New(),
+				auditLogger,
 			)
 
 			// Set this at the last second to support calling subject.Name().
@@ -192,6 +197,8 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 
 		it.After(func() {
 			cancelContextCancelFunc()
+
+			testutil.CompareAuditLogs(t, wantAuditLogs, auditLog.String())
 		})
 
 		when("there are secrets without the garbage-collect-after annotation", func() {
@@ -387,6 +394,27 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Upstream OIDC Token Revoked",
+						map[string]any{
+							"sessionID": "request-id-1",
+							"type":      "refresh_token",
+						},
+					),
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "authcode",
+						},
+					),
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-2",
+							"storageType": "authcode",
+						},
+					),
+				}
 			})
 		})
 
@@ -511,6 +539,27 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Upstream OIDC Token Revoked",
+						map[string]any{
+							"sessionID": "request-id-1",
+							"type":      "access_token",
+						},
+					),
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "authcode",
+						},
+					),
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-2",
+							"storageType": "authcode",
+						},
+					),
+				}
 			})
 		})
 
@@ -651,6 +700,15 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "authcode",
+						},
+					),
+				}
 			})
 		})
 
@@ -722,6 +780,15 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "authcode",
+						},
+					),
+				}
 			})
 		})
 
@@ -827,6 +894,15 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "authcode",
+						},
+					),
+				}
 			})
 		})
 
@@ -906,6 +982,15 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "authcode",
+						},
+					),
+				}
 			})
 		})
 
@@ -1030,6 +1115,27 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "access-token",
+						},
+					),
+					testutil.WantAuditLog("Upstream OIDC Token Revoked",
+						map[string]any{
+							"sessionID": "request-id-2",
+							"type":      "refresh_token",
+						},
+					),
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-2",
+							"storageType": "access-token",
+						},
+					),
+				}
 			})
 		})
 
@@ -1154,6 +1260,27 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "access-token",
+						},
+					),
+					testutil.WantAuditLog("Upstream OIDC Token Revoked",
+						map[string]any{
+							"sessionID": "request-id-2",
+							"type":      "access_token",
+						},
+					),
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-2",
+							"storageType": "access-token",
+						},
+					),
+				}
 			})
 		})
 
@@ -1231,6 +1358,21 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Upstream OIDC Token Revoked",
+						map[string]any{
+							"sessionID": "request-id-1",
+							"type":      "refresh_token",
+						},
+					),
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "refresh-token",
+						},
+					),
+				}
 			})
 		})
 
@@ -1308,6 +1450,21 @@ func TestGarbageCollectorControllerSync(t *testing.T) {
 					},
 					kubeClient.Actions(),
 				)
+
+				wantAuditLogs = []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Upstream OIDC Token Revoked",
+						map[string]any{
+							"sessionID": "request-id-1",
+							"type":      "access_token",
+						},
+					),
+					testutil.WantAuditLog("Session Garbage Collected",
+						map[string]any{
+							"sessionID":   "request-id-1",
+							"storageType": "refresh-token",
+						},
+					),
+				}
 			})
 		})
 

@@ -4,7 +4,6 @@
 package plog
 
 import (
-	"bytes"
 	"fmt"
 	"runtime"
 	"strings"

@@ -33,8 +33,9 @@ import (
 	"slices"
 
 	"github.com/go-logr/logr"
-	"go.pinniped.dev/internal/auditevent"
 	"k8s.io/apiserver/pkg/audit"
+
+	"go.pinniped.dev/internal/auditevent"
 )
 
 const errorKey = "error" // this matches zapr's default for .Error calls (which is asserted via tests)

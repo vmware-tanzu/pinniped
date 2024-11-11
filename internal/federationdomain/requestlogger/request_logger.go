@@ -116,39 +116,40 @@ func (rl *requestLogger) logRequestReceived() {
 	)
 }
 
+func getLocationForAuditLogs(location string) string {
+	if location == "" {
+		return "no location header"
+	}
+
+	parsedLocation, err := url.Parse(location)
+	if err != nil {
+		return "unparsable location header"
+	}
+
+	// We don't know what this `Location` header is used for, so redact nearly all query parameters
+	redactedParams := parsedLocation.Query()
+	for k, v := range redactedParams {
+		// Due to https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1,
+		// authorize errors can have an 'error' and an 'error_description' parameter
+		// which should never contain PII and is safe to log.
+		// The 'err' parameter may be populated by the post_login_handler to indicate issues
+		// when using Supervisor's built-in login page.
+		if k == "error" || k == "error_description" || k == "err" {
+			continue
+		}
+		for i := range v {
+			redactedParams[k][i] = "redacted"
+		}
+	}
+	parsedLocation.RawQuery = redactedParams.Encode()
+	return parsedLocation.String()
+}
+
 func (rl *requestLogger) logRequestComplete() {
 	r := rl.req
 
 	if rl.auditCfg.InternalPaths != supervisor.AuditInternalPathsEnabled && slices.Contains(internalPaths(), r.URL.Path) {
 		return
-	}
-
-	location := rl.Header().Get("Location")
-	if location == "" {
-		location = "no location header"
-	} else {
-		parsedLocation, err := url.Parse(location)
-		if err != nil {
-			location = "unparsable location header"
-		} else {
-			// We don't know what this `Location` header is used for, so redact all query params
-			redactedParams := parsedLocation.Query()
-			for k, v := range redactedParams {
-				// Due to https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1,
-				// authorize errors can have an 'error' and an 'error_description' parameter
-				// which should never contain PII and is safe to log.
-				// The 'err' parameter may be populated by the post_login_handler to indicate issues
-				// when using Supervisor's built-in login page.
-				if k == "error" || k == "error_description" || k == "err" {
-					continue
-				}
-				for i := range v {
-					redactedParams[k][i] = "redacted"
-				}
-			}
-			parsedLocation.RawQuery = redactedParams.Encode()
-			location = parsedLocation.String()
-		}
 	}
 
 	rl.auditLogger.Audit(auditevent.HTTPRequestCompleted,
@@ -157,7 +158,7 @@ func (rl *requestLogger) logRequestComplete() {
 		"path", r.URL.Path, // include the path again to make it easy to "grep -v healthz" to watch all other audit events
 		"latency", rl.clock.Since(rl.startTime),
 		"responseStatus", rl.status,
-		"location", location,
+		"location", getLocationForAuditLogs(rl.Header().Get("Location")),
 	)
 }
 

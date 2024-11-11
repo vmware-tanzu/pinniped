@@ -156,7 +156,7 @@ func TestLogRequestComplete(t *testing.T) {
 			auditCfg: supervisor.AuditSpec{
 				InternalPaths: "Enabled",
 			},
-			wantAuditLogs: happyAuditEventWanted("/healthz", ""),
+			wantAuditLogs: happyAuditEventWanted("/healthz", "no location header"),
 		},
 		{
 			name:     "when internal paths are Enabled, audits external paths",

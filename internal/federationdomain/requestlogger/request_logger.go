@@ -109,17 +109,18 @@ func (rl *requestLogger) logRequestReceived() {
 	}
 
 	// Always log all other requests, including 404's caused by bad paths, for debugging purposes.
-	rl.auditLogger.Audit(auditevent.HTTPRequestReceived,
-		r.Context(),
-		plog.NoSessionPersisted(),
-		"proto", r.Proto,
-		"method", r.Method,
-		"host", r.Host,
-		"serverName", requestutil.SNIServerName(r),
-		"path", r.URL.Path,
-		"userAgent", rl.userAgent,
-		"remoteAddr", r.RemoteAddr,
-	)
+	rl.auditLogger.Audit(auditevent.HTTPRequestReceived, &plog.AuditParams{
+		ReqCtx: r.Context(),
+		KeysAndValues: []any{
+			"proto", r.Proto,
+			"method", r.Method,
+			"host", r.Host,
+			"serverName", requestutil.SNIServerName(r),
+			"path", r.URL.Path,
+			"userAgent", rl.userAgent,
+			"remoteAddr", r.RemoteAddr,
+		},
+	})
 }
 
 func getLocationForAuditLogs(location string) string {
@@ -158,14 +159,15 @@ func (rl *requestLogger) logRequestComplete() {
 		return
 	}
 
-	rl.auditLogger.Audit(auditevent.HTTPRequestCompleted,
-		r.Context(),
-		plog.NoSessionPersisted(),
-		"path", r.URL.Path, // include the path again to make it easy to "grep -v healthz" to watch all other audit events
-		"latency", rl.clock.Since(rl.startTime),
-		"responseStatus", rl.status,
-		"location", getLocationForAuditLogs(rl.Header().Get("Location")),
-	)
+	rl.auditLogger.Audit(auditevent.HTTPRequestCompleted, &plog.AuditParams{
+		ReqCtx: r.Context(),
+		KeysAndValues: []any{
+			"path", r.URL.Path,
+			"latency", rl.clock.Since(rl.startTime),
+			"responseStatus", rl.status,
+			"location", getLocationForAuditLogs(rl.Header().Get("Location")),
+		},
+	})
 }
 
 // Unwrap implements responsewriter.UserProvidedDecorator.

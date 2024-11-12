@@ -34,8 +34,10 @@ func NewHandler(
 			return err
 		}
 
-		auditLogger.Audit(auditevent.AuthorizeIDFromParameters, r.Context(), plog.NoSessionPersisted(),
-			"authorizeID", encodedState.AuthorizeID())
+		auditLogger.Audit(auditevent.AuthorizeIDFromParameters, &plog.AuditParams{
+			ReqCtx:        r.Context(),
+			KeysAndValues: []any{"authorizeID", encodedState.AuthorizeID()},
+		})
 
 		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
 		if err != nil || idp == nil {
@@ -49,7 +51,7 @@ func NewHandler(
 			return httperr.New(http.StatusBadRequest, "error reading state downstream auth params")
 		}
 
-		// Recreate enough of the original authorize request so we can pass it to NewAuthorizeRequest().
+		// Recreate enough of the original authorize request, so we can pass it to NewAuthorizeRequest().
 		reconstitutedAuthRequest := &http.Request{Form: downstreamAuthParams}
 		authorizeRequester, err := oauthHelper.NewAuthorizeRequest(r.Context(), reconstitutedAuthRequest)
 		if err != nil {

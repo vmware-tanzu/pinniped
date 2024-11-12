@@ -192,9 +192,14 @@ func upstreamRefresh(
 		return err
 	}
 
-	auditLogger.Audit(auditevent.IdentityRefreshedFromUpstreamIDP, ctx, accessRequest,
-		"upstreamUsername", refreshedIdentity.UpstreamUsername,
-		"upstreamGroups", refreshedIdentity.UpstreamGroups)
+	auditLogger.Audit(auditevent.IdentityRefreshedFromUpstreamIDP, &plog.AuditParams{
+		ReqCtx:  ctx,
+		Session: accessRequest,
+		KeysAndValues: []any{
+			"upstreamUsername", refreshedIdentity.UpstreamUsername,
+			"upstreamGroups", refreshedIdentity.UpstreamGroups,
+		},
+	})
 
 	// If the idp wants to update the session with new information from the refresh, then update it.
 	if refreshedIdentity.IDPSpecificSessionData != nil {
@@ -221,8 +226,11 @@ func upstreamRefresh(
 	if fositeErr != nil {
 		// The HintField is always populated by applyIdentityTransformationsDuringRefresh,
 		// and more descriptive than fositeErr.Error() which is just "error".
-		auditLogger.Audit(auditevent.AuthenticationRejectedByTransforms, ctx, accessRequest,
-			"reason", fositeErr.HintField)
+		auditLogger.Audit(auditevent.AuthenticationRejectedByTransforms, &plog.AuditParams{
+			ReqCtx:        ctx,
+			Session:       accessRequest,
+			KeysAndValues: []any{"reason", fositeErr.HintField},
+		})
 		return fositeErr
 	}
 
@@ -239,10 +247,14 @@ func upstreamRefresh(
 		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = refreshedTransformedGroups
 	}
 
-	auditLogger.Audit(auditevent.SessionRefreshed, ctx, accessRequest,
-		"username", oldTransformedUsername, // not allowed to change above so must be the same as old
-		"groups", refreshedTransformedGroups,
-		"subject", previousIdentity.DownstreamSubject)
+	auditLogger.Audit(auditevent.SessionRefreshed, &plog.AuditParams{
+		ReqCtx:  ctx,
+		Session: accessRequest,
+		KeysAndValues: []any{
+			"username", oldTransformedUsername, // not allowed to change above so must be the same as old
+			"groups", refreshedTransformedGroups,
+			"subject", previousIdentity.DownstreamSubject},
+	})
 
 	return nil
 }

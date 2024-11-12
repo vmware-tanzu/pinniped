@@ -50,19 +50,25 @@ func NewPinnipedSession(
 ) (*psession.PinnipedSession, error) {
 	now := time.Now().UTC()
 
-	auditLogger.Audit(auditevent.IdentityFromUpstreamIDP, ctx, plog.NoSessionPersisted(),
-		"upstreamIDPDisplayName", c.IdentityProvider.GetDisplayName(),
-		"upstreamIDPType", c.IdentityProvider.GetSessionProviderType(),
-		"upstreamIDPResourceName", c.IdentityProvider.GetProvider().GetResourceName(),
-		"upstreamIDPResourceUID", c.IdentityProvider.GetProvider().GetResourceUID(),
-		"upstreamUsername", c.UpstreamIdentity.UpstreamUsername,
-		"upstreamGroups", c.UpstreamIdentity.UpstreamGroups)
+	auditLogger.Audit(auditevent.IdentityFromUpstreamIDP, &plog.AuditParams{
+		ReqCtx: ctx,
+		KeysAndValues: []any{
+			"upstreamIDPDisplayName", c.IdentityProvider.GetDisplayName(),
+			"upstreamIDPType", c.IdentityProvider.GetSessionProviderType(),
+			"upstreamIDPResourceName", c.IdentityProvider.GetProvider().GetResourceName(),
+			"upstreamIDPResourceUID", c.IdentityProvider.GetProvider().GetResourceUID(),
+			"upstreamUsername", c.UpstreamIdentity.UpstreamUsername,
+			"upstreamGroups", c.UpstreamIdentity.UpstreamGroups,
+		},
+	})
 
 	downstreamUsername, downstreamGroups, err := applyIdentityTransformations(ctx,
 		c.IdentityProvider.GetTransforms(), c.UpstreamIdentity.UpstreamUsername, c.UpstreamIdentity.UpstreamGroups)
 	if err != nil {
-		auditLogger.Audit(auditevent.AuthenticationRejectedByTransforms, ctx, plog.NoSessionPersisted(),
-			"reason", err)
+		auditLogger.Audit(auditevent.AuthenticationRejectedByTransforms, &plog.AuditParams{
+			ReqCtx:        ctx,
+			KeysAndValues: []any{"reason", err},
+		})
 		return nil, err
 	}
 
@@ -109,12 +115,17 @@ func NewPinnipedSession(
 
 	pinnipedSession.IDTokenClaims().Extra = extras
 
-	auditLogger.Audit(auditevent.SessionStarted, ctx, c.SessionIDGetter,
-		"username", downstreamUsername,
-		"groups", downstreamGroups,
-		"subject", c.UpstreamIdentity.DownstreamSubject,
-		"additionalClaims", c.UpstreamLoginExtras.DownstreamAdditionalClaims,
-		"warnings", c.UpstreamLoginExtras.Warnings)
+	auditLogger.Audit(auditevent.SessionStarted, &plog.AuditParams{
+		ReqCtx:  ctx,
+		Session: c.SessionIDGetter,
+		KeysAndValues: []any{
+			"username", downstreamUsername,
+			"groups", downstreamGroups,
+			"subject", c.UpstreamIdentity.DownstreamSubject,
+			"additionalClaims", c.UpstreamLoginExtras.DownstreamAdditionalClaims,
+			"warnings", c.UpstreamLoginExtras.Warnings,
+		},
+	})
 
 	return pinnipedSession, nil
 }

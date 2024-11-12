@@ -59,8 +59,10 @@ func NewHandler(
 			return err
 		}
 
-		auditLogger.Audit(auditevent.AuthorizeIDFromParameters, r.Context(), plog.NoSessionPersisted(),
-			"authorizeID", encodedState.AuthorizeID())
+		auditLogger.Audit(auditevent.AuthorizeIDFromParameters, &plog.AuditParams{
+			ReqCtx:        r.Context(),
+			KeysAndValues: []any{"authorizeID", encodedState.AuthorizeID()},
+		})
 
 		switch decodedState.UpstreamType {
 		case string(idpdiscoveryv1alpha1.IDPTypeLDAP), string(idpdiscoveryv1alpha1.IDPTypeActiveDirectory):

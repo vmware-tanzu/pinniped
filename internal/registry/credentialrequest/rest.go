@@ -132,11 +132,15 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	traceSuccess(t, userInfo, true)
 
-	r.auditLogger.Audit(auditevent.TokenCredentialRequest, ctx, nil,
-		"username", userInfo.GetName(),
-		"groups", userInfo.GetGroups(),
-		"authenticated", true,
-		"expires", expires.Format(time.RFC3339))
+	r.auditLogger.Audit(auditevent.TokenCredentialRequest, &plog.AuditParams{
+		ReqCtx: ctx,
+		KeysAndValues: []any{
+			"username", userInfo.GetName(),
+			"groups", userInfo.GetGroups(),
+			"authenticated", true,
+			"expires", expires.Format(time.RFC3339),
+		},
+	})
 
 	return &loginapi.TokenCredentialRequest{
 		Status: loginapi.TokenCredentialRequestStatus{

@@ -112,12 +112,18 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Log if these headers were present, but don't log the actual values. The password is obviously sensitive,
 	// and sometimes users use their password as their username by mistake.
-	h.auditLogger.Audit(auditevent.HTTPRequestCustomHeadersUsed, r.Context(), plog.NoSessionPersisted(),
-		oidcapi.AuthorizeUsernameHeaderName, hadUsernameHeader,
-		oidcapi.AuthorizePasswordHeaderName, hadPasswordHeader)
+	h.auditLogger.Audit(auditevent.HTTPRequestCustomHeadersUsed, &plog.AuditParams{
+		ReqCtx: r.Context(),
+		KeysAndValues: []any{
+			oidcapi.AuthorizeUsernameHeaderName, hadUsernameHeader,
+			oidcapi.AuthorizePasswordHeaderName, hadPasswordHeader,
+		},
+	})
 
-	h.auditLogger.Audit(auditevent.HTTPRequestParameters, r.Context(), plog.NoSessionPersisted(),
-		auditevent.SanitizeParams(r.Form, paramsSafeToLog())...)
+	h.auditLogger.Audit(auditevent.HTTPRequestParameters, &plog.AuditParams{
+		ReqCtx:        r.Context(),
+		KeysAndValues: auditevent.SanitizeParams(r.Form, paramsSafeToLog()),
+	})
 
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		// https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
@@ -156,17 +162,21 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.auditLogger.Audit(auditevent.UsingUpstreamIDP, r.Context(), plog.NoSessionPersisted(),
-		"displayName", idp.GetDisplayName(),
-		"resourceName", idp.GetProvider().GetResourceName(),
-		"resourceUID", idp.GetProvider().GetResourceUID(),
-		"type", idp.GetSessionProviderType())
+	h.auditLogger.Audit(auditevent.UsingUpstreamIDP, &plog.AuditParams{
+		ReqCtx: r.Context(),
+		KeysAndValues: []any{
+			"displayName", idp.GetDisplayName(),
+			"resourceName", idp.GetProvider().GetResourceName(),
+			"resourceUID", idp.GetProvider().GetResourceUID(),
+			"type", idp.GetSessionProviderType(),
+		},
+	})
 
 	h.authorize(w, r, requestedBrowserlessFlow, idp)
 }
 
 // parseForm parses the query params and/or POST body form params. It returns an error, or in the case of success it
-// has the side-effect of leaving the parsed form params on the http.Request in the Form field. Request body
+// has the side effect of leaving the parsed form params on the http.Request in the Form field. Request body
 // parameters take precedence over URL query string values.
 func parseForm(r *http.Request) error {
 	// The style of form parsing and the text of the error is inspired by fosite's implementation of NewAuthorizeRequest().
@@ -221,8 +231,10 @@ func (h *authorizeHandler) authorize(
 		authorizeID, err = h.authorizeWithBrowser(r, w, oauthHelper, authorizeRequester, idp)
 
 		if err == nil {
-			h.auditLogger.Audit(auditevent.UpstreamAuthorizeRedirect, r.Context(), plog.NoSessionPersisted(),
-				"authorizeID", authorizeID)
+			h.auditLogger.Audit(auditevent.UpstreamAuthorizeRedirect, &plog.AuditParams{
+				ReqCtx:        r.Context(),
+				KeysAndValues: []any{"authorizeID", authorizeID},
+			})
 		}
 	}
 	if err != nil {

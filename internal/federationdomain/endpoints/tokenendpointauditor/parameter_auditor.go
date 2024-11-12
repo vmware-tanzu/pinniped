@@ -53,8 +53,9 @@ func paramsSafeToLogTokenEndpoint() sets.Set[string] {
 }
 
 func (p parameterAuditorHandler) CanHandleTokenEndpointRequest(ctx context.Context, requester fosite.AccessRequester) bool {
-	p.auditLogger.Audit(auditevent.HTTPRequestParameters, ctx, plog.NoSessionPersisted(),
-		auditevent.SanitizeParams(requester.GetRequestForm(), paramsSafeToLogTokenEndpoint())...)
-
+	p.auditLogger.Audit(auditevent.HTTPRequestParameters, &plog.AuditParams{
+		ReqCtx:        ctx,
+		KeysAndValues: auditevent.SanitizeParams(requester.GetRequestForm(), paramsSafeToLogTokenEndpoint()),
+	})
 	return false
 }

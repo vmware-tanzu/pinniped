@@ -4,6 +4,7 @@
 package credentialrequest
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -18,10 +19,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/audit"
 	"k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
+	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
@@ -33,7 +37,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	r := NewREST(nil, nil, schema.GroupResource{Group: "bears", Resource: "panda"}, nil)
+	r := NewREST(nil, nil, schema.GroupResource{Group: "bears", Resource: "panda"}, nil, clock.RealClock{})
 	require.NotNil(t, r)
 	require.False(t, r.NamespaceScoped())
 	require.Equal(t, []string{"pinniped"}, r.Categories())
@@ -71,6 +75,10 @@ func TestCreate(t *testing.T) {
 		var logger *testutil.TranscriptLogger
 		var originalKLogLevel klog.Level
 		var auditLogger plog.AuditLogger
+		var actualAuditLog *bytes.Buffer
+		var frozenNow time.Time
+		var frozenClock *clocktesting.FakeClock
+		var wantAuditLog []testutil.WantedAuditLog
 
 		it.Before(func() {
 			r = require.New(t)
@@ -80,10 +88,13 @@ func TestCreate(t *testing.T) {
 			originalKLogLevel = testutil.GetGlobalKlogLevel()
 			// trace.Log() utility will only log at level 2 or above, so set that for this test.
 			testutil.SetGlobalKlogLevel(t, 2) //nolint:staticcheck // old test of code using trace.Log()
-			auditLogger, _ = plog.TestAuditLogger(t)
+			auditLogger, actualAuditLog = plog.TestAuditLogger(t)
+			frozenNow = time.Date(2024, time.September, 12, 4, 25, 56, 778899, time.UTC)
+			frozenClock = clocktesting.NewFakeClock(frozenNow)
 		})
 
 		it.After(func() {
+			testutil.CompareAuditLogs(t, wantAuditLog, actualAuditLog.String())
 			klog.ClearLogger()
 			testutil.SetGlobalKlogLevel(t, originalKLogLevel) //nolint:staticcheck // old test of code using trace.Log()
 			ctrl.Finish()
@@ -106,28 +117,36 @@ func TestCreate(t *testing.T) {
 				5*time.Minute,
 			).Return([]byte("test-cert"), []byte("test-key"), nil)
 
-			storage := NewREST(requestAuthenticator, clientCertIssuer, schema.GroupResource{}, auditLogger)
+			storage := NewREST(requestAuthenticator, clientCertIssuer, schema.GroupResource{}, auditLogger, frozenClock)
 
-			response, err := callCreate(context.Background(), storage, req)
+			response, err := callCreate(storage, req)
 
 			r.NoError(err)
 			r.IsType(&loginapi.TokenCredentialRequest{}, response)
 
-			expires := response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp
-			r.NotNil(expires)
-			r.InDelta(time.Now().Add(5*time.Minute).Unix(), expires.Unix(), 5)
-			response.(*loginapi.TokenCredentialRequest).Status.Credential.ExpirationTimestamp = metav1.Time{}
-
 			r.Equal(response, &loginapi.TokenCredentialRequest{
 				Status: loginapi.TokenCredentialRequestStatus{
 					Credential: &loginapi.ClusterCredential{
-						ExpirationTimestamp:   metav1.Time{},
+						ExpirationTimestamp:   metav1.NewTime(frozenNow.Add(5 * time.Minute).UTC()),
 						ClientCertificateData: "test-cert",
 						ClientKeyData:         "test-key",
 					},
 				},
 			})
+
 			requireOneLogStatement(r, logger, `"success" userID:,hasExtra:false,authenticated:true`)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest", map[string]any{
+					"auditID":       "fake-audit-id",
+					"authenticated": true,
+					"expires":       "2024-09-12T04:30:56Z", // this is frozenNow + 5 minutes in UTC
+					"personalInfo": map[string]any{
+						"username": "test-user",
+						"groups":   []any{"test-group-1", "test-group-2"},
+					},
+				}),
+			}
 		})
 
 		it("CreateFailsWithValidTokenWhenCertIssuerFails", func() {
@@ -145,9 +164,9 @@ func TestCreate(t *testing.T) {
 				IssueClientCertPEM(gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(nil, nil, fmt.Errorf("some certificate authority error"))
 
-			storage := NewREST(requestAuthenticator, clientCertIssuer, schema.GroupResource{}, auditLogger)
+			storage := NewREST(requestAuthenticator, clientCertIssuer, schema.GroupResource{}, auditLogger, frozenClock)
 
-			response, err := callCreate(context.Background(), storage, req)
+			response, err := callCreate(storage, req)
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"failure" failureType:cert issuer,msg:some certificate authority error`)
 		})
@@ -158,9 +177,9 @@ func TestCreate(t *testing.T) {
 			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).Return(nil, nil)
 
-			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger)
+			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger, frozenClock)
 
-			response, err := callCreate(context.Background(), storage, req)
+			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"success" userID:<none>,hasExtra:false,authenticated:false`)
@@ -173,9 +192,9 @@ func TestCreate(t *testing.T) {
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
 				Return(nil, errors.New("some webhook error"))
 
-			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger)
+			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger, frozenClock)
 
-			response, err := callCreate(context.Background(), storage, req)
+			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"failure" failureType:token authentication,msg:some webhook error`)
@@ -188,9 +207,9 @@ func TestCreate(t *testing.T) {
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
 				Return(&user.DefaultInfo{Name: ""}, nil)
 
-			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger)
+			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger, frozenClock)
 
-			response, err := callCreate(context.Background(), storage, req)
+			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"success" userID:,hasExtra:false,authenticated:false`)
@@ -207,9 +226,9 @@ func TestCreate(t *testing.T) {
 					Groups: []string{"test-group-1", "test-group-2"},
 				}, nil)
 
-			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger)
+			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger, frozenClock)
 
-			response, err := callCreate(context.Background(), storage, req)
+			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"success" userID:test-uid,hasExtra:false,authenticated:false`)
@@ -226,9 +245,9 @@ func TestCreate(t *testing.T) {
 					Extra:  map[string][]string{"test-key": {"test-val-1", "test-val-2"}},
 				}, nil)
 
-			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger)
+			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger, frozenClock)
 
-			response, err := callCreate(context.Background(), storage, req)
+			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 			requireOneLogStatement(r, logger, `"success" userID:,hasExtra:true,authenticated:false`)
@@ -236,7 +255,7 @@ func TestCreate(t *testing.T) {
 
 		it("CreateFailsWhenGivenTheWrongInputType", func() {
 			notACredentialRequest := runtime.Unknown{}
-			response, err := NewREST(nil, nil, schema.GroupResource{}, auditLogger).Create(
+			response, err := NewREST(nil, nil, schema.GroupResource{}, auditLogger, frozenClock).Create(
 				genericapirequest.NewContext(),
 				&notACredentialRequest,
 				rest.ValidateAllObjectFunc,
@@ -247,8 +266,8 @@ func TestCreate(t *testing.T) {
 		})
 
 		it("CreateFailsWhenTokenValueIsEmptyInRequest", func() {
-			storage := NewREST(nil, nil, schema.GroupResource{}, auditLogger)
-			response, err := callCreate(context.Background(), storage, credentialRequest(loginapi.TokenCredentialRequestSpec{
+			storage := NewREST(nil, nil, schema.GroupResource{}, auditLogger, frozenClock)
+			response, err := callCreate(storage, credentialRequest(loginapi.TokenCredentialRequestSpec{
 				Token: "",
 			}))
 
@@ -258,7 +277,7 @@ func TestCreate(t *testing.T) {
 		})
 
 		it("CreateFailsWhenValidationFails", func() {
-			storage := NewREST(nil, nil, schema.GroupResource{}, auditLogger)
+			storage := NewREST(nil, nil, schema.GroupResource{}, auditLogger, frozenClock)
 			response, err := storage.Create(
 				context.Background(),
 				validCredentialRequest(),
@@ -278,9 +297,12 @@ func TestCreate(t *testing.T) {
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req.DeepCopy()).
 				Return(&user.DefaultInfo{Name: "test-user"}, nil)
 
-			storage := NewREST(requestAuthenticator, successfulIssuer(ctrl), schema.GroupResource{}, auditLogger)
+			fakeReqContext := audit.WithAuditContext(context.Background())
+			audit.WithAuditID(fakeReqContext, "fake-audit-id")
+
+			storage := NewREST(requestAuthenticator, successfulIssuer(ctrl), schema.GroupResource{}, auditLogger, frozenClock)
 			response, err := storage.Create(
-				context.Background(),
+				fakeReqContext,
 				req,
 				func(ctx context.Context, obj runtime.Object) error {
 					credentialRequest, _ := obj.(*loginapi.TokenCredentialRequest)
@@ -290,6 +312,18 @@ func TestCreate(t *testing.T) {
 				&metav1.CreateOptions{})
 			r.NoError(err)
 			r.NotEmpty(response)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest", map[string]any{
+					"auditID":       "fake-audit-id",
+					"authenticated": true,
+					"expires":       "2024-09-12T04:30:56Z", // this is frozenNow + 5 minutes in UTC
+					"personalInfo": map[string]any{
+						"username": "test-user",
+						"groups":   []any{},
+					},
+				}),
+			}
 		})
 
 		it("CreateDoesNotAllowValidationFunctionToSeeTheActualRequestToken", func() {
@@ -299,11 +333,16 @@ func TestCreate(t *testing.T) {
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req.DeepCopy()).
 				Return(&user.DefaultInfo{Name: "test-user"}, nil)
 
-			storage := NewREST(requestAuthenticator, successfulIssuer(ctrl), schema.GroupResource{}, auditLogger)
+			storage := NewREST(requestAuthenticator, successfulIssuer(ctrl), schema.GroupResource{}, auditLogger, frozenClock)
+
+			fakeReqContext := audit.WithAuditContext(context.Background())
+			audit.WithAuditID(fakeReqContext, "fake-audit-id")
+
 			validationFunctionWasCalled := false
 			var validationFunctionSawTokenValue string
+
 			response, err := storage.Create(
-				context.Background(),
+				fakeReqContext,
 				req,
 				func(ctx context.Context, obj runtime.Object) error {
 					credentialRequest, _ := obj.(*loginapi.TokenCredentialRequest)
@@ -316,10 +355,22 @@ func TestCreate(t *testing.T) {
 			r.NotEmpty(response)
 			r.True(validationFunctionWasCalled)
 			r.Empty(validationFunctionSawTokenValue)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest", map[string]any{
+					"auditID":       "fake-audit-id",
+					"authenticated": true,
+					"expires":       "2024-09-12T04:30:56Z", // this is frozenNow + 5 minutes in UTC
+					"personalInfo": map[string]any{
+						"username": "test-user",
+						"groups":   []any{},
+					},
+				}),
+			}
 		})
 
 		it("CreateFailsWhenRequestOptionsDryRunIsNotEmpty", func() {
-			response, err := NewREST(nil, nil, schema.GroupResource{}, auditLogger).Create(
+			response, err := NewREST(nil, nil, schema.GroupResource{}, auditLogger, frozenClock).Create(
 				genericapirequest.NewContext(),
 				validCredentialRequest(),
 				rest.ValidateAllObjectFunc,
@@ -333,7 +384,7 @@ func TestCreate(t *testing.T) {
 		})
 
 		it("CreateFailsWhenNamespaceIsNotEmpty", func() {
-			response, err := NewREST(nil, nil, schema.GroupResource{}, auditLogger).Create(
+			response, err := NewREST(nil, nil, schema.GroupResource{}, auditLogger, frozenClock).Create(
 				genericapirequest.WithNamespace(genericapirequest.NewContext(), "some-ns"),
 				validCredentialRequest(),
 				rest.ValidateAllObjectFunc,
@@ -352,9 +403,12 @@ func requireOneLogStatement(r *require.Assertions, logger *testutil.TranscriptLo
 	r.Contains(transcript[0].Message, messageContains)
 }
 
-func callCreate(ctx context.Context, storage *REST, obj runtime.Object) (runtime.Object, error) {
+func callCreate(storage *REST, obj runtime.Object) (runtime.Object, error) {
+	fakeReqContext := audit.WithAuditContext(context.Background())
+	audit.WithAuditID(fakeReqContext, "fake-audit-id")
+
 	return storage.Create(
-		ctx,
+		fakeReqContext,
 		obj,
 		rest.ValidateAllObjectFunc,
 		&metav1.CreateOptions{

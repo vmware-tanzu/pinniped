@@ -18,6 +18,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
+	"k8s.io/utils/clock"
 	"k8s.io/utils/trace"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
@@ -38,12 +39,14 @@ func NewREST(
 	issuer clientcertissuer.ClientCertIssuer,
 	resource schema.GroupResource,
 	auditLogger plog.AuditLogger,
+	clock clock.Clock,
 ) *REST {
 	return &REST{
 		authenticator:  authenticator,
 		issuer:         issuer,
 		tableConvertor: rest.NewDefaultTableConvertor(resource),
 		auditLogger:    auditLogger,
+		clock:          clock,
 	}
 }
 
@@ -52,6 +55,7 @@ type REST struct {
 	issuer         clientcertissuer.ClientCertIssuer
 	tableConvertor rest.TableConvertor
 	auditLogger    plog.AuditLogger
+	clock          clock.Clock
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -123,7 +127,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}
 
 	// this timestamp should be returned from IssueClientCertPEM but this is a safe approximation
-	expires := metav1.NewTime(time.Now().UTC().Add(clientCertificateTTL))
+	expires := metav1.NewTime(r.clock.Now().UTC().Add(clientCertificateTTL))
 	certPEM, keyPEM, err := r.issuer.IssueClientCertPEM(userInfo.GetName(), userInfo.GetGroups(), clientCertificateTTL)
 	if err != nil {
 		traceFailureWithError(t, "cert issuer", err)

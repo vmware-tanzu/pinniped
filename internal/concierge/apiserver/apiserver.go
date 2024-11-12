@@ -15,6 +15,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	utilversion "k8s.io/apiserver/pkg/util/version"
+	"k8s.io/utils/clock"
 
 	"go.pinniped.dev/internal/clientcertissuer"
 	"go.pinniped.dev/internal/controllerinit"
@@ -83,7 +84,13 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	for _, f := range []func() (schema.GroupVersionResource, rest.Storage){
 		func() (schema.GroupVersionResource, rest.Storage) {
 			tokenCredReqGVR := c.ExtraConfig.LoginConciergeGroupVersion.WithResource("tokencredentialrequests")
-			tokenCredStorage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer, tokenCredReqGVR.GroupResource(), c.ExtraConfig.AuditLogger)
+			tokenCredStorage := credentialrequest.NewREST(
+				c.ExtraConfig.Authenticator,
+				c.ExtraConfig.Issuer,
+				tokenCredReqGVR.GroupResource(),
+				c.ExtraConfig.AuditLogger,
+				clock.RealClock{},
+			)
 			return tokenCredReqGVR, tokenCredStorage
 		},
 		func() (schema.GroupVersionResource, rest.Storage) {

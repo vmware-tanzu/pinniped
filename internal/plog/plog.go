@@ -29,6 +29,8 @@ package plog
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"slices"
@@ -43,18 +45,6 @@ const errorKey = "error" // this matches zapr's default for .Error calls (which 
 
 type SessionIDGetter interface {
 	GetID() string
-}
-
-// NoSessionPersisted means do not associate this audit event with a session ID.
-// The session has not yet "started" and may or may not ever be persisted to permanent storage.
-func NoSessionPersisted() SessionIDGetter {
-	return nil
-}
-
-// NoHTTPRequestAvailable means there is no request context for this audit event.
-// Use this when an audit event is emitted from a controller or some other place that does not have a request context.
-func NoHTTPRequestAvailable() context.Context {
-	return nil
 }
 
 type AuditParams struct {
@@ -172,9 +162,12 @@ func (a *auditLogger) Audit(msg auditevent.Message, p *AuditParams) {
 		allKV = slices.Concat(allKV, []any{"sessionID", sessionID})
 	}
 
-	if p != nil && len(p.PIIKeysAndValues) > 0 {
+	if p != nil && len(p.PIIKeysAndValues) > 1 {
 		allKV = slices.Concat(allKV, []any{
-			"personalInfo", a.nestedPIIKeysAndValues(p.PIIKeysAndValues, a.cfg.LogUsernamesAndGroupNames),
+			"personalInfo", &piiKeysAndValues{
+				kv:                        p.PIIKeysAndValues,
+				logUsernamesAndGroupNames: a.cfg.LogUsernamesAndGroupNames,
+			},
 		})
 	}
 
@@ -183,50 +176,6 @@ func (a *auditLogger) Audit(msg auditevent.Message, p *AuditParams) {
 	}
 
 	a.logger.audit(string(msg), allKV...)
-}
-
-func (a *auditLogger) nestedPIIKeysAndValues(values []any, logUsernamesAndGroupNames bool) map[string]any {
-	// TODO: This implementation alphabetizes the keys because it builds a map to nest all key/values deeper. Could we keep the original order instead? Do we care?
-	kvMap := map[string]any{}
-	var k string
-
-	for i, v := range values {
-		if i%2 == 0 {
-			// Interpret even indices (0, 2, 4, etc.) as a key.
-			// Just remember its value for the next loop iteration.
-			k = valueAsKey(v)
-		} else {
-			// Interpret odd indices as a value.
-			// Save it using the key from the previous loop iteration.
-			kvMap[k] = valueAsValue(v, logUsernamesAndGroupNames)
-		}
-	}
-
-	return kvMap
-}
-
-func valueAsKey(v any) string {
-	vStr, ok := v.(string)
-	if !ok {
-		// Indicates programmer error that will hopefully be caught by unit tests.
-		vStr = "cannotCastKeyNameToString"
-	}
-	return vStr
-}
-
-func valueAsValue(v any, logUsernamesAndGroupNames bool) any {
-	if logUsernamesAndGroupNames {
-		return v // use the original value without redacting
-	} else {
-		rt := reflect.TypeOf(v)
-		if rt.Kind() == reflect.Slice {
-			// For any slice, replace it by a redacted slice.
-			return []string{"redacted"}
-		} else {
-			// For anything else, just redact it without keeping any hint of the original type.
-			return "redacted"
-		}
-	}
 }
 
 // audit is used internally by AuditLogger to print an audit log event to the pLogger's output.
@@ -468,4 +417,92 @@ func Fatal(err error, keysAndValues ...any) {
 	logger.Error("unrecoverable error encountered", err, keysAndValues...)
 	globalFlush()
 	os.Exit(1)
+}
+
+// piiKeysAndValues can be used to serialize the keys and values as a JSON map without losing their order,
+// and optionally redacting values.
+type piiKeysAndValues struct {
+	kv                        []any
+	logUsernamesAndGroupNames bool
+}
+
+func (p *piiKeysAndValues) MarshalJSON() ([]byte, error) {
+	var buf []byte
+	var k string
+	var wroteOne bool
+
+	buf = append(buf, '{')
+
+	for i, v := range p.kv {
+		if i%2 == 0 {
+			// Interpret even indices (0, 2, 4, etc.) as a key.
+			// Remember its value for the next loop iteration.
+			k = p.asJSONKey(v)
+		} else {
+			// Interpret odd indices as a value.
+			// Write it using the key from the previous loop iteration.
+			// First write a comma if needed.
+			if wroteOne {
+				buf = append(buf, ',')
+			}
+			buf = append(buf, []byte(k)...)
+			buf = append(buf, ':')
+			buf = append(buf, []byte(p.asJSONValue(v))...)
+			wroteOne = true
+		}
+	}
+
+	buf = append(buf, '}')
+
+	return buf, nil
+}
+
+func (p *piiKeysAndValues) asJSONKey(v any) string {
+	vStr, ok := v.(string)
+	if !ok {
+		// Indicates programmer error that will hopefully be caught by unit tests of usages of Audit().
+		return `"cannotCastKeyNameToString"`
+	}
+	// Encode the string to get proper JSON escaping if needed.
+	b, err := json.Marshal(vStr)
+	if err != nil {
+		// Shouldn't really happen because the argument to Marshal was a string.
+		return `"cannotMarshalKeyNameToJSON"`
+	}
+	return string(b)
+}
+
+func (p *piiKeysAndValues) asJSONValue(v any) string {
+	rt := reflect.TypeOf(v) // note that rt can be nil when v is nil
+	if p.logUsernamesAndGroupNames {
+		// Encode the original value without redacting.
+		switch {
+		case v != nil && rt.Kind() == reflect.Slice && reflect.ValueOf(v).IsNil():
+			// Handle the special case where v is a nil slice by showing it as an empty slice.
+			return "[]"
+		case v != nil && rt.Kind() == reflect.Map && reflect.ValueOf(v).IsNil():
+			// Handle the special case where v is a nil map by showing it as an empty map.
+			return "{}"
+		default:
+			b, err := json.Marshal(v)
+			if err != nil {
+				// Hopefully this would be caught by unit tests of usages of Audit().
+				return `"cannotMarshalValueToJSON"`
+			}
+			return string(b)
+		}
+	} else {
+		// Redact the value.
+		switch {
+		case rt != nil && rt.Kind() == reflect.Slice:
+			// Handle the special case where v is a slice by showing it as a slice with redacted values.
+			return fmt.Sprintf(`["redacted %d values"]`, reflect.ValueOf(v).Len())
+		case rt != nil && rt.Kind() == reflect.Map:
+			// Handle the special case where v is a map by showing it as a map with redacted values.
+			return fmt.Sprintf(`{"redacted": "redacted %d keys"}`, reflect.ValueOf(v).Len())
+		default:
+			// For anything else, just redact it without worrying about the original type.
+			return `"redacted"`
+		}
+	}
 }

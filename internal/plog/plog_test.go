@@ -73,22 +73,57 @@ func TestAudit(t *testing.T) {
 			`),
 		},
 		{
-			name: "with an even number of PII keys and values",
+			name: "with an even number of PII keys and values, nests them under personalInfo and preserves their original order, without redacting PII",
 			run: func(a AuditLogger) {
-				a.Audit("fake event type", &AuditParams{PIIKeysAndValues: []any{"username", "ryan", "groups", []string{"g1", "g2"}, "foo", 42}})
+				a.Audit("fake event type", &AuditParams{PIIKeysAndValues: []any{
+					"username", "ryan",
+					"groups", []string{"g1", "g2"},
+					"int", 42,
+					"float", 42.75,
+					`specialJSONChars"👋\`, `hi"👋\`,
+					"map", map[string]int{"k1": 1, "k2": 2},
+					"empty_list", []any{},
+					"empty_map", map[string]any{},
+					"nil_list", []any(nil),
+					"nil_map", map[string]any(nil),
+					"nil_ptr", (*int)(nil),
+					"nil", nil,
+				}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"foo":42,"groups":["g1","g2"],"username":"ryan"}}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"username":"ryan","groups":["g1","g2"],"int":42,"float":42.75,"specialJSONChars\"👋\\":"hi\"👋\\","map":{"k1":1,"k2":2},"empty_list":[],"empty_map":{},"nil_list":[],"nil_map":{},"nil_ptr":null,"nil":null}}
 			`),
 		},
 		{
 			name:      "with an even number of PII keys and values and PII configured to be redacted",
 			redactPII: true,
 			run: func(a AuditLogger) {
-				a.Audit("fake event type", &AuditParams{PIIKeysAndValues: []any{"username", "ryan", "groups", []string{"g1", "g2"}, "foo", 42}})
+				a.Audit("fake event type", &AuditParams{PIIKeysAndValues: []any{
+					"username", "ryan",
+					"groups", []string{"g1", "g2"},
+					"int", 42,
+					"float", 42.75,
+					`specialJSONChars"👋\`, `hi"👋\`,
+					"map", map[string]int{"k1": 1, "k2": 2},
+					"empty_list", []any{},
+					"empty_map", map[string]any{},
+					"nil_list", []any(nil),
+					"nil_map", map[string]any(nil),
+					"nil_ptr", (*int)(nil),
+					"nil", nil,
+				}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"foo":"redacted","groups":["redacted"],"username":"redacted"}}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"username":"redacted","groups":["redacted 2 values"],"int":"redacted","float":"redacted","specialJSONChars\"👋\\":"redacted","map":{"redacted":"redacted 2 keys"},"empty_list":["redacted 0 values"],"empty_map":{"redacted":"redacted 0 keys"},"nil_list":["redacted 0 values"],"nil_map":{"redacted":"redacted 0 keys"},"nil_ptr":"redacted","nil":"redacted"}}
+			`),
+		},
+		{
+			name: "with an illegal single PII keys and values, quietly ignores it",
+			run: func(a AuditLogger) {
+				a.Audit("fake event type", &AuditParams{PIIKeysAndValues: []any{"foo"}})
+			},
+			want: here.Doc(`
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true}
 			`),
 		},
 		{
@@ -106,7 +141,7 @@ func TestAudit(t *testing.T) {
 				a.Audit("fake event type", &AuditParams{PIIKeysAndValues: []any{42, "foo", "bar", "baz"}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"bar":"baz","cannotCastKeyNameToString":"foo"}}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"cannotCastKeyNameToString":"foo","bar":"baz"}}
 			`),
 		},
 		{
@@ -129,7 +164,7 @@ func TestAudit(t *testing.T) {
 				})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id","sessionID":"fake-session-id","personalInfo":{"bat":14,"groups":["g1","g2"],"username":"ryan"},"foo":42,"bar":"baz"}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id","sessionID":"fake-session-id","personalInfo":{"username":"ryan","groups":["g1","g2"],"bat":14},"foo":42,"bar":"baz"}
 			`),
 		},
 		{
@@ -144,7 +179,7 @@ func TestAudit(t *testing.T) {
 				})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id","sessionID":"fake-session-id","personalInfo":{"bat":"redacted","groups":["redacted"],"username":"redacted"},"foo":42,"bar":"baz"}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id","sessionID":"fake-session-id","personalInfo":{"username":"redacted","groups":["redacted 2 values"],"bat":"redacted"},"foo":42,"bar":"baz"}
 			`),
 		},
 	}

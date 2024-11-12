@@ -329,6 +329,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 		// is stored, so it is possible with an LDAP upstream to store objects and then return an error to
 		// the client anyway (which makes the stored objects useless, but oh well).
 		wantUnnecessaryStoredRecords int
+		wantAuditLogs                func(sessionID string) []testutil.WantedAuditLog
 	}{
 		{
 			name: "happy LDAP login",
@@ -352,6 +353,30 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "some-ldap-idp",
+						"upstreamIDPType":         "ldap",
+						"upstreamIDPResourceName": "some-ldap-idp",
+						"upstreamIDPResourceUID":  "ldap-resource-uid",
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-mapped-ldap-username",
+							"upstreamGroups":   []any{"group1", "group2", "group3"},
+						},
+					}),
+					testutil.WantAuditLog("Session Started", map[string]any{
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "some-mapped-ldap-username",
+							"groups":           []any{"group1", "group2", "group3"},
+							"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
+					}),
+				}
+			},
 		},
 		{
 			name: "happy LDAP login with identity transformations which modify the username and group names",
@@ -380,6 +405,30 @@ func TestPostLoginEndpoint(t *testing.T) {
 				happyLDAPUsernameFromAuthenticator,
 				happyLDAPGroups,
 			),
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "some-ldap-idp",
+						"upstreamIDPType":         "ldap",
+						"upstreamIDPResourceName": "some-ldap-idp",
+						"upstreamIDPResourceUID":  "ldap-resource-uid",
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-mapped-ldap-username",
+							"upstreamGroups":   []any{"group1", "group2", "group3"},
+						},
+					}),
+					testutil.WantAuditLog("Session Started", map[string]any{
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "username_prefix:some-mapped-ldap-username",
+							"groups":           []any{"groups_prefix:group1", "groups_prefix:group2", "groups_prefix:group3"},
+							"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
+					}),
+				}
+			},
 		},
 		{
 			name: "happy LDAP login with dynamic client",
@@ -427,6 +476,30 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
 			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
 			wantDownstreamCustomSessionData:   expectedHappyActiveDirectoryUpstreamCustomSession,
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "some-active-directory-idp",
+						"upstreamIDPType":         "activedirectory",
+						"upstreamIDPResourceName": "some-active-directory-idp",
+						"upstreamIDPResourceUID":  "active-directory-resource-uid",
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-mapped-ldap-username",
+							"upstreamGroups":   []any{"group1", "group2", "group3"},
+						},
+					}),
+					testutil.WantAuditLog("Session Started", map[string]any{
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "some-mapped-ldap-username",
+							"groups":           []any{"group1", "group2", "group3"},
+							"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-active-directory-idp&sub=some-ldap-uid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
+					}),
+				}
+			},
 		},
 		{
 			name: "happy AD login with identity transformations which modify the username and group names",
@@ -1147,7 +1220,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 			rsp := httptest.NewRecorder()
 
-			auditLogger, _ := plog.TestAuditLogger(t)
+			auditLogger, actualAuditLog := plog.TestAuditLogger(t)
 
 			subject := NewPostHandler(downstreamIssuer, tt.idps.BuildFederationDomainIdentityProvidersListerFinder(), oauthHelper, auditLogger)
 
@@ -1165,12 +1238,13 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 			actualLocation := rsp.Header().Get("Location")
 
+			var sessionID string
 			switch {
 			case tt.wantRedirectLocationRegexp != "":
 				// Expecting a success redirect to the client.
 				require.Equal(t, tt.wantBodyString, rsp.Body.String())
 				require.Len(t, rsp.Header().Values("Location"), 1)
-				_ = oidctestutil.RequireAuthCodeRegexpMatch(
+				sessionID = oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					actualLocation,
 					tt.wantRedirectLocationRegexp,
@@ -1206,7 +1280,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 				// Expecting the body of the response to be a html page with a form (for "response_mode=form_post").
 				_, hasLocationHeader := rsp.Header()["Location"]
 				require.False(t, hasLocationHeader)
-				_ = oidctestutil.RequireAuthCodeRegexpMatch(
+				sessionID = oidctestutil.RequireAuthCodeRegexpMatch(
 					t,
 					rsp.Body.String(),
 					tt.wantBodyFormResponseRegexp,
@@ -1229,6 +1303,10 @@ func TestPostLoginEndpoint(t *testing.T) {
 			default:
 				require.Failf(t, "test should have expected a redirect or form body",
 					"actual location was %q", actualLocation)
+			}
+
+			if test.wantAuditLogs != nil {
+				testutil.CompareAuditLogs(t, test.wantAuditLogs(sessionID), actualAuditLog.String())
 			}
 		})
 	}

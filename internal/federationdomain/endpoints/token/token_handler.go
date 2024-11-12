@@ -195,7 +195,7 @@ func upstreamRefresh(
 	auditLogger.Audit(auditevent.IdentityRefreshedFromUpstreamIDP, &plog.AuditParams{
 		ReqCtx:  ctx,
 		Session: accessRequest,
-		KeysAndValues: []any{
+		PIIKeysAndValues: []any{
 			"upstreamUsername", refreshedIdentity.UpstreamUsername,
 			"upstreamGroups", refreshedIdentity.UpstreamGroups,
 		},
@@ -250,7 +250,7 @@ func upstreamRefresh(
 	auditLogger.Audit(auditevent.SessionRefreshed, &plog.AuditParams{
 		ReqCtx:  ctx,
 		Session: accessRequest,
-		KeysAndValues: []any{
+		PIIKeysAndValues: []any{
 			"username", oldTransformedUsername, // not allowed to change above so must be the same as old
 			"groups", refreshedTransformedGroups,
 			"subject", previousIdentity.DownstreamSubject},

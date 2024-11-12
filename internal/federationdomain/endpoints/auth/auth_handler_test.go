@@ -1203,16 +1203,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"upstreamIDPResourceName": "some-password-granting-oidc-idp",
 						"upstreamIDPResourceUID":  "some-password-granting-resource-uid",
 						"upstreamIDPType":         "oidc",
-						"upstreamUsername":        "test-oidc-pinniped-username",
-						"upstreamGroups":          []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						"personalInfo": map[string]any{
+							"upstreamUsername": "test-oidc-pinniped-username",
+							"upstreamGroups":   []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						},
 					}),
 					testutil.WantAuditLog("Session Started", map[string]any{
-						"sessionID":        sessionID,
-						"username":         "test-oidc-pinniped-username",
-						"groups":           []any{"test-pinniped-group-0", "test-pinniped-group-1"},
-						"subject":          "https://my-upstream-issuer.com?idpName=some-password-granting-oidc-idp&sub=abc123-some+guid",
-						"additionalClaims": map[string]any{}, // json: {}
-						"warnings":         []any{},          // json: []
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "test-oidc-pinniped-username",
+							"groups":           []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+							"subject":          "https://my-upstream-issuer.com?idpName=some-password-granting-oidc-idp&sub=abc123-some+guid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
 					}),
 				}
 			},
@@ -1288,8 +1292,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"upstreamIDPResourceName": "some-password-granting-oidc-idp",
 						"upstreamIDPResourceUID":  "some-password-granting-resource-uid",
 						"upstreamIDPType":         "oidc",
-						"upstreamUsername":        "test-oidc-pinniped-username",
-						"upstreamGroups":          []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						"personalInfo": map[string]any{
+							"upstreamUsername": "test-oidc-pinniped-username",
+							"upstreamGroups":   []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						},
 					}),
 					testutil.WantAuditLog("Authentication Rejected By Transforms", map[string]any{
 						"reason": "configured identity policy rejected this authentication: authentication was rejected by a configured policy",
@@ -1409,16 +1415,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"upstreamIDPResourceName": "some-ldap-idp",
 						"upstreamIDPResourceUID":  "ldap-resource-uid",
 						"upstreamIDPType":         "ldap",
-						"upstreamUsername":        "some-ldap-username-from-authenticator",
-						"upstreamGroups":          []any{"group1", "group2", "group3"},
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-ldap-username-from-authenticator",
+							"upstreamGroups":   []any{"group1", "group2", "group3"},
+						},
 					}),
 					testutil.WantAuditLog("Session Started", map[string]any{
-						"sessionID":        sessionID,
-						"username":         "some-ldap-username-from-authenticator",
-						"groups":           []any{"group1", "group2", "group3"},
-						"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid",
-						"additionalClaims": nil,     // json: null
-						"warnings":         []any{}, // json: []
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "some-ldap-username-from-authenticator",
+							"groups":           []any{"group1", "group2", "group3"},
+							"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
 					}),
 				}
 			},
@@ -1479,16 +1489,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"upstreamIDPResourceName": "some-ldap-idp",
 						"upstreamIDPResourceUID":  "ldap-resource-uid",
 						"upstreamIDPType":         "ldap",
-						"upstreamUsername":        "some-ldap-username-from-authenticator",
-						"upstreamGroups":          []any{"group1", "group2", "group3"},
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-ldap-username-from-authenticator",
+							"upstreamGroups":   []any{"group1", "group2", "group3"},
+						},
 					}),
 					testutil.WantAuditLog("Session Started", map[string]any{
-						"sessionID":        sessionID,
-						"username":         "username_prefix:some-ldap-username-from-authenticator",
-						"groups":           []any{"groups_prefix:group1", "groups_prefix:group2", "groups_prefix:group3"},
-						"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid",
-						"additionalClaims": nil,     // json: null
-						"warnings":         []any{}, // json: []
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "username_prefix:some-ldap-username-from-authenticator",
+							"groups":           []any{"groups_prefix:group1", "groups_prefix:group2", "groups_prefix:group3"},
+							"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
 					}),
 				}
 			},
@@ -1794,16 +1808,20 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"upstreamIDPResourceName": "some-active-directory-idp",
 						"upstreamIDPResourceUID":  "active-directory-resource-uid",
 						"upstreamIDPType":         "activedirectory",
-						"upstreamUsername":        "some-ldap-username-from-authenticator",
-						"upstreamGroups":          []any{"group1", "group2", "group3"},
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-ldap-username-from-authenticator",
+							"upstreamGroups":   []any{"group1", "group2", "group3"},
+						},
 					}),
 					testutil.WantAuditLog("Session Started", map[string]any{
-						"sessionID":        sessionID,
-						"username":         "some-ldap-username-from-authenticator",
-						"groups":           []any{"group1", "group2", "group3"},
-						"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-active-directory-idp&sub=some-ldap-uid",
-						"additionalClaims": nil,     // json: null
-						"warnings":         []any{}, // json: []
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "some-ldap-username-from-authenticator",
+							"groups":           []any{"group1", "group2", "group3"},
+							"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-active-directory-idp&sub=some-ldap-uid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
 					}),
 				}
 			},

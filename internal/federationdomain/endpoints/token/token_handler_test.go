@@ -2340,18 +2340,22 @@ func TestRefreshGrant(t *testing.T) {
 								},
 							}),
 							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
-								"sessionID":        sessionID,
-								"upstreamGroups":   []any{},
-								"upstreamUsername": "some-username",
+								"sessionID": sessionID,
+								"personalInfo": map[string]any{
+									"upstreamGroups":   []any{},
+									"upstreamUsername": "some-username",
+								},
 							}),
 							testutil.WantAuditLog("Session Refreshed", map[string]any{
 								"sessionID": sessionID,
-								"username":  "some-username",
-								"groups": []any{
-									"group1",
-									"groups2",
+								"personalInfo": map[string]any{
+									"username": "some-username",
+									"groups": []any{
+										"group1",
+										"groups2",
+									},
+									"subject": "https://issuer?sub=some-subject",
 								},
-								"subject": "https://issuer?sub=some-subject",
 							}),
 						}
 					},
@@ -2533,9 +2537,11 @@ func TestRefreshGrant(t *testing.T) {
 								},
 							}),
 							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
-								"sessionID":        sessionID,
-								"upstreamGroups":   []any{},
-								"upstreamUsername": "some-username",
+								"sessionID": sessionID,
+								"personalInfo": map[string]any{
+									"upstreamGroups":   []any{},
+									"upstreamUsername": "some-username",
+								},
 							}),
 							testutil.WantAuditLog("Authentication Rejected By Transforms", map[string]any{
 								"sessionID": sessionID,

@@ -134,9 +134,11 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	r.auditLogger.Audit(auditevent.TokenCredentialRequest, &plog.AuditParams{
 		ReqCtx: ctx,
-		KeysAndValues: []any{
+		PIIKeysAndValues: []any{
 			"username", userInfo.GetName(),
 			"groups", userInfo.GetGroups(),
+		},
+		KeysAndValues: []any{
 			"authenticated", true,
 			"expires", expires.Format(time.RFC3339),
 		},

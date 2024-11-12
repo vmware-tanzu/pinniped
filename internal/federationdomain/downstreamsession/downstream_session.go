@@ -52,13 +52,15 @@ func NewPinnipedSession(
 
 	auditLogger.Audit(auditevent.IdentityFromUpstreamIDP, &plog.AuditParams{
 		ReqCtx: ctx,
+		PIIKeysAndValues: []any{
+			"upstreamUsername", c.UpstreamIdentity.UpstreamUsername,
+			"upstreamGroups", c.UpstreamIdentity.UpstreamGroups,
+		},
 		KeysAndValues: []any{
 			"upstreamIDPDisplayName", c.IdentityProvider.GetDisplayName(),
 			"upstreamIDPType", c.IdentityProvider.GetSessionProviderType(),
 			"upstreamIDPResourceName", c.IdentityProvider.GetProvider().GetResourceName(),
 			"upstreamIDPResourceUID", c.IdentityProvider.GetProvider().GetResourceUID(),
-			"upstreamUsername", c.UpstreamIdentity.UpstreamUsername,
-			"upstreamGroups", c.UpstreamIdentity.UpstreamGroups,
 		},
 	})
 
@@ -118,11 +120,13 @@ func NewPinnipedSession(
 	auditLogger.Audit(auditevent.SessionStarted, &plog.AuditParams{
 		ReqCtx:  ctx,
 		Session: c.SessionIDGetter,
-		KeysAndValues: []any{
+		PIIKeysAndValues: []any{
 			"username", downstreamUsername,
 			"groups", downstreamGroups,
 			"subject", c.UpstreamIdentity.DownstreamSubject,
 			"additionalClaims", c.UpstreamLoginExtras.DownstreamAdditionalClaims,
+		},
+		KeysAndValues: []any{
 			"warnings", c.UpstreamLoginExtras.Warnings,
 		},
 	})

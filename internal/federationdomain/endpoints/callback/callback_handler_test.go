@@ -290,16 +290,20 @@ func TestCallbackEndpoint(t *testing.T) {
 						"upstreamIDPType":         "oidc",
 						"upstreamIDPResourceName": "upstream-oidc-idp-name",
 						"upstreamIDPResourceUID":  "upstream-oidc-resource-uid",
-						"upstreamUsername":        "test-pinniped-username",
-						"upstreamGroups":          []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						"personalInfo": map[string]any{
+							"upstreamUsername": "test-pinniped-username",
+							"upstreamGroups":   []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						},
 					}),
 					testutil.WantAuditLog("Session Started", map[string]any{
-						"sessionID":        sessionID,
-						"username":         "test-pinniped-username",
-						"groups":           []any{"test-pinniped-group-0", "test-pinniped-group-1"},
-						"subject":          "https://my-upstream-issuer.com?idpName=upstream-oidc-idp-name&sub=abc123-some+guid",
-						"additionalClaims": map[string]any{}, // json: {}
-						"warnings":         []any{},          // json: []
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "test-pinniped-username",
+							"groups":           []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+							"subject":          "https://my-upstream-issuer.com?idpName=upstream-oidc-idp-name&sub=abc123-some+guid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
 					}),
 				}
 			},
@@ -344,16 +348,20 @@ func TestCallbackEndpoint(t *testing.T) {
 						"upstreamIDPType":         "github",
 						"upstreamIDPResourceName": "upstream-github-idp-name",
 						"upstreamIDPResourceUID":  "upstream-github-idp-resource-uid",
-						"upstreamUsername":        "some-github-login",
-						"upstreamGroups":          []any{"org1/team1", "org2/team2"},
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-github-login",
+							"upstreamGroups":   []any{"org1/team1", "org2/team2"},
+						},
 					}),
 					testutil.WantAuditLog("Session Started", map[string]any{
-						"sessionID":        sessionID,
-						"username":         "some-github-login",
-						"groups":           []any{"org1/team1", "org2/team2"},
-						"subject":          "https://github.com?idpName=upstream-github-idp-name&sub=some-github-login",
-						"additionalClaims": nil,     // json: null
-						"warnings":         []any{}, // json: []
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "some-github-login",
+							"groups":           []any{"org1/team1", "org2/team2"},
+							"subject":          "https://github.com?idpName=upstream-github-idp-name&sub=some-github-login",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
 					}),
 				}
 			},
@@ -1788,8 +1796,10 @@ func TestCallbackEndpoint(t *testing.T) {
 						"upstreamIDPType":         "oidc",
 						"upstreamIDPResourceName": "upstream-oidc-idp-name",
 						"upstreamIDPResourceUID":  "upstream-oidc-resource-uid",
-						"upstreamUsername":        "test-pinniped-username",
-						"upstreamGroups":          []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						"personalInfo": map[string]any{
+							"upstreamUsername": "test-pinniped-username",
+							"upstreamGroups":   []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						},
 					}),
 					testutil.WantAuditLog("Authentication Rejected By Transforms", map[string]any{
 						"reason": "configured identity policy rejected this authentication: authentication was rejected by a configured policy",
@@ -1821,8 +1831,10 @@ func TestCallbackEndpoint(t *testing.T) {
 						"upstreamIDPType":         "github",
 						"upstreamIDPResourceName": "upstream-github-idp-name",
 						"upstreamIDPResourceUID":  "upstream-github-idp-resource-uid",
-						"upstreamUsername":        "some-github-login",
-						"upstreamGroups":          []any{"org1/team1", "org2/team2"},
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-github-login",
+							"upstreamGroups":   []any{"org1/team1", "org2/team2"},
+						},
 					}),
 					testutil.WantAuditLog("Authentication Rejected By Transforms", map[string]any{
 						"reason": "configured identity policy rejected this authentication: authentication was rejected by a configured policy",

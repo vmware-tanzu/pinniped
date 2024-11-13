@@ -41,8 +41,8 @@ func TestAudit(t *testing.T) {
 				a.Audit("fake event type 2", &AuditParams{})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type 1","auditEvent":true}
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type 2","auditEvent":true}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func1","message":"fake event type 1","auditEvent":true}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func1","message":"fake event type 2","auditEvent":true}
 			`),
 		},
 		{
@@ -51,7 +51,7 @@ func TestAudit(t *testing.T) {
 				a.Audit("fake event type", &AuditParams{ReqCtx: context.Background()})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func2","message":"fake event type","auditEvent":true}
 			`),
 		},
 		{
@@ -60,7 +60,7 @@ func TestAudit(t *testing.T) {
 				a.Audit("fake event type", &AuditParams{ReqCtx: fakeReqContext})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id"}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func3","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id"}
 			`),
 		},
 		{
@@ -69,7 +69,7 @@ func TestAudit(t *testing.T) {
 				a.Audit("fake event type", &AuditParams{Session: &fakeSessionGetter{}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"sessionID":"fake-session-id"}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func4","message":"fake event type","auditEvent":true,"sessionID":"fake-session-id"}
 			`),
 		},
 		{
@@ -91,7 +91,7 @@ func TestAudit(t *testing.T) {
 				}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"username":"ryan","groups":["g1","g2"],"int":42,"float":42.75,"specialJSONChars\"👋\\":"hi\"👋\\","map":{"k1":1,"k2":2},"empty_list":[],"empty_map":{},"nil_list":[],"nil_map":{},"nil_ptr":null,"nil":null}}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func5","message":"fake event type","auditEvent":true,"personalInfo":{"username":"ryan","groups":["g1","g2"],"int":42,"float":42.75,"specialJSONChars\"👋\\":"hi\"👋\\","map":{"k1":1,"k2":2},"empty_list":[],"empty_map":{},"nil_list":[],"nil_map":{},"nil_ptr":null,"nil":null}}
 			`),
 		},
 		{
@@ -114,7 +114,7 @@ func TestAudit(t *testing.T) {
 				}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"username":"redacted","groups":["redacted 2 values"],"int":"redacted","float":"redacted","specialJSONChars\"👋\\":"redacted","map":{"redacted":"redacted 2 keys"},"empty_list":["redacted 0 values"],"empty_map":{"redacted":"redacted 0 keys"},"nil_list":["redacted 0 values"],"nil_map":{"redacted":"redacted 0 keys"},"nil_ptr":"redacted","nil":"redacted"}}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func6","message":"fake event type","auditEvent":true,"personalInfo":{"username":"redacted","groups":["redacted 2 values"],"int":"redacted","float":"redacted","specialJSONChars\"👋\\":"redacted","map":{"redacted":"redacted 2 keys"},"empty_list":["redacted 0 values"],"empty_map":{"redacted":"redacted 0 keys"},"nil_list":["redacted 0 values"],"nil_map":{"redacted":"redacted 0 keys"},"nil_ptr":"redacted","nil":"redacted"}}
 			`),
 		},
 		{
@@ -123,7 +123,7 @@ func TestAudit(t *testing.T) {
 				a.Audit("fake event type", &AuditParams{PIIKeysAndValues: []any{"foo"}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func7","message":"fake event type","auditEvent":true}
 			`),
 		},
 		{
@@ -132,7 +132,7 @@ func TestAudit(t *testing.T) {
 				a.Audit("fake event type", &AuditParams{PIIKeysAndValues: []any{"foo", 42, "bar"}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"foo":42}}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func8","message":"fake event type","auditEvent":true,"personalInfo":{"foo":42}}
 			`),
 		},
 		{
@@ -141,7 +141,7 @@ func TestAudit(t *testing.T) {
 				a.Audit("fake event type", &AuditParams{PIIKeysAndValues: []any{42, "foo", "bar", "baz"}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"personalInfo":{"cannotCastKeyNameToString":"foo","bar":"baz"}}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func9","message":"fake event type","auditEvent":true,"personalInfo":{"cannotCastKeyNameToString":"foo","bar":"baz"}}
 			`),
 		},
 		{
@@ -150,7 +150,7 @@ func TestAudit(t *testing.T) {
 				a.Audit("fake event type", &AuditParams{KeysAndValues: []any{"foo", 42, "bar", "baz"}})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"foo":42,"bar":"baz"}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func10","message":"fake event type","auditEvent":true,"foo":42,"bar":"baz"}
 			`),
 		},
 		{
@@ -164,7 +164,7 @@ func TestAudit(t *testing.T) {
 				})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id","sessionID":"fake-session-id","personalInfo":{"username":"ryan","groups":["g1","g2"],"bat":14},"foo":42,"bar":"baz"}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func11","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id","sessionID":"fake-session-id","personalInfo":{"username":"ryan","groups":["g1","g2"],"bat":14},"foo":42,"bar":"baz"}
 			`),
 		},
 		{
@@ -179,7 +179,7 @@ func TestAudit(t *testing.T) {
 				})
 			},
 			want: here.Doc(`
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).Audit","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id","sessionID":"fake-session-id","personalInfo":{"username":"redacted","groups":["redacted 2 values"],"bat":"redacted"},"foo":42,"bar":"baz"}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog_test.go:<line>$plog.TestAudit.func12","message":"fake event type","auditEvent":true,"auditID":"fake-audit-id","sessionID":"fake-session-id","personalInfo":{"username":"redacted","groups":["redacted 2 values"],"bat":"redacted"},"foo":42,"bar":"baz"}
 			`),
 		},
 	}

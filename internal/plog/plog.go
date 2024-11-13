@@ -182,7 +182,7 @@ func (a *auditLogger) Audit(msg auditevent.Message, p *AuditParams) {
 func (p pLogger) audit(msg string, keysAndValues ...any) {
 	// Always print log message (klogLevelWarning cannot be suppressed by configuration),
 	// and always use the Info function because audit logs are not warnings or errors.
-	p.logr().V(klogLevelWarning).WithCallDepth(p.depth+1).Info(msg, keysAndValues...)
+	p.logr().V(klogLevelWarning).WithCallDepth(p.depth+2).Info(msg, keysAndValues...)
 }
 
 // Error logs show in the pod log output as `"level":"error","message":"some error msg"`

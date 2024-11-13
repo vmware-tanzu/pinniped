@@ -218,7 +218,6 @@ func TestAuditRequestParams(t *testing.T) {
 					"baz": []string{"baz1", "baz2"},
 				}
 				req := httptest.NewRequestWithContext(context.Background(), "GET", "/?"+params.Encode(), nil)
-				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
 				return req
 			},
 			paramsSafeToLog: sets.New("foo"),
@@ -234,7 +233,6 @@ func TestAuditRequestParams(t *testing.T) {
 					"baz": []string{"baz1", "baz2"},
 				}
 				req := httptest.NewRequestWithContext(context.Background(), "POST", "/", strings.NewReader(params.Encode()))
-				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				return req
 			},
@@ -247,7 +245,6 @@ func TestAuditRequestParams(t *testing.T) {
 			name: "get request with bad form",
 			req: func() *http.Request {
 				req := httptest.NewRequestWithContext(context.Background(), "GET", "/?invalid;;;form", nil)
-				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
 				return req
 			},
 			paramsSafeToLog: sets.New("foo"),
@@ -263,7 +260,6 @@ func TestAuditRequestParams(t *testing.T) {
 			name: "post request with bad urlencoded form in body",
 			req: func() *http.Request {
 				req := httptest.NewRequestWithContext(context.Background(), "POST", "/", strings.NewReader("invalid;;;form"))
-				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				return req
 			},
@@ -280,7 +276,6 @@ func TestAuditRequestParams(t *testing.T) {
 			name: "post request with bad multipart form in body",
 			req: func() *http.Request {
 				req := httptest.NewRequestWithContext(context.Background(), "POST", "/", strings.NewReader("this is not a valid multipart form"))
-				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
 				req.Header.Set("Content-Type", "multipart/form-data")
 				return req
 			},
@@ -301,7 +296,10 @@ func TestAuditRequestParams(t *testing.T) {
 
 			l, actualAuditLogs := TestAuditLogger(t)
 
-			rawErr := l.AuditRequestParams(test.req(), test.paramsSafeToLog)
+			req := test.req()
+			req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
+
+			rawErr := l.AuditRequestParams(req, test.paramsSafeToLog)
 
 			if test.wantErr == nil {
 				require.NoError(t, rawErr)

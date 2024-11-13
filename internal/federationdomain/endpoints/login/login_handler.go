@@ -6,6 +6,8 @@ package login
 import (
 	"net/http"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
 	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/endpoints/login/loginhtml"
@@ -25,6 +27,13 @@ type HandlerFunc func(
 	decodedState *oidc.UpstreamStateParamData,
 ) error
 
+func paramsSafeToLog() sets.Set[string] {
+	return sets.New[string](
+		// This param is sometimes added by the POST login handler when redirecting back to the GET login handler.
+		"err",
+	)
+}
+
 // NewHandler returns a http.Handler that serves the login endpoint for IDPs that don't have their own web UI for login.
 //
 // This handler takes care of the shared concerns between the GET and POST methods of the login endpoint:
@@ -43,6 +52,11 @@ func NewHandler(
 	auditLogger plog.AuditLogger,
 ) http.Handler {
 	loginHandler := httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		if err := auditLogger.AuditRequestParams(r, paramsSafeToLog()); err != nil {
+			plog.DebugErr("error parsing callback request params", err)
+			return httperr.New(http.StatusBadRequest, "error parsing request params")
+		}
+
 		var handler HandlerFunc
 		switch r.Method {
 		case http.MethodGet:

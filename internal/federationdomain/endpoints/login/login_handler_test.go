@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"go.pinniped.dev/internal/auditid"
+	"go.pinniped.dev/internal/federationdomain/endpoints/loginurl"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/httperr"
@@ -134,7 +135,11 @@ func TestLoginEndpoint(t *testing.T) {
 			wantContentType: htmlContentType,
 			wantBody:        "Method Not Allowed: PUT (try GET or POST)\n",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded) []testutil.WantedAuditLog {
-				return []testutil.WantedAuditLog{}
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"state": "redacted"},
+					}),
+				}
 			},
 		},
 		{
@@ -200,7 +205,11 @@ func TestLoginEndpoint(t *testing.T) {
 			wantContentType: htmlContentType,
 			wantBody:        "Bad Request: state param not found\n",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded) []testutil.WantedAuditLog {
-				return []testutil.WantedAuditLog{}
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{},
+					}),
+				}
 			},
 		},
 		{
@@ -296,6 +305,17 @@ func TestLoginEndpoint(t *testing.T) {
 			wantBody:        "Bad Request: not a supported upstream IDP type for this endpoint: \"oidc\"\n",
 		},
 		{
+			name:   "GET request with invalid form",
+			method: http.MethodGet,
+			path: newRequestPath().WithState(
+				happyUpstreamStateParam().WithUpstreamIDPType("oidc").Build(t, happyStateCodec),
+			).String() + "&invalid;;param",
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error parsing request params\n",
+		},
+		{
 			name:   "POST request when upstream IDP type in state param is not supported by this endpoint",
 			method: http.MethodPost,
 			path: newRequestPath().WithState(
@@ -331,6 +351,27 @@ func TestLoginEndpoint(t *testing.T) {
 			wantDecodedState: expectedHappyDecodedUpstreamStateParam(),
 		},
 		{
+			name:             "happy GET request with err param which can be set by the real POST handler on redirects back to the GET handler",
+			method:           http.MethodGet,
+			path:             happyPathWithState + "&" + loginurl.ErrParamName + "=" + string(loginurl.ShowBadUserPassErr),
+			csrfCookie:       happyCSRFCookie,
+			wantStatus:       http.StatusOK,
+			wantContentType:  htmlContentType,
+			wantBody:         happyGetResult,
+			wantEncodedState: happyState,
+			wantDecodedState: expectedHappyDecodedUpstreamStateParam(),
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"state": "redacted", "err": "login_error"},
+					}),
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+				}
+			},
+		},
+		{
 			name:             "happy GET request for LDAP upstream",
 			method:           http.MethodGet,
 			path:             happyPathWithState,
@@ -342,6 +383,9 @@ func TestLoginEndpoint(t *testing.T) {
 			wantDecodedState: expectedHappyDecodedUpstreamStateParam(),
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"state": "redacted"},
+					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
@@ -360,6 +404,9 @@ func TestLoginEndpoint(t *testing.T) {
 			wantDecodedState: expectedHappyDecodedUpstreamStateParam(),
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"state": "redacted"},
+					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
@@ -378,6 +425,9 @@ func TestLoginEndpoint(t *testing.T) {
 			wantDecodedState: expectedHappyDecodedUpstreamStateParamForActiveDirectory(),
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"state": "redacted"},
+					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
@@ -396,6 +446,9 @@ func TestLoginEndpoint(t *testing.T) {
 			wantDecodedState: expectedHappyDecodedUpstreamStateParamForActiveDirectory(),
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"state": "redacted"},
+					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),

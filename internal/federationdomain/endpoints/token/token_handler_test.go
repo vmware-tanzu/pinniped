@@ -2961,6 +2961,41 @@ func TestRefreshGrant(t *testing.T) {
 						{Text: `User "some-username" has been added to the following groups: ["new-group1" "new-group2" "new-group3"]`},
 						{Text: `User "some-username" has been removed from the following groups: ["group1" "groups2"]`},
 					},
+					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"params": map[string]any{
+									"client_id":     "pinniped-cli",
+									"grant_type":    "refresh_token",
+									"refresh_token": "redacted",
+									"scope":         "openid",
+								},
+							}),
+							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
+								"sessionID": sessionID,
+								"personalInfo": map[string]any{
+									"upstreamGroups": []any{
+										"new-group1",
+										"new-group2",
+										"new-group3",
+									},
+									"upstreamUsername": "some-username",
+								},
+							}),
+							testutil.WantAuditLog("Session Refreshed", map[string]any{
+								"sessionID": sessionID,
+								"personalInfo": map[string]any{
+									"username": "some-username",
+									"groups": []any{
+										"new-group1",
+										"new-group2",
+										"new-group3",
+									},
+									"subject": "https://issuer?sub=some-subject",
+								},
+							}),
+						}
+					},
 				},
 			},
 		},

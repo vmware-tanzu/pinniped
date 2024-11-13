@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # For running the GitHub CLI.
-FROM debian:12.7-slim AS builder
+FROM debian:12.8-slim AS builder
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 

@@ -3,12 +3,6 @@
 
 package auditevent
 
-import (
-	"net/url"
-
-	"k8s.io/apimachinery/pkg/util/sets"
-)
-
 type Message string
 
 const (
@@ -32,41 +26,3 @@ const (
 	TokenCredentialRequestUnsupportedUserInfo  Message = "TokenCredentialRequest Unsupported UserInfo"  //nolint:gosec // this is not a credential
 	IncorrectUsernameOrPassword                Message = "Incorrect Username Or Password"               //nolint:gosec // this is not a credential
 )
-
-// SanitizeParams can be used to redact all params not included in the allowedKeys set.
-// Useful when audit logging HTTPRequestParameters events.
-func SanitizeParams(inputParams url.Values, allowedKeys sets.Set[string]) []any {
-	params := make(map[string]string)
-	multiValueParams := make(url.Values)
-
-	transform := func(key, value string) string {
-		if !allowedKeys.Has(key) {
-			return "redacted"
-		}
-
-		unescape, err := url.QueryUnescape(value)
-		if err != nil {
-			// ignore these errors and just use the original query parameter
-			unescape = value
-		}
-		return unescape
-	}
-
-	for key := range inputParams {
-		for i, p := range inputParams[key] {
-			transformed := transform(key, p)
-			if i == 0 {
-				params[key] = transformed
-			}
-
-			if len(inputParams[key]) > 1 {
-				multiValueParams[key] = append(multiValueParams[key], transformed)
-			}
-		}
-	}
-
-	if len(multiValueParams) > 0 {
-		return []any{"params", params, "multiValueParams", multiValueParams}
-	}
-	return []any{"params", params}
-}

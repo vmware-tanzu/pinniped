@@ -19,12 +19,12 @@ import (
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	"go.pinniped.dev/internal/auditid"
 	"go.pinniped.dev/internal/authenticators"
 	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
-	"go.pinniped.dev/internal/federationdomain/requestlogger"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
@@ -1342,7 +1342,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			if tt.reqURIQuery != nil {
 				req.URL.RawQuery = tt.reqURIQuery.Encode()
 			}
-			req, _ = requestlogger.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
+			req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
 
 			rsp := httptest.NewRecorder()
 

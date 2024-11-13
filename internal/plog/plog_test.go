@@ -6,15 +6,21 @@ package plog
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
+	"github.com/ory/fosite"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/audit"
 
+	"go.pinniped.dev/internal/auditid"
 	"go.pinniped.dev/internal/here"
 )
 
@@ -190,6 +196,125 @@ func TestAudit(t *testing.T) {
 
 			l, actualAuditLogs := TestAuditLoggerWithConfig(t, AuditLogConfig{LogUsernamesAndGroupNames: !test.redactPII})
 			test.run(l)
+
+			require.Equal(t, strings.TrimSpace(test.want), strings.TrimSpace(actualAuditLogs.String()))
+		})
+	}
+}
+
+func TestAuditRequestParams(t *testing.T) {
+	tests := []struct {
+		name            string
+		req             func() *http.Request
+		paramsSafeToLog sets.Set[string]
+		want            string
+		wantErr         *fosite.RFC6749Error
+	}{
+		{
+			name: "get request",
+			req: func() *http.Request {
+				params := url.Values{
+					"foo": []string{"bar1", "bar2"},
+					"baz": []string{"baz1", "baz2"},
+				}
+				req := httptest.NewRequestWithContext(context.Background(), "GET", "/?"+params.Encode(), nil)
+				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
+				return req
+			},
+			paramsSafeToLog: sets.New("foo"),
+			want: here.Doc(`
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).AuditRequestParams","message":"HTTP Request Parameters","auditEvent":true,"auditID":"some-audit-id","params":{"baz":"redacted","foo":"bar1"},"multiValueParams":{"baz":["redacted","redacted"],"foo":["bar1","bar2"]}}
+			`),
+		},
+		{
+			name: "post request with urlencoded form in body",
+			req: func() *http.Request {
+				params := url.Values{
+					"foo": []string{"bar1", "bar2"},
+					"baz": []string{"baz1", "baz2"},
+				}
+				req := httptest.NewRequestWithContext(context.Background(), "POST", "/", strings.NewReader(params.Encode()))
+				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				return req
+			},
+			paramsSafeToLog: sets.New("foo"),
+			want: here.Doc(`
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.(*auditLogger).AuditRequestParams","message":"HTTP Request Parameters","auditEvent":true,"auditID":"some-audit-id","params":{"baz":"redacted","foo":"bar1"},"multiValueParams":{"baz":["redacted","redacted"],"foo":["bar1","bar2"]}}
+			`),
+		},
+		{
+			name: "get request with bad form",
+			req: func() *http.Request {
+				req := httptest.NewRequestWithContext(context.Background(), "GET", "/?invalid;;;form", nil)
+				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
+				return req
+			},
+			paramsSafeToLog: sets.New("foo"),
+			wantErr: &fosite.RFC6749Error{
+				CodeField:        fosite.ErrInvalidRequest.CodeField,
+				ErrorField:       fosite.ErrInvalidRequest.ErrorField,
+				DescriptionField: fosite.ErrInvalidRequest.DescriptionField,
+				HintField:        "Unable to parse form params, make sure to send a properly formatted query params or form request body.",
+				DebugField:       "invalid semicolon separator in query",
+			},
+		},
+		{
+			name: "post request with bad urlencoded form in body",
+			req: func() *http.Request {
+				req := httptest.NewRequestWithContext(context.Background(), "POST", "/", strings.NewReader("invalid;;;form"))
+				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				return req
+			},
+			paramsSafeToLog: sets.New("foo"),
+			wantErr: &fosite.RFC6749Error{
+				CodeField:        fosite.ErrInvalidRequest.CodeField,
+				ErrorField:       fosite.ErrInvalidRequest.ErrorField,
+				DescriptionField: fosite.ErrInvalidRequest.DescriptionField,
+				HintField:        "Unable to parse form params, make sure to send a properly formatted query params or form request body.",
+				DebugField:       "invalid semicolon separator in query",
+			},
+		},
+		{
+			name: "post request with bad multipart form in body",
+			req: func() *http.Request {
+				req := httptest.NewRequestWithContext(context.Background(), "POST", "/", strings.NewReader("this is not a valid multipart form"))
+				req, _ = auditid.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
+				req.Header.Set("Content-Type", "multipart/form-data")
+				return req
+			},
+			paramsSafeToLog: sets.New("foo"),
+			wantErr: &fosite.RFC6749Error{
+				CodeField:        fosite.ErrInvalidRequest.CodeField,
+				ErrorField:       fosite.ErrInvalidRequest.ErrorField,
+				DescriptionField: fosite.ErrInvalidRequest.DescriptionField,
+				HintField:        "Unable to parse multipart HTTP body, make sure to send a properly formatted form request body.",
+				DebugField:       "no multipart boundary param in Content-Type",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			l, actualAuditLogs := TestAuditLogger(t)
+
+			rawErr := l.AuditRequestParams(test.req(), test.paramsSafeToLog)
+
+			if test.wantErr == nil {
+				require.NoError(t, rawErr)
+			} else {
+				require.Error(t, rawErr)
+				err, ok := rawErr.(*fosite.RFC6749Error)
+				require.True(t, ok)
+				require.Equal(t, test.wantErr.CodeField, err.CodeField)
+				require.Equal(t, test.wantErr.ErrorField, err.ErrorField)
+				require.Equal(t, test.wantErr.DescriptionField, err.DescriptionField)
+				require.Equal(t, test.wantErr.HintField, err.HintField)
+				require.Equal(t, test.wantErr.DebugField, err.DebugField)
+			}
 
 			require.Equal(t, strings.TrimSpace(test.want), strings.TrimSpace(actualAuditLogs.String()))
 		})
@@ -564,4 +689,163 @@ func testAllPlogMethods(l Logger) {
 	l.TraceErr("te", testErr, "panda", 2)
 	l.All("all", "panda", 2)
 	l.Always("always", "panda", 2)
+}
+
+func TestSanitizeRequestParams(t *testing.T) {
+	tests := []struct {
+		name        string
+		params      url.Values
+		allowedKeys sets.Set[string]
+		want        []any
+	}{
+		{
+			name:        "nil values",
+			params:      nil,
+			allowedKeys: nil,
+			want: []any{
+				"params",
+				map[string]string{},
+			},
+		},
+		{
+			name:        "empty values",
+			params:      url.Values{},
+			allowedKeys: nil,
+			want: []any{
+				"params",
+				map[string]string{},
+			},
+		},
+		{
+			name:        "all allowed values",
+			params:      url.Values{"foo": []string{"a", "b", "c"}, "bar": []string{"d", "e", "f"}},
+			allowedKeys: sets.New("foo", "bar"),
+			want: []any{
+				"params",
+				map[string]string{
+					"bar": "d",
+					"foo": "a",
+				},
+				"multiValueParams",
+				url.Values{
+					"bar": []string{"d", "e", "f"},
+					"foo": []string{"a", "b", "c"},
+				},
+			},
+		},
+		{
+			name:        "all allowed values with single values",
+			params:      url.Values{"foo": []string{"a"}, "bar": []string{"d"}},
+			allowedKeys: sets.New("foo", "bar"),
+			want: []any{
+				"params",
+				map[string]string{
+					"foo": "a",
+					"bar": "d",
+				},
+			},
+		},
+		{
+			name:        "some allowed values",
+			params:      url.Values{"foo": []string{"a", "b", "c"}, "bar": []string{"d", "e", "f"}},
+			allowedKeys: sets.New("foo"),
+			want: []any{
+				"params",
+				map[string]string{
+					"bar": "redacted",
+					"foo": "a",
+				},
+				"multiValueParams",
+				url.Values{
+					"bar": []string{"redacted", "redacted", "redacted"},
+					"foo": []string{"a", "b", "c"},
+				},
+			},
+		},
+		{
+			name:        "some allowed values with single values",
+			params:      url.Values{"foo": []string{"a"}, "bar": []string{"d"}},
+			allowedKeys: sets.New("foo"),
+			want: []any{
+				"params",
+				map[string]string{
+					"bar": "redacted",
+					"foo": "a",
+				},
+			},
+		},
+		{
+			name:        "no allowed values",
+			params:      url.Values{"foo": []string{"a", "b", "c"}, "bar": []string{"d", "e", "f"}},
+			allowedKeys: sets.New[string](),
+			want: []any{
+				"params",
+				map[string]string{
+					"bar": "redacted",
+					"foo": "redacted",
+				},
+				"multiValueParams",
+				url.Values{
+					"bar": {"redacted", "redacted", "redacted"},
+					"foo": {"redacted", "redacted", "redacted"},
+				},
+			},
+		},
+		{
+			name:        "nil allowed values",
+			params:      url.Values{"foo": []string{"a", "b", "c"}, "bar": []string{"d", "e", "f"}},
+			allowedKeys: nil,
+			want: []any{
+				"params",
+				map[string]string{
+					"bar": "redacted",
+					"foo": "redacted",
+				},
+				"multiValueParams",
+				url.Values{
+					"bar": {"redacted", "redacted", "redacted"},
+					"foo": {"redacted", "redacted", "redacted"},
+				},
+			},
+		},
+		{
+			name: "url decodes allowed values",
+			params: url.Values{
+				"foo": []string{"a%3Ab", "c", "urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange"},
+				"bar": []string{"d", "e", "f"},
+			},
+			allowedKeys: sets.New("foo"),
+			want: []any{
+				"params",
+				map[string]string{
+					"bar": "redacted",
+					"foo": "a:b",
+				},
+				"multiValueParams",
+				url.Values{
+					"bar": {"redacted", "redacted", "redacted"},
+					"foo": {"a:b", "c", "urn:ietf:params:oauth:grant-type:token-exchange"},
+				},
+			},
+		},
+		{
+			name: "ignores url decode errors",
+			params: url.Values{
+				"bad_encoding": []string{"%.."},
+			},
+			allowedKeys: sets.New("bad_encoding"),
+			want: []any{
+				"params",
+				map[string]string{
+					"bad_encoding": "%..",
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// This comparison should require the exact order
+			require.Equal(t, test.want, sanitizeRequestParams(test.params, test.allowedKeys))
+		})
+	}
 }

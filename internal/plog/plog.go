@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"reflect"
 	"slices"
@@ -205,7 +206,7 @@ func (a *auditLogger) AuditRequestParams(r *http.Request, reqParamsSafeToLog set
 
 	a.Audit(auditevent.HTTPRequestParameters, &AuditParams{
 		ReqCtx:        r.Context(),
-		KeysAndValues: auditevent.SanitizeParams(r.Form, reqParamsSafeToLog),
+		KeysAndValues: sanitizeRequestParams(r.Form, reqParamsSafeToLog),
 	})
 
 	return nil
@@ -538,4 +539,42 @@ func (p *piiKeysAndValues) asJSONValue(v any) string {
 			return `"redacted"`
 		}
 	}
+}
+
+// sanitizeRequestParams can be used to redact all params not included in the allowedKeys set.
+// Useful when audit logging HTTPRequestParameters events.
+func sanitizeRequestParams(inputParams url.Values, allowedKeys sets.Set[string]) []any {
+	params := make(map[string]string)
+	multiValueParams := make(url.Values)
+
+	transform := func(key, value string) string {
+		if !allowedKeys.Has(key) {
+			return "redacted"
+		}
+
+		unescape, err := url.QueryUnescape(value)
+		if err != nil {
+			// ignore these errors and just use the original query parameter
+			unescape = value
+		}
+		return unescape
+	}
+
+	for key := range inputParams {
+		for i, p := range inputParams[key] {
+			transformed := transform(key, p)
+			if i == 0 {
+				params[key] = transformed
+			}
+
+			if len(inputParams[key]) > 1 {
+				multiValueParams[key] = append(multiValueParams[key], transformed)
+			}
+		}
+	}
+
+	if len(multiValueParams) > 0 {
+		return []any{"params", params, "multiValueParams", multiValueParams}
+	}
+	return []any{"params", params}
 }

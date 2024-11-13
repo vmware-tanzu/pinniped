@@ -22,10 +22,10 @@ import (
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	"go.pinniped.dev/internal/auditid"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
-	"go.pinniped.dev/internal/federationdomain/requestlogger"
 	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
@@ -1979,7 +1979,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
 			}
-			req, _ = requestlogger.NewRequestWithAuditID(req, func() string { return "fake-audit-id" })
+			req, _ = auditid.NewRequestWithAuditID(req, func() string { return "fake-audit-id" })
 			rsp := httptest.NewRecorder()
 			subject.ServeHTTP(rsp, req)
 			t.Logf("response: %#v", rsp)

@@ -11,6 +11,7 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
+	"go.pinniped.dev/internal/auditid"
 	"go.pinniped.dev/internal/config/supervisor"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
 	"go.pinniped.dev/internal/federationdomain/dynamiccodec"
@@ -197,7 +198,7 @@ func (m *Manager) buildHandlerChain(nextHandler http.Handler, auditInternalPaths
 	// Log all requests, including audit ID.
 	handler = requestlogger.WithHTTPRequestAuditLogging(handler, m.auditLogger, auditInternalPathsCfg)
 	// Add random audit ID to request context and response headers.
-	handler = requestlogger.WithAuditID(handler)
+	handler = auditid.WithAuditID(handler)
 	m.handlerChain = handler
 }
 

@@ -128,7 +128,7 @@ var (
 	fositeInvalidPayloadErrorBody = here.Doc(`
 		{
 			"error":             "invalid_request",
-			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse HTTP body, make sure to send a properly formatted form request body."
+			"error_description": "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed. Unable to parse form params, make sure to send a properly formatted query params or form request body."
 		}
 	`)
 
@@ -5117,7 +5117,7 @@ func exchangeAuthcodeForTokens(
 
 	var oauthHelper fosite.OAuth2Provider
 	// Note that makeHappyOauthHelper() calls simulateAuthEndpointHavingAlreadyRun() to preload the session storage.
-	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession, auditLogger)
+	oauthHelper, authCode, jwtSigningKey = makeHappyOauthHelper(t, authRequest, oauthStore, test.makeJwksSigningKeyAndProvider, test.customSessionData, test.modifySession)
 
 	subject = NewHandler(
 		idps,
@@ -5336,12 +5336,11 @@ func makeHappyOauthHelper(
 	makeJwksSigningKeyAndProvider MakeJwksSigningKeyAndProviderFunc,
 	initialCustomSessionData *psession.CustomSessionData,
 	modifySession func(session *psession.PinnipedSession),
-	auditLogger plog.AuditLogger,
 ) (fosite.OAuth2Provider, string, *ecdsa.PrivateKey) {
 	t.Helper()
 
 	jwtSigningKey, jwkProvider := makeJwksSigningKeyAndProvider(t, goodIssuer)
-	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration(), auditLogger)
+	oauthHelper := oidc.FositeOauth2Helper(store, goodIssuer, hmacSecretFunc, jwkProvider, oidc.DefaultOIDCTimeoutsConfiguration())
 	authResponder := simulateAuthEndpointHavingAlreadyRun(t, authRequest, oauthHelper, initialCustomSessionData, modifySession)
 	return oauthHelper, authResponder.GetCode(), jwtSigningKey
 }

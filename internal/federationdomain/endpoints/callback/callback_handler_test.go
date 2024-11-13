@@ -1961,7 +1961,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			hmacSecretFunc := func() []byte { return []byte("some secret - must have at least 32 bytes") }
 			require.GreaterOrEqual(t, len(hmacSecretFunc()), 32, "fosite requires that hmac secrets have at least 32 bytes")
 			jwksProviderIsUnused := jwks.NewDynamicJWKSProvider()
-			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration, nil)
+			oauthHelper := oidc.FositeOauth2Helper(oauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration)
 
 			auditLogger, actualAuditLog := plog.TestAuditLogger(t)
 

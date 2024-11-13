@@ -272,14 +272,14 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		// Inject this into our test subject at the last second so we get a fresh storage for every test.
 		// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
 		kubeOauthStore := storage.NewKubeStorage(secretsClient, oidcClientsClient, timeoutsConfiguration, bcrypt.MinCost)
-		return oidc.FositeOauth2Helper(kubeOauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration, nil), kubeOauthStore
+		return oidc.FositeOauth2Helper(kubeOauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration), kubeOauthStore
 	}
 
 	createOauthHelperWithNullStorage := func(secretsClient v1.SecretInterface, oidcClientsClient v1alpha1.OIDCClientInterface) (fosite.OAuth2Provider, *storage.NullStorage) {
 		// Configure fosite the same way that the production code would, using NullStorage to turn off storage.
 		// Use lower minimum required bcrypt cost than we would use in production to keep unit the tests fast.
 		nullOauthStore := storage.NewNullStorage(secretsClient, oidcClientsClient, bcrypt.MinCost)
-		return oidc.FositeOauth2Helper(nullOauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration, nil), nullOauthStore
+		return oidc.FositeOauth2Helper(nullOauthStore, downstreamIssuer, hmacSecretFunc, jwksProviderIsUnused, timeoutsConfiguration), nullOauthStore
 	}
 
 	upstreamAuthURL, err := url.Parse("https://some-upstream-idp:8443/auth")

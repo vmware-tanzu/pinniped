@@ -31,6 +31,18 @@ import (
 	"go.pinniped.dev/internal/psession"
 )
 
+func paramsSafeToLog() sets.Set[string] {
+	return sets.New(
+		// Standard params from https://openid.net/specs/openid-connect-core-1_0.html for authcode and refresh grants.
+		// Redacting code, client_secret, refresh_token, and PKCE code_verifier params.
+		"grant_type", "client_id", "redirect_uri", "scope",
+		// Token exchange params from https://datatracker.ietf.org/doc/html/rfc8693.
+		// Redact subject_token and actor_token.
+		// We don't allow all of these, but they should be safe to log.
+		"audience", "resource", "scope", "requested_token_type", "actor_token_type", "subject_token_type",
+	)
+}
+
 func NewHandler(
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	oauthHelper fosite.OAuth2Provider,
@@ -39,6 +51,11 @@ func NewHandler(
 	auditLogger plog.AuditLogger,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		if err := auditLogger.AuditRequestParams(r, paramsSafeToLog()); err != nil {
+			oauthHelper.WriteAccessError(r.Context(), w, nil, err)
+			return nil
+		}
+
 		session := psession.NewPinnipedSession()
 		accessRequest, err := oauthHelper.NewAccessRequest(r.Context(), r, session)
 		if err != nil {

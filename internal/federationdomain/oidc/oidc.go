@@ -22,7 +22,6 @@ import (
 	"go.pinniped.dev/internal/federationdomain/clientregistry"
 	"go.pinniped.dev/internal/federationdomain/csrftoken"
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
-	"go.pinniped.dev/internal/federationdomain/endpoints/tokenendpointauditor"
 	"go.pinniped.dev/internal/federationdomain/endpoints/tokenexchange"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/federationdomain/idtokenlifespan"
@@ -232,7 +231,6 @@ func FositeOauth2Helper(
 	hmacSecretOfLengthAtLeast32Func func() []byte,
 	jwksProvider jwks.DynamicJWKSProvider,
 	timeoutsConfiguration timeouts.Configuration,
-	auditLogger plog.AuditLogger,
 ) fosite.OAuth2Provider {
 	oauthConfig := &fosite.Config{
 		IDTokenIssuer: issuer,
@@ -273,8 +271,6 @@ func FositeOauth2Helper(
 			CoreStrategy:               strategy.NewDynamicOauth2HMACStrategy(oauthConfig, hmacSecretOfLengthAtLeast32Func),
 			OpenIDConnectTokenStrategy: strategy.NewDynamicOpenIDConnectECDSAStrategy(oauthConfig, jwksProvider),
 		},
-		// Put this before others to make sure it logs params!
-		tokenendpointauditor.AuditorHandlerFactory(auditLogger),
 		compose.OAuth2AuthorizeExplicitFactory,
 		compose.OAuth2RefreshTokenGrantFactory,
 		// Use a custom factory to allow selective overrides of the ID token lifespan during authcode exchange.

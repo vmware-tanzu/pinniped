@@ -285,6 +285,12 @@ func TestCallbackEndpoint(t *testing.T) {
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "upstream-oidc-idp-name",
+						"resourceName": "upstream-oidc-idp-name",
+						"resourceUID":  "upstream-oidc-resource-uid",
+						"type":         "oidc",
+					}),
 					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "upstream-oidc-idp-name",
 						"upstreamIDPType":         "oidc",
@@ -342,6 +348,12 @@ func TestCallbackEndpoint(t *testing.T) {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "upstream-github-idp-name",
+						"resourceName": "upstream-github-idp-name",
+						"resourceUID":  "upstream-github-idp-resource-uid",
+						"type":         "github",
 					}),
 					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "upstream-github-idp-name",
@@ -717,6 +729,12 @@ func TestCallbackEndpoint(t *testing.T) {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "upstream-oidc-idp-name",
+						"resourceName": "upstream-oidc-idp-name",
+						"resourceUID":  "upstream-oidc-resource-uid",
+						"type":         "oidc",
 					}),
 				}
 			},
@@ -1791,6 +1809,12 @@ func TestCallbackEndpoint(t *testing.T) {
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "upstream-oidc-idp-name",
+						"resourceName": "upstream-oidc-idp-name",
+						"resourceUID":  "upstream-oidc-resource-uid",
+						"type":         "oidc",
+					}),
 					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "upstream-oidc-idp-name",
 						"upstreamIDPType":         "oidc",
@@ -1825,6 +1849,12 @@ func TestCallbackEndpoint(t *testing.T) {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "upstream-github-idp-name",
+						"resourceName": "upstream-github-idp-name",
+						"resourceUID":  "upstream-github-idp-resource-uid",
+						"type":         "github",
 					}),
 					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "upstream-github-idp-name",

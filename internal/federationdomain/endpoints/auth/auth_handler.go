@@ -24,6 +24,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider"
+	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
 	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/responseutil"
 	"go.pinniped.dev/internal/httputil/securityheader"
@@ -261,11 +262,14 @@ func (h *authorizeHandler) authorizeWithoutBrowser(
 
 	identity, loginExtras, err := idp.Login(r.Context(), submittedUsername, submittedPassword)
 	if err != nil {
+		if err == resolvedldap.ErrAccessDeniedDueToUsernamePasswordNotAccepted {
+			h.auditLogger.Audit(auditevent.IncorrectUsernameOrPassword, &plog.AuditParams{
+				ReqCtx: r.Context(),
+			})
+		}
+
 		return err
 	}
-
-	// TODO: Perhaps add audit event "Incorrect Username Or Password"?
-	// See "post_login_handler" for example
 
 	session, err := downstreamsession.NewPinnipedSession(r.Context(), h.auditLogger, &downstreamsession.SessionConfig{
 		UpstreamIdentity:    identity,

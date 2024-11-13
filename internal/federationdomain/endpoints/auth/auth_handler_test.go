@@ -2178,6 +2178,33 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantContentType:    jsonContentType,
 			wantLocationHeader: urlWithQuery(downstreamRedirectURI, fositeAccessDeniedErrorQuery),
 			wantBodyString:     "",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
+					}),
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-password-granting-oidc-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
+					}),
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-password-granting-oidc-idp",
+						"resourceName": "some-password-granting-oidc-idp",
+						"resourceUID":  "some-password-granting-resource-uid",
+						"type":         "oidc",
+					}),
+				}
+			},
 		},
 		{
 			name:                 "wrong upstream password for LDAP authentication",
@@ -2190,6 +2217,34 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantContentType:      jsonContentType,
 			wantLocationHeader:   urlWithQuery(downstreamRedirectURI, fositeAccessDeniedWithBadUsernamePasswordHintErrorQuery),
 			wantBodyString:       "",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
+					}),
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"pinniped_idp_name":     "some-ldap-idp",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
+					}),
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
+					testutil.WantAuditLog("Incorrect Username Or Password", map[string]any{}),
+				}
+			},
 		},
 		{
 			name:                 "wrong upstream password for Active Directory authentication",

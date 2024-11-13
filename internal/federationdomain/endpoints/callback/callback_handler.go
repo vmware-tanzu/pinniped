@@ -45,7 +45,15 @@ func NewHandler(
 			return httperr.New(http.StatusUnprocessableEntity, "upstream provider not found")
 		}
 
-		// TODO: Add audit event "auditevent.UsingUpstreamIDP"
+		auditLogger.Audit(auditevent.UsingUpstreamIDP, &plog.AuditParams{
+			ReqCtx: r.Context(),
+			KeysAndValues: []any{
+				"displayName", idp.GetDisplayName(),
+				"resourceName", idp.GetProvider().GetResourceName(),
+				"resourceUID", idp.GetProvider().GetResourceUID(),
+				"type", idp.GetSessionProviderType(),
+			},
+		})
 
 		downstreamAuthParams, err := url.ParseQuery(decodedState.AuthParams)
 		if err != nil {

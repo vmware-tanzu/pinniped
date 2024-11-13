@@ -24,6 +24,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/jwks"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/oidcclientvalidator"
+	"go.pinniped.dev/internal/federationdomain/requestlogger"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
@@ -290,6 +291,10 @@ func TestPostLoginEndpoint(t *testing.T) {
 	prefixUsernameAndGroupsPipeline := transformtestutil.NewPrefixingPipeline(t, transformationUsernamePrefix, transformationGroupsPrefix)
 	rejectAuthPipeline := transformtestutil.NewRejectAllAuthPipeline(t)
 
+	noAuditLogsWanted := func(_ string) []testutil.WantedAuditLog {
+		return nil
+	}
+
 	tests := []struct {
 		name          string
 		idps          *testidplister.UpstreamIDPListerBuilder
@@ -355,6 +360,12 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
 			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
 					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "some-ldap-idp",
 						"upstreamIDPType":         "ldap",
@@ -407,6 +418,12 @@ func TestPostLoginEndpoint(t *testing.T) {
 			),
 			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
 					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "some-ldap-idp",
 						"upstreamIDPType":         "ldap",
@@ -478,6 +495,12 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantDownstreamCustomSessionData:   expectedHappyActiveDirectoryUpstreamCustomSession,
 			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-active-directory-idp",
+						"resourceName": "some-active-directory-idp",
+						"resourceUID":  "active-directory-resource-uid",
+						"type":         "activedirectory",
+					}),
 					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
 						"upstreamIDPDisplayName":  "some-active-directory-idp",
 						"upstreamIDPType":         "activedirectory",
@@ -786,6 +809,29 @@ func TestPostLoginEndpoint(t *testing.T) {
 				"error_description": "The resource owner or authorization server denied the request. Reason: configured identity policy rejected this authentication: users who belong to certain upstream group are not allowed.",
 				"state":             happyDownstreamState,
 			}),
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "some-ldap-idp",
+						"upstreamIDPType":         "ldap",
+						"upstreamIDPResourceName": "some-ldap-idp",
+						"upstreamIDPResourceUID":  "ldap-resource-uid",
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-mapped-ldap-username",
+							"upstreamGroups":   []any{"group1", "group2", "group3"},
+						},
+					}),
+					testutil.WantAuditLog("Authentication Rejected By Transforms", map[string]any{
+						"reason": "configured identity policy rejected this authentication: users who belong to certain upstream group are not allowed",
+					}),
+				}
+			},
 		},
 		{
 			name: "happy LDAP when downstream OIDC validations are skipped because the openid scope was not requested",
@@ -854,6 +900,17 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantContentType:              htmlContentType,
 			wantBodyString:               "",
 			wantRedirectToLoginPageError: badUserPassErrParamValue,
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
+					testutil.WantAuditLog("Incorrect Username Or Password", map[string]any{}),
+				}
+			},
 		},
 		{
 			name:                         "bad password LDAP login",
@@ -864,6 +921,17 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantContentType:              htmlContentType,
 			wantBodyString:               "",
 			wantRedirectToLoginPageError: badUserPassErrParamValue,
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
+					testutil.WantAuditLog("Incorrect Username Or Password", map[string]any{}),
+				}
+			},
 		},
 		{
 			name:                         "blank username LDAP login",
@@ -874,6 +942,17 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantContentType:              htmlContentType,
 			wantBodyString:               "",
 			wantRedirectToLoginPageError: badUserPassErrParamValue,
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
+					testutil.WantAuditLog("Incorrect Username Or Password", map[string]any{}),
+				}
+			},
 		},
 		{
 			name:                         "blank password LDAP login",
@@ -884,6 +963,17 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantContentType:              htmlContentType,
 			wantBodyString:               "",
 			wantRedirectToLoginPageError: badUserPassErrParamValue,
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
+					testutil.WantAuditLog("Incorrect Username Or Password", map[string]any{}),
+				}
+			},
 		},
 		{
 			name:                         "username and password sent as URI query params should be ignored since they are expected in form post body",
@@ -904,6 +994,16 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantContentType:              htmlContentType,
 			wantBodyString:               "",
 			wantRedirectToLoginPageError: internalErrParamValue,
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "some-ldap-idp",
+						"resourceName": "some-ldap-idp",
+						"resourceUID":  "ldap-resource-uid",
+						"type":         "ldap",
+					}),
+				}
+			},
 		},
 		{
 			name: "downstream redirect uri does not match what is configured for client",
@@ -915,6 +1015,30 @@ func TestPostLoginEndpoint(t *testing.T) {
 			}),
 			formParams: happyUsernamePasswordFormParams,
 			wantErr:    "error using state downstream auth params",
+			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "some-ldap-idp",
+						"upstreamIDPType":         "ldap",
+						"upstreamIDPResourceName": "some-ldap-idp",
+						"upstreamIDPResourceUID":  "ldap-resource-uid",
+						"personalInfo": map[string]any{
+							"upstreamUsername": "some-mapped-ldap-username",
+							"upstreamGroups":   []any{"group1", "group2", "group3"},
+						},
+					}),
+					testutil.WantAuditLog("Session Started", map[string]any{
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "some-mapped-ldap-username",
+							"groups":           []any{"group1", "group2", "group3"},
+							"subject":          "ldaps://some-ldap-host:123?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=some-ldap-idp&sub=some-ldap-uid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
+					}),
+				}
+			},
 		},
 		{
 			name:          "downstream redirect uri does not match what is configured for client with dynamic client",
@@ -1116,8 +1240,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 					map[string]string{"scope": "openid offline_access pinniped:request-audience scope_not_allowed"},
 				).Encode()
 			}),
-			formParams: happyUsernamePasswordFormParams,
-			wantErr:    "error using state downstream auth params",
+			formParams:    happyUsernamePasswordFormParams,
+			wantErr:       "error using state downstream auth params",
+			wantAuditLogs: noAuditLogsWanted,
 		},
 		{
 			name: "using dynamic client which is not allowed to request username scope in authorize request but requests it anyway",
@@ -1217,6 +1342,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 			if tt.reqURIQuery != nil {
 				req.URL.RawQuery = tt.reqURIQuery.Encode()
 			}
+			req, _ = requestlogger.NewRequestWithAuditID(req, func() string { return "some-audit-id" })
 
 			rsp := httptest.NewRecorder()
 
@@ -1306,7 +1432,9 @@ func TestPostLoginEndpoint(t *testing.T) {
 			}
 
 			if test.wantAuditLogs != nil {
-				testutil.CompareAuditLogs(t, test.wantAuditLogs(sessionID), actualAuditLog.String())
+				wantAuditLogs := test.wantAuditLogs(sessionID)
+				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "some-audit-id")
+				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 			}
 		})
 	}

@@ -30,6 +30,7 @@ const (
 	TokenCredentialRequestAuthenticationFailed Message = "TokenCredentialRequest Authentication Failed" //nolint:gosec // this is not a credential
 	TokenCredentialRequestUnexpectedError      Message = "TokenCredentialRequest Unexpected Error"      //nolint:gosec // this is not a credential
 	TokenCredentialRequestUnsupportedUserInfo  Message = "TokenCredentialRequest Unsupported UserInfo"  //nolint:gosec // this is not a credential
+	IncorrectUsernameOrPassword                Message = "Incorrect Username Or Password"               //nolint:gosec // this is not a credential
 )
 
 // SanitizeParams can be used to redact all params not included in the allowedKeys set.

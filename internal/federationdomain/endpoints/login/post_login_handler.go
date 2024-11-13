@@ -10,6 +10,7 @@ import (
 
 	"github.com/ory/fosite"
 
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/endpoints/loginurl"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
@@ -35,6 +36,16 @@ func NewPostHandler(
 			plog.Error("error finding upstream provider", err)
 			return httperr.Wrap(http.StatusUnprocessableEntity, "error finding upstream provider", err)
 		}
+
+		auditLogger.Audit(auditevent.UsingUpstreamIDP, &plog.AuditParams{
+			ReqCtx: r.Context(),
+			KeysAndValues: []any{
+				"displayName", idp.GetDisplayName(),
+				"resourceName", idp.GetProvider().GetResourceName(),
+				"resourceUID", idp.GetProvider().GetResourceUID(),
+				"type", idp.GetSessionProviderType(),
+			},
+		})
 
 		// Get the original params that were used at the authorization endpoint.
 		downstreamAuthParams, err := url.ParseQuery(decodedState.AuthParams)
@@ -66,6 +77,10 @@ func NewPostHandler(
 
 		// Treat blank username or password as a bad username/password combination, as opposed to an internal error.
 		if submittedUsername == "" || submittedPassword == "" {
+			auditLogger.Audit(auditevent.IncorrectUsernameOrPassword, &plog.AuditParams{
+				ReqCtx: r.Context(),
+			})
+
 			// User forgot to enter one of the required fields.
 			// The user may try to log in again if they'd like, so redirect back to the login page with an error.
 			return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowBadUserPassErr)
@@ -80,6 +95,10 @@ func NewPostHandler(
 				// The user may try to log in again if they'd like, so redirect back to the login page with an error.
 				return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowInternalError)
 			case err == resolvedldap.ErrAccessDeniedDueToUsernamePasswordNotAccepted:
+				auditLogger.Audit(auditevent.IncorrectUsernameOrPassword, &plog.AuditParams{
+					ReqCtx: r.Context(),
+				})
+
 				// The upstream did not accept the username/password combination.
 				// The user may try to log in again if they'd like, so redirect back to the login page with an error.
 				return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowBadUserPassErr)

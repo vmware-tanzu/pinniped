@@ -264,6 +264,9 @@ func (h *authorizeHandler) authorizeWithoutBrowser(
 		return err
 	}
 
+	// TODO: Perhaps add audit event "Incorrect Username Or Password"?
+	// See "post_login_handler" for example
+
 	session, err := downstreamsession.NewPinnipedSession(r.Context(), h.auditLogger, &downstreamsession.SessionConfig{
 		UpstreamIdentity:    identity,
 		UpstreamLoginExtras: loginExtras,

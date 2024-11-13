@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/sclevine/spec"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,7 +23,6 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
-	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
@@ -72,8 +71,6 @@ func TestCreate(t *testing.T) {
 	spec.Run(t, "create", func(t *testing.T, when spec.G, it spec.S) {
 		var r *require.Assertions
 		var ctrl *gomock.Controller
-		var logger *testutil.TranscriptLogger
-		var originalKLogLevel klog.Level
 		var auditLogger plog.AuditLogger
 		var actualAuditLog *bytes.Buffer
 		var frozenNow time.Time
@@ -83,11 +80,6 @@ func TestCreate(t *testing.T) {
 		it.Before(func() {
 			r = require.New(t)
 			ctrl = gomock.NewController(t)
-			logger = testutil.NewTranscriptLogger(t) //nolint:staticcheck  // old test with lots of log statements
-			klog.SetLogger(logr.New(logger))         // this is unfortunately a global logger, so can't run these tests in parallel :(
-			originalKLogLevel = testutil.GetGlobalKlogLevel()
-			// trace.Log() utility will only log at level 2 or above, so set that for this test.
-			testutil.SetGlobalKlogLevel(t, 2) //nolint:staticcheck // old test of code using trace.Log()
 			auditLogger, actualAuditLog = plog.TestAuditLogger(t)
 			frozenNow = time.Date(2024, time.September, 12, 4, 25, 56, 778899, time.UTC)
 			frozenClock = clocktesting.NewFakeClock(frozenNow)
@@ -95,8 +87,6 @@ func TestCreate(t *testing.T) {
 
 		it.After(func() {
 			testutil.CompareAuditLogs(t, wantAuditLog, actualAuditLog.String())
-			klog.ClearLogger()
-			testutil.SetGlobalKlogLevel(t, originalKLogLevel) //nolint:staticcheck // old test of code using trace.Log()
 			ctrl.Finish()
 		})
 
@@ -134,13 +124,15 @@ func TestCreate(t *testing.T) {
 				},
 			})
 
-			requireOneLogStatement(r, logger, `"success" userID:,hasExtra:false,authenticated:true`)
-
 			wantAuditLog = []testutil.WantedAuditLog{
-				testutil.WantAuditLog("TokenCredentialRequest", map[string]any{
-					"auditID":       "fake-audit-id",
-					"authenticated": true,
-					"expires":       "2024-09-12T04:30:56Z", // this is frozenNow + 5 minutes in UTC
+				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"issuedClientCertExpires": "2024-09-12T04:30:56Z", // this is frozenNow + 5 minutes in UTC
 					"personalInfo": map[string]any{
 						"username": "test-user",
 						"groups":   []any{"test-group-1", "test-group-2"},
@@ -168,7 +160,19 @@ func TestCreate(t *testing.T) {
 
 			response, err := callCreate(storage, req)
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"failure" failureType:cert issuer,msg:some certificate authority error`)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Unexpected Error", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"reason": "cert issuer returned an error",
+					"err":    "some certificate authority error",
+				}),
+			}
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenGivenATokenAndTheWebhookReturnsNilUser", func() {
@@ -182,7 +186,18 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:<none>,hasExtra:false,authenticated:false`)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Authentication Failed", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"reason": "auth rejected by authenticator",
+				}),
+			}
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookFails", func() {
@@ -197,7 +212,19 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"failure" failureType:token authentication,msg:some webhook error`)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Unexpected Error", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"reason": "authenticator returned an error",
+					"err":    "some webhook error",
+				}),
+			}
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAnEmptyUsername", func() {
@@ -205,14 +232,31 @@ func TestCreate(t *testing.T) {
 
 			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
 			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
-				Return(&user.DefaultInfo{Name: ""}, nil)
+				Return(&user.DefaultInfo{Name: "", UID: "test-uid"}, nil)
 
 			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger, frozenClock)
 
 			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:,hasExtra:false,authenticated:false`)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"reason":              "unsupported value in userInfo returned by authenticator",
+					"err":                 "empty username is not allowed",
+					"userInfoExtrasCount": float64(0),
+					"personalInfo": map[string]any{
+						"userInfoName": "",
+						"userInfoUID":  "test-uid",
+					},
+				}),
+			}
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAUserWithUID", func() {
@@ -231,7 +275,24 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:test-uid,hasExtra:false,authenticated:false`)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"reason":              "unsupported value in userInfo returned by authenticator",
+					"err":                 "UIDs are not supported",
+					"userInfoExtrasCount": float64(0),
+					"personalInfo": map[string]any{
+						"userInfoName": "test-user",
+						"userInfoUID":  "test-uid",
+					},
+				}),
+			}
 		})
 
 		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAUserWithExtra", func() {
@@ -250,7 +311,24 @@ func TestCreate(t *testing.T) {
 			response, err := callCreate(storage, req)
 
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
-			requireOneLogStatement(r, logger, `"success" userID:,hasExtra:true,authenticated:false`)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"reason":              "unsupported value in userInfo returned by authenticator",
+					"err":                 "extras are not supported",
+					"userInfoExtrasCount": float64(1),
+					"personalInfo": map[string]any{
+						"userInfoName": "test-user",
+						"userInfoUID":  "",
+					},
+				}),
+			}
 		})
 
 		it("CreateFailsWhenGivenTheWrongInputType", func() {
@@ -262,7 +340,6 @@ func TestCreate(t *testing.T) {
 				&metav1.CreateOptions{})
 
 			requireAPIError(t, response, err, apierrors.IsBadRequest, "not a TokenCredentialRequest")
-			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:not a TokenCredentialRequest`)
 		})
 
 		it("CreateFailsWhenTokenValueIsEmptyInRequest", func() {
@@ -273,7 +350,6 @@ func TestCreate(t *testing.T) {
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
 				`.pinniped.dev "request name" is invalid: spec.token.value: Required value: token must be supplied`)
-			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:token must be supplied`)
 		})
 
 		it("CreateFailsWhenValidationFails", func() {
@@ -287,7 +363,6 @@ func TestCreate(t *testing.T) {
 				&metav1.CreateOptions{})
 			r.Nil(response)
 			r.EqualError(err, "some validation error")
-			requireOneLogStatement(r, logger, `"failure" failureType:validation webhook,msg:some validation error`)
 		})
 
 		it("CreateDoesNotAllowValidationFunctionToMutateRequest", func() {
@@ -314,10 +389,14 @@ func TestCreate(t *testing.T) {
 			r.NotEmpty(response)
 
 			wantAuditLog = []testutil.WantedAuditLog{
-				testutil.WantAuditLog("TokenCredentialRequest", map[string]any{
-					"auditID":       "fake-audit-id",
-					"authenticated": true,
-					"expires":       "2024-09-12T04:30:56Z", // this is frozenNow + 5 minutes in UTC
+				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"issuedClientCertExpires": "2024-09-12T04:30:56Z", // this is frozenNow + 5 minutes in UTC
 					"personalInfo": map[string]any{
 						"username": "test-user",
 						"groups":   []any{},
@@ -357,10 +436,14 @@ func TestCreate(t *testing.T) {
 			r.Empty(validationFunctionSawTokenValue)
 
 			wantAuditLog = []testutil.WantedAuditLog{
-				testutil.WantAuditLog("TokenCredentialRequest", map[string]any{
-					"auditID":       "fake-audit-id",
-					"authenticated": true,
-					"expires":       "2024-09-12T04:30:56Z", // this is frozenNow + 5 minutes in UTC
+				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"issuedClientCertExpires": "2024-09-12T04:30:56Z", // this is frozenNow + 5 minutes in UTC
 					"personalInfo": map[string]any{
 						"username": "test-user",
 						"groups":   []any{},
@@ -380,7 +463,6 @@ func TestCreate(t *testing.T) {
 
 			requireAPIError(t, response, err, apierrors.IsInvalid,
 				`.pinniped.dev "request name" is invalid: dryRun: Unsupported value: []string{"some dry run flag"}`)
-			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:dryRun not supported`)
 		})
 
 		it("CreateFailsWhenNamespaceIsNotEmpty", func() {
@@ -391,16 +473,8 @@ func TestCreate(t *testing.T) {
 				&metav1.CreateOptions{})
 
 			requireAPIError(t, response, err, apierrors.IsBadRequest, `namespace is not allowed on TokenCredentialRequest: some-ns`)
-			requireOneLogStatement(r, logger, `"failure" failureType:request validation,msg:namespace is not allowed`)
 		})
 	}, spec.Sequential())
-}
-
-func requireOneLogStatement(r *require.Assertions, logger *testutil.TranscriptLogger, messageContains string) {
-	transcript := logger.Transcript()
-	r.Len(transcript, 1)
-	r.Equal("info", transcript[0].Level)
-	r.Contains(transcript[0].Message, messageContains)
 }
 
 func callCreate(storage *REST, obj runtime.Object) (runtime.Object, error) {
@@ -421,7 +495,14 @@ func validCredentialRequest() *loginapi.TokenCredentialRequest {
 }
 
 func validCredentialRequestWithToken(token string) *loginapi.TokenCredentialRequest {
-	return credentialRequest(loginapi.TokenCredentialRequestSpec{Token: token})
+	return credentialRequest(loginapi.TokenCredentialRequestSpec{
+		Token: token,
+		Authenticator: corev1.TypedLocalObjectReference{
+			APIGroup: ptr.To("fake-api-group.com"),
+			Kind:     "FakeAuthenticatorKind",
+			Name:     "fake-authenticator-name",
+		},
+	})
 }
 
 func credentialRequest(spec loginapi.TokenCredentialRequestSpec) *loginapi.TokenCredentialRequest {

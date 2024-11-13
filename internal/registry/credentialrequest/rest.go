@@ -6,6 +6,7 @@ package credentialrequest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,7 +20,6 @@ import (
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/utils/clock"
-	"k8s.io/utils/trace"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/auditevent"
@@ -105,46 +105,78 @@ func (*REST) GetSingularName() string {
 }
 
 func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
-	t := trace.FromContext(ctx).Nest("create", trace.Field{
-		Key:   "kind",
-		Value: "TokenCredentialRequest",
-	})
-	defer t.Log()
-
-	credentialRequest, err := validateRequest(ctx, obj, createValidation, options, t)
+	credentialRequest, err := validateRequest(ctx, obj, createValidation, options)
 	if err != nil {
+		// Bad requests are not audit logged because the Kubernetes audit log will show the response's status error code.
+		plog.DebugErr("TokenCredentialRequest request object validation error", err)
 		return nil, err
 	}
 
 	userInfo, err := r.authenticator.AuthenticateTokenCredentialRequest(ctx, credentialRequest)
 	if err != nil {
-		traceFailureWithError(t, "token authentication", err)
-		return failureResponse(), nil
+		r.auditLogger.Audit(auditevent.TokenCredentialRequestUnexpectedError, &plog.AuditParams{
+			ReqCtx: ctx,
+			KeysAndValues: []any{
+				"reason", "authenticator returned an error",
+				"err", err.Error(),
+				"authenticator", credentialRequest.Spec.Authenticator,
+			},
+		})
+		return authenticationFailedResponse(), nil
 	}
-	if ok := isUserInfoValid(userInfo); !ok {
-		traceSuccess(t, userInfo, false)
-		return failureResponse(), nil
+
+	if userInfo == nil {
+		r.auditLogger.Audit(auditevent.TokenCredentialRequestAuthenticationFailed, &plog.AuditParams{
+			ReqCtx: ctx,
+			KeysAndValues: []any{
+				"reason", "auth rejected by authenticator",
+				"authenticator", credentialRequest.Spec.Authenticator,
+			},
+		})
+		return authenticationFailedResponse(), nil
+	}
+
+	if err = validateUserInfo(userInfo); err != nil {
+		r.auditLogger.Audit(auditevent.TokenCredentialRequestUnsupportedUserInfo, &plog.AuditParams{
+			ReqCtx: ctx,
+			PIIKeysAndValues: []any{
+				"userInfoName", userInfo.GetName(),
+				"userInfoUID", userInfo.GetUID(),
+			},
+			KeysAndValues: []any{
+				"userInfoExtrasCount", len(userInfo.GetExtra()),
+				"reason", "unsupported value in userInfo returned by authenticator",
+				"err", err.Error(),
+				"authenticator", credentialRequest.Spec.Authenticator,
+			},
+		})
+		return authenticationFailedResponse(), nil
 	}
 
 	// this timestamp should be returned from IssueClientCertPEM but this is a safe approximation
 	expires := metav1.NewTime(r.clock.Now().UTC().Add(clientCertificateTTL))
 	certPEM, keyPEM, err := r.issuer.IssueClientCertPEM(userInfo.GetName(), userInfo.GetGroups(), clientCertificateTTL)
 	if err != nil {
-		traceFailureWithError(t, "cert issuer", err)
-		return failureResponse(), nil
+		r.auditLogger.Audit(auditevent.TokenCredentialRequestUnexpectedError, &plog.AuditParams{
+			ReqCtx: ctx,
+			KeysAndValues: []any{
+				"reason", "cert issuer returned an error",
+				"err", err.Error(),
+				"authenticator", credentialRequest.Spec.Authenticator,
+			},
+		})
+		return authenticationFailedResponse(), nil
 	}
 
-	traceSuccess(t, userInfo, true)
-
-	r.auditLogger.Audit(auditevent.TokenCredentialRequest, &plog.AuditParams{
+	r.auditLogger.Audit(auditevent.TokenCredentialRequestAuthenticatedUser, &plog.AuditParams{
 		ReqCtx: ctx,
 		PIIKeysAndValues: []any{
 			"username", userInfo.GetName(),
 			"groups", userInfo.GetGroups(),
 		},
 		KeysAndValues: []any{
-			"authenticated", true,
-			"expires", expires.Format(time.RFC3339),
+			"issuedClientCertExpires", expires.Format(time.RFC3339),
+			"authenticator", credentialRequest.Spec.Authenticator,
 		},
 	})
 
@@ -159,15 +191,13 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	}, nil
 }
 
-func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions, t *trace.Trace) (*loginapi.TokenCredentialRequest, error) {
+func validateRequest(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (*loginapi.TokenCredentialRequest, error) {
 	credentialRequest, ok := obj.(*loginapi.TokenCredentialRequest)
 	if !ok {
-		traceValidationFailure(t, "not a TokenCredentialRequest")
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("not a TokenCredentialRequest: %#v", obj))
 	}
 
 	if len(credentialRequest.Spec.Token) == 0 {
-		traceValidationFailure(t, "token must be supplied")
 		errs := field.ErrorList{field.Required(field.NewPath("spec", "token", "value"), "token must be supplied")}
 		return nil, apierrors.NewInvalid(loginapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 	}
@@ -175,14 +205,12 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	// just a sanity check, not sure how to honor a dry run on a virtual API
 	if options != nil {
 		if len(options.DryRun) != 0 {
-			traceValidationFailure(t, "dryRun not supported")
 			errs := field.ErrorList{field.NotSupported(field.NewPath("dryRun"), options.DryRun, []string(nil))}
 			return nil, apierrors.NewInvalid(loginapi.Kind(credentialRequest.Kind), credentialRequest.Name, errs)
 		}
 	}
 
 	if namespace := genericapirequest.NamespaceValue(ctx); len(namespace) != 0 {
-		traceValidationFailure(t, "namespace is not allowed")
 		return nil, apierrors.NewBadRequest(fmt.Sprintf("namespace is not allowed on TokenCredentialRequest: %v", namespace))
 	}
 
@@ -195,7 +223,6 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 		requestForValidation := obj.DeepCopyObject()
 		requestForValidation.(*loginapi.TokenCredentialRequest).Spec.Token = ""
 		if err := createValidation(ctx, requestForValidation); err != nil {
-			traceFailureWithError(t, "validation webhook", err)
 			return nil, err
 		}
 	}
@@ -203,48 +230,20 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	return credentialRequest, nil
 }
 
-func isUserInfoValid(userInfo user.Info) bool {
+func validateUserInfo(userInfo user.Info) error {
 	switch {
-	case userInfo == nil, // must be non-nil
-		len(userInfo.GetName()) == 0,  // must have a username, groups are optional
-		len(userInfo.GetUID()) != 0,   // certs cannot assert UID
-		len(userInfo.GetExtra()) != 0: // certs cannot assert extra
-		return false
-
+	case len(userInfo.GetName()) == 0:
+		return errors.New("empty username is not allowed")
+	case len(userInfo.GetUID()) != 0:
+		return errors.New("UIDs are not supported") // certs cannot assert UID
+	case len(userInfo.GetExtra()) != 0:
+		return errors.New("extras are not supported") // certs cannot assert extra
 	default:
-		return true
+		return nil
 	}
 }
 
-func traceSuccess(t *trace.Trace, userInfo user.Info, authenticated bool) {
-	userID := "<none>"
-	hasExtra := false
-	if userInfo != nil {
-		userID = userInfo.GetUID()
-		hasExtra = len(userInfo.GetExtra()) > 0
-	}
-	t.Step("success",
-		trace.Field{Key: "userID", Value: userID},
-		trace.Field{Key: "hasExtra", Value: hasExtra},
-		trace.Field{Key: "authenticated", Value: authenticated},
-	)
-}
-
-func traceValidationFailure(t *trace.Trace, msg string) {
-	t.Step("failure",
-		trace.Field{Key: "failureType", Value: "request validation"},
-		trace.Field{Key: "msg", Value: msg},
-	)
-}
-
-func traceFailureWithError(t *trace.Trace, failureType string, err error) {
-	t.Step("failure",
-		trace.Field{Key: "failureType", Value: failureType},
-		trace.Field{Key: "msg", Value: err.Error()},
-	)
-}
-
-func failureResponse() *loginapi.TokenCredentialRequest {
+func authenticationFailedResponse() *loginapi.TokenCredentialRequest {
 	m := "authentication failed"
 	return &loginapi.TokenCredentialRequest{
 		Status: loginapi.TokenCredentialRequestStatus{

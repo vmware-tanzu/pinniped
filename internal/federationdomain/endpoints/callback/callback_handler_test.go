@@ -282,6 +282,9 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"code": "redacted", "state": "redacted"},
+					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
@@ -346,6 +349,9 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"code": "redacted", "state": "redacted"},
+					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
@@ -727,6 +733,9 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, _ string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"code": "redacted", "state": "redacted"},
+					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
@@ -1122,6 +1131,13 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantStatus:      http.StatusMethodNotAllowed,
 			wantContentType: htmlContentType,
 			wantBody:        "Method Not Allowed: PUT (try GET)\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"code": "redacted", "state": "redacted"},
+					}),
+				}
+			},
 		},
 		{
 			name:            "POST method is invalid",
@@ -1151,6 +1167,41 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantBody:        "Method Not Allowed: DELETE (try GET)\n",
 		},
 		{
+			name:            "params cannot be parsed",
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
+			method:          http.MethodGet,
+			path:            newRequestPath().String() + "&invalid;;param",
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error parsing request params\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{}
+			},
+		},
+		{
+			name:            "error redirect from upstream IDP audit logs the error params from the OAuth2 spec",
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyOIDCState).WithoutCode().String() + "&error=some_error&error_description=some_description&error_uri=some_uri",
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: code param not found: check URL in browser's address bar for error parameters from upstream identity provider\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{
+							"state":             "redacted",
+							"error":             "some_error",
+							"error_description": "some_description",
+							"error_uri":         "some_uri",
+						},
+					}),
+				}
+			},
+		},
+		{
 			name:            "code param was not included on request",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:          http.MethodGet,
@@ -1158,7 +1209,14 @@ func TestCallbackEndpoint(t *testing.T) {
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: htmlContentType,
-			wantBody:        "Bad Request: code param not found\n",
+			wantBody:        "Bad Request: code param not found: check URL in browser's address bar for error parameters from upstream identity provider\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"state": "redacted"},
+					}),
+				}
+			},
 		},
 		{
 			name:            "state param was not included on request",
@@ -1170,7 +1228,11 @@ func TestCallbackEndpoint(t *testing.T) {
 			wantContentType: htmlContentType,
 			wantBody:        "Bad Request: state param not found\n",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
-				return []testutil.WantedAuditLog{}
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"code": "redacted"},
+					}),
+				}
 			},
 		},
 		{
@@ -1806,6 +1868,9 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"code": "redacted", "state": "redacted"},
+					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
@@ -1847,6 +1912,9 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"code": "redacted", "state": "redacted"},
+					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),

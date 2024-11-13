@@ -5,7 +5,6 @@
 package auth
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -104,8 +103,9 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	hadPasswordHeader := len(r.Header.Values(oidcapi.AuthorizePasswordHeaderName)) > 0
 	requestedBrowserlessFlow := hadUsernameHeader || hadPasswordHeader
 
-	// Need to parse the request params, so we can get the IDP name and audit log the params.
-	if err := parseForm(r); err != nil {
+	// Audit the request params. Also gives us access to the IDP name param for use below,
+	// before fosite would normally parse the params.
+	if err := h.auditLogger.AuditRequestParams(r, paramsSafeToLog()); err != nil {
 		oidc.WriteAuthorizeError(r, w,
 			h.oauthHelperWithoutStorage, fosite.NewAuthorizeRequest(), err, requestedBrowserlessFlow)
 		return
@@ -119,11 +119,6 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			oidcapi.AuthorizeUsernameHeaderName, hadUsernameHeader,
 			oidcapi.AuthorizePasswordHeaderName, hadPasswordHeader,
 		},
-	})
-
-	h.auditLogger.Audit(auditevent.HTTPRequestParameters, &plog.AuditParams{
-		ReqCtx:        r.Context(),
-		KeysAndValues: auditevent.SanitizeParams(r.Form, paramsSafeToLog()),
 	})
 
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
@@ -174,27 +169,6 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 
 	h.authorize(w, r, requestedBrowserlessFlow, idp)
-}
-
-// parseForm parses the query params and/or POST body form params. It returns an error, or in the case of success it
-// has the side effect of leaving the parsed form params on the http.Request in the Form field. Request body
-// parameters take precedence over URL query string values.
-func parseForm(r *http.Request) error {
-	// The style of form parsing and the text of the error is inspired by fosite's implementation of NewAuthorizeRequest().
-	// Fosite only calls ParseMultipartForm() there. However, although ParseMultipartForm() calls ParseForm(),
-	// it swallows errors from ParseForm() sometimes. To avoid having any errors swallowed, we call both.
-	// When fosite calls ParseMultipartForm() later, it will be a noop.
-	if err := r.ParseForm(); err != nil {
-		return fosite.ErrInvalidRequest.
-			WithHint("Unable to parse form params, make sure to send a properly formatted query params or form request body.").
-			WithWrap(err).WithDebug(err.Error())
-	}
-	if err := r.ParseMultipartForm(1 << 20); err != nil && !errors.Is(err, http.ErrNotMultipart) {
-		return fosite.ErrInvalidRequest.
-			WithHint("Unable to parse multipart HTTP body, make sure to send a properly formatted form request body.").
-			WithWrap(err).WithDebug(err.Error())
-	}
-	return nil
 }
 
 func (h *authorizeHandler) authorize(

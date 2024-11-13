@@ -30,12 +30,16 @@ package plog
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"reflect"
 	"slices"
 
 	"github.com/go-logr/logr"
+	"github.com/ory/fosite"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/audit"
 
 	"go.pinniped.dev/internal/auditevent"
@@ -72,6 +76,7 @@ type AuditParams struct {
 // that would make unit testing of audit logs harder.
 type AuditLogger interface {
 	Audit(msg auditevent.Message, p *AuditParams)
+	AuditRequestParams(r *http.Request, reqParamsSafeToLog sets.Set[string]) error
 }
 
 // Logger implements the plog logging convention described above.  The global functions in this package
@@ -176,6 +181,34 @@ func (a *auditLogger) Audit(msg auditevent.Message, p *AuditParams) {
 	}
 
 	a.logger.audit(string(msg), allKV...)
+}
+
+// AuditRequestParams parses the URL's query params and/or POST body form params, and then audit logs them with
+// redaction as specified by reqParamsSafeToLog. It can return an error, or in the case of success it has the side
+// effect of leaving the parsed form params on the http.Request in the Form field. Note that request body parameters
+// take precedence over URL query values.
+func (a *auditLogger) AuditRequestParams(r *http.Request, reqParamsSafeToLog sets.Set[string]) error {
+	// The style of form parsing and the text of the error is inspired by fosite's implementation of NewAuthorizeRequest().
+	// Fosite only calls ParseMultipartForm() there. However, although ParseMultipartForm() calls ParseForm(),
+	// it swallows errors from ParseForm() sometimes. To avoid having any errors swallowed, we call both.
+	// When fosite calls ParseMultipartForm() later, it will be a noop.
+	if err := r.ParseForm(); err != nil {
+		return fosite.ErrInvalidRequest.
+			WithHint("Unable to parse form params, make sure to send a properly formatted query params or form request body.").
+			WithWrap(err).WithDebug(err.Error())
+	}
+	if err := r.ParseMultipartForm(1 << 20); err != nil && !errors.Is(err, http.ErrNotMultipart) {
+		return fosite.ErrInvalidRequest.
+			WithHint("Unable to parse multipart HTTP body, make sure to send a properly formatted form request body.").
+			WithWrap(err).WithDebug(err.Error())
+	}
+
+	a.Audit(auditevent.HTTPRequestParameters, &AuditParams{
+		ReqCtx:        r.Context(),
+		KeysAndValues: auditevent.SanitizeParams(r.Form, reqParamsSafeToLog),
+	})
+
+	return nil
 }
 
 // audit is used internally by AuditLogger to print an audit log event to the pLogger's output.

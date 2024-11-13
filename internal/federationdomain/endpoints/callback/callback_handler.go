@@ -9,6 +9,7 @@ import (
 	"net/url"
 
 	"github.com/ory/fosite"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
@@ -21,6 +22,15 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+func paramsSafeToLog() sets.Set[string] {
+	return sets.New[string](
+		// Due to https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1,
+		// authorize errors can have these parameters, which should not contain PII or secrets and are safe to log.
+		"error", "error_description", "error_uri",
+		// Note that this endpoint also receives 'code' and 'state' params, which are not safe to log.
+	)
+}
+
 func NewHandler(
 	upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersFinderI,
 	oauthHelper fosite.OAuth2Provider,
@@ -29,6 +39,11 @@ func NewHandler(
 	auditLogger plog.AuditLogger,
 ) http.Handler {
 	handler := httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		if err := auditLogger.AuditRequestParams(r, paramsSafeToLog()); err != nil {
+			plog.DebugErr("error parsing callback request params", err)
+			return httperr.New(http.StatusBadRequest, "error parsing request params")
+		}
+
 		encodedState, decodedState, err := validateRequest(r, stateDecoder, cookieDecoder)
 		if err != nil {
 			return err
@@ -137,7 +152,8 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 
 	if authcode(r) == "" {
 		plog.Info("code param not found")
-		return "", nil, httperr.New(http.StatusBadRequest, "code param not found")
+		return "", nil, httperr.New(http.StatusBadRequest,
+			"code param not found: check URL in browser's address bar for error parameters from upstream identity provider")
 	}
 
 	return encodedState, decodedState, nil

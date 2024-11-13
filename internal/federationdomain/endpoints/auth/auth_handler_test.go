@@ -726,10 +726,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -742,6 +738,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
@@ -774,10 +774,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             dynamicClientID,
@@ -790,6 +786,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid offline_access pinniped:request-audience username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
@@ -821,10 +821,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -837,6 +833,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-github-idp",
@@ -869,10 +869,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             dynamicClientID,
@@ -885,6 +881,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid offline_access pinniped:request-audience username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-github-idp",
@@ -916,10 +916,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -932,6 +928,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
@@ -964,10 +964,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -979,6 +975,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
@@ -1012,10 +1012,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -1027,6 +1023,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 				}
 			},
@@ -1051,10 +1051,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyStringWithLocationInHref:       true,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -1067,6 +1063,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
@@ -1175,10 +1175,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantDownstreamCustomSessionData:   expectedHappyOIDCPasswordGrantCustomSession,
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": true,
-						"Pinniped-Password": true,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -1191,6 +1187,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-password-granting-oidc-idp",
@@ -1264,10 +1264,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:        "",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": true,
-						"Pinniped-Password": true,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -1280,6 +1276,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-password-granting-oidc-idp",
@@ -1387,10 +1387,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantDownstreamCustomSessionData:   expectedHappyLDAPUpstreamCustomSession,
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": true,
-						"Pinniped-Password": true,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -1403,6 +1399,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
@@ -1461,10 +1461,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			),
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": true,
-						"Pinniped-Password": true,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -1477,6 +1473,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
@@ -1780,10 +1780,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantDownstreamCustomSessionData:   expectedHappyActiveDirectoryUpstreamCustomSession,
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": true,
-						"Pinniped-Password": true,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -1796,6 +1792,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-active-directory-idp",
@@ -1894,10 +1894,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:     "",
 			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -1911,6 +1907,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-oidc-idp",
@@ -2180,10 +2180,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:     "",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": true,
-						"Pinniped-Password": true,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -2196,6 +2192,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-password-granting-oidc-idp",
@@ -2219,10 +2219,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:       "",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": true,
-						"Pinniped-Password": true,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -2235,6 +2231,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": true,
+						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-ldap-idp",
@@ -2295,10 +2295,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:       "",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": true,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id":             "pinniped-cli",
@@ -2311,6 +2307,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 							"scope":                 "openid profile email username groups",
 							"state":                 "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": true,
 					}),
 					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 						"displayName":  "some-password-granting-oidc-idp",
@@ -4031,15 +4031,15 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:  "Method Not Allowed: PUT (try GET or POST)\n",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id": "baz",
 							"foo":       "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 				}
 			},
@@ -4054,15 +4054,15 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:  "Method Not Allowed: PATCH (try GET or POST)\n",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id": "baz",
 							"foo":       "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 				}
 			},
@@ -4077,15 +4077,15 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			wantBodyString:  "Method Not Allowed: DELETE (try GET or POST)\n",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-						"Pinniped-Username": false,
-						"Pinniped-Password": false,
-					}),
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"client_id": "baz",
 							"foo":       "redacted",
 						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
 					}),
 				}
 			},
@@ -4328,10 +4328,6 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		)
 		test.wantAuditLogs = func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 			return []testutil.WantedAuditLog{
-				testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
-					"Pinniped-Username": false,
-					"Pinniped-Password": false,
-				}),
 				testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 					"params": map[string]any{
 						"client_id":             "pinniped-cli",
@@ -4344,6 +4340,10 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 						"scope":                 "openid profile email username groups",
 						"state":                 "redacted",
 					},
+				}),
+				testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+					"Pinniped-Username": false,
+					"Pinniped-Password": false,
 				}),
 				testutil.WantAuditLog("Using Upstream IDP", map[string]any{
 					"displayName":  "some-other-new-idp-display-name",

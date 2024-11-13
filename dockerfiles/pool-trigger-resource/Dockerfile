@@ -9,7 +9,7 @@
 # to use newer versions of linux, jq, and git. The "assets" directory's source code is copied from
 # https://github.com/cfmobile/pool-trigger-resource/tree/master/assets as of commit efefe018c88e937.
 
-FROM debian:12.7-slim
+FROM debian:12.8-slim
 
 RUN apt-get update && apt-get install -y ca-certificates jq git && rm -rf /var/lib/apt/lists/*
 

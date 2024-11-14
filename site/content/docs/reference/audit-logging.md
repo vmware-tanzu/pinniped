@@ -20,7 +20,7 @@ and audited by the
 [standard Kubernetes audit logging](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/)
 capabilities.
 
-In addition, Pinniped exposes several APIs to all end-users to provide end-user authentication.
+In addition, Pinniped exposes several APIs to all end users to provide end-user authentication.
 For these APIs, Pinniped offers additional audit logging capabilities. These additional audit logs appear in
 the pod logs of the Supervisor and Concierge pods. Each line of the pod logs is a JSON object.
 Although these audit events are interleaved with other pod log messages, they are identifiable by always
@@ -30,16 +30,16 @@ having an `"auditEvent"=true` key/value pair.
 
 Both the Supervisor and the Concierge offer custom resource definitions (CRDs) for configuration,
 which are protected by Kubernetes RBAC and typically only available for administrators to use.
-End-users typically cannot access these APIs, and they are not part of the authentication flows for end-users.
+End users typically cannot access these APIs, and they are not part of the authentication flows for end users.
 Changes to these resources are audited by the standard Kubernetes audit logging.
 
 The Pinniped Supervisor offers one additional API for administrators, which is an aggregated API called
 `OIDCClientSecretRequest` to create client secrets for `OIDCClient` resources.
-End-users typically cannot access this API (protected by Kubernetes RBAC), and it is not part of the authentication
-flows for end-users. This API is audited by both the standard Kubernetes audit logging and may emit Pinniped audit events.
+End users typically cannot access this API (protected by Kubernetes RBAC), and it is not part of the authentication
+flows for end users. This API is audited by the standard Kubernetes audit logging and may also emit Pinniped audit events.
 
 The Pinniped Concierge offers two public APIs for end-user authentication, which are both aggregated APIs.
-These will be audited by both the standard Kubernetes audit logging and may emit Pinniped audit events.
+These will be audited by the standard Kubernetes audit logging and may also emit Pinniped audit events.
 - `TokenCredendtialRequest`: This API authenticates a user and returns a temporary cluster credential for that user.
 - `WhoAmIRequest`: This API returns the username and group memberships of the user who invokes it.
 
@@ -82,14 +82,14 @@ audit logs both forwards and backwards in time. The values for these keys are op
   lines of audit events to be correlated when they came from a single HTTP request. This `auditID` is also returned
   to the client as an HTTP response header to allow for correlation between the request as observed by the client
   and the logs as observed by the administrator. For aggregated APIs only, the `auditID` can also be used to
-  correlate Pinniped audit events with Kubernetes audit logs, which will use the same `auditID`.
+  correlate Pinniped audit events with Kubernetes audit logs, which will use the same `auditID` value for a particular request.
 - When applicable, audit logs have a `sessionID` which is the unique ID of a stored Pinniped Supervisor user session,
   to allow audit events to be correlated which relate to a single session even when they are caused by different
   requests or controllers. The same `sessionID` can help you observe all the actions performed during a single user's
   session across multiple HTTP requests that make up a fresh login, token exchanges, multiple session refreshes, and
   session garbage collection.
 - When applicable, audit logs have an `authorizeID` which is a unique ID to allow audit events to be correlated
-  across some of the browser redirects which relate to a single login attempt by an end-user. This is only applicable
+  across some of the browser redirects which relate to a single login attempt by an end user. This is only applicable
   to those browser-based login flows which use redirects to identity providers and/or interstitial pages in the login flow.
 
 Each audit event may also have more key/value pairs specific to the event's type.
@@ -101,25 +101,33 @@ Audit events are always enabled. There are two configuration options available:
 1. By default, usernames and group names are not included in the audit events. This is because these names may
    include personally identifiable information (PII) which you may wish to avoid sending to your pod logs.
    However, authentication audit logs can be more useful when this information is included.
-2. By default, some endpoints that are internal to the Kubernetes cluster are not audited in the pod logs.
-   These include, for example, a `healthz` endpoint that is used for pod liveness and readiness probes,
-   some discovery endpoints called by the Kubernetes API server to discover the endpoints made available by
-   the Pinniped pods, and other similar endpoints. These are typically not available to end-users and therefore
-   not always as interesting for authentication auditing.
+2. By default, the Supervisor does not audit log requests made to the `healthz` endpoint, which is used for
+   pod liveness and readiness probes, because it is called so often and it has no behavior other than returning OK.
 
 Both of these can be optionally enabled in the ConfigMaps which hold the pod startup settings for the Supervisor
 and Concierge deployments. When these ConfigMaps are changed, the corresponding Supervisor or Concierge pods must
-be restarted for the new settings to be picked up by the pods.
-
-TODO: Document this configuration, probably something like so:
+be restarted for the new settings to be picked up by the pods. You can find these ConfigMaps by looking at which
+ConfigMap is volume mounted by the Supervisor or Concierge Deployment.
 
 ```yaml
-audit:
-  show_personally_identifiable_information: enabled
-  internal_endpoints: enabled
-```
+apiVersion: v1
+kind: ConfigMap
+metadata: # ...
+data:
+  pinniped.yaml: |
+    # ...other settings
 
-#</TODO>
+    audit:
+
+      # This setting is available in both the Supervisor and Concierge ConfigMaps.
+      # When enabled, usernames and group names determined during end-user auth
+      # will be audit logged.
+      logUsernamesAndGroups: enabled
+
+      # This setting is only available in the Supervisor's ConfigMap.
+      # Enables audit logging of the /healthz endpoint.
+      logInternalPaths: enabled
+```
 
 ## Exporting Pinniped audit events off-cluster
 
@@ -130,36 +138,264 @@ export only the audit event lines, or export the audit event lines separately fr
 This can be achieved by configuring Fluentbit `FILTER`s to evaluate each Supervisor or Concierge pod log line
 based on the presence or absence of the `"auditEvent"=true` key/value pair.
 
+## Example of audit event logs
 
-## TODO: Show audit events for a sample flow, in this case an LDAP browser flow
+The follow example shows several audit event logs from the Supervisor's pod logs during an end user's browser-based
+login using an OIDC identity provider.
+
+For this example, the `logUsernamesAndGroups` setting is enabled. If it were disabled,
+all values in the `personalInfo` maps would be redacted. The pod logs contain one JSON object per line.
+For readability, we have pretty-printed each line.
+
+The login flow starts with the client calling several discovery endpoints.
+We will skip showing those audit logs here for brevity.
+
+Next, the client calls the authorize endpoint to start the login flow.
+A single call to the authorize endpoint causes several audit log event,
+which can be correlated using the `auditID` (request ID) to find all logs related to that single HTTPS request.
+Note that potentially sensitive values such as credentials are automatically redacted in the logs.
+The logs from the authorize endpoint are shown below.
 
 ```json lines
-{"message":"HTTP Request Received","auditID":"c5c83810-17e6-4090-86f0-7bfa1d86c8e0","auditEvent":true,"proto":"HTTP/2.0","method":"GET","host":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","serverName":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","path":"/some/path/oauth2/authorize","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36","remoteAddr":"10.244.0.17:50122"}
-{"message":"HTTP Request Custom Headers Used","auditID":"c5c83810-17e6-4090-86f0-7bfa1d86c8e0","auditEvent":true,"Pinniped-Username":false,"Pinniped-Password":false}
-{"message":"HTTP Request Parameters","auditID":"c5c83810-17e6-4090-86f0-7bfa1d86c8e0","auditEvent":true,"params":"access_type=offline&client_id=pinniped-cli&code_challenge=redacted&code_challenge_method=S256&nonce=redacted&pinniped_idp_name=My+LDAP+IDP+%F0%9F%9A%80&redirect_uri=http%3A%2F%2F127.0.0.1%3A52377%2Fcallback&response_mode=form_post&response_type=code&scope=groups+offline_access+openid+pinniped%3Arequest-audience+username&state=redacted"}
-{"message":"Using Upstream IDP","auditID":"c5c83810-17e6-4090-86f0-7bfa1d86c8e0","auditEvent":true,"displayName":"My LDAP IDP 🚀","resourceName":"my-ldap-provider","resourceUID":"e8006e7c-91d0-4aa5-b655-844fa2d4aaa4","type":"ldap"}
-{"message":"Upstream Authorize Redirect","auditID":"c5c83810-17e6-4090-86f0-7bfa1d86c8e0","auditEvent":true,"authorizeID":"9e9289b3e8b8480360dbfaddb86d91ca5e7c59a3ff3622ee1153cf2124cdee05"}
-{"message":"HTTP Request Completed","auditID":"c5c83810-17e6-4090-86f0-7bfa1d86c8e0","auditEvent":true,"path":"/some/path/oauth2/authorize","latency":"510.279µs","responseStatus":303,"location":"https://pinniped-supervisor-clusterip.supervisor.svc.cluster.local/some/path/login?state=redacted"}
-{"message":"HTTP Request Received","auditID":"50b5e755-fb36-4cec-b343-9ba4cbc4d46f","auditEvent":true,"proto":"HTTP/2.0","method":"GET","host":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","serverName":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","path":"/some/path/login","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36","remoteAddr":"10.244.0.17:50122"}
-{"message":"AuthorizeID From Parameters","auditID":"50b5e755-fb36-4cec-b343-9ba4cbc4d46f","auditEvent":true,"authorizeID":"9e9289b3e8b8480360dbfaddb86d91ca5e7c59a3ff3622ee1153cf2124cdee05"}
-{"message":"HTTP Request Completed","auditID":"50b5e755-fb36-4cec-b343-9ba4cbc4d46f","auditEvent":true,"path":"/some/path/login","latency":"786.974µs","responseStatus":200,"location":"no location header"}
-{"message":"HTTP Request Received","auditID":"3634195e-52b7-4beb-97d7-f881027251b3","auditEvent":true,"proto":"HTTP/2.0","method":"POST","host":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","serverName":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","path":"/some/path/login","userAgent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36","remoteAddr":"10.244.0.17:50122"}
-{"message":"AuthorizeID From Parameters","auditID":"3634195e-52b7-4beb-97d7-f881027251b3","auditEvent":true,"authorizeID":"9e9289b3e8b8480360dbfaddb86d91ca5e7c59a3ff3622ee1153cf2124cdee05"}
-{"message":"Identity From Upstream IDP","auditID":"3634195e-52b7-4beb-97d7-f881027251b3","auditEvent":true,"upstreamIDPDisplayName":"My LDAP IDP 🚀","upstreamIDPType":"ldap","upstreamIDPResourceName":"my-ldap-provider","upstreamIDPResourceUID":"e8006e7c-91d0-4aa5-b655-844fa2d4aaa4","upstreamUsername":"pinny.ldap@example.com","upstreamGroups":["ball-game-players","seals"]}
-{"message":"Session Started","sessionID":"d4f6d184-fda2-4638-a44a-88c9484ba1d2","auditID":"3634195e-52b7-4beb-97d7-f881027251b3","auditEvent":true,"username":"ldap:pinny.ldap@example.com","groups":["ldap:ball-admins","ldap:ball-game-players"],"subject":"ldaps://ldap.tools.svc.cluster.local?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=My+LDAP+IDP+%F0%9F%9A%80&sub=MTAwMA","additionalClaims":null,"warnings":[]}
-{"message":"HTTP Request Completed","auditID":"3634195e-52b7-4beb-97d7-f881027251b3","auditEvent":true,"path":"/some/path/login","latency":"47.139942ms","responseStatus":200,"location":"no location header"}
-{"message":"HTTP Request Received","auditID":"fd54a485-ee59-4c61-b05d-d5c86303f167","auditEvent":true,"proto":"HTTP/2.0","method":"POST","host":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","serverName":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","path":"/some/path/oauth2/token","userAgent":"pinniped/v0.0.0 (darwin/amd64) kubernetes/$Format","remoteAddr":"10.244.0.17:41922"}
-{"message":"HTTP Request Parameters","sessionID":"d4f6d184-fda2-4638-a44a-88c9484ba1d2","auditID":"fd54a485-ee59-4c61-b05d-d5c86303f167","auditEvent":true,"params":"code=redacted&code_verifier=redacted&grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%3A52377%2Fcallback"}
-{"message":"HTTP Request Completed","auditID":"fd54a485-ee59-4c61-b05d-d5c86303f167","auditEvent":true,"path":"/some/path/oauth2/token","latency":"207.835054ms","responseStatus":200,"location":"no location header"}
-{"message":"HTTP Request Received","auditID":"4aee9fbb-6163-4d55-a487-413549e6f746","auditEvent":true,"proto":"HTTP/2.0","method":"POST","host":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","serverName":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","path":"/some/path/oauth2/token","userAgent":"pinniped/v0.0.0 (darwin/amd64) kubernetes/$Format","remoteAddr":"10.244.0.17:41922"}
-{"message":"HTTP Request Parameters","sessionID":"d4f6d184-fda2-4638-a44a-88c9484ba1d2","auditID":"4aee9fbb-6163-4d55-a487-413549e6f746","auditEvent":true,"params":"audience=my-workload-cluster-3b4294dd&client_id=pinniped-cli&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange&requested_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Ajwt&subject_token=redacted&subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token"}
-{"message":"HTTP Request Completed","auditID":"4aee9fbb-6163-4d55-a487-413549e6f746","auditEvent":true,"path":"/some/path/oauth2/token","latency":"183.118075ms","responseStatus":200,"location":"no location header"}
-{"message":"HTTP Request Received","auditID":"6a7760aa-6ea8-4ceb-abf4-9215b976e9e4","auditEvent":true,"proto":"HTTP/2.0","method":"POST","host":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","serverName":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","path":"/some/path/oauth2/token","userAgent":"pinniped/v0.0.0 (darwin/amd64) kubernetes/$Format","remoteAddr":"10.244.0.17:50346"}
-{"message":"HTTP Request Parameters","sessionID":"d4f6d184-fda2-4638-a44a-88c9484ba1d2","auditID":"6a7760aa-6ea8-4ceb-abf4-9215b976e9e4","auditEvent":true,"params":"grant_type=refresh_token&refresh_token=redacted"}
-{"message":"Identity Refreshed From Upstream IDP","sessionID":"d4f6d184-fda2-4638-a44a-88c9484ba1d2","auditID":"6a7760aa-6ea8-4ceb-abf4-9215b976e9e4","auditEvent":true,"upstreamUsername":"pinny.ldap@example.com","upstreamGroups":["ball-game-players","seals"]}
-{"message":"Session Refreshed","sessionID":"d4f6d184-fda2-4638-a44a-88c9484ba1d2","auditID":"6a7760aa-6ea8-4ceb-abf4-9215b976e9e4","auditEvent":true,"username":"ldap:pinny.ldap@example.com","groups":["ldap:ball-admins","ldap:ball-game-players"],"subject":"ldaps://ldap.tools.svc.cluster.local?base=ou%3Dusers%2Cdc%3Dpinniped%2Cdc%3Ddev&idpName=My+LDAP+IDP+%F0%9F%9A%80&sub=MTAwMA"}
-{"message":"HTTP Request Completed","auditID":"6a7760aa-6ea8-4ceb-abf4-9215b976e9e4","auditEvent":true,"path":"/some/path/oauth2/token","latency":"41.358432ms","responseStatus":200,"location":"no location header"}
-{"message":"HTTP Request Received","auditID":"6f00fd23-c932-4bd0-8102-86632c7e8ae0","auditEvent":true,"proto":"HTTP/2.0","method":"POST","host":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","serverName":"pinniped-supervisor-clusterip.supervisor.svc.cluster.local","path":"/some/path/oauth2/token","userAgent":"pinniped/v0.0.0 (darwin/amd64) kubernetes/$Format","remoteAddr":"10.244.0.17:50346"}
-{"message":"HTTP Request Parameters","sessionID":"d4f6d184-fda2-4638-a44a-88c9484ba1d2","auditID":"6f00fd23-c932-4bd0-8102-86632c7e8ae0","auditEvent":true,"params":"audience=my-workload-cluster-3b4294dd&client_id=pinniped-cli&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange&requested_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Ajwt&subject_token=redacted&subject_token_type=urn%3Aietf%3Aparams%3Aoauth%3Atoken-type%3Aaccess_token"}
-{"message":"HTTP Request Completed","auditID":"6f00fd23-c932-4bd0-8102-86632c7e8ae0","auditEvent":true,"path":"/some/path/oauth2/token","latency":"2.993264ms","responseStatus":200,"location":"no location header"}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:41:53.162801Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:83$requestlogger.(*requestLogger).logRequestReceived",
+  "message": "HTTP Request Received",
+  "auditEvent": true,
+  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "proto": "HTTP/2.0",
+  "method": "GET",
+  "host": "example-supervisor.pinniped.dev",
+  "serverName": "example-supervisor.pinniped.dev",
+  "path": "/oauth2/authorize",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+  "remoteAddr": "1.2.3.4:40262"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:41:53.162877Z",
+  "caller": "go.pinniped.dev/internal/plog/plog.go:207$plog.(*auditLogger).AuditRequestParams",
+  "message": "HTTP Request Parameters",
+  "auditEvent": true,
+  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "params": {
+    "access_type": "offline",
+    "client_id": "pinniped-cli",
+    "code_challenge": "redacted",
+    "code_challenge_method": "S256",
+    "nonce": "redacted",
+    "pinniped_idp_name": "My OIDC IDP",
+    "pinniped_idp_type": "oidc",
+    "redirect_uri": "http://127.0.0.1:55186/callback",
+    "response_mode": "form_post",
+    "response_type": "code",
+    "scope": "groups offline_access openid pinniped:request-audience username",
+    "state": "redacted"
+  }
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:41:53.163006Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/auth/auth_handler.go:116$auth.(*authorizeHandler).ServeHTTP",
+  "message": "HTTP Request Custom Headers Used",
+  "auditEvent": true,
+  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "Pinniped-Username": false,
+  "Pinniped-Password": false
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:41:53.163056Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/auth/auth_handler.go:161$auth.(*authorizeHandler).ServeHTTP",
+  "message": "Using Upstream IDP",
+  "auditEvent": true,
+  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "displayName": "My OIDC IDP",
+  "resourceName": "my-oidc-provider",
+  "resourceUID": "1028052a-4061-473b-b54a-0f6d4c15651f",
+  "type": "oidc"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:41:53.163433Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/auth/auth_handler.go:209$auth.(*authorizeHandler).authorize",
+  "message": "Upstream Authorize Redirect",
+  "auditEvent": true,
+  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "authorizeID": "8129f3052a512881c72a329bb3044b8f39b7e9ed30e28f91b04d3917570b80e8"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:41:53.163464Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:133$requestlogger.(*requestLogger).logRequestComplete",
+  "message": "HTTP Request Completed",
+  "auditEvent": true,
+  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "path": "/oauth2/authorize",
+  "latency": "671.792µs",
+  "responseStatus": 303,
+  "location": "https://example-external-oidc.pinniped.dev/auth?client_id=redacted&code_challenge=redacted&code_challenge_method=redacted&nonce=redacted&redirect_uri=redacted&response_type=redacted&scope=redacted&state=redacted"
+}
 ```
+
+As by the logs above, the authorize endpoint has redirected the user's browser to the external OIDC identity provider
+for authentication. After the user authenticates there, the OIDC provider redirects back to the Supervisor's callback
+endpoint. The `authorizeID` can be used to correlate the original authorize request with this callback request.
+The logs from the callback request are shown below.
+
+```json lines
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:11.887705Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:83$requestlogger.(*requestLogger).logRequestReceived",
+  "message": "HTTP Request Received",
+  "auditEvent": true,
+  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "proto": "HTTP/2.0",
+  "method": "GET",
+  "host": "example-supervisor.pinniped.dev",
+  "serverName": "example-supervisor.pinniped.dev",
+  "path": "/callback",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+  "remoteAddr": "1.2.3.4:40262"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:11.887769Z",
+  "caller": "go.pinniped.dev/internal/plog/plog.go:207$plog.(*auditLogger).AuditRequestParams",
+  "message": "HTTP Request Parameters",
+  "auditEvent": true,
+  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "params": {
+    "code": "redacted",
+    "state": "redacted"
+  }
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:11.887853Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/callback/callback_handler.go:52$endpointsmanager.(*Manager).SetFederationDomains.NewHandler.func7",
+  "message": "AuthorizeID From Parameters",
+  "auditEvent": true,
+  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "authorizeID": "8129f3052a512881c72a329bb3044b8f39b7e9ed30e28f91b04d3917570b80e8"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:11.887872Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/callback/callback_handler.go:63$endpointsmanager.(*Manager).SetFederationDomains.NewHandler.func7",
+  "message": "Using Upstream IDP",
+  "auditEvent": true,
+  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "displayName": "My OIDC IDP",
+  "resourceName": "my-oidc-provider",
+  "resourceUID": "1028052a-4061-473b-b54a-0f6d4c15651f",
+  "type": "oidc"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:11.899166Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/downstreamsession/downstream_session.go:53$downstreamsession.NewPinnipedSession",
+  "message": "Identity From Upstream IDP",
+  "auditEvent": true,
+  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "personalInfo": {
+    "upstreamUsername": "pinny@example.com",
+    "upstreamGroups": []
+  },
+  "upstreamIDPDisplayName": "My OIDC IDP",
+  "upstreamIDPType": "oidc",
+  "upstreamIDPResourceName": "my-oidc-provider",
+  "upstreamIDPResourceUID": "1028052a-4061-473b-b54a-0f6d4c15651f"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:11.899243Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/downstreamsession/downstream_session.go:120$downstreamsession.NewPinnipedSession",
+  "message": "Session Started",
+  "auditEvent": true,
+  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "sessionID": "22a0fe9f-9cab-4248-8dac-bff71291b95c",
+  "personalInfo": {
+    "username": "oidc:pinny@example.com",
+    "groups": [],
+    "subject": "https://example-external-oidc.pinniped.dev?idpName=My+OIDC+IDP&sub=CiQwNjFkMjNkMS1mZTFlLTQ3NzctOWFlOS01OWNkMTJhYmVhYWESBWxvY2Fs",
+    "additionalClaims": {}
+  },
+  "warnings": []
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:11.909870Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:133$requestlogger.(*requestLogger).logRequestComplete",
+  "message": "HTTP Request Completed",
+  "auditEvent": true,
+  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "path": "/callback",
+  "latency": "22.183042ms",
+  "responseStatus": 200,
+  "location": "no location header"
+}
+```
+
+The callback endpoint started a Supervisor session for the user and sent an authorization code to the client.
+Note that it logged a new unique `sessionID` for this user session.
+Next, the client will call the token endpoint to exchange that code for tokens. This can be correlated to the
+callback endpoint invocation using the `sessionID`. Additionally, all future activity related to this user session
+can also be correlated using the `sessionID`, e.g. session refreshes, token exchanges, and session expiration.
+
+```json lines
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:15.190376Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:83$requestlogger.(*requestLogger).logRequestReceived",
+  "message": "HTTP Request Received",
+  "auditEvent": true,
+  "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
+  "proto": "HTTP/2.0",
+  "method": "POST",
+  "host": "example-supervisor.pinniped.dev",
+  "serverName": "example-supervisor.pinniped.dev",
+  "path": "/oauth2/token",
+  "userAgent": "pinniped/v0.0.0 (darwin/arm64) kubernetes/$Format",
+  "remoteAddr": "1.2.3.4:42446"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:15.190475Z",
+  "caller": "go.pinniped.dev/internal/plog/plog.go:207$plog.(*auditLogger).AuditRequestParams",
+  "message": "HTTP Request Parameters",
+  "auditEvent": true,
+  "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
+  "params": {
+    "code": "redacted",
+    "code_verifier": "redacted",
+    "grant_type": "authorization_code",
+    "redirect_uri": "http://127.0.0.1:55186/callback"
+  }
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:15.190479Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/token/token_handler.go:68$endpointsmanager.(*Manager).SetFederationDomains.NewHandler.func7",
+  "message": "Session Found",
+  "auditEvent": true,
+  "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
+  "sessionID": "22a0fe9f-9cab-4248-8dac-bff71291b95c"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-14T18:42:15.396784Z",
+  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:133$requestlogger.(*requestLogger).logRequestComplete",
+  "message": "HTTP Request Completed",
+  "auditEvent": true,
+  "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
+  "path": "/oauth2/token",
+  "latency": "206.434458ms",
+  "responseStatus": 200,
+  "location": "no location header"
+}
+```
+
+In a typical login, several more endpoints are called, but we omit them here for brevity.

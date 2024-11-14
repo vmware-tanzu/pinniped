@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apiserver/pkg/audit"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	kubefake "k8s.io/client-go/kubernetes/fake"
@@ -31,6 +32,7 @@ import (
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
+	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/testutil"
 )
 
@@ -41,6 +43,7 @@ func TestNew(t *testing.T) {
 		nil,
 		"foobar",
 		4,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -120,6 +123,7 @@ func TestCreate(t *testing.T) {
 		wantErrStatus         *metav1.Status
 		wantHashes            *wantHashes
 		wantLogStepSubstrings []string
+		wantAuditLog          []testutil.WantedAuditLog
 	}{
 		{
 			name: "wrong type of request object provided",
@@ -714,6 +718,15 @@ func TestCreate(t *testing.T) {
 				`secretStorage.Set`,
 				`END`,
 			},
+			wantAuditLog: []testutil.WantedAuditLog{
+				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
+					"auditID":         "fake-audit-id",
+					"clientID":        "client.oauth.pinniped.dev-happy-new-secret",
+					"generatedSecret": true,
+					"revokedSecrets":  float64(0),
+					"totalSecrets":    float64(1),
+				}),
+			},
 		},
 		{
 			name: "happy path: secret exists, prepend new secret hash to secret to the list of hashes for found oidcclient",
@@ -783,6 +796,15 @@ func TestCreate(t *testing.T) {
 				`secretStorage.Set`,
 				`END`,
 			},
+			wantAuditLog: []testutil.WantedAuditLog{
+				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
+					"auditID":         "fake-audit-id",
+					"clientID":        "client.oauth.pinniped.dev-append-new-secret-hash",
+					"generatedSecret": true,
+					"revokedSecrets":  float64(0),
+					"totalSecrets":    float64(3),
+				}),
+			},
 		},
 		{
 			name: "happy path: secret exists, append new secret hash to secret and revoke old for found oidcclient",
@@ -849,9 +871,18 @@ func TestCreate(t *testing.T) {
 				`secretStorage.Set`,
 				`END`,
 			},
+			wantAuditLog: []testutil.WantedAuditLog{
+				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
+					"auditID":         "fake-audit-id",
+					"clientID":        "client.oauth.pinniped.dev-append-new-secret-hash",
+					"generatedSecret": true,
+					"revokedSecrets":  float64(2),
+					"totalSecrets":    float64(1),
+				}),
+			},
 		},
 		{
-			name: "happy path: secret exists, revoke old secrets but retain latest for found oidcclient",
+			name: "happy path: secret exists, revoke oldest secrets but retain latest old secret for found oidcclient",
 			args: args{
 				ctx: namespacedContext,
 				obj: &clientsecretapi.OIDCClientSecretRequest{
@@ -874,6 +905,7 @@ func TestCreate(t *testing.T) {
 						[]string{
 							"hashed-password-1",
 							"hashed-password-2",
+							"hashed-password-3",
 						},
 					))
 			},
@@ -912,6 +944,15 @@ func TestCreate(t *testing.T) {
 				`secretStorage.Get`,
 				`secretStorage.Set`,
 				`END`,
+			},
+			wantAuditLog: []testutil.WantedAuditLog{
+				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
+					"auditID":         "fake-audit-id",
+					"clientID":        "client.oauth.pinniped.dev-some-client",
+					"generatedSecret": false,
+					"revokedSecrets":  float64(2),
+					"totalSecrets":    float64(1),
+				}),
 			},
 		},
 		{
@@ -1413,6 +1454,15 @@ func TestCreate(t *testing.T) {
 				`secretStorage.Set`,
 				`END`,
 			},
+			wantAuditLog: []testutil.WantedAuditLog{
+				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
+					"auditID":         "fake-audit-id",
+					"clientID":        "client.oauth.pinniped.dev-some-client",
+					"generatedSecret": true,
+					"revokedSecrets":  float64(1),
+					"totalSecrets":    float64(1),
+				}),
+			},
 		},
 		{
 			name: "happy path: generate new secret when existing secrets is max (5)",
@@ -1481,6 +1531,15 @@ func TestCreate(t *testing.T) {
 				`bcrypt.GenerateFromPassword`,
 				`secretStorage.Set`,
 				`END`,
+			},
+			wantAuditLog: []testutil.WantedAuditLog{
+				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
+					"auditID":         "fake-audit-id",
+					"clientID":        "client.oauth.pinniped.dev-some-client",
+					"generatedSecret": true,
+					"revokedSecrets":  float64(5),
+					"totalSecrets":    float64(1),
+				}),
 			},
 		},
 		{
@@ -1552,6 +1611,15 @@ func TestCreate(t *testing.T) {
 				`secretStorage.Set`,
 				`END`,
 			},
+			wantAuditLog: []testutil.WantedAuditLog{
+				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
+					"auditID":         "fake-audit-id",
+					"clientID":        "client.oauth.pinniped.dev-some-client",
+					"generatedSecret": true,
+					"revokedSecrets":  float64(6),
+					"totalSecrets":    float64(1),
+				}),
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -1606,6 +1674,10 @@ func TestCreate(t *testing.T) {
 				fakeByteGenerator = strings.NewReader(fakeRandomBytes + "these extra bytes should be ignored since we only read 32 bytes")
 			}
 
+			auditLogger, actualAuditLog := plog.TestAuditLogger(t)
+			ctx := audit.WithAuditContext(tt.args.ctx)
+			audit.WithAuditID(ctx, "fake-audit-id")
+
 			r := NewREST(
 				schema.GroupResource{Group: "bears", Resource: "panda"},
 				secretsClient,
@@ -1615,9 +1687,10 @@ func TestCreate(t *testing.T) {
 				fakeByteGenerator,
 				fakeHasher,
 				fakeTimeNowFunc,
+				auditLogger,
 			)
 
-			got, err := r.Create(tt.args.ctx, tt.args.obj, tt.args.createValidation, tt.args.options)
+			got, err := r.Create(ctx, tt.args.obj, tt.args.createValidation, tt.args.options)
 
 			require.Equal(t, tt.want, got)
 			if tt.wantErrStatus != nil {
@@ -1646,6 +1719,8 @@ func TestCreate(t *testing.T) {
 			}
 
 			requireExactlyOneLogLineWithMultipleSteps(t, logger, tt.wantLogStepSubstrings)
+
+			testutil.CompareAuditLogs(t, tt.wantAuditLog, actualAuditLog.String())
 		})
 	}
 }

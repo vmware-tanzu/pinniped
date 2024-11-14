@@ -20,6 +20,7 @@ const (
 	UpstreamOIDCTokenRevoked                   Message = "Upstream OIDC Token Revoked" //nolint:gosec // this is not a credential
 	SessionGarbageCollected                    Message = "Session Garbage Collected"
 	UpstreamAuthorizeRedirect                  Message = "Upstream Authorize Redirect"
+	OIDCClientSecretRequestUpdatedSecrets      Message = "OIDCClientSecretRequest Updated Secrets"
 	TokenCredentialRequestAuthenticatedUser    Message = "TokenCredentialRequest Authenticated User"    //nolint:gosec // this is not a credential
 	TokenCredentialRequestAuthenticationFailed Message = "TokenCredentialRequest Authentication Failed" //nolint:gosec // this is not a credential
 	TokenCredentialRequestUnexpectedError      Message = "TokenCredentialRequest Unexpected Error"      //nolint:gosec // this is not a credential

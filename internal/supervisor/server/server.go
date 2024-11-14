@@ -529,6 +529,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace),
 		client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
 		serverInstallationNamespace,
+		auditLogger,
 	)
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
@@ -639,6 +640,7 @@ func getAggregatedAPIServerConfig(
 	secrets corev1client.SecretInterface,
 	oidcClients v1alpha1.OIDCClientInterface,
 	serverInstallationNamespace string,
+	auditLogger plog.AuditLogger,
 ) (*apiserver.Config, error) {
 	codecs := serializer.NewCodecFactory(scheme)
 
@@ -705,6 +707,7 @@ func getAggregatedAPIServerConfig(
 			Secrets:                            secrets,
 			OIDCClients:                        oidcClients,
 			Namespace:                          serverInstallationNamespace,
+			AuditLogger:                        auditLogger,
 		},
 	}
 	return apiServerConfig, nil

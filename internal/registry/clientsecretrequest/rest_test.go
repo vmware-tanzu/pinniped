@@ -720,7 +720,6 @@ func TestCreate(t *testing.T) {
 			},
 			wantAuditLog: []testutil.WantedAuditLog{
 				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
-					"auditID":         "fake-audit-id",
 					"clientID":        "client.oauth.pinniped.dev-happy-new-secret",
 					"generatedSecret": true,
 					"revokedSecrets":  float64(0),
@@ -798,7 +797,6 @@ func TestCreate(t *testing.T) {
 			},
 			wantAuditLog: []testutil.WantedAuditLog{
 				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
-					"auditID":         "fake-audit-id",
 					"clientID":        "client.oauth.pinniped.dev-append-new-secret-hash",
 					"generatedSecret": true,
 					"revokedSecrets":  float64(0),
@@ -873,7 +871,6 @@ func TestCreate(t *testing.T) {
 			},
 			wantAuditLog: []testutil.WantedAuditLog{
 				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
-					"auditID":         "fake-audit-id",
 					"clientID":        "client.oauth.pinniped.dev-append-new-secret-hash",
 					"generatedSecret": true,
 					"revokedSecrets":  float64(2),
@@ -947,7 +944,6 @@ func TestCreate(t *testing.T) {
 			},
 			wantAuditLog: []testutil.WantedAuditLog{
 				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
-					"auditID":         "fake-audit-id",
 					"clientID":        "client.oauth.pinniped.dev-some-client",
 					"generatedSecret": false,
 					"revokedSecrets":  float64(2),
@@ -1456,7 +1452,6 @@ func TestCreate(t *testing.T) {
 			},
 			wantAuditLog: []testutil.WantedAuditLog{
 				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
-					"auditID":         "fake-audit-id",
 					"clientID":        "client.oauth.pinniped.dev-some-client",
 					"generatedSecret": true,
 					"revokedSecrets":  float64(1),
@@ -1534,7 +1529,6 @@ func TestCreate(t *testing.T) {
 			},
 			wantAuditLog: []testutil.WantedAuditLog{
 				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
-					"auditID":         "fake-audit-id",
 					"clientID":        "client.oauth.pinniped.dev-some-client",
 					"generatedSecret": true,
 					"revokedSecrets":  float64(5),
@@ -1613,7 +1607,6 @@ func TestCreate(t *testing.T) {
 			},
 			wantAuditLog: []testutil.WantedAuditLog{
 				testutil.WantAuditLog("OIDCClientSecretRequest Updated Secrets", map[string]any{
-					"auditID":         "fake-audit-id",
 					"clientID":        "client.oauth.pinniped.dev-some-client",
 					"generatedSecret": true,
 					"revokedSecrets":  float64(6),
@@ -1720,6 +1713,7 @@ func TestCreate(t *testing.T) {
 
 			requireExactlyOneLogLineWithMultipleSteps(t, logger, tt.wantLogStepSubstrings)
 
+			testutil.WantAuditIDOnEveryAuditLog(tt.wantAuditLog, "fake-audit-id")
 			testutil.CompareAuditLogs(t, tt.wantAuditLog, actualAuditLog.String())
 		})
 	}

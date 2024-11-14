@@ -363,7 +363,7 @@ func TestLoginEndpoint(t *testing.T) {
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
-						"params": map[string]any{"state": "redacted", "err": "login_error"},
+						"params": map[string]any{"state": "redacted", "err": "incorrect_username_or_password"},
 					}),
 					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
 						"authorizeID": encodedStateParam.AuthorizeID(),

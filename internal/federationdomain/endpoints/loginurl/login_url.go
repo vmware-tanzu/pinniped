@@ -18,7 +18,7 @@ const (
 
 	ShowNoError        ErrorParamValue = ""
 	ShowInternalError  ErrorParamValue = "internal_error"
-	ShowBadUserPassErr ErrorParamValue = "login_error"
+	ShowBadUserPassErr ErrorParamValue = "incorrect_username_or_password"
 )
 
 type ErrorParamValue string

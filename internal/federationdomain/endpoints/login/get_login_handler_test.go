@@ -47,13 +47,13 @@ func TestGetLogin(t *testing.T) {
 			wantBody:        testutil.ExpectedLoginPageHTML(loginhtml.CSS(), testUpstreamName, testPath, testEncodedState, ""), // no alert message
 		},
 		{
-			name: "displays error banner when err=login_error param is sent",
+			name: "displays error banner when err=incorrect_username_or_password param is sent",
 			decodedState: &oidc.UpstreamStateParamData{
 				UpstreamName: testUpstreamName,
 				UpstreamType: testUpstreamType,
 			},
 			encodedState:    testEncodedState,
-			errParam:        "login_error",
+			errParam:        "incorrect_username_or_password",
 			wantStatus:      http.StatusOK,
 			wantContentType: htmlContentType,
 			wantBody: testutil.ExpectedLoginPageHTML(loginhtml.CSS(), testUpstreamName, testPath, testEncodedState,

@@ -64,7 +64,7 @@ func TestPostLoginEndpoint(t *testing.T) {
 
 		userParam                = "username"
 		passParam                = "password"
-		badUserPassErrParamValue = "login_error"
+		badUserPassErrParamValue = "incorrect_username_or_password"
 		internalErrParamValue    = "internal_error"
 
 		transformationUsernamePrefix = "username_prefix:"
@@ -942,17 +942,6 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantContentType:              htmlContentType,
 			wantBodyString:               "",
 			wantRedirectToLoginPageError: badUserPassErrParamValue,
-			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
-				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
-						"displayName":  "some-ldap-idp",
-						"resourceName": "some-ldap-idp",
-						"resourceUID":  "ldap-resource-uid",
-						"type":         "ldap",
-					}),
-					testutil.WantAuditLog("Incorrect Username Or Password", map[string]any{}),
-				}
-			},
 		},
 		{
 			name:                         "blank password LDAP login",
@@ -963,17 +952,6 @@ func TestPostLoginEndpoint(t *testing.T) {
 			wantContentType:              htmlContentType,
 			wantBodyString:               "",
 			wantRedirectToLoginPageError: badUserPassErrParamValue,
-			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
-				return []testutil.WantedAuditLog{
-					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
-						"displayName":  "some-ldap-idp",
-						"resourceName": "some-ldap-idp",
-						"resourceUID":  "ldap-resource-uid",
-						"type":         "ldap",
-					}),
-					testutil.WantAuditLog("Incorrect Username Or Password", map[string]any{}),
-				}
-			},
 		},
 		{
 			name:                         "username and password sent as URI query params should be ignored since they are expected in form post body",

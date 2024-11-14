@@ -257,7 +257,6 @@ func (h *authorizeHandler) authorizeWithoutBrowser(
 				ReqCtx: r.Context(),
 			})
 		}
-
 		return err
 	}
 

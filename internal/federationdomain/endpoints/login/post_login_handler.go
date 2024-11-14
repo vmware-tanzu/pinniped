@@ -77,10 +77,6 @@ func NewPostHandler(
 
 		// Treat blank username or password as a bad username/password combination, as opposed to an internal error.
 		if submittedUsername == "" || submittedPassword == "" {
-			auditLogger.Audit(auditevent.IncorrectUsernameOrPassword, &plog.AuditParams{
-				ReqCtx: r.Context(),
-			})
-
 			// User forgot to enter one of the required fields.
 			// The user may try to log in again if they'd like, so redirect back to the login page with an error.
 			return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowBadUserPassErr)

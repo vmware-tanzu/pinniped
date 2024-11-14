@@ -584,7 +584,7 @@ func WaitForUpstreamLDAPLoginPageWithError(t *testing.T, b *Browser, issuer stri
 
 	// Wait for redirect back to the login page again with an error.
 	t.Logf("waiting for redirect to back to login page with error message")
-	loginURLRegexp, err := regexp.Compile(`\A` + regexp.QuoteMeta(issuer+"/login") + `\?err=login_error&state=.+\z`)
+	loginURLRegexp, err := regexp.Compile(`\A` + regexp.QuoteMeta(issuer+"/login") + `\?err=incorrect_username_or_password&state=.+\z`)
 	require.NoError(t, err)
 	b.WaitForURL(t, loginURLRegexp)
 

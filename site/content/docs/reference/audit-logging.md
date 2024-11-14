@@ -145,7 +145,9 @@ login using an OIDC identity provider.
 
 For this example, the `logUsernamesAndGroups` setting is enabled. If it were disabled,
 all values in the `personalInfo` maps would be redacted. The pod logs contain one JSON object per line.
-For readability, we have pretty-printed each line.
+For readability, we have pretty-printed each line. Also for readability, we have removed the `caller` key
+in the example logs below. In the pod logs, every line includes `caller` and the value identifies the line of
+code which caused the message to be logged.
 
 The login flow starts with the client calling several discovery endpoints.
 We will skip showing those audit logs here for brevity.
@@ -160,7 +162,6 @@ The logs from the authorize endpoint are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:41:53.162801Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:83$requestlogger.(*requestLogger).logRequestReceived",
   "message": "HTTP Request Received",
   "auditEvent": true,
   "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
@@ -175,7 +176,6 @@ The logs from the authorize endpoint are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:41:53.162877Z",
-  "caller": "go.pinniped.dev/internal/plog/plog.go:207$plog.(*auditLogger).AuditRequestParams",
   "message": "HTTP Request Parameters",
   "auditEvent": true,
   "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
@@ -197,7 +197,6 @@ The logs from the authorize endpoint are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:41:53.163006Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/auth/auth_handler.go:116$auth.(*authorizeHandler).ServeHTTP",
   "message": "HTTP Request Custom Headers Used",
   "auditEvent": true,
   "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
@@ -207,7 +206,6 @@ The logs from the authorize endpoint are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:41:53.163056Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/auth/auth_handler.go:161$auth.(*authorizeHandler).ServeHTTP",
   "message": "Using Upstream IDP",
   "auditEvent": true,
   "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
@@ -219,7 +217,6 @@ The logs from the authorize endpoint are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:41:53.163433Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/auth/auth_handler.go:209$auth.(*authorizeHandler).authorize",
   "message": "Upstream Authorize Redirect",
   "auditEvent": true,
   "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
@@ -228,7 +225,6 @@ The logs from the authorize endpoint are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:41:53.163464Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:133$requestlogger.(*requestLogger).logRequestComplete",
   "message": "HTTP Request Completed",
   "auditEvent": true,
   "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
@@ -248,7 +244,6 @@ The logs from the callback request are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:11.887705Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:83$requestlogger.(*requestLogger).logRequestReceived",
   "message": "HTTP Request Received",
   "auditEvent": true,
   "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
@@ -263,7 +258,6 @@ The logs from the callback request are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:11.887769Z",
-  "caller": "go.pinniped.dev/internal/plog/plog.go:207$plog.(*auditLogger).AuditRequestParams",
   "message": "HTTP Request Parameters",
   "auditEvent": true,
   "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
@@ -275,7 +269,6 @@ The logs from the callback request are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:11.887853Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/callback/callback_handler.go:52$endpointsmanager.(*Manager).SetFederationDomains.NewHandler.func7",
   "message": "AuthorizeID From Parameters",
   "auditEvent": true,
   "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
@@ -284,7 +277,6 @@ The logs from the callback request are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:11.887872Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/callback/callback_handler.go:63$endpointsmanager.(*Manager).SetFederationDomains.NewHandler.func7",
   "message": "Using Upstream IDP",
   "auditEvent": true,
   "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
@@ -296,13 +288,12 @@ The logs from the callback request are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:11.899166Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/downstreamsession/downstream_session.go:53$downstreamsession.NewPinnipedSession",
   "message": "Identity From Upstream IDP",
   "auditEvent": true,
   "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
   "personalInfo": {
     "upstreamUsername": "pinny@example.com",
-    "upstreamGroups": []
+    "upstreamGroups": ["developers", "auditors"]
   },
   "upstreamIDPDisplayName": "My OIDC IDP",
   "upstreamIDPType": "oidc",
@@ -312,14 +303,13 @@ The logs from the callback request are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:11.899243Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/downstreamsession/downstream_session.go:120$downstreamsession.NewPinnipedSession",
   "message": "Session Started",
   "auditEvent": true,
   "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
   "sessionID": "22a0fe9f-9cab-4248-8dac-bff71291b95c",
   "personalInfo": {
-    "username": "oidc:pinny@example.com",
-    "groups": [],
+    "username": "pinny@example.com",
+    "groups": ["developers", "auditors"],
     "subject": "https://example-external-oidc.pinniped.dev?idpName=My+OIDC+IDP&sub=CiQwNjFkMjNkMS1mZTFlLTQ3NzctOWFlOS01OWNkMTJhYmVhYWESBWxvY2Fs",
     "additionalClaims": {}
   },
@@ -328,7 +318,6 @@ The logs from the callback request are shown below.
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:11.909870Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:133$requestlogger.(*requestLogger).logRequestComplete",
   "message": "HTTP Request Completed",
   "auditEvent": true,
   "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
@@ -349,7 +338,6 @@ can also be correlated using the `sessionID`, e.g. session refreshes, token exch
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:15.190376Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:83$requestlogger.(*requestLogger).logRequestReceived",
   "message": "HTTP Request Received",
   "auditEvent": true,
   "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
@@ -364,7 +352,6 @@ can also be correlated using the `sessionID`, e.g. session refreshes, token exch
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:15.190475Z",
-  "caller": "go.pinniped.dev/internal/plog/plog.go:207$plog.(*auditLogger).AuditRequestParams",
   "message": "HTTP Request Parameters",
   "auditEvent": true,
   "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
@@ -378,7 +365,6 @@ can also be correlated using the `sessionID`, e.g. session refreshes, token exch
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:15.190479Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/endpoints/token/token_handler.go:68$endpointsmanager.(*Manager).SetFederationDomains.NewHandler.func7",
   "message": "Session Found",
   "auditEvent": true,
   "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
@@ -387,7 +373,6 @@ can also be correlated using the `sessionID`, e.g. session refreshes, token exch
 {
   "level": "info",
   "timestamp": "2024-11-14T18:42:15.396784Z",
-  "caller": "go.pinniped.dev/internal/federationdomain/requestlogger/request_logger.go:133$requestlogger.(*requestLogger).logRequestComplete",
   "message": "HTTP Request Completed",
   "auditEvent": true,
   "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",

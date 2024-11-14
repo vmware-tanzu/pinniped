@@ -45,14 +45,14 @@ func WantAuditIDOnEveryAuditLog(wantedAuditLogs []WantedAuditLog, wantAuditID st
 }
 
 func GetStateParam(t *testing.T, fullURL string) stateparam.Encoded {
-	var encodedStateParam stateparam.Encoded
-	if fullURL != "" {
-		path, err := url.Parse(fullURL)
-		require.NoError(t, err)
-		encodedStateParam = stateparam.Encoded(path.Query().Get("state"))
+	if fullURL == "" {
+		var empty stateparam.Encoded
+		return empty
 	}
 
-	return encodedStateParam
+	path, err := url.Parse(fullURL)
+	require.NoError(t, err)
+	return stateparam.Encoded(path.Query().Get("state"))
 }
 
 func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditLogsOneLiner string) {

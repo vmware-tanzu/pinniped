@@ -44,6 +44,7 @@ import (
 
 	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	supervisorfake "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake"
+	"go.pinniped.dev/internal/auditid"
 	"go.pinniped.dev/internal/celtransformer"
 	"go.pinniped.dev/internal/crud"
 	"go.pinniped.dev/internal/federationdomain/clientregistry"
@@ -397,6 +398,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 									"redirect_uri":  "http://127.0.0.1/callback",
 								},
 							}),
+							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 						}
 					},
 				},
@@ -466,6 +468,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 									"redirect_uri":  "http://127.0.0.1/callback",
 								},
 							}),
+							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 						}
 					},
 				},
@@ -557,6 +560,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 									"redirect_uri":  "http://127.0.0.1/callback",
 								},
 							}),
+							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 						}
 					},
 				},
@@ -1195,6 +1199,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 									"redirect_uri":  "http://127.0.0.1/callback",
 								},
 							}),
+							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 						}
 					},
 				},
@@ -1213,6 +1218,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 							"subject_token_type":   "urn:ietf:params:oauth:token-type:access_token",
 						},
 					}),
+					testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 				}
 			},
 		},
@@ -1793,6 +1799,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 
 			req := httptest.NewRequest("POST", "/token/exchange/path/shouldn't/matter", body(request.Form).ReadCloser())
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req, _ = auditid.NewRequestWithAuditID(req, func() string { return "fake-token-exchange-audit-id" })
 			rsp = httptest.NewRecorder()
 
 			if test.modifyRequestHeaders != nil {
@@ -1818,7 +1825,9 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
 
 			if test.wantAuditLogs != nil {
-				testutil.CompareAuditLogs(t, test.wantAuditLogs(sessionID), actualAuditLog.String())
+				wantAuditLogs := test.wantAuditLogs(sessionID)
+				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-token-exchange-audit-id")
+				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 			}
 
 			var parsedResponseBody map[string]any
@@ -2339,6 +2348,7 @@ func TestRefreshGrant(t *testing.T) {
 									"scope":         "openid",
 								},
 							}),
+							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
 								"sessionID": sessionID,
 								"personalInfo": map[string]any{
@@ -2536,6 +2546,7 @@ func TestRefreshGrant(t *testing.T) {
 									"scope":         "openid",
 								},
 							}),
+							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
 								"sessionID": sessionID,
 								"personalInfo": map[string]any{
@@ -2607,6 +2618,7 @@ func TestRefreshGrant(t *testing.T) {
 									"redirect_uri":  "http://127.0.0.1/callback",
 								},
 							}),
+							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 						}
 					},
 				},
@@ -2971,6 +2983,7 @@ func TestRefreshGrant(t *testing.T) {
 									"scope":         "openid",
 								},
 							}),
+							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 							testutil.WantAuditLog("Identity Refreshed From Upstream IDP", map[string]any{
 								"sessionID": sessionID,
 								"personalInfo": map[string]any{
@@ -4967,10 +4980,14 @@ func TestRefreshGrant(t *testing.T) {
 			}
 
 			reqContextWarningRecorder := &TestWarningRecorder{}
-			reqContext := warning.WithWarningRecorder(context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context"), reqContextWarningRecorder)
 			req := httptest.NewRequest("POST", "/path/shouldn't/matter",
-				happyRefreshRequestBody(firstRefreshToken).ReadCloser()).WithContext(reqContext)
+				happyRefreshRequestBody(firstRefreshToken).ReadCloser()).
+				WithContext(warning.WithWarningRecorder(
+					context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context"),
+					reqContextWarningRecorder,
+				))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req, _ = auditid.NewRequestWithAuditID(req, func() string { return "fake-refresh-grant-audit-id" })
 			if test.refreshRequest.modifyTokenRequest != nil {
 				test.refreshRequest.modifyTokenRequest(req, firstRefreshToken, parsedAuthcodeExchangeResponseBody["access_token"].(string))
 			}
@@ -4983,31 +5000,33 @@ func TestRefreshGrant(t *testing.T) {
 			t.Logf("second response body: %q", refreshResponse.Body.String())
 
 			if test.refreshRequest.want.wantAuditLogs != nil {
-				testutil.CompareAuditLogs(t, test.refreshRequest.want.wantAuditLogs(sessionID), actualAuditLog.String())
+				wantAuditLogs := test.refreshRequest.want.wantAuditLogs(sessionID)
+				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-refresh-grant-audit-id")
+				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 			}
 
 			// Test that we did or did not make a call to the upstream provider's interface to perform refresh.
 			switch {
 			case test.refreshRequest.want.wantOIDCUpstreamRefreshCall != nil:
-				test.refreshRequest.want.wantOIDCUpstreamRefreshCall.args.Ctx = reqContext
+				test.refreshRequest.want.wantOIDCUpstreamRefreshCall.args.Ctx = req.Context()
 				test.idps.RequireExactlyOneCallToOIDCPerformRefresh(t,
 					test.refreshRequest.want.wantOIDCUpstreamRefreshCall.performedByUpstreamName,
 					test.refreshRequest.want.wantOIDCUpstreamRefreshCall.args,
 				)
 			case test.refreshRequest.want.wantLDAPUpstreamRefreshCall != nil:
-				test.refreshRequest.want.wantLDAPUpstreamRefreshCall.args.Ctx = reqContext
+				test.refreshRequest.want.wantLDAPUpstreamRefreshCall.args.Ctx = req.Context()
 				test.idps.RequireExactlyOneCallToLDAPPerformRefresh(t,
 					test.refreshRequest.want.wantLDAPUpstreamRefreshCall.performedByUpstreamName,
 					test.refreshRequest.want.wantLDAPUpstreamRefreshCall.args,
 				)
 			case test.refreshRequest.want.wantActiveDirectoryUpstreamRefreshCall != nil:
-				test.refreshRequest.want.wantActiveDirectoryUpstreamRefreshCall.args.Ctx = reqContext
+				test.refreshRequest.want.wantActiveDirectoryUpstreamRefreshCall.args.Ctx = req.Context()
 				test.idps.RequireExactlyOneCallToActiveDirectoryPerformRefresh(t,
 					test.refreshRequest.want.wantActiveDirectoryUpstreamRefreshCall.performedByUpstreamName,
 					test.refreshRequest.want.wantActiveDirectoryUpstreamRefreshCall.args,
 				)
 			case test.refreshRequest.want.wantGithubUpstreamRefreshCall != nil:
-				test.refreshRequest.want.wantGithubUpstreamRefreshCall.args.Ctx = reqContext
+				test.refreshRequest.want.wantGithubUpstreamRefreshCall.args.Ctx = req.Context()
 				test.idps.RequireExactlyOneCallToGithubGetUser(t,
 					test.refreshRequest.want.wantGithubUpstreamRefreshCall.performedByUpstreamName,
 					test.refreshRequest.want.wantGithubUpstreamRefreshCall.args,
@@ -5019,7 +5038,7 @@ func TestRefreshGrant(t *testing.T) {
 			// Test that we did or did not make a call to the upstream OIDC provider interface to validate the
 			// new ID token that was returned by the upstream refresh, in the case of an OIDC upstream.
 			if test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall != nil {
-				test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.args.Ctx = reqContext
+				test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.args.Ctx = req.Context()
 				test.idps.RequireExactlyOneCallToValidateToken(t,
 					test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.performedByUpstreamName,
 					test.refreshRequest.want.wantUpstreamOIDCValidateTokenCall.args,
@@ -5179,6 +5198,7 @@ func exchangeAuthcodeForTokens(
 	if test.modifyTokenRequest != nil {
 		test.modifyTokenRequest(req, authCode)
 	}
+	req, _ = auditid.NewRequestWithAuditID(req, func() string { return "fake-code-grant-audit-id" })
 	rsp = httptest.NewRecorder()
 
 	approxRequestTime := time.Now()
@@ -5189,7 +5209,9 @@ func exchangeAuthcodeForTokens(
 	sessionID = getSessionID(t, secrets)
 
 	if test.want.wantAuditLogs != nil {
-		testutil.CompareAuditLogs(t, test.want.wantAuditLogs(sessionID), actualAuditLog.String())
+		wantAuditLogs := test.want.wantAuditLogs(sessionID)
+		testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-code-grant-audit-id")
+		testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 	}
 
 	wantNonceValueInIDToken := true // ID tokens returned by the authcode exchange must include the nonce from the auth request (unlike refreshed ID tokens)

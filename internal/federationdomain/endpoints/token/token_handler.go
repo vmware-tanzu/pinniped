@@ -64,6 +64,12 @@ func NewHandler(
 			return nil
 		}
 
+		// Log sessionID for cross-request correlation purposes.
+		auditLogger.Audit(auditevent.SessionFound, &plog.AuditParams{
+			ReqCtx:  r.Context(),
+			Session: accessRequest,
+		})
+
 		// Check if we are performing a refresh grant.
 		if accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeRefreshToken) {
 			// The above call to NewAccessRequest has loaded the session from storage into the accessRequest variable.

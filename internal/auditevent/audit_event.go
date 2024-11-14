@@ -16,6 +16,7 @@ const (
 	IdentityRefreshedFromUpstreamIDP           Message = "Identity Refreshed From Upstream IDP"
 	SessionStarted                             Message = "Session Started"
 	SessionRefreshed                           Message = "Session Refreshed"
+	SessionFound                               Message = "Session Found"
 	AuthenticationRejectedByTransforms         Message = "Authentication Rejected By Transforms"
 	UpstreamOIDCTokenRevoked                   Message = "Upstream OIDC Token Revoked" //nolint:gosec // this is not a credential
 	SessionGarbageCollected                    Message = "Session Garbage Collected"

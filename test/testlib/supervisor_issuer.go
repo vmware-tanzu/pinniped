@@ -37,6 +37,10 @@ func NewSupervisorIssuer(t *testing.T, issuer string) *SupervisorIssuer {
 	}
 }
 
+func (s *SupervisorIssuer) AddPathSuffix(path string) {
+	s.issuerURL.Path += path
+}
+
 // AddAlternativeName adds a SAN for the cert. It is not intended to take an IP address as its argument.
 func (s *SupervisorIssuer) AddAlternativeName(san string) {
 	s.alternativeNames = append(s.alternativeNames, san)

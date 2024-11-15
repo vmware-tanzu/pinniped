@@ -14,39 +14,37 @@ The Pinniped Supervisor and Pinniped Concierge components provide audit logging 
 to help you meet your security and compliance standards.
 
 The configuration of the Pinniped Supervisor and Pinniped Concierge is managed by Kubernetes
-custom resources and aggregated APIs. These resources and APIs are protected by the
+custom resources. These resources are protected by the
 [standard Kubernetes authorization controls](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)
 and audited by the
 [standard Kubernetes audit logging](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/)
 capabilities.
 
-In addition, Pinniped exposes several APIs to all end users to provide end-user authentication.
-For these APIs, Pinniped offers additional audit logging capabilities. These additional audit logs appear in
+Pinniped also offers additional audit logging capabilities. These additional audit logs appear in
 the pod logs of the Supervisor and Concierge pods. Each line of the pod logs is a JSON object.
 Although these audit events are interleaved with other pod log messages, they are identifiable by always
-having an `"auditEvent"=true` key/value pair.
+having an `"auditEvent":true` key-value pair.
 
 ## APIs that can emit Pinniped audit events to the pod logs
 
-Both the Supervisor and the Concierge offer custom resource definitions (CRDs) for configuration,
-which are protected by Kubernetes RBAC and typically only available for administrators to use.
-End users typically cannot access these APIs, and they are not part of the authentication flows for end users.
+Both the Supervisor and the Concierge offer several custom Kubernetes resources for configuration,
+which are protected by Kubernetes RBAC and by default are only available for administrators to use.
+These APIs are not part of the authentication flows for end users.
 Changes to these resources are audited by the standard Kubernetes audit logging.
+Of these resources, only two will emit additional audit events into the Supervisor or Concierge pod logs.
+These audit events can be cross-referenced to the standard Kubernetes audit logs using the value at the `auditID`
+key, which will be the same value in the Supervisor or Concierge pod logs and in the Kubernetes audit logs for
+a particular request to the resource. These resources are:
+- The Supervisor's `OIDCClientSecretRequest` resource. This is used create client secrets for `OIDCClient` resources.
+  It will emit audit events into the Supervisor pod logs to describe the changes to client secrets saved by the request.
+- The Concierge's `TokenCredendtialRequest` resource. This is used to authenticate a user and return a temporary
+  cluster credential for that user. It will emit audit events into the Concierge pod logs to describe the authentication
+  success or authentication failure of the request.
 
-The Pinniped Supervisor offers one additional API for administrators, which is an aggregated API called
-`OIDCClientSecretRequest` to create client secrets for `OIDCClient` resources.
-End users typically cannot access this API (protected by Kubernetes RBAC), and it is not part of the authentication
-flows for end users. This API is audited by the standard Kubernetes audit logging and may also emit Pinniped audit events.
-
-The Pinniped Concierge offers two public APIs for end-user authentication, which are both aggregated APIs.
-These will be audited by the standard Kubernetes audit logging and may also emit Pinniped audit events.
-- `TokenCredendtialRequest`: This API authenticates a user and returns a temporary cluster credential for that user.
-- `WhoAmIRequest`: This API returns the username and group memberships of the user who invokes it.
-
-The Pinniped Supervisor offers several public APIs for end-user authentication for each configured `FederationDomain`.
-These are not aggregated APIs, so they are not audited by the standard Kubernetes audit logging.
-These will emit Pinniped audit events. Each request to these APIs may emit several audit events.
-These APIs include:
+Additionally, the Pinniped Supervisor offers several public APIs for end-user authentication for each
+configured `FederationDomain`. These REST APIs are not represented as Kubernetes resources,
+so they are not audited by the standard Kubernetes audit logging. These APIs will emit Pinniped audit events
+into the Supervisor pod logs. Each request may emit several audit events. These APIs include:
 - `<issuer_path>/.well-known/openid-configuration` is the standard OIDC discovery endpoint, which can be used to discover all the other endpoints listed here.
 - `<issuer_path>/jwks.json` is the standard OIDC JWKS discovery endpoint.
 - `<issuer_path>/v1alpha1/pinniped_identity_providers` is a custom discovery endpoint for clients to learn about available upstream identity providers.
@@ -56,58 +54,62 @@ These APIs include:
   extended to handle an additional grant type for [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) token exchanges to
   reduce the applicable scope (technically, the `aud` claim) of ID tokens.
 - `<issuer_path>/callback` is a special endpoint that is used as the redirect URL when performing an OAuth 2.0 or OIDC authcode flow against an upstream OIDC identity provider as configured by an `OIDCIdentityProvider` or `GitHubIdentityProvider` custom resource.
-- `<issuer_path>/login` is a login UI page to support the optional browser-based login flow for LDAP and Active Directory identity providers.
+- `<issuer_path>/choose_identity_provider` is a UI page which allows users to choose which identity provider they would like to use during a browser-based login flow.
+- `<issuer_path>/login` is a UI page which prompts for username and password to support the optional browser-based login flow for LDAP and Active Directory identity providers.
 
 ## Structure of an audit event
 
 Every log line in a Supervisor or Concierge pod log is a JSON object. Only those log lines that include the
-key/value pair `"auditEvent": true` are audit events. Other lines are for errors, warnings, and
+key-value pair `"auditEvent":true` are audit events. Other lines are for errors, warnings, and
 debugging information.
 
-Every line in the pod logs contains the following common keys/values, including audit event log lines:
+Every line in the pod logs contains the following common keys and values, including audit event log lines:
 
 - `timestamp`, whose value is in UTC time, e.g. `2024-07-10T20:03:26.164470Z`
 - `level`, which for an audit event will always have the value `info`
 - `message`, which for audit events is effectively the audit event type, whose
-  value will always be one of the messages declared as an enum in `audit_events.go`,
+  value will always be one of the messages declared as an enum value in
+  [`audit_event.go`](https://github.com/vmware-tanzu/pinniped/blob/main/internal/auditevent/audit_event.go),
   which is effectively a catalog of all possible audit event types
 - `caller`, which is the line of Go code which caused the log
 - `stacktrace`, which is only included when the global log level is configured to `trace` or `all`,
   in which case the value shows a full Go stacktrace for the caller
 
-Every audit event log line may also have the following keys/values, which are specifically designed to correlate
-audit logs both forwards and backwards in time. The values for these keys are opaque and only used for correlation.
+Some audit event log lines may also have the following keys and values, which are specifically designed to help
+correlate an audit event log line to other logs. The values for these keys are opaque and only used for correlation.
 
 - When applicable, audit logs have an `auditID` which is a unique ID for every HTTP request, to allow multiple
   lines of audit events to be correlated when they came from a single HTTP request. This `auditID` is also returned
   to the client as an HTTP response header to allow for correlation between the request as observed by the client
-  and the logs as observed by the administrator. For aggregated APIs only, the `auditID` can also be used to
-  correlate Pinniped audit events with Kubernetes audit logs, which will use the same `auditID` value for a particular request.
+  and the logs as observed by the administrator. Only for `TokenCredendtialRequest` and `OIDCClientSecretRequest`,
+  the `auditID` can also be used to correlate Pinniped audit events with Kubernetes audit logs, which will use the
+  same `auditID` value for a particular request.
 - When applicable, audit logs have a `sessionID` which is the unique ID of a stored Pinniped Supervisor user session,
   to allow audit events to be correlated which relate to a single session even when they are caused by different
-  requests or controllers. The same `sessionID` can help you observe all the actions performed during a single user's
-  session across multiple HTTP requests that make up a fresh login, token exchanges, multiple session refreshes, and
-  session garbage collection.
+  HTTP requests or controllers. The same `sessionID` can help you observe all the actions performed during a single user's
+  session across multiple HTTP requests that make up a login, token exchanges, session refreshes, and session
+  expiration (garbage collection).
 - When applicable, audit logs have an `authorizeID` which is a unique ID to allow audit events to be correlated
   across some of the browser redirects which relate to a single login attempt by an end user. This is only applicable
   to those browser-based login flows which use redirects to identity providers and/or interstitial pages in the login flow.
 
-Each audit event may also have more key/value pairs specific to the event's type.
+Each audit event may also have more key-value pairs specific to the event's type.
 
 ## Configuration options for audit events
 
-Audit events are always enabled. There are two configuration options available:
+Logging of audit events is always enabled. There are two configuration options available:
 
 1. By default, usernames and group names are not included in the audit events. This is because these names may
    include personally identifiable information (PII) which you may wish to avoid sending to your pod logs.
-   However, authentication audit logs can be more useful when this information is included.
-2. By default, the Supervisor does not audit log requests made to the `healthz` endpoint, which is used for
+   However, authentication audit logs can be more useful when this information is included, so there is a
+   configuration option to enable it.
+2. By default, the Supervisor does not audit log requests made to the `/healthz` endpoint, which is used for
    pod liveness and readiness probes, because it is called so often and it has no behavior other than returning OK.
 
 Both of these can be optionally enabled in the ConfigMaps which hold the pod startup settings for the Supervisor
 and Concierge deployments. When these ConfigMaps are changed, the corresponding Supervisor or Concierge pods must
 be restarted for the new settings to be picked up by the pods. You can find these ConfigMaps by looking at which
-ConfigMap is volume mounted by the Supervisor or Concierge Deployment.
+ConfigMap is volume-mounted by the Supervisor or Concierge Deployment.
 
 ```yaml
 apiVersion: v1
@@ -136,7 +138,7 @@ audit events appear in the pod logs, they will be exported along with the rest o
 Popular tools, like [Fluentbit](https://fluentbit.io), allow configuration options that could let you
 export only the audit event lines, or export the audit event lines separately from the other log lines.
 This can be achieved by configuring Fluentbit `FILTER`s to evaluate each Supervisor or Concierge pod log line
-based on the presence or absence of the `"auditEvent"=true` key/value pair.
+based on the presence or absence of the `"auditEvent":true` key-value pair.
 
 ## Example of audit event logs
 
@@ -144,7 +146,7 @@ The follow example shows several audit event logs from the Supervisor's pod logs
 login using an OIDC identity provider.
 
 For this example, the `logUsernamesAndGroups` setting is enabled. If it were disabled,
-all values in the `personalInfo` maps would be redacted. The pod logs contain one JSON object per line.
+all values in the `personalInfo` maps shown below would be redacted. The pod logs contain one JSON object per line.
 For readability, we have pretty-printed each line. Also for readability, we have removed the `caller` key
 in the example logs below. In the pod logs, every line includes `caller` and the value identifies the line of
 code which caused the message to be logged.
@@ -153,7 +155,7 @@ The login flow starts with the client calling several discovery endpoints.
 We will skip showing those audit logs here for brevity.
 
 Next, the client calls the authorize endpoint to start the login flow.
-A single call to the authorize endpoint causes several audit log event,
+A single call to the authorize endpoint causes several audit log events,
 which can be correlated using the `auditID` (request ID) to find all logs related to that single HTTPS request.
 Note that potentially sensitive values such as credentials are automatically redacted in the logs.
 The logs from the authorize endpoint are shown below.
@@ -235,10 +237,10 @@ The logs from the authorize endpoint are shown below.
 }
 ```
 
-As by the logs above, the authorize endpoint has redirected the user's browser to the external OIDC identity provider
+As shown by the logs above, the authorize endpoint has redirected the user's browser to the external OIDC identity provider
 for authentication. After the user authenticates there, the OIDC provider redirects back to the Supervisor's callback
-endpoint. The `authorizeID` can be used to correlate the original authorize request with this callback request.
-The logs from the callback request are shown below.
+endpoint. The `authorizeID` can be used to correlate the logs from the original authorize request, shown above,
+with the logs from this callback request, shown below.
 
 ```json lines
 {
@@ -330,9 +332,11 @@ The logs from the callback request are shown below.
 
 The callback endpoint started a Supervisor session for the user and sent an authorization code to the client.
 Note that it logged a new unique `sessionID` for this user session.
-Next, the client will call the token endpoint to exchange that code for tokens. This can be correlated to the
-callback endpoint invocation using the `sessionID`. Additionally, all future activity related to this user session
-can also be correlated using the `sessionID`, e.g. session refreshes, token exchanges, and session expiration.
+Next, the client will call the token endpoint to exchange that authorization code for tokens. The requests to the
+callback endpoint and the token endpoint can be correlated using the `sessionID`.
+Additionally, all future activity related to this user session can also be correlated using the `sessionID`,
+including session refreshes, token exchanges, and session expiration.
+The logs from the token endpoint are shown below.
 
 ```json lines
 {
@@ -383,4 +387,6 @@ can also be correlated using the `sessionID`, e.g. session refreshes, token exch
 }
 ```
 
-In a typical login, several more endpoints are called, but we omit them here for brevity.
+In a typical login flow, several more endpoints are called, but we omit them here for brevity. As we've seen,
+a user's entire authentication journey can be followed by using the `auditID`, `authorizeID`, and `sessionID`
+correlation values to find related audit log events.

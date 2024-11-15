@@ -31,8 +31,14 @@ if ! command -v terraform &>/dev/null; then
   echo "Please install the terraform CLI"
   exit
 fi
-if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
-  echo "Please run \`gcloud auth login\`"
+# This is needed for running gcloud commands.
+if ! gcloud auth print-access-token &>/dev/null; then
+  echo "Please run \`gcloud auth login\` and try again."
+  exit 1
+fi
+# This is needed for running terraform commands.
+if ! gcloud auth application-default print-access-token --quiet &>/dev/null; then
+  echo "Please run \`gcloud auth application-default login\` and try again."
   exit 1
 fi
 

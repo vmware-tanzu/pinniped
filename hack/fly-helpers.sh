@@ -19,7 +19,7 @@ function set_pipeline() {
   "$ROOT_DIR"/hack/setup-fly.sh
 
   # Ensure that the user is authenticated with gcloud.
-  if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
+  if ! gcloud auth print-access-token &>/dev/null; then
     echo "Please run \`gcloud auth login\` and try again."
     exit 1
   fi

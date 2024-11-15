@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-# Require two env vars.
+# Require env vars.
 if [[ -z "${GITHUB_CLIENT_ID:-}" ]]; then
   echo "GITHUB_CLIENT_ID env var must be set"
   exit 1
@@ -14,7 +14,6 @@ if [[ -z "${GITHUB_CLIENT_SECRET:-}" ]]; then
   echo "GITHUB_CLIENT_SECRET env var must be set"
   exit 1
 fi
-
 if [[ -z "${PINNIPED_GCP_PROJECT:-}" ]]; then
   echo "PINNIPED_GCP_PROJECT env var must be set"
   exit 1
@@ -29,8 +28,8 @@ if ! command -v yq &>/dev/null; then
   echo "Please install the yq CLI"
   exit
 fi
-if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
-  echo "Please run \`gcloud auth login\`"
+if ! gcloud auth print-access-token &>/dev/null; then
+  echo "Please run \`gcloud auth login\` and try again."
   exit 1
 fi
 

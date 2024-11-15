@@ -6,8 +6,8 @@
 # To be run before local integration tests.
 # From the pinniped repo:
 # hack/prepare-for-integration-tests.sh --get-active-directory-vars "../pinniped-ci-branch/hack/get-aws-ad-env-vars.sh"
-if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
-  echo "Please run \`gcloud auth login\`"
+if ! gcloud auth print-access-token &>/dev/null; then
+  echo "Please run \`gcloud auth login\` and try again."
   exit 1
 fi
 

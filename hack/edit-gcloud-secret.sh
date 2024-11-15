@@ -23,11 +23,10 @@ if ! command -v gcloud &> /dev/null; then
     echo "Please install the gcloud CLI"
     exit 1
 fi
-if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
-  echo "Please run \`gcloud auth login\`"
+if ! gcloud auth print-access-token &>/dev/null; then
+  echo "Please run \`gcloud auth login\` and try again."
   exit 1
 fi
-
 if [[ -z "${PINNIPED_GCP_PROJECT:-}" ]]; then
   echo "PINNIPED_GCP_PROJECT env var must be set"
   exit 1

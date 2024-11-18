@@ -224,6 +224,7 @@ func runOIDCLogin(cmd *cobra.Command, deps oidcLoginCommandDeps, flags oidcLogin
 			conciergeclient.WithBase64CABundle(flags.conciergeCABundle),
 			conciergeclient.WithAuthenticator(flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName),
 			conciergeclient.WithAPIGroupSuffix(flags.conciergeAPIGroupSuffix),
+			conciergeclient.WithTransportWrapper(LogAuditIDTransportWrapper),
 		)
 		if err != nil {
 			return fmt.Errorf("invalid Concierge parameters: %w", err)

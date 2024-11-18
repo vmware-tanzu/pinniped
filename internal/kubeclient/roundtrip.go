@@ -31,25 +31,25 @@ func configWithWrapper(config *restclient.Config, scheme *runtime.Scheme, negoti
 		return config // invalid input config, will fail existing client-go validation
 	}
 
-	// no need for any wrapping when we have no middleware to inject
-	if len(middlewares) == 0 {
-		return config
+	var middlewareWrapper transport.WrapperFunc
+	if len(middlewares) > 0 {
+		info, ok := runtime.SerializerInfoForMediaType(negotiatedSerializer.SupportedMediaTypes(), config.ContentType)
+		if !ok {
+			panic(fmt.Errorf("unknown content type: %s ", config.ContentType)) // static input, programmer error
+		}
+		regSerializer := info.Serializer // should perform no conversion
+
+		resolver := server.NewRequestInfoResolver(server.NewConfig(serializer.CodecFactory{}))
+
+		schemeRestMapperFunc := schemeRestMapper(scheme)
+
+		middlewareWrapper = newWrapper(hostURL, apiPathPrefix, config, resolver, regSerializer, negotiatedSerializer, schemeRestMapperFunc, middlewares)
 	}
-
-	info, ok := runtime.SerializerInfoForMediaType(negotiatedSerializer.SupportedMediaTypes(), config.ContentType)
-	if !ok {
-		panic(fmt.Errorf("unknown content type: %s ", config.ContentType)) // static input, programmer error
-	}
-	regSerializer := info.Serializer // should perform no conversion
-
-	resolver := server.NewRequestInfoResolver(server.NewConfig(serializer.CodecFactory{}))
-
-	schemeRestMapperFunc := schemeRestMapper(scheme)
-
-	f := newWrapper(hostURL, apiPathPrefix, config, resolver, regSerializer, negotiatedSerializer, schemeRestMapperFunc, middlewares)
 
 	cc := restclient.CopyConfig(config)
-	cc.Wrap(f)
+	if middlewareWrapper != nil {
+		cc.Wrap(middlewareWrapper)
+	}
 	if wrapper != nil {
 		cc.Wrap(wrapper)
 	}

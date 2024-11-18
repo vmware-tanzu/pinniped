@@ -274,8 +274,8 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 4,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"expirationTimestamp":"3020-10-12T13:14:15Z","token":"test-id-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  cmd/login_oidc.go:267  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  cmd/login_oidc.go:287  No concierge configured, skipping token credential exchange`,
+				nowStr + `  cmd/login_oidc.go:268  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  cmd/login_oidc.go:288  No concierge configured, skipping token credential exchange`,
 			},
 		},
 		{
@@ -319,10 +319,10 @@ func TestLoginOIDCCommand(t *testing.T) {
 			wantOptionsCount: 12,
 			wantStdout:       `{"kind":"ExecCredential","apiVersion":"client.authentication.k8s.io/v1beta1","spec":{"interactive":false},"status":{"token":"exchanged-token"}}` + "\n",
 			wantLogs: []string{
-				nowStr + `  cmd/login_oidc.go:267  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
-				nowStr + `  cmd/login_oidc.go:277  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
-				nowStr + `  cmd/login_oidc.go:285  Successfully exchanged token for cluster credential.`,
-				nowStr + `  cmd/login_oidc.go:292  caching cluster credential for future use.`,
+				nowStr + `  cmd/login_oidc.go:268  Performing OIDC login  {"issuer": "test-issuer", "client id": "test-client-id"}`,
+				nowStr + `  cmd/login_oidc.go:278  Exchanging token for cluster credential  {"endpoint": "https://127.0.0.1:1234/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
+				nowStr + `  cmd/login_oidc.go:286  Successfully exchanged token for cluster credential.`,
+				nowStr + `  cmd/login_oidc.go:293  caching cluster credential for future use.`,
 			},
 		},
 	}

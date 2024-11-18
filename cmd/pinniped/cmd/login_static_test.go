@@ -147,7 +147,7 @@ func TestLoginStaticCommand(t *testing.T) {
 				Error: could not complete Concierge credential exchange: some concierge error
 			`),
 			wantLogs: []string{
-				nowStr + `  cmd/login_static.go:159  exchanging static token for cluster credential  {"endpoint": "https://127.0.0.1/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
+				nowStr + `  cmd/login_static.go:160  exchanging static token for cluster credential  {"endpoint": "https://127.0.0.1/", "authenticator type": "webhook", "authenticator name": "test-authenticator"}`,
 			},
 		},
 		{

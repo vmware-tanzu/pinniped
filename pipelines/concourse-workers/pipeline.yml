@@ -34,6 +34,7 @@ resources:
   - name: k8s-app-deployer-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/k8s-app-deployer
       username: ((ci-ghcr-pusher-username))
@@ -43,6 +44,7 @@ resources:
   - name: gcloud-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: google/cloud-sdk
       tag: slim
@@ -50,6 +52,7 @@ resources:
   - name: hourly
     type: time
     icon: calendar-clock
+    check_every: 10m
     source:
       interval: 1h
 

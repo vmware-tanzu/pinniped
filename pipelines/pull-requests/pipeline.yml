@@ -261,6 +261,7 @@ resources:
   - name: integration-test-runner-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/integration-test-runner
       username: ((ci-ghcr-puller-username))
@@ -268,6 +269,7 @@ resources:
 
   - name: kind-release
     type: github-release
+    check_every: 10m
     source:
       access_token: ((ci-bot-access-token-with-read-user-permission)) # needed to avoid rate limits on GitHub API requests
       owner: kubernetes-sigs
@@ -277,6 +279,7 @@ resources:
   - name: gcloud-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: google/cloud-sdk
       tag: slim
@@ -284,6 +287,7 @@ resources:
   - name: k8s-app-deployer-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/k8s-app-deployer
       username: ((ci-ghcr-puller-username))
@@ -292,12 +296,14 @@ resources:
   - name: opensource-lint-image
     type: registry-image
     icon: docker
+    check_every: 10m
     source:
       repository: golangci/golangci-lint
 
   - name: code-coverage-uploader-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/code-coverage-uploader
       username: ((ci-ghcr-puller-username))
@@ -306,6 +312,7 @@ resources:
   - name: k8s-code-generator-1.25-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.25
       username: ((ci-ghcr-puller-username))
@@ -314,6 +321,7 @@ resources:
   - name: k8s-code-generator-1.26-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.26
       username: ((ci-ghcr-puller-username))
@@ -322,6 +330,7 @@ resources:
   - name: k8s-code-generator-1.27-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.27
       username: ((ci-ghcr-puller-username))
@@ -330,6 +339,7 @@ resources:
   - name: k8s-code-generator-1.28-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.28
       username: ((ci-ghcr-puller-username))
@@ -338,6 +348,7 @@ resources:
   - name: k8s-code-generator-1.29-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.29
       username: ((ci-ghcr-puller-username))
@@ -346,6 +357,7 @@ resources:
   - name: k8s-code-generator-1.30-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.30
       username: ((ci-ghcr-puller-username))
@@ -354,6 +366,7 @@ resources:
   - name: k8s-code-generator-1.31-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.31
       username: ((ci-ghcr-puller-username))

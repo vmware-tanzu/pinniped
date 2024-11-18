@@ -208,6 +208,7 @@ resources:
   - name: weekdays
     type: time
     icon: calendar-clock
+    check_every: 10m
     source:
       location: America/Los_Angeles
       start: 6:00 AM
@@ -241,6 +242,7 @@ resources:
   - name: homebrew-pinniped
     type: git
     icon: github
+    check_every: 5m
     source:
       uri: git@github.com:vmware-tanzu/homebrew-pinniped.git
       branch: main
@@ -285,6 +287,7 @@ resources:
   - name: integration-test-runner-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/integration-test-runner
       username: ((ci-ghcr-puller-username))
@@ -292,6 +295,7 @@ resources:
 
   - name: integration-test-runner-beta-image
     type: registry-image
+    check_every: 5m
     icon: docker
     source:
       repository: ((ci-ghcr-registry))/integration-test-runner-beta
@@ -301,6 +305,7 @@ resources:
   - name: eks-deployer-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/eks-deployer
       username: ((ci-ghcr-puller-username))
@@ -309,6 +314,7 @@ resources:
   - name: code-coverage-uploader-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/code-coverage-uploader
       username: ((ci-ghcr-puller-username))
@@ -317,6 +323,7 @@ resources:
   - name: k8s-code-generator-1.25-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.25
       username: ((ci-ghcr-puller-username))
@@ -325,6 +332,7 @@ resources:
   - name: k8s-code-generator-1.26-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.26
       username: ((ci-ghcr-puller-username))
@@ -333,6 +341,7 @@ resources:
   - name: k8s-code-generator-1.27-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.27
       username: ((ci-ghcr-puller-username))
@@ -341,6 +350,7 @@ resources:
   - name: k8s-code-generator-1.28-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.28
       username: ((ci-ghcr-puller-username))
@@ -349,6 +359,7 @@ resources:
   - name: k8s-code-generator-1.29-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.29
       username: ((ci-ghcr-puller-username))
@@ -357,6 +368,7 @@ resources:
   - name: k8s-code-generator-1.30-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.30
       username: ((ci-ghcr-puller-username))
@@ -365,6 +377,7 @@ resources:
   - name: k8s-code-generator-1.31-image
     type: registry-image
     icon: docker
+    check_every: 3m
     source:
       repository: ((ci-ghcr-registry))/k8s-code-generator-1.31
       username: ((ci-ghcr-puller-username))
@@ -372,6 +385,7 @@ resources:
 
   - name: kind-release
     type: github-release
+    check_every: 10m
     source:
       access_token: ((ci-bot-access-token-with-read-user-permission)) # needed to avoid rate limits on GitHub API requests
       owner: kubernetes-sigs
@@ -381,6 +395,7 @@ resources:
   - name: gcloud-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: google/cloud-sdk
       tag: slim
@@ -388,6 +403,7 @@ resources:
   - name: k8s-app-deployer-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/k8s-app-deployer
       username: ((ci-ghcr-puller-username))
@@ -396,6 +412,7 @@ resources:
   - name: deployment-yaml-formatter-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/deployment-yaml-formatter
       username: ((ci-ghcr-puller-username))
@@ -404,12 +421,14 @@ resources:
   - name: aks-deployer-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: mcr.microsoft.com/azure-cli
 
   - name: crane-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: ((ci-ghcr-registry))/crane
       username: ((ci-ghcr-puller-username))
@@ -418,6 +437,7 @@ resources:
   - name: release-semver
     type: semver
     icon: counter
+    check_every: 5m
     source:
       driver: gcs
       bucket: tanzu-user-authentication-private-ci
@@ -428,6 +448,7 @@ resources:
   - name: github-release
     type: github-release
     icon: github
+    check_every: 5m
     source:
       owner: vmware-tanzu
       repository: pinniped
@@ -437,6 +458,7 @@ resources:
   - name: github-final-release
     type: github-release
     icon: github
+    check_every: 5m
     source:
       owner: vmware-tanzu
       repository: pinniped

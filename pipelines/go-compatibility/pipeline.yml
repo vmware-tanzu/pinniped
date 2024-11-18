@@ -32,6 +32,7 @@ resources:
   - name: daily
     type: time
     icon: calendar-clock
+    check_every: 10m
     source:
       location: America/Los_Angeles
       start: 4:00 AM
@@ -49,6 +50,7 @@ resources:
   - name: go-1.22-image
     type: registry-image
     icon: docker
+    check_every: 10m
     source:
       repository: docker.io/golang
       tag: "1.22"

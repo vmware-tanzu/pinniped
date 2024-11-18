@@ -41,6 +41,7 @@ resources:
   - name: gcloud-image
     type: registry-image
     icon: docker
+    check_every: 5m
     source:
       repository: google/cloud-sdk
       tag: slim
@@ -56,6 +57,7 @@ resources:
   - name: daily
     type: time
     icon: calendar-clock
+    check_every: 10m
     source:
       location: America/Los_Angeles
       start: 1:00 AM

@@ -70,6 +70,7 @@ resources:
   - name: pinniped-latest-release-image
     type: registry-image
     icon: docker
+    check_every: 10m
     source:
       repository: ghcr.io/vmware-tanzu/pinniped/pinniped-server
       tag: latest
@@ -77,6 +78,7 @@ resources:
   - name: pinniped-latest-main-image
     type: registry-image
     icon: docker
+    check_every: 10m
     source:
       repository: ((ci-ghcr-registry))/ci-build
       username: ((ci-ghcr-puller-username))
@@ -86,6 +88,7 @@ resources:
   - name: gh-cli-image
     type: registry-image
     icon: docker
+    check_every: 10m
     source:
       repository: ((ci-ghcr-registry))/gh-cli
       username: ((ci-ghcr-puller-username))
@@ -95,12 +98,14 @@ resources:
   - name: golang-image
     type: registry-image
     icon: docker
+    check_every: 10m
     source:
       repository: docker.io/golang
 
   - name: crane-image
     type: registry-image
     icon: docker
+    check_every: 10m
     source:
       repository: ((ci-ghcr-registry))/crane
       username: ((ci-ghcr-puller-username))
@@ -109,6 +114,7 @@ resources:
   - name: weekdays
     type: time
     icon: calendar-clock
+    check_every: 10m
     source:
       location: America/Los_Angeles
       start: 6:00 AM

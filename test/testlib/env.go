@@ -401,7 +401,7 @@ func (e *TestEnv) WithoutCapability(cap Capability) *TestEnv {
 // Please use this sparingly. We would prefer that a test run on every cluster type where it can possibly run, so
 // prefer to run everywhere when possible or use cluster capabilities when needed, rather than looking at the
 // type of cluster to decide to skip a test. However, there are some tests that do not depend on or interact with
-// Kubernetes itself which really only need to run on on a single platform to give us the coverage that we desire.
+// Kubernetes itself which really only need to run on a single platform to give us the coverage that we desire.
 func (e *TestEnv) WithKubeDistribution(distro KubeDistro) *TestEnv {
 	e.t.Helper()
 	if e.KubernetesDistribution != distro {

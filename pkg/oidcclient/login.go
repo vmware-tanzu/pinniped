@@ -33,6 +33,7 @@ import (
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
@@ -357,6 +358,40 @@ type nopCache struct{}
 func (*nopCache) GetToken(SessionCacheKey) *oidctypes.Token  { return nil }
 func (*nopCache) PutToken(SessionCacheKey, *oidctypes.Token) {}
 
+// maybePrintAuditID will choose to log the auditID when certain failure cases are detected,
+// to give a breadcrumb for an admin to follow.
+// Older Supervisors and other OIDC identity providers may not provide this header.
+func maybePrintAuditID(rt http.RoundTripper) http.RoundTripper {
+	return roundtripper.WrapFunc(rt, func(r *http.Request) (*http.Response, error) {
+		path := r.URL.Path
+		response, responseErr := rt.RoundTrip(r)
+		if response != nil && response.Header.Get("audit-ID") != "" {
+			switch {
+			case response.StatusCode >= http.StatusMultipleChoices && response.StatusCode < http.StatusBadRequest:
+				// failing oauth2/authorize redirects from audit-enabled Supervisors
+
+				location, err := url.Parse(response.Header.Get(httpLocationHeaderName))
+				if err != nil || location.Query().Get("error") != "" {
+					plog.Info("Received auditID for failed request",
+						"path", path,
+						"statusCode", response.StatusCode,
+						"auditID", response.Header.Get("audit-ID"))
+				}
+			case response.StatusCode >= http.StatusBadRequest:
+				// failing discovery, oauth2/authorize, or oauth2/token responses from audit-enabled Supervisors
+
+				plog.Info("Received auditID for failed request",
+					"path", path,
+					"statusCode", response.StatusCode,
+					"auditID", response.Header.Get("audit-ID"))
+			default:
+				// noop
+			}
+		}
+		return response, responseErr
+	})
+}
+
 // Login performs an OAuth2/OIDC authorization code login using a localhost listener.
 func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, error) {
 	h := handlerState{
@@ -379,7 +414,15 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		getEnv:        os.Getenv,
 		listen:        net.Listen,
 		stdinIsTTY:    func() bool { return term.IsTerminal(stdin()) },
-		getProvider:   upstreamoidc.New,
+		getProvider: func(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+			// can't use upstreamoidc.New here since it does not set the Name
+			return &upstreamoidc.ProviderConfig{
+				Name:     issuer, // use the issuer as the Name
+				Config:   config,
+				Provider: provider,
+				Client:   client,
+			}
+		},
 		validateIDToken: func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error) {
 			return provider.Verifier(&coreosoidc.Config{ClientID: audience}).Verify(ctx, token)
 		},
@@ -392,6 +435,8 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 			return nil, err
 		}
 	}
+
+	h.httpClient.Transport = maybePrintAuditID(h.httpClient.Transport)
 
 	if h.cliToSendCredentials {
 		if h.loginFlow != "" {

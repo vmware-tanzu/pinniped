@@ -204,7 +204,7 @@ func handleCreateOrUpdate(
 	negotiatedSerializer runtime.NegotiatedSerializer,
 ) (bool, *http.Response, error) {
 	if req.GetBody == nil {
-		return true, nil, fmt.Errorf("unreadible body for request: %#v", middlewareReq) // this should never happen
+		return true, nil, fmt.Errorf("unreadable body for request: %#v", middlewareReq) // this should never happen
 	}
 
 	body, err := req.GetBody()

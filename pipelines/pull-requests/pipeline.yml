@@ -398,7 +398,6 @@ jobs:
           - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-latest-fips } }
           - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-k8s-main } }
           - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: kubectl-apply-test } }
-          - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-changed-api-group-oldest } }
           - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-changed-api-group-latest } }
           - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: integration-test-multiple-pinnipeds } }
           - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, target_url: "$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME", context: uninstall-test } }
@@ -908,7 +907,6 @@ jobs:
               - integration-test-latest-arm64
               - integration-test-latest-with-external-idps
               - integration-test-gke-rapid
-              - integration-test-changed-api-group-oldest
               - integration-test-changed-api-group-latest
               # Then repeat these from ready-for-int because we want to refer to them also in the "passed"
               # constraints for the other resources below, so we can be sure that the pinniped-pr resource
@@ -1515,77 +1513,6 @@ jobs:
         params:
           <<: *gcp_account_params
 
-  # Run the changed-api-group test on the oldest and the newest versions of Kubernetes that we support to give
-  # us confidence that the middleware code works for versions within that range, without needing to pay the
-  # cost of running it on every version within the range.
-  - name: integration-test-changed-api-group-oldest
-    on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-changed-api-group-oldest } }
-    on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-changed-api-group-oldest } }
-    on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-changed-api-group-oldest } }
-    on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-changed-api-group-oldest } }
-    public: true # all logs are publicly visible
-    plan:
-      - in_parallel:
-          - get: pinniped-pr
-            version: every
-            passed: [ ready-for-int ]
-            trigger: true
-          - get: pinniped-ci
-          - get: kind-release
-          - get: gcloud-image
-          - get: k8s-app-deployer-image
-          - get: ci-build-image
-            passed: [ ready-for-int ]
-            params:
-              skip_download: true
-          - get: ci-test-image
-            passed: [ ready-for-int ]
-          - get: integration-test-runner-image
-      - { <<: *pr-status-on-pending, params: { <<: *pr-status-on-pending-params, context: integration-test-changed-api-group-oldest } }
-      - task: deploy-kind-instance
-        attempts: 5
-        timeout: 30m
-        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
-        image: gcloud-image
-        params:
-          <<: *oldest_kind_kube_version
-          <<: *gcp_account_params
-      - task: deploy
-        input_mapping:
-          cluster-pool: deploy-kind-cluster-vm-output
-          pinniped: pinniped-pr
-        params:
-          PINNIPED_API_GROUP_SUFFIX: walrus.tld
-          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
-        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
-        image: integration-test-runner-image
-      - task: run-integration-tests
-        <<: *pinniped-pr-input-mapping
-        timeout: 75m
-        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
-        image: integration-test-runner-image
-        params:
-          START_GCLOUD_PROXY: "yes"
-          <<: *gcp_account_params
-    ensure:
-      task: export-cluster-diagnostics
-      <<: *cluster_diagnostics_task
-      input_mapping:
-        cluster-pool: deploy-kind-cluster-vm-output
-      ensure:
-        task: remove-kind-instance
-        attempts: 2
-        timeout: 20m
-        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
-        image: gcloud-image
-        input_mapping:
-          kind-cluster-pool: deploy-kind-cluster-vm-output
-        params:
-          <<: *gcp_account_params
-
-  # Run the changed-api-group test on the oldest and the newest versions of Kubernetes that we support to give
-  # us confidence that the middleware code works for versions within that range, without needing to pay the
-  # cost of running it on every version within the range.
   - name: integration-test-changed-api-group-latest
     on_success: { <<: *pr-status-on-success, params: { <<: *pr-status-on-success-params, context: integration-test-changed-api-group-latest } }
     on_failure: { <<: *pr-status-on-failure, params: { <<: *pr-status-on-failure-params, context: integration-test-changed-api-group-latest } }

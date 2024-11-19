@@ -3911,3 +3911,154 @@ func TestLoggers(t *testing.T) {
 
 	// NOTE: We can't really test logs with the default (e.g. no logger option specified)
 }
+
+func TestMaybePrintAuditID(t *testing.T) {
+	canonicalAuditIdHeaderName := "Audit-Id"
+
+	buildResponse := func(statusCode int) *http.Response {
+		return &http.Response{
+			Header: http.Header{
+				canonicalAuditIdHeaderName: []string{"some-audit-id", "some-other-audit-id-that-will-never-be-seen"},
+			},
+			StatusCode: statusCode,
+			Request: &http.Request{
+				URL: &url.URL{
+					Path: "some-path-from-response-request",
+				},
+			},
+		}
+	}
+	tests := []struct {
+		name        string
+		response    *http.Response
+		responseErr error
+		want        func(t *testing.T, called func()) auditIDLoggerFunc
+		wantCalled  bool
+	}{
+		{
+			name:        "happy HTTP response - no error",
+			response:    buildResponse(http.StatusOK), //nolint:bodyclose // there is no Body.
+			responseErr: nil,
+			want: func(t *testing.T, called func()) auditIDLoggerFunc {
+				return func(_ string, _ int, _ string) {
+					called()
+				}
+			},
+			wantCalled: false, // make it obvious
+		},
+		{
+			name: "HTTP response with no response.request.url will not log",
+			response: func() *http.Response {
+				response := buildResponse(http.StatusOK)
+				response.Request.URL = nil
+				return response
+			}(), //nolint:bodyclose // there is no Body.
+			responseErr: nil,
+			want: func(t *testing.T, called func()) auditIDLoggerFunc {
+				return func(_ string, _ int, _ string) {
+					called()
+				}
+			},
+			wantCalled: false, // make it obvious
+		},
+		{
+			name: "302 with error parameter in location and audit-ID will log",
+			response: func() *http.Response {
+				response := buildResponse(http.StatusFound)
+				response.Header.Set("Location", "https://example.com?error=some-error")
+				return response
+			}(), //nolint:bodyclose // there is no Body.
+			responseErr: nil,
+			want: func(t *testing.T, called func()) auditIDLoggerFunc {
+				return func(path string, statusCode int, auditID string) {
+					called()
+					require.Equal(t, "some-path-from-response-request", path)
+					require.Equal(t, http.StatusFound, statusCode)
+					require.Equal(t, "some-audit-id", auditID)
+				}
+			},
+			wantCalled: true,
+		},
+		{
+			name: "303 with error parameter in location and audit-ID will log",
+			response: func() *http.Response {
+				response := buildResponse(http.StatusSeeOther)
+				response.Header.Set("Location", "https://example.com?error=some-error")
+				return response
+			}(), //nolint:bodyclose // there is no Body.
+			responseErr: nil,
+			want: func(t *testing.T, called func()) auditIDLoggerFunc {
+				return func(path string, statusCode int, auditID string) {
+					called()
+					require.Equal(t, "some-path-from-response-request", path)
+					require.Equal(t, http.StatusSeeOther, statusCode)
+					require.Equal(t, "some-audit-id", auditID)
+				}
+			},
+			wantCalled: true,
+		},
+		{
+			name: "303 without error parameter in location and audit-ID will not log",
+			response: func() *http.Response {
+				response := buildResponse(http.StatusSeeOther)
+				response.Header.Set("Location", "https://example.com?foo=bar")
+				return response
+			}(), //nolint:bodyclose // there is no Body.
+			responseErr: nil,
+			want: func(t *testing.T, called func()) auditIDLoggerFunc {
+				return func(path string, statusCode int, auditID string) {
+					called()
+				}
+			},
+			wantCalled: false, // make it obvious
+		},
+		{
+			name:        "404 with error parameter in location and audit-ID will log",
+			response:    buildResponse(http.StatusNotFound), //nolint:bodyclose // there is no Body.
+			responseErr: nil,
+			want: func(t *testing.T, called func()) auditIDLoggerFunc {
+				return func(path string, statusCode int, auditID string) {
+					called()
+					require.Equal(t, "some-path-from-response-request", path)
+					require.Equal(t, http.StatusNotFound, statusCode)
+					require.Equal(t, "some-audit-id", auditID)
+				}
+			},
+			wantCalled: true,
+		},
+		{
+			name:        "when the roundtrip returns an error, will not log",
+			responseErr: errors.New("some error"),
+			want: func(t *testing.T, called func()) auditIDLoggerFunc {
+				return func(path string, statusCode int, auditID string) {
+					called()
+				}
+			},
+			wantCalled: false, // make it obvious
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.NotNil(t, test.want)
+
+			mockRequest := &http.Request{
+				URL: &url.URL{
+					Path: "should-never-use-this-path",
+				},
+			}
+			var mockRt roundtripper.Func = func(r *http.Request) (*http.Response, error) {
+				require.Equal(t, mockRequest, r)
+				return test.response, test.responseErr
+			}
+			called := false
+			subjectRt := maybePrintAuditID(mockRt, test.want(t, func() {
+				called = true
+			}))
+			actualResponse, err := subjectRt.RoundTrip(mockRequest) //nolint:bodyclose // there is no Body.
+			require.Equal(t, test.responseErr, err)                 // This roundtripper only returns mocked errors.
+			require.Equal(t, test.response, actualResponse)
+			require.Equal(t, test.wantCalled, called, "expected logFunc to be called")
+		})
+	}
+}

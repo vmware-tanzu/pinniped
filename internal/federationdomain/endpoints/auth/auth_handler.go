@@ -214,22 +214,7 @@ func (h *authorizeHandler) authorize(
 	}
 	if err != nil {
 		// No specific audit event is emitted here in the case of an authorization error.
-		// There are currently seven possible cases:
-		// (1) OIDC with cli_password:
-		//   - Rely on the "HTTP Request Completed" audit event with an error and error_description to indicate what went wrong.
-		//   - There's no way to determine why the OIDC provider rejected the request.
-		// (2) OIDC with browser_authcode: this endpoint only redirects upstream
-		// (3) LDAP with cli_password:
-		//   - Rely on the "HTTP Request Completed" audit event with an error and error_description to indicate what went wrong.
-		//   - If we know that the LDAP provider rejected the request due to incorrect username or password,
-		//     Pinniped will provide the "Incorrect Username Or Password" audit event.
-		// (4) LDAP with browser_authcode: this endpoint only redirects to the /login page
-		// (5) Active Directory with cli_password:
-		//   - Rely on the "HTTP Request Completed" audit event with an error and error_description to indicate what went wrong.
-		//   - If we know that the Active Directory provider rejected the request due to incorrect username or password,
-		//     Pinniped will provide the "Incorrect Username Or Password" audit event.
-		// (6) Active Directory with browser_authcode: this endpoint only redirects to the /login page
-		// (7) GitHub with browser_authcode (cli_password is not supported): this endpoint only redirects upstream
+		// Rely on the "HTTP Request Completed" audit event with an error and error_description to indicate what went wrong.
 		oidc.WriteAuthorizeError(r, w, oauthHelper, authorizeRequester, err, requestedBrowserlessFlow)
 	}
 }

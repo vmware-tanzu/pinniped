@@ -85,7 +85,7 @@ func (rl *requestLogger) logRequestReceived() {
 		KeysAndValues: []any{
 			"proto", r.Proto,
 			"method", r.Method,
-			"host", r.Host,
+			"host", r.Host, // The "Host" header is promoted to this field.
 			"serverName", requestutil.SNIServerName(r),
 			"path", r.URL.Path,
 			"userAgent", rl.userAgent,

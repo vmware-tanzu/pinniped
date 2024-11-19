@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
@@ -173,7 +174,6 @@ func updateStaticConfigMapAndRestartApp(
 }
 
 // restartAllPodsOfApp will immediately scale to 0 and then scale back.
-// There are no uses of t.Cleanup since these actions need to happen immediately.
 func restartAllPodsOfApp(
 	t *testing.T,
 	namespace string,
@@ -195,17 +195,39 @@ func restartAllPodsOfApp(
 	originalScale := updateDeploymentScale(t, namespace, appName, 0)
 	require.Greater(t, int(originalScale), 0)
 
+	scaleDeploymentBackToOriginalScale := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+		client := testlib.NewKubernetesClientset(t)
+
+		currentScale, err := client.AppsV1().Deployments(namespace).GetScale(ctx, appName, metav1.GetOptions{})
+		require.NoError(t, err)
+		if currentScale.Spec.Replicas == originalScale {
+			// Already scaled appropriately. No need to change the scale.
+			return
+		}
+
+		updateDeploymentScale(t, namespace, appName, originalScale)
+
+		// Wait for all the new pods to be running and ready.
+		var newPods []corev1.Pod
+		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+			newPods = getRunningPodsByNamePrefix(t, namespace, appName+"-", ignorePodsWithNameSubstring)
+			requireEventually.Equal(len(newPods), int(originalScale), "wanted pods to return to original scale")
+			requireEventually.True(allPodsReady(newPods), "wanted all new pods to be ready")
+		}, 2*time.Minute, 200*time.Millisecond)
+	}
+
+	// Even if the test fails due to the below assertions, still try to scale back to original scale,
+	// to avoid polluting other tests.
+	t.Cleanup(scaleDeploymentBackToOriginalScale)
+
+	// Now that we have adjusted the scale to 0, the pods should go away.
 	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
 		newPods := getRunningPodsByNamePrefix(t, namespace, appName+"-", ignorePodsWithNameSubstring)
 		requireEventually.Len(newPods, 0, "wanted zero pods")
 	}, 2*time.Minute, 200*time.Millisecond)
 
-	// Reset the application to its original scale.
-	updateDeploymentScale(t, namespace, appName, originalScale)
-
-	testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
-		newPods := getRunningPodsByNamePrefix(t, namespace, appName+"-", ignorePodsWithNameSubstring)
-		requireEventually.Equal(len(newPods), int(originalScale), "wanted %d pods", originalScale)
-		requireEventually.True(allPodsReady(newPods), "wanted all new pods to be ready")
-	}, 2*time.Minute, 200*time.Millisecond)
+	// Scale back to original scale immediately.
+	scaleDeploymentBackToOriginalScale()
 }

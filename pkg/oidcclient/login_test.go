@@ -4058,7 +4058,8 @@ func TestMaybePrintAuditID(t *testing.T) {
 			actualResponse, err := subjectRt.RoundTrip(mockRequest) //nolint:bodyclose // there is no Body.
 			require.Equal(t, test.responseErr, err)                 // This roundtripper only returns mocked errors.
 			require.Equal(t, test.response, actualResponse)
-			require.Equal(t, test.wantCalled, called, "expected logFunc to be called")
+			require.Equal(t, test.wantCalled, called,
+				"want logFunc to be called: %t, actually was called: %t", test.wantCalled, called)
 		})
 	}
 }

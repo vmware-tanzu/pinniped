@@ -10,17 +10,37 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+type auditIDLoggerFunc func(path string, statusCode int, auditID string)
+
+func logAuditID(path string, statusCode int, auditID string) {
+	plog.Info("Received auditID for failed request",
+		"path", path,
+		"statusCode", statusCode,
+		"auditID", auditID)
+}
+
 func LogAuditIDTransportWrapper(rt http.RoundTripper) http.RoundTripper {
+	return logAuditIDTransportWrapper(rt, logAuditID)
+}
+
+func logAuditIDTransportWrapper(rt http.RoundTripper, auditIDLoggerFunc auditIDLoggerFunc) http.RoundTripper {
 	return roundtripper.WrapFunc(rt, func(r *http.Request) (*http.Response, error) {
 		response, responseErr := rt.RoundTrip(r)
-		if response != nil && response.Header.Get("audit-ID") != "" {
-			plog.Info("Received auditID for request",
-				// Use the request path from the response's request, in case the
-				// original request was modified by any other roudtrippers in the chain.
-				"path", response.Request.URL.Path,
-				"statusCode", response.StatusCode,
-				"auditID", response.Header.Get("audit-ID"))
+
+		if responseErr != nil ||
+			response == nil ||
+			response.Header.Get("audit-ID") == "" ||
+			response.Request == nil ||
+			response.Request.URL == nil {
+			return response, responseErr
 		}
+
+		// Use the request path from the response's request, in case the
+		// original request was modified by any other roudtrippers in the chain.
+		auditIDLoggerFunc(response.Request.URL.Path,
+			response.StatusCode,
+			response.Header.Get("audit-ID"))
+
 		return response, responseErr
 	})
 }

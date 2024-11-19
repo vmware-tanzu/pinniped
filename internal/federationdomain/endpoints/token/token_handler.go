@@ -36,10 +36,11 @@ func paramsSafeToLog() sets.Set[string] {
 		// Standard params from https://openid.net/specs/openid-connect-core-1_0.html for authcode and refresh grants.
 		// Redacting code, client_secret, refresh_token, and PKCE code_verifier params.
 		"grant_type", "client_id", "redirect_uri", "scope",
-		// Token exchange params from https://datatracker.ietf.org/doc/html/rfc8693.
+		// Token exchange params from https://datatracker.ietf.org/doc/html/rfc8693#section-2.1.
 		// Redact subject_token and actor_token.
 		// We don't allow all of these, but they should be safe to log.
-		"audience", "resource", "scope", "requested_token_type", "actor_token_type", "subject_token_type",
+		// "scope" is already included from the authcode grant.
+		"audience", "resource", "requested_token_type", "actor_token_type", "subject_token_type",
 	)
 }
 

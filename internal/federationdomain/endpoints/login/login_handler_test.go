@@ -553,3 +553,12 @@ func (r *requestPath) String() string {
 	}
 	return path + params.Encode()
 }
+
+// TestParamsSafeToLog only exists to ensure that paramsSafeToLog will not be accidentally updated.
+func TestParamsSafeToLog(t *testing.T) {
+	wantParams := []string{
+		"err",
+	}
+
+	require.ElementsMatch(t, wantParams, paramsSafeToLog().UnsortedList())
+}

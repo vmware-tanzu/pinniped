@@ -2206,3 +2206,14 @@ func shallowCopyAndModifyQuery(query url.Values, modifications map[string]string
 	}
 	return copied
 }
+
+// TestParamsSafeToLog only exists to ensure that paramsSafeToLog will not be accidentally updated.
+func TestParamsSafeToLog(t *testing.T) {
+	wantParams := []string{
+		"error",
+		"error_description",
+		"error_uri",
+	}
+
+	require.ElementsMatch(t, wantParams, paramsSafeToLog().UnsortedList())
+}

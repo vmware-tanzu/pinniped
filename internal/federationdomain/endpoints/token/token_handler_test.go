@@ -5996,3 +5996,20 @@ func getSecretNameFromSignature(t *testing.T, signature string, typeLabel string
 	signatureAsValidName := strings.ToLower(b32.EncodeToString(signatureBytes))
 	return fmt.Sprintf("pinniped-storage-%s-%s", typeLabel, signatureAsValidName)
 }
+
+// TestParamsSafeToLog only exists to ensure that paramsSafeToLog will not be accidentally updated.
+func TestParamsSafeToLog(t *testing.T) {
+	wantParams := []string{
+		"actor_token_type",
+		"audience",
+		"client_id",
+		"grant_type",
+		"redirect_uri",
+		"requested_token_type",
+		"resource",
+		"scope",
+		"subject_token_type",
+	}
+
+	require.ElementsMatch(t, wantParams, paramsSafeToLog().UnsortedList())
+}

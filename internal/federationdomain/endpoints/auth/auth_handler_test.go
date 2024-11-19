@@ -4431,3 +4431,32 @@ func requireEqualURLsIgnoringState(t *testing.T, actualURL string, expectedURL s
 
 	require.Equal(t, expectedLocationQuery, actualLocationQuery)
 }
+
+// TestParamsSafeToLog only exists to ensure that paramsSafeToLog will not be accidentally updated.
+func TestParamsSafeToLog(t *testing.T) {
+	wantParams := []string{
+		"access_type",
+		"acr_values",
+		"claims",
+		"claims_locales",
+		"client_id",
+		"code_challenge_method",
+		"display",
+		"id_token_hint",
+		"login_hint",
+		"max_age",
+		"pinniped_idp_name",
+		"pinniped_idp_type",
+		"prompt",
+		"redirect_uri",
+		"registration",
+		"request",
+		"request_uri",
+		"response_mode",
+		"response_type",
+		"scope",
+		"ui_locales",
+	}
+
+	require.ElementsMatch(t, wantParams, paramsSafeToLog().UnsortedList())
+}

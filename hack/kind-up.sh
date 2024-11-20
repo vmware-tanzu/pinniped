@@ -37,8 +37,12 @@ if [[ "${PINNIPED_USE_LOCAL_KIND_REGISTRY:-}" != "" ]]; then
   use_kind_registry="--file=${ROOT}/hack/lib/kind-config/kind-registry-overlay.yaml"
 fi
 
+cp "${ROOT}/hack/lib/kind-config/metadata-audit-policy.yaml" /tmp/metadata-audit-policy.yaml
+
 # Do not quote ${use_kind_registry} ${use_contour_registry} in this command because they might be empty.
-ytt ${use_kind_registry} ${use_contour_registry} --file="${ROOT}"/hack/lib/kind-config/single-node.yaml >/tmp/kind-config.yaml
+ytt ${use_kind_registry} ${use_contour_registry} \
+  --data-value-yaml enable_audit_logs=${ENABLE_KIND_AUDIT_LOGS:-false} \
+  --file="${ROOT}"/hack/lib/kind-config/single-node.yaml >/tmp/kind-config.yaml
 
 # To choose a specific version of kube, add this option to the command below: `--image kindest/node:v1.28.0`.
 # To use the "latest-main" version of kubernetes builds by the pipeline, use `--image ghcr.io/pinniped-ci-bot/kind-node-image:latest`

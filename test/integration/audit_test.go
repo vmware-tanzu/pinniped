@@ -124,7 +124,7 @@ func TestAuditLogsDuringLogin_Disruptive(t *testing.T) {
 	sessionCachePath := tempDir + "/test-sessions.yaml"
 	credentialCachePath := tempDir + "/test-credentials.yaml"
 
-	kubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
+	pinnipedStyleKubeconfigPath := runPinnipedGetKubeconfig(t, env, pinnipedExe, tempDir, []string{
 		"get", "kubeconfig",
 		"--concierge-api-group-suffix", env.APIGroupSuffix,
 		"--concierge-authenticator-type", "jwt",
@@ -140,7 +140,11 @@ func TestAuditLogsDuringLogin_Disruptive(t *testing.T) {
 	timeBeforeLogin := metav1.Now()
 
 	// Run kubectl command which should run an LDAP-style login without interactive prompts for username and password.
-	kubectlCmd := exec.CommandContext(ctx, "kubectl", "auth", "whoami", "--kubeconfig", kubeconfigPath)
+	// We'd prefer to use "kubectl auth whoami" but that's only available in recent K8s.
+	// Generally on a kind cluster there is a clusterrolebinding "system:basic-user" and a clusterrole "system:basic-user"
+	// that allows those in group "system:authenticated" to call this API, so it does prove that we authenticated.
+	kubectlCmd := exec.CommandContext(ctx, "kubectl", "auth", "can-i", "create", "selfsubjectaccessreviews",
+		"--kubeconfig", pinnipedStyleKubeconfigPath)
 	kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 	kubectlOutput, err := kubectlCmd.CombinedOutput()
 	require.NoErrorf(t, err,
@@ -197,7 +201,7 @@ func TestAuditLogsDuringLogin_Disruptive(t *testing.T) {
 		{
 			"message": "TokenCredentialRequest Authenticated User",
 			"authenticator": map[string]any{
-				// this always pinniped.dev even when the API group suffix was customized because of the way that the production code works
+				// this is always pinniped.dev even when the API group suffix was customized because of the way that the production code works
 				"apiGroup": "authentication.concierge.pinniped.dev",
 				"kind":     "JWTAuthenticator",
 				"name":     authenticator.Name,
@@ -277,7 +281,11 @@ func TestAuditLogsDuringLogin_Disruptive(t *testing.T) {
 
 	// Do a second login, which should cause audit logs with non-redacted personal info.
 	// Run kubectl command which should run an LDAP-style login without interactive prompts for username and password.
-	kubectlCmd = exec.CommandContext(ctx, "kubectl", "auth", "whoami", "--kubeconfig", kubeconfigPath)
+	// We'd prefer to use "kubectl auth whoami" but that's only available in recent K8s.
+	// Generally on a kind cluster there is a clusterrolebinding "system:basic-user" and a clusterrole "system:basic-user"
+	// that allows those in group "system:authenticated" to call this API, so it does prove that we authenticated.
+	kubectlCmd = exec.CommandContext(ctx, "kubectl", "auth", "can-i", "create", "selfsubjectaccessreviews",
+		"--kubeconfig", pinnipedStyleKubeconfigPath)
 	kubectlCmd.Env = slices.Concat(os.Environ(), env.ProxyEnv())
 	kubectlOutput, err = kubectlCmd.CombinedOutput()
 	require.NoErrorf(t, err,
@@ -341,7 +349,8 @@ func TestAuditLogsDuringLogin_Disruptive(t *testing.T) {
 		{
 			"message": "TokenCredentialRequest Authenticated User",
 			"authenticator": map[string]any{
-				"apiGroup": "authentication.concierge." + env.APIGroupSuffix,
+				// this is always pinniped.dev even when the API group suffix was customized because of the way that the production code works
+				"apiGroup": "authentication.concierge.pinniped.dev",
 				"kind":     "JWTAuthenticator",
 				"name":     authenticator.Name,
 			},

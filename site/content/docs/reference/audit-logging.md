@@ -92,6 +92,9 @@ correlate an audit event log line to other logs. The values for these keys are o
 - When applicable, audit logs have an `authorizeID` which is a unique ID to allow audit events to be correlated
   across some of the browser redirects which relate to a single login attempt by an end user. This is only applicable
   to those browser-based login flows which use redirects to identity providers and/or interstitial pages in the login flow.
+- When applicable, audit logs have a `tokenIdentifier` which is a unique ID of a token to allow audit events to be correlated
+  between where a token is issued to an end user in the Supervisor and where a token is used to gain access to a
+  Kubernetes cluster in the Concierge.
 
 Each audit event may also have more key-value pairs specific to the event's type.
 

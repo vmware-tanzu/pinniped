@@ -312,7 +312,7 @@ type tokenEndpointResponseExpectedValues struct {
 	// The expected lifetime of the ID tokens issued by authcode exchange and refresh, but not token exchange.
 	// When zero, will assume that the test wants the default value for ID token lifetime.
 	wantIDTokenLifetimeSeconds int
-	wantAuditLogs              func(sessionID string) []testutil.WantedAuditLog
+	wantAuditLogs              func(sessionID string, idToken string) []testutil.WantedAuditLog
 }
 
 func withWantCustomIDTokenLifetime(wantIDTokenLifetimeSeconds int, w tokenEndpointResponseExpectedValues) tokenEndpointResponseExpectedValues {
@@ -368,6 +368,10 @@ func addDynamicClientIDToFormPostBody(r *http.Request) {
 	r.Form.Set("client_id", dynamicClientID)
 }
 
+func idTokenToHash(tok string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(tok)))
+}
+
 func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -387,7 +391,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"openid", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
-					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -399,6 +403,10 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 								},
 							}),
 							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
+							testutil.WantAuditLog("ID Token Issued", map[string]any{
+								"sessionID":       sessionID,
+								"tokenIdentifier": idTokenToHash(idToken),
+							}),
 						}
 					},
 				},
@@ -458,7 +466,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"openid", "pinniped:request-audience", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
-					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -468,7 +476,12 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 									"redirect_uri":  "http://127.0.0.1/callback",
 								},
 							}),
+							testutil.WantAuditLog("HTTP Request Basic Auth", map[string]any{"clientID": dynamicClientID}),
 							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
+							testutil.WantAuditLog("ID Token Issued", map[string]any{
+								"sessionID":       sessionID,
+								"tokenIdentifier": idTokenToHash(idToken),
+							}),
 						}
 					},
 				},
@@ -549,7 +562,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"username", "groups"}, // username and groups were not requested, but granted anyway for backwards compatibility
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
-					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -583,6 +596,21 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 					wantGrantedScopes:     []string{"pinniped:request-audience", "username", "groups"},
 					wantUsername:          goodUsername,
 					wantGroups:            goodGroups,
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
+						return []testutil.WantedAuditLog{
+							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+								"params": map[string]any{
+									"code":          "redacted",
+									"code_verifier": "redacted",
+									"grant_type":    "authorization_code",
+									"redirect_uri":  "http://127.0.0.1/callback",
+								},
+							}),
+							testutil.WantAuditLog("HTTP Request Basic Auth", map[string]any{"clientID": dynamicClientID}),
+							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
+							// Note that there was no ID token issued, so there is no "ID Token Issued" audit log.
+						}
+					},
 				},
 			},
 		},
@@ -955,7 +983,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
 					wantErrorResponseBody: fositeMissingPKCEVerifierErrorBody,
-					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -981,7 +1009,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
 					wantErrorResponseBody: fositeWrongPKCEVerifierErrorBody,
-					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -1144,7 +1172,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 		wantStatus            int
 		wantErrorType         string
 		wantErrorDescContains string
-		wantAuditLogs         func(sessionID string) []testutil.WantedAuditLog
+		wantAuditLogs         func(sessionID string, idToken string) []testutil.WantedAuditLog
 	}{
 		{
 			name:              "happy path",
@@ -1188,7 +1216,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 							"name": "value",
 						},
 					},
-					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -1200,13 +1228,17 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 								},
 							}),
 							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
+							testutil.WantAuditLog("ID Token Issued", map[string]any{
+								"sessionID":       sessionID,
+								"tokenIdentifier": idTokenToHash(idToken),
+							}),
 						}
 					},
 				},
 			},
 			requestedAudience: "some-workload-cluster",
 			wantStatus:        http.StatusOK,
-			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+			wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
@@ -1219,6 +1251,10 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 						},
 					}),
 					testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
+					testutil.WantAuditLog("ID Token Issued", map[string]any{
+						"sessionID":       sessionID,
+						"tokenIdentifier": idTokenToHash(idToken),
+					}),
 				}
 			},
 		},
@@ -1394,7 +1430,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantStatus:            http.StatusBadRequest,
 			wantErrorType:         "unauthorized_client",
 			wantErrorDescContains: `The client is not authorized to request a token using this method. The OAuth 2.0 Client is not allowed to use token exchange grant 'urn:ietf:params:oauth:grant-type:token-exchange'.`,
-			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+			wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
@@ -1405,6 +1441,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 							"subject_token_type":   "urn:ietf:params:oauth:token-type:access_token",
 						},
 					}),
+					testutil.WantAuditLog("HTTP Request Basic Auth", map[string]any{"clientID": dynamicClientID}),
 				}
 			},
 		},
@@ -1505,7 +1542,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			wantStatus:            http.StatusBadRequest,
 			wantErrorType:         "invalid_request",
 			wantErrorDescContains: "Missing 'audience' parameter.",
-			wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+			wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
@@ -1784,7 +1821,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			t.Parallel()
 
 			// Authcode exchange doesn't use the upstream provider cache, so just pass an empty cache.
-			subject, rsp, _, _, secrets, oauthStore, actualAuditLog, sessionID := exchangeAuthcodeForTokens(t,
+			subject, rsp, _, _, secrets, oauthStore, actualAuditLog, actualSessionID := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, testidplister.NewUpstreamIDPListerBuilder().BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
@@ -1824,12 +1861,6 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.Equal(t, test.wantStatus, rsp.Code)
 			testutil.RequireEqualContentType(t, rsp.Header().Get("Content-Type"), "application/json")
 
-			if test.wantAuditLogs != nil {
-				wantAuditLogs := test.wantAuditLogs(sessionID)
-				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-token-exchange-audit-id")
-				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
-			}
-
 			var parsedResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedResponseBody))
 
@@ -1844,6 +1875,13 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 				errorDesc := parsedResponseBody["error_description"]
 				require.NotEmpty(t, errorDesc)
 				require.Contains(t, errorDesc, test.wantErrorDescContains)
+
+				// Even in the error case, make assertions about audit logs, but without an ID token.
+				if test.wantAuditLogs != nil {
+					wantAuditLogs := test.wantAuditLogs(actualSessionID, "")
+					testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-token-exchange-audit-id")
+					testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
+				}
 
 				// The remaining assertions apply only to the happy path.
 				return
@@ -1860,7 +1898,8 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			require.Equal(t, "urn:ietf:params:oauth:token-type:jwt", parsedResponseBody["issued_token_type"])
 
 			// Parse the returned token.
-			parsedJWT, err := jose.ParseSigned(parsedResponseBody["access_token"].(string), []jose.SignatureAlgorithm{jose.ES256})
+			actualIDToken := parsedResponseBody["access_token"].(string)
+			parsedJWT, err := jose.ParseSigned(actualIDToken, []jose.SignatureAlgorithm{jose.ES256})
 			require.NoError(t, err)
 			var tokenClaims map[string]any
 			require.NoError(t, json.Unmarshal(parsedJWT.UnsafePayloadWithoutVerification(), &tokenClaims))
@@ -1948,6 +1987,12 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 			newSecrets, err := secrets.List(context.Background(), metav1.ListOptions{})
 			require.NoError(t, err)
 			require.ElementsMatch(t, existingSecrets.Items, newSecrets.Items)
+
+			if test.wantAuditLogs != nil {
+				wantAuditLogs := test.wantAuditLogs(actualSessionID, actualIDToken)
+				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-token-exchange-audit-id")
+				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
+			}
 		})
 	}
 }
@@ -2184,7 +2229,7 @@ func TestRefreshGrant(t *testing.T) {
 		return want
 	}
 
-	refreshResponseWithAuditLogs := func(expectedValues tokenEndpointResponseExpectedValues, wantAuditLogs func(sessionID string) []testutil.WantedAuditLog) tokenEndpointResponseExpectedValues {
+	refreshResponseWithAuditLogs := func(expectedValues tokenEndpointResponseExpectedValues, wantAuditLogs func(sessionID string, idToken string) []testutil.WantedAuditLog) tokenEndpointResponseExpectedValues {
 		expectedValues.wantAuditLogs = wantAuditLogs
 		return expectedValues
 	}
@@ -2338,7 +2383,7 @@ func TestRefreshGrant(t *testing.T) {
 						upstreamOIDCCustomSessionDataWithNewRefreshToken(oidcUpstreamRefreshedRefreshToken),
 						refreshedUpstreamTokensWithIDAndRefreshTokens(),
 					),
-					func(sessionID string) []testutil.WantedAuditLog {
+					func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -2366,6 +2411,10 @@ func TestRefreshGrant(t *testing.T) {
 									},
 									"subject": "https://issuer?sub=some-subject",
 								},
+							}),
+							testutil.WantAuditLog("ID Token Issued", map[string]any{
+								"sessionID":       sessionID,
+								"tokenIdentifier": idTokenToHash(idToken),
 							}),
 						}
 					},
@@ -2536,7 +2585,7 @@ func TestRefreshGrant(t *testing.T) {
 							"error_description": "Error during upstream refresh. Upstream refresh rejected by configured identity policy: authentication was rejected by a configured policy."
 						}
 					`),
-					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -2607,7 +2656,7 @@ func TestRefreshGrant(t *testing.T) {
 							"name": "value",
 						},
 					},
-					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -2619,6 +2668,10 @@ func TestRefreshGrant(t *testing.T) {
 								},
 							}),
 							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
+							testutil.WantAuditLog("ID Token Issued", map[string]any{
+								"sessionID":       sessionID,
+								"tokenIdentifier": idTokenToHash(idToken),
+							}),
 						}
 					},
 				},
@@ -2973,7 +3026,7 @@ func TestRefreshGrant(t *testing.T) {
 						{Text: `User "some-username" has been added to the following groups: ["new-group1" "new-group2" "new-group3"]`},
 						{Text: `User "some-username" has been removed from the following groups: ["group1" "groups2"]`},
 					},
-					wantAuditLogs: func(sessionID string) []testutil.WantedAuditLog {
+					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
 							testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 								"params": map[string]any{
@@ -3006,6 +3059,10 @@ func TestRefreshGrant(t *testing.T) {
 									},
 									"subject": "https://issuer?sub=some-subject",
 								},
+							}),
+							testutil.WantAuditLog("ID Token Issued", map[string]any{
+								"sessionID":       sessionID,
+								"tokenIdentifier": idTokenToHash(idToken),
 							}),
 						}
 					},
@@ -4955,7 +5012,7 @@ func TestRefreshGrant(t *testing.T) {
 			// First exchange the authcode for tokens, including a refresh token.
 			// It's actually fine to use this function even when simulating LDAP (which uses a different flow) because it's
 			// just populating a secret in storage.
-			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, actualAuditLog, sessionID := exchangeAuthcodeForTokens(t,
+			subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, actualAuditLog, actualSessionID := exchangeAuthcodeForTokens(t,
 				test.authcodeExchange, test.idps.BuildFederationDomainIdentityProvidersListerFinder(), test.kubeResources)
 			var parsedAuthcodeExchangeResponseBody map[string]any
 			require.NoError(t, json.Unmarshal(rsp.Body.Bytes(), &parsedAuthcodeExchangeResponseBody))
@@ -4998,12 +5055,6 @@ func TestRefreshGrant(t *testing.T) {
 			subject.ServeHTTP(refreshResponse, req)
 			t.Logf("second response: %#v", refreshResponse)
 			t.Logf("second response body: %q", refreshResponse.Body.String())
-
-			if test.refreshRequest.want.wantAuditLogs != nil {
-				wantAuditLogs := test.refreshRequest.want.wantAuditLogs(sessionID)
-				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-refresh-grant-audit-id")
-				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
-			}
 
 			// Test that we did or did not make a call to the upstream provider's interface to perform refresh.
 			switch {
@@ -5067,6 +5118,9 @@ func TestRefreshGrant(t *testing.T) {
 				jwtSigningKey,
 				secrets,
 				approxRequestTime,
+				actualSessionID,
+				"fake-refresh-grant-audit-id",
+				actualAuditLog,
 			)
 
 			if test.refreshRequest.want.wantStatus == http.StatusOK {
@@ -5141,7 +5195,7 @@ func exchangeAuthcodeForTokens(
 	secrets v1.SecretInterface,
 	oauthStore *storage.KubeStorage,
 	actualAuditLog *bytes.Buffer,
-	sessionID string,
+	actualSessionID string,
 ) {
 	authRequest := deepCopyRequestForm(happyAuthRequest)
 	if test.modifyAuthRequest != nil {
@@ -5206,13 +5260,7 @@ func exchangeAuthcodeForTokens(
 	t.Logf("response: %#v", rsp)
 	t.Logf("response body: %q", rsp.Body.String())
 
-	sessionID = getSessionID(t, secrets)
-
-	if test.want.wantAuditLogs != nil {
-		wantAuditLogs := test.want.wantAuditLogs(sessionID)
-		testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-code-grant-audit-id")
-		testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
-	}
+	actualSessionID = getSessionID(t, secrets)
 
 	wantNonceValueInIDToken := true // ID tokens returned by the authcode exchange must include the nonce from the auth request (unlike refreshed ID tokens)
 
@@ -5226,9 +5274,12 @@ func exchangeAuthcodeForTokens(
 		jwtSigningKey,
 		secrets,
 		approxRequestTime,
+		actualSessionID,
+		"fake-code-grant-audit-id",
+		actualAuditLog,
 	)
 
-	return subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, actualAuditLog, sessionID
+	return subject, rsp, authCode, jwtSigningKey, secrets, oauthStore, actualAuditLog, actualSessionID
 }
 
 func getSessionID(t *testing.T, secrets v1.SecretInterface) string {
@@ -5255,10 +5306,14 @@ func requireTokenEndpointBehavior(
 	jwtSigningKey *ecdsa.PrivateKey,
 	secrets v1.SecretInterface,
 	requestTime time.Time,
+	actualSessionID string,
+	wantAuditID string,
+	actualAuditLog *bytes.Buffer,
 ) {
 	testutil.RequireEqualContentType(t, tokenEndpointResponse.Header().Get("Content-Type"), "application/json")
 	require.Equal(t, test.wantStatus, tokenEndpointResponse.Code)
 
+	var actualIDToken string
 	if test.wantStatus == http.StatusOK {
 		require.NotNil(t, test.wantSuccessBodyFields, "problem with test table setup: wanted success but did not specify expected response body")
 
@@ -5279,7 +5334,7 @@ func requireTokenEndpointBehavior(
 			expectedNumberOfRefreshTokenSessionsStored = 1
 		}
 		if wantIDToken {
-			requireValidIDToken(t, parsedResponseBody, jwtSigningKey, test.wantClientID, wantNonceValueInIDToken, test.wantUsername, test.wantGroups, test.wantAdditionalClaims, test.wantIDTokenLifetimeSeconds, parsedResponseBody["access_token"].(string), requestTime)
+			actualIDToken = requireValidIDToken(t, parsedResponseBody, jwtSigningKey, test.wantClientID, wantNonceValueInIDToken, test.wantUsername, test.wantGroups, test.wantAdditionalClaims, test.wantIDTokenLifetimeSeconds, parsedResponseBody["access_token"].(string), requestTime)
 		}
 		if wantRefreshToken {
 			requireValidRefreshTokenStorage(t, parsedResponseBody, oauthStore, test.wantClientID, test.wantRequestedScopes, test.wantGrantedScopes, test.wantUsername, test.wantGroups, test.wantCustomSessionDataStored, test.wantAdditionalClaims, secrets, requestTime)
@@ -5296,6 +5351,12 @@ func requireTokenEndpointBehavior(
 		require.NotNil(t, test.wantErrorResponseBody, "problem with test table setup: wanted failure but did not specify failure response body")
 
 		require.JSONEq(t, test.wantErrorResponseBody, tokenEndpointResponse.Body.String())
+	}
+
+	if test.wantAuditLogs != nil {
+		wantAuditLogs := test.wantAuditLogs(actualSessionID, actualIDToken)
+		testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, wantAuditID)
+		testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 	}
 }
 
@@ -5806,7 +5867,7 @@ func requireValidIDToken(
 	wantIDTokenLifetimeSeconds int,
 	actualAccessToken string,
 	requestTime time.Time,
-) {
+) string {
 	t.Helper()
 
 	idToken, ok := body["id_token"]
@@ -5891,6 +5952,8 @@ func requireValidIDToken(
 
 	require.NotEmpty(t, actualAccessToken)
 	require.Equal(t, hashAccessToken(actualAccessToken), claims.AccessTokenHash)
+
+	return idTokenString
 }
 
 func deepCopyRequestForm(r *http.Request) *http.Request {

@@ -6,6 +6,7 @@ package credentialrequest
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"testing"
@@ -67,6 +68,10 @@ func TestNew(t *testing.T) {
 	require.Error(t, err, "the resource panda.bears does not support being converted to a Table")
 }
 
+func tokenToHash(tok string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(tok)))
+}
+
 func TestCreate(t *testing.T) {
 	spec.Run(t, "create", func(t *testing.T, when spec.G, it spec.S) {
 		var r *require.Assertions
@@ -125,6 +130,10 @@ func TestCreate(t *testing.T) {
 			})
 
 			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID":         "fake-audit-id",
+					"tokenIdentifier": tokenToHash(req.Spec.Token),
+				}),
 				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
 					"auditID": "fake-audit-id",
 					"authenticator": map[string]any{
@@ -162,6 +171,10 @@ func TestCreate(t *testing.T) {
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 
 			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID":         "fake-audit-id",
+					"tokenIdentifier": tokenToHash(req.Spec.Token),
+				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unexpected Error", map[string]any{
 					"auditID": "fake-audit-id",
 					"authenticator": map[string]any{
@@ -188,6 +201,10 @@ func TestCreate(t *testing.T) {
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 
 			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID":         "fake-audit-id",
+					"tokenIdentifier": tokenToHash(req.Spec.Token),
+				}),
 				testutil.WantAuditLog("TokenCredentialRequest Authentication Failed", map[string]any{
 					"auditID": "fake-audit-id",
 					"authenticator": map[string]any{
@@ -214,6 +231,10 @@ func TestCreate(t *testing.T) {
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 
 			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID":         "fake-audit-id",
+					"tokenIdentifier": tokenToHash(req.Spec.Token),
+				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unexpected Error", map[string]any{
 					"auditID": "fake-audit-id",
 					"authenticator": map[string]any{
@@ -241,6 +262,10 @@ func TestCreate(t *testing.T) {
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 
 			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID":         "fake-audit-id",
+					"tokenIdentifier": tokenToHash(req.Spec.Token),
+				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
 					"auditID": "fake-audit-id",
 					"authenticator": map[string]any{
@@ -277,6 +302,10 @@ func TestCreate(t *testing.T) {
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 
 			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID":         "fake-audit-id",
+					"tokenIdentifier": tokenToHash(req.Spec.Token),
+				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
 					"auditID": "fake-audit-id",
 					"authenticator": map[string]any{
@@ -313,6 +342,10 @@ func TestCreate(t *testing.T) {
 			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
 
 			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID":         "fake-audit-id",
+					"tokenIdentifier": tokenToHash(req.Spec.Token),
+				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
 					"auditID": "fake-audit-id",
 					"authenticator": map[string]any{
@@ -389,6 +422,10 @@ func TestCreate(t *testing.T) {
 			r.NotEmpty(response)
 
 			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID":         "fake-audit-id",
+					"tokenIdentifier": tokenToHash(req.Spec.Token),
+				}),
 				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
 					"auditID": "fake-audit-id",
 					"authenticator": map[string]any{
@@ -436,6 +473,10 @@ func TestCreate(t *testing.T) {
 			r.Empty(validationFunctionSawTokenValue)
 
 			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID":         "fake-audit-id",
+					"tokenIdentifier": tokenToHash(req.Spec.Token),
+				}),
 				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
 					"auditID": "fake-audit-id",
 					"authenticator": map[string]any{

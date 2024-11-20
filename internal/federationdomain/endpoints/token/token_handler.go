@@ -6,6 +6,7 @@ package token
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
@@ -56,6 +57,7 @@ func NewHandler(
 			oauthHelper.WriteAccessError(r.Context(), w, nil, err)
 			return nil
 		}
+		auditLogBasicAuthClientID(r, auditLogger)
 
 		session := psession.NewPinnipedSession()
 		accessRequest, err := oauthHelper.NewAccessRequest(r.Context(), r, session)
@@ -113,6 +115,9 @@ func NewHandler(
 			oauthHelper.WriteAccessError(r.Context(), w, accessRequest, err)
 			return nil
 		}
+
+		// Allow cross-referencing the token with the Concierge's audit logs.
+		auditLogIDToken(r.Context(), auditLogger, accessRequest, accessResponse)
 
 		oauthHelper.WriteAccessResponse(r.Context(), w, accessRequest, accessResponse)
 
@@ -390,4 +395,51 @@ func diffSortedGroups(oldGroups, newGroups []string) ([]string, []string) {
 	added := newGroupsAsSet.Difference(oldGroupsAsSet)   // groups in newGroups that are not in oldGroups i.e. added
 	removed := oldGroupsAsSet.Difference(newGroupsAsSet) // groups in oldGroups that are not in newGroups i.e. removed
 	return added.List(), removed.List()
+}
+
+func auditLogBasicAuthClientID(r *http.Request, auditLogger plog.AuditLogger) {
+	// For dynamic clients, the client ID is from basic auth, not from the request parameters.
+	clientIDFromBasicAuth, _, basicAuthUsed := r.BasicAuth()
+	if basicAuthUsed {
+		auditLogger.Audit(auditevent.HTTPRequestBasicAuthUsed, &plog.AuditParams{
+			ReqCtx:        r.Context(),
+			KeysAndValues: []any{"clientID", clientIDFromBasicAuth},
+		})
+	}
+}
+
+func auditLogIDToken(
+	reqCtx context.Context,
+	auditLogger plog.AuditLogger,
+	accessRequest fosite.AccessRequester,
+	accessResponse fosite.AccessResponder,
+) {
+	var idToken string
+
+	if accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeTokenExchange) {
+		// Token exchanges return the ID token in the access token field of the response.
+		idToken = accessResponse.GetAccessToken()
+	} else {
+		// For other grant types, there may not be an access token, e.g. when the openid scope was not granted.
+		tok := accessResponse.GetExtra("id_token")
+		if tok != nil {
+			// This should always be a string. Checking just to be safe.
+			tokAsStr, ok := tok.(string)
+			if ok {
+				idToken = tokAsStr
+			}
+		}
+	}
+
+	if len(idToken) == 0 {
+		return
+	}
+
+	auditLogger.Audit(auditevent.IDTokenIssued, &plog.AuditParams{
+		ReqCtx:  reqCtx,
+		Session: accessRequest,
+		KeysAndValues: []any{
+			"tokenIdentifier", fmt.Sprintf("%x", sha256.Sum256([]byte(idToken))),
+		},
+	})
 }

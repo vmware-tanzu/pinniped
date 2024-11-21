@@ -477,8 +477,8 @@ of this specific token to other systems.
 Finally, that ID token is submitted to the workload cluster's Concierge to get a temporary credential which
 grants access to that workload cluster. In those logs below, you can see how the `tokenID` can be used
 to follow the user's session to another cluster by following the token. This `TokenCredentialRequest` endpoint
-s a Kubernetes API, so the `auditID` value from the Concierge pod logs will match the `auditID` value in
-the Kubernetes audit logs, allowing them to be correlated.
+is a Kubernetes API, so the `auditID` value from the Concierge pod logs will match the `auditID` value in
+the Kubernetes audit logs for the same request, allowing them to be correlated.
 
 ```json lines
 {
@@ -510,6 +510,8 @@ the Kubernetes audit logs, allowing them to be correlated.
 
 As we've seen, a user's entire authentication journey across clusters can be followed by using the
 `auditID`, `authorizeID`, `sessionID`, and `tokenID` correlation values to find related audit log events.
+The same correlation values could be used to trace a user's journey both forwards and backwards in time
+through the logs.
 
 ## Watching the audit logs
 

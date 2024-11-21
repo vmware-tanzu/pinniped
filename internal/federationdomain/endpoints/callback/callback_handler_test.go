@@ -29,6 +29,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/federationdomain/storage"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
+	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
 	"go.pinniped.dev/internal/psession"
 	"go.pinniped.dev/internal/testutil"
@@ -1180,36 +1181,75 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name:            "error redirect from upstream IDP audit logs the error params from the OAuth2 spec",
+			name:            "error redirect from upstream IDP audit logs all the error params from the OAuth2 spec",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:          http.MethodGet,
-			path:            newRequestPath().WithState(happyOIDCState).WithoutCode().String() + "&error=some_error&error_description=some_description&error_uri=some_uri",
+			path:            newRequestPath().WithState(happyOIDCState).WithoutCode().String() + "&error=some%20error&error_description=some%20description&error_uri=some%20uri",
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: htmlContentType,
-			wantBody:        "Bad Request: code param not found: check URL in browser's address bar for error parameters from upstream identity provider\n",
+			wantBody: here.Doc(`Bad Request: code param not found
+
+				error from external identity provider: some error
+				error_description from external identity provider: some description
+				error_uri from external identity provider: some uri
+
+				Pinniped AuditID: fake-audit-id
+			`),
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{
 							"state":             "redacted",
-							"error":             "some_error",
-							"error_description": "some_description",
-							"error_uri":         "some_uri",
+							"error":             "some error",
+							"error_description": "some description",
+							"error_uri":         "some uri",
 						},
 					}),
 				}
 			},
 		},
 		{
-			name:            "code param was not included on request",
+			name:            "error redirect from upstream IDP when only some of the error params from the OAuth2 spec are included on the URL",
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
+			method:          http.MethodGet,
+			path:            newRequestPath().WithState(happyOIDCState).WithoutCode().String() + "&error=some%20error&error_description=some%20description",
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody: here.Doc(`Bad Request: code param not found
+
+				error from external identity provider: some error
+				error_description from external identity provider: some description
+
+				Pinniped AuditID: fake-audit-id
+			`),
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{
+							"state":             "redacted",
+							"error":             "some error",
+							"error_description": "some description",
+						},
+					}),
+				}
+			},
+		},
+		{
+			name:            "code param was not included on request and there is no error param",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyOIDCState).WithoutCode().String(),
 			csrfCookie:      happyCSRFCookie,
 			wantStatus:      http.StatusBadRequest,
 			wantContentType: htmlContentType,
-			wantBody:        "Bad Request: code param not found: check URL in browser's address bar for error parameters from upstream identity provider\n",
+			wantBody: here.Doc(`Bad Request: code param not found
+
+				Something went wrong with your authentication attempt at your external identity provider.
+
+				Pinniped AuditID: fake-audit-id
+			`),
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{

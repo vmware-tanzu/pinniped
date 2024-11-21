@@ -7,9 +7,11 @@ package callback
 import (
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/ory/fosite"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apiserver/pkg/audit"
 
 	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
@@ -152,9 +154,43 @@ func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) 
 
 	if authcode(r) == "" {
 		plog.Info("code param not found")
-		return "", nil, httperr.New(http.StatusBadRequest,
-			"code param not found: check URL in browser's address bar for error parameters from upstream identity provider")
+		return "", nil, httperr.New(http.StatusBadRequest, errorMsgForNoCodeParam(r))
 	}
 
 	return encodedState, decodedState, nil
+}
+
+func errorMsgForNoCodeParam(r *http.Request) string {
+	msg := strings.Builder{}
+
+	msg.WriteString("code param not found\n\n")
+
+	errorParam, hasError := r.Form["error"]
+	errorDescParam, hasErrorDesc := r.Form["error_description"]
+	errorURIParam, hasErrorURI := r.Form["error_uri"]
+
+	if hasError {
+		msg.WriteString("error from external identity provider: ")
+		msg.WriteString(errorParam[0])
+		msg.WriteByte('\n')
+	}
+	if hasErrorDesc {
+		msg.WriteString("error_description from external identity provider: ")
+		msg.WriteString(errorDescParam[0])
+		msg.WriteByte('\n')
+	}
+	if hasErrorURI {
+		msg.WriteString("error_uri from external identity provider: ")
+		msg.WriteString(errorURIParam[0])
+		msg.WriteByte('\n')
+	}
+	if !hasError && !hasErrorDesc && !hasErrorURI {
+		msg.WriteString("Something went wrong with your authentication attempt at your external identity provider.\n")
+	}
+
+	msg.WriteByte('\n')
+	msg.WriteString("Pinniped AuditID: ")
+	msg.WriteString(audit.GetAuditIDTruncated(r.Context()))
+
+	return msg.String()
 }

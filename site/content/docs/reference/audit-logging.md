@@ -166,24 +166,24 @@ The logs from the authorize endpoint are shown below.
 ```json lines
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:41:53.162801Z",
+  "timestamp": "2024-11-21T17:48:43.566433Z",
   "message": "HTTP Request Received",
   "auditEvent": true,
-  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "auditID": "2d979b88-0e1e-46d4-8c64-44a0bfa1af17",
   "proto": "HTTP/2.0",
   "method": "GET",
   "host": "example-supervisor.pinniped.dev",
   "serverName": "example-supervisor.pinniped.dev",
   "path": "/oauth2/authorize",
-  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
-  "remoteAddr": "1.2.3.4:40262"
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1.1 Safari/605.1.15",
+  "remoteAddr": "1.2.3.4:58586"
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:41:53.162877Z",
+  "timestamp": "2024-11-21T17:48:43.566519Z",
   "message": "HTTP Request Parameters",
   "auditEvent": true,
-  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "auditID": "2d979b88-0e1e-46d4-8c64-44a0bfa1af17",
   "params": {
     "access_type": "offline",
     "client_id": "pinniped-cli",
@@ -192,7 +192,7 @@ The logs from the authorize endpoint are shown below.
     "nonce": "redacted",
     "pinniped_idp_name": "My OIDC IDP",
     "pinniped_idp_type": "oidc",
-    "redirect_uri": "http://127.0.0.1:55186/callback",
+    "redirect_uri": "http://127.0.0.1:55379/callback",
     "response_mode": "form_post",
     "response_type": "code",
     "scope": "groups offline_access openid pinniped:request-audience username",
@@ -201,40 +201,40 @@ The logs from the authorize endpoint are shown below.
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:41:53.163006Z",
+  "timestamp": "2024-11-21T17:48:43.567086Z",
   "message": "HTTP Request Custom Headers Used",
   "auditEvent": true,
-  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "auditID": "2d979b88-0e1e-46d4-8c64-44a0bfa1af17",
   "Pinniped-Username": false,
   "Pinniped-Password": false
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:41:53.163056Z",
+  "timestamp": "2024-11-21T17:48:43.567133Z",
   "message": "Using Upstream IDP",
   "auditEvent": true,
-  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "auditID": "2d979b88-0e1e-46d4-8c64-44a0bfa1af17",
   "displayName": "My OIDC IDP",
   "resourceName": "my-oidc-provider",
-  "resourceUID": "1028052a-4061-473b-b54a-0f6d4c15651f",
+  "resourceUID": "754c1c2f-84a4-4e79-981c-8d8ff9da42df",
   "type": "oidc"
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:41:53.163433Z",
+  "timestamp": "2024-11-21T17:48:43.567548Z",
   "message": "Upstream Authorize Redirect",
   "auditEvent": true,
-  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
-  "authorizeID": "8129f3052a512881c72a329bb3044b8f39b7e9ed30e28f91b04d3917570b80e8"
+  "auditID": "2d979b88-0e1e-46d4-8c64-44a0bfa1af17",
+  "authorizeID": "fe25634e5094b7f74e4666166f1520436d95bbeeea5109744ca5ad163217a08b"
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:41:53.163464Z",
+  "timestamp": "2024-11-21T17:48:43.567576Z",
   "message": "HTTP Request Completed",
   "auditEvent": true,
-  "auditID": "29826e50-4668-4bca-b905-a6a2d1aacd3c",
+  "auditID": "2d979b88-0e1e-46d4-8c64-44a0bfa1af17",
   "path": "/oauth2/authorize",
-  "latency": "671.792µs",
+  "latency": "1.173084ms",
   "responseStatus": 303,
   "location": "https://example-external-oidc.pinniped.dev/auth?client_id=redacted&code_challenge=redacted&code_challenge_method=redacted&nonce=redacted&redirect_uri=redacted&response_type=redacted&scope=redacted&state=redacted"
 }
@@ -248,24 +248,24 @@ with the logs from this callback request, shown below.
 ```json lines
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:11.887705Z",
+  "timestamp": "2024-11-21T17:49:07.764567Z",
   "message": "HTTP Request Received",
   "auditEvent": true,
-  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "auditID": "1697bdfd-ccdc-4f22-9f30-9b9b8acf964a",
   "proto": "HTTP/2.0",
   "method": "GET",
   "host": "example-supervisor.pinniped.dev",
   "serverName": "example-supervisor.pinniped.dev",
   "path": "/callback",
-  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
-  "remoteAddr": "1.2.3.4:40262"
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1.1 Safari/605.1.15",
+  "remoteAddr": "1.2.3.4:58586"
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:11.887769Z",
+  "timestamp": "2024-11-21T17:49:07.764626Z",
   "message": "HTTP Request Parameters",
   "auditEvent": true,
-  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "auditID": "1697bdfd-ccdc-4f22-9f30-9b9b8acf964a",
   "params": {
     "code": "redacted",
     "state": "redacted"
@@ -273,29 +273,29 @@ with the logs from this callback request, shown below.
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:11.887853Z",
+  "timestamp": "2024-11-21T17:49:07.764707Z",
   "message": "AuthorizeID From Parameters",
   "auditEvent": true,
-  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
-  "authorizeID": "8129f3052a512881c72a329bb3044b8f39b7e9ed30e28f91b04d3917570b80e8"
+  "auditID": "1697bdfd-ccdc-4f22-9f30-9b9b8acf964a",
+  "authorizeID": "fe25634e5094b7f74e4666166f1520436d95bbeeea5109744ca5ad163217a08b"
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:11.887872Z",
+  "timestamp": "2024-11-21T17:49:07.764734Z",
   "message": "Using Upstream IDP",
   "auditEvent": true,
-  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "auditID": "1697bdfd-ccdc-4f22-9f30-9b9b8acf964a",
   "displayName": "My OIDC IDP",
   "resourceName": "my-oidc-provider",
-  "resourceUID": "1028052a-4061-473b-b54a-0f6d4c15651f",
+  "resourceUID": "754c1c2f-84a4-4e79-981c-8d8ff9da42df",
   "type": "oidc"
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:11.899166Z",
+  "timestamp": "2024-11-21T17:49:07.775753Z",
   "message": "Identity From Upstream IDP",
   "auditEvent": true,
-  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "auditID": "1697bdfd-ccdc-4f22-9f30-9b9b8acf964a",
   "personalInfo": {
     "upstreamUsername": "pinny@example.com",
     "upstreamGroups": ["developers", "auditors"]
@@ -303,15 +303,15 @@ with the logs from this callback request, shown below.
   "upstreamIDPDisplayName": "My OIDC IDP",
   "upstreamIDPType": "oidc",
   "upstreamIDPResourceName": "my-oidc-provider",
-  "upstreamIDPResourceUID": "1028052a-4061-473b-b54a-0f6d4c15651f"
+  "upstreamIDPResourceUID": "754c1c2f-84a4-4e79-981c-8d8ff9da42df"
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:11.899243Z",
+  "timestamp": "2024-11-21T17:49:07.775859Z",
   "message": "Session Started",
   "auditEvent": true,
-  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
-  "sessionID": "22a0fe9f-9cab-4248-8dac-bff71291b95c",
+  "auditID": "1697bdfd-ccdc-4f22-9f30-9b9b8acf964a",
+  "sessionID": "316fa17f-2ea3-47fd-b7b0-2b02097d8c87",
   "personalInfo": {
     "username": "pinny@example.com",
     "groups": ["developers", "auditors"],
@@ -322,12 +322,12 @@ with the logs from this callback request, shown below.
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:11.909870Z",
+  "timestamp": "2024-11-21T17:49:07.786155Z",
   "message": "HTTP Request Completed",
   "auditEvent": true,
-  "auditID": "6d8c2f3f-7556-48fe-b5fb-b4fc4cae38a7",
+  "auditID": "1697bdfd-ccdc-4f22-9f30-9b9b8acf964a",
   "path": "/callback",
-  "latency": "22.183042ms",
+  "latency": "21.603667ms",
   "responseStatus": 200,
   "location": "no location header"
 }
@@ -344,52 +344,189 @@ The logs from the token endpoint are shown below.
 ```json lines
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:15.190376Z",
+  "timestamp": "2024-11-21T17:49:11.359739Z",
   "message": "HTTP Request Received",
   "auditEvent": true,
-  "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
+  "auditID": "4effaac3-3f56-4133-9fa8-15104a3022c9",
   "proto": "HTTP/2.0",
   "method": "POST",
   "host": "example-supervisor.pinniped.dev",
   "serverName": "example-supervisor.pinniped.dev",
   "path": "/oauth2/token",
   "userAgent": "pinniped/v0.0.0 (darwin/arm64) kubernetes/$Format",
-  "remoteAddr": "1.2.3.4:42446"
+  "remoteAddr": "1.2.3.4:59420"
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:15.190475Z",
+  "timestamp": "2024-11-21T17:49:11.359905Z",
   "message": "HTTP Request Parameters",
   "auditEvent": true,
-  "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
+  "auditID": "4effaac3-3f56-4133-9fa8-15104a3022c9",
   "params": {
     "code": "redacted",
     "code_verifier": "redacted",
     "grant_type": "authorization_code",
-    "redirect_uri": "http://127.0.0.1:55186/callback"
+    "redirect_uri": "http://127.0.0.1:55379/callback"
   }
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:15.190479Z",
-  "message": "Session Found",
+  "timestamp": "2024-11-21T17:49:11.359954Z",
+  "message": "HTTP Request Basic Auth",
   "auditEvent": true,
-  "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
-  "sessionID": "22a0fe9f-9cab-4248-8dac-bff71291b95c"
+  "auditID": "4effaac3-3f56-4133-9fa8-15104a3022c9",
+  "clientID": "pinniped-cli"
 }
 {
   "level": "info",
-  "timestamp": "2024-11-14T18:42:15.396784Z",
+  "timestamp": "2024-11-21T17:49:11.372646Z",
+  "message": "Session Found",
+  "auditEvent": true,
+  "auditID": "4effaac3-3f56-4133-9fa8-15104a3022c9",
+  "sessionID": "316fa17f-2ea3-47fd-b7b0-2b02097d8c87"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-21T17:49:11.576172Z",
+  "message": "ID Token Issued",
+  "auditEvent": true,
+  "auditID": "4effaac3-3f56-4133-9fa8-15104a3022c9",
+  "sessionID": "316fa17f-2ea3-47fd-b7b0-2b02097d8c87",
+  "tokenIdentifier": "255b785220fe841e950aaf2f78df167991f2b38d2f0b25cc4449301e91d63913"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-21T17:49:11.576319Z",
   "message": "HTTP Request Completed",
   "auditEvent": true,
-  "auditID": "6dd829ce-9060-4062-ab8d-2053cb1eef70",
+  "auditID": "4effaac3-3f56-4133-9fa8-15104a3022c9",
   "path": "/oauth2/token",
-  "latency": "206.434458ms",
+  "latency": "216.627292ms",
   "responseStatus": 200,
   "location": "no location header"
 }
 ```
 
-In a typical login flow, several more endpoints are called, but we omit them here for brevity. As we've seen,
-a user's entire authentication journey can be followed by using the `auditID`, `authorizeID`, and `sessionID`
-correlation values to find related audit log events.
+Next, the token endpoint is called again to request a new ID token with reduced scope which will only work
+for the target workload cluster (technically, an ID token with a different `aud` claim). These logs are shown below.
+
+```json lines
+{
+  "level": "info",
+  "timestamp": "2024-11-21T17:49:11.585635Z",
+  "message": "HTTP Request Received",
+  "auditEvent": true,
+  "auditID": "b49b0a29-b1af-4902-a4fc-bea2c851fcb6",
+  "proto": "HTTP/2.0",
+  "method": "POST",
+  "host": "example-supervisor.pinniped.dev",
+  "serverName": "example-supervisor.pinniped.dev",
+  "path": "/oauth2/token",
+  "userAgent": "pinniped/v0.0.0 (darwin/arm64) kubernetes/$Format",
+  "remoteAddr": "1.2.3.4:59420"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-21T17:49:11.585748Z",
+  "message": "HTTP Request Parameters",
+  "auditEvent": true,
+  "auditID": "b49b0a29-b1af-4902-a4fc-bea2c851fcb6",
+  "params": {
+    "audience": "my-workload-cluster-1f4757da",
+    "client_id": "pinniped-cli",
+    "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+    "requested_token_type": "urn:ietf:params:oauth:token-type:jwt",
+    "subject_token": "redacted",
+    "subject_token_type": "urn:ietf:params:oauth:token-type:access_token"
+  }
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-21T17:49:11.766796Z",
+  "message": "Session Found",
+  "auditEvent": true,
+  "auditID": "b49b0a29-b1af-4902-a4fc-bea2c851fcb6",
+  "sessionID": "316fa17f-2ea3-47fd-b7b0-2b02097d8c87"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-21T17:49:11.767113Z",
+  "message": "ID Token Issued",
+  "auditEvent": true,
+  "auditID": "b49b0a29-b1af-4902-a4fc-bea2c851fcb6",
+  "sessionID": "316fa17f-2ea3-47fd-b7b0-2b02097d8c87",
+  "tokenIdentifier": "931aabb59f2ecedb1ae9ed1d3c94dd37d169aecce5cbd3dd2096295d3b409720"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-21T17:49:11.767198Z",
+  "message": "HTTP Request Completed",
+  "auditEvent": true,
+  "auditID": "b49b0a29-b1af-4902-a4fc-bea2c851fcb6",
+  "path": "/oauth2/token",
+  "latency": "181.197416ms",
+  "responseStatus": 200,
+  "location": "no location header"
+}
+```
+
+Note that when the ID token is issued, it prints a `tokenIdentifier` which is a unique identifier for that
+specific token. Technically, it is a sha256sum of the token. This can be used to cross-reference the usage
+of this specific token to other systems.
+
+Finally, that ID token is submitted to the workload cluster's Concierge to get a temporary credential which
+grants access to that workload cluster. In those logs below, you can see how the `tokenIdentifier` can be used
+to follow the user's session to another cluster by following the token. This `TokenCredentialRequest` endpoint
+s a Kubernetes API, so the `auditID` value from the Concierge pod logs will match the `auditID` value in
+the Kubernetes audit logs, allowing them to be correlated.
+
+```json lines
+{
+  "level": "info",
+  "timestamp": "2024-11-21T17:49:11.783402Z",
+  "message": "TokenCredentialRequest Token Received",
+  "auditEvent": true,
+  "auditID": "6776ad70-b587-4bfd-ae41-74ab5e3e00f5",
+  "tokenIdentifier": "931aabb59f2ecedb1ae9ed1d3c94dd37d169aecce5cbd3dd2096295d3b409720"
+}
+{
+  "level": "info",
+  "timestamp": "2024-11-21T17:49:11.786405Z",
+  "message": "TokenCredentialRequest Authenticated User",
+  "auditEvent": true,
+  "auditID": "6776ad70-b587-4bfd-ae41-74ab5e3e00f5",
+  "personalInfo": {
+    "username": "pinny@example.com",
+    "groups": ["developers", "auditors"]
+  },
+  "issuedClientCertExpires": "2024-11-21T17:54:11Z",
+  "authenticator": {
+    "apiGroup": "authentication.concierge.pinniped.dev",
+    "kind": "JWTAuthenticator",
+    "name": "my-jwt-authenticator"
+  }
+}
+```
+
+As we've seen, a user's entire authentication journey across clusters can be followed by using the
+`auditID`, `authorizeID`, `sessionID`, and `tokenIdentifier` correlation values to find related audit log events.
+
+## Watching the audit logs
+
+Here is a handy command to watch the audit logs from a Supervisor's pod logs which pretty-prints the logs and
+removes keys to make them more terse. A similar command would work for the Concierge's pod logs.
+
+```shell
+kubectl logs --follow --selector=app=pinniped-supervisor -n pinniped-supervisor \
+  | jq --unbuffered -r '. | select(.auditEvent == true) | del(.caller) | del(.level) | del(.auditEvent)'
+```
+
+## End users getting auditIDs
+
+The `auditID` of each request is returned on an HTTP response header to clients.
+
+If an end user encounters an authentication problem, they can get the `auditID` of the failed request to share
+with their Pinniped administrator, who can then search the pod logs to find the audit logs associated with that
+particular request. This may aid in debugging the problem. The end user can set the environment variable
+`PINNIPED_DEBUG=true` while using `kubectl` and other similar tools with their Pinniped-compatible kubeconfig.
+The extra console output caused by that environment variable will include the `auditID` of any failed requests.

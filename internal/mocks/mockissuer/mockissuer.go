@@ -17,6 +17,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	cert "go.pinniped.dev/internal/cert"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -45,13 +46,12 @@ func (m *MockClientCertIssuer) EXPECT() *MockClientCertIssuerMockRecorder {
 }
 
 // IssueClientCertPEM mocks base method.
-func (m *MockClientCertIssuer) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
+func (m *MockClientCertIssuer) IssueClientCertPEM(username string, groups []string, ttl time.Duration) (*cert.PEM, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IssueClientCertPEM", username, groups, ttl)
-	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].([]byte)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret0, _ := ret[0].(*cert.PEM)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // IssueClientCertPEM indicates an expected call of IssueClientCertPEM.

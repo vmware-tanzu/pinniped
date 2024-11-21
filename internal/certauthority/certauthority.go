@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package certauthority implements a simple x509 certificate authority suitable for use in an aggregated API service.
@@ -20,6 +20,7 @@ import (
 	"net"
 	"time"
 
+	"go.pinniped.dev/internal/cert"
 	"go.pinniped.dev/internal/constable"
 )
 
@@ -38,7 +39,7 @@ type env struct {
 	// clock tells the current time (usually time.Now(), but broken out here for tests).
 	clock func() time.Time
 
-	// parse function to parse an ASN.1 byte slice into an x509 struct (normally x509.ParseCertificate)
+	// parse function to parse an ASN.1 byte slice into a x509 struct (normally x509.ParseCertificate)
 	parseCert func([]byte) (*x509.Certificate, error)
 }
 
@@ -180,19 +181,19 @@ func (c *CA) IssueServerCert(dnsNames []string, ips []net.IP, ttl time.Duration)
 }
 
 // IssueClientCertPEM is similar to IssueClientCert, but returns the new cert as a pair of PEM-formatted byte slices
-// for the certificate and private key.
-func (c *CA) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
+// for the certificate and private key, along with the notBefore and notAfter values.
+func (c *CA) IssueClientCertPEM(username string, groups []string, ttl time.Duration) (*cert.PEM, error) {
 	return toPEM(c.IssueClientCert(username, groups, ttl))
 }
 
 // IssueServerCertPEM is similar to IssueServerCert, but returns the new cert as a pair of PEM-formatted byte slices
-// for the certificate and private key.
-func (c *CA) IssueServerCertPEM(dnsNames []string, ips []net.IP, ttl time.Duration) ([]byte, []byte, error) {
+// for the certificate and private key, along with the notBefore and notAfter values.
+func (c *CA) IssueServerCertPEM(dnsNames []string, ips []net.IP, ttl time.Duration) (*cert.PEM, error) {
 	return toPEM(c.IssueServerCert(dnsNames, ips, ttl))
 }
 
 func (c *CA) issueCert(extKeyUsage x509.ExtKeyUsage, subject pkix.Name, dnsNames []string, ips []net.IP, ttl time.Duration) (*tls.Certificate, error) {
-	// Choose a random 128 bit serial number.
+	// Choose a random 128-bit serial number.
 	serialNumber, err := randomSerial(c.env.serialRNG)
 	if err != nil {
 		return nil, fmt.Errorf("could not generate serial number for certificate: %w", err)
@@ -209,7 +210,7 @@ func (c *CA) issueCert(extKeyUsage x509.ExtKeyUsage, subject pkix.Name, dnsNames
 	notBefore := now.Add(-certBackdate)
 	notAfter := now.Add(ttl)
 
-	// Parse the DER encoded certificate to get an x509.Certificate.
+	// Parse the DER encoded certificate to get a x509.Certificate.
 	caCert, err := x509.ParseCertificate(c.caCertBytes)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse CA certificate: %w", err)
@@ -246,18 +247,23 @@ func (c *CA) issueCert(extKeyUsage x509.ExtKeyUsage, subject pkix.Name, dnsNames
 	}, nil
 }
 
-func toPEM(cert *tls.Certificate, err error) ([]byte, []byte, error) {
+func toPEM(certificate *tls.Certificate, err error) (*cert.PEM, error) {
 	// If the wrapped IssueServerCert() returned an error, pass it back.
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	certPEM, keyPEM, err := ToPEM(cert)
+	certPEM, keyPEM, err := ToPEM(certificate)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return certPEM, keyPEM, nil
+	return &cert.PEM{
+		CertPEM:   certPEM,
+		KeyPEM:    keyPEM,
+		NotBefore: certificate.Leaf.NotBefore,
+		NotAfter:  certificate.Leaf.NotAfter,
+	}, nil
 }
 
 // ToPEM encodes a tls.Certificate into a private key PEM and a cert chain PEM.
@@ -279,7 +285,7 @@ func ToPEM(cert *tls.Certificate) ([]byte, []byte, error) {
 	return certPEM, keyPEM, nil
 }
 
-// randomSerial generates a random 128 bit serial number.
+// randomSerial generates a random 128-bit serial number.
 func randomSerial(rng io.Reader) (*big.Int, error) {
 	return rand.Int(rng, new(big.Int).Lsh(big.NewInt(1), 128))
 }

@@ -70,10 +70,10 @@ func TestImpersonator(t *testing.T) {
 	err = caContent.SetCertKeyContent(ca.Bundle(), caKey)
 	require.NoError(t, err)
 
-	cert, key, err := ca.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
+	pem, err := ca.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
 	require.NoError(t, err)
 	certKeyContent := dynamiccert.NewServingCert("cert-key")
-	err = certKeyContent.SetCertKeyContent(cert, key)
+	err = certKeyContent.SetCertKeyContent(pem.CertPEM, pem.KeyPEM)
 	require.NoError(t, err)
 
 	unrelatedCA, err := certauthority.New("ca", time.Hour)
@@ -1997,11 +1997,11 @@ type clientCert struct {
 
 func newClientCert(t *testing.T, ca *certauthority.CA, username string, groups []string) *clientCert {
 	t.Helper()
-	certPEM, keyPEM, err := ca.IssueClientCertPEM(username, groups, time.Hour)
+	pem, err := ca.IssueClientCertPEM(username, groups, time.Hour)
 	require.NoError(t, err)
 	return &clientCert{
-		certPEM: certPEM,
-		keyPEM:  keyPEM,
+		certPEM: pem.CertPEM,
+		keyPEM:  pem.KeyPEM,
 	}
 }
 

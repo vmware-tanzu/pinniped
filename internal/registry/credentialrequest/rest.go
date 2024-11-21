@@ -20,7 +20,6 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
-	"k8s.io/utils/clock"
 
 	loginapi "go.pinniped.dev/generated/latest/apis/concierge/login"
 	"go.pinniped.dev/internal/auditevent"
@@ -40,14 +39,12 @@ func NewREST(
 	issuer clientcertissuer.ClientCertIssuer,
 	resource schema.GroupResource,
 	auditLogger plog.AuditLogger,
-	clock clock.Clock,
 ) *REST {
 	return &REST{
 		authenticator:  authenticator,
 		issuer:         issuer,
 		tableConvertor: rest.NewDefaultTableConvertor(resource),
 		auditLogger:    auditLogger,
-		clock:          clock,
 	}
 }
 
@@ -56,7 +53,6 @@ type REST struct {
 	issuer         clientcertissuer.ClientCertIssuer
 	tableConvertor rest.TableConvertor
 	auditLogger    plog.AuditLogger
-	clock          clock.Clock
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -162,9 +158,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return authenticationFailedResponse(), nil
 	}
 
-	// this timestamp should be returned from IssueClientCertPEM but this is a safe approximation
-	expires := metav1.NewTime(r.clock.Now().UTC().Add(clientCertificateTTL))
-	certPEM, keyPEM, err := r.issuer.IssueClientCertPEM(userInfo.GetName(), userInfo.GetGroups(), clientCertificateTTL)
+	pem, err := r.issuer.IssueClientCertPEM(userInfo.GetName(), userInfo.GetGroups(), clientCertificateTTL)
 	if err != nil {
 		r.auditLogger.Audit(auditevent.TokenCredentialRequestUnexpectedError, &plog.AuditParams{
 			ReqCtx: ctx,
@@ -177,6 +171,9 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		return authenticationFailedResponse(), nil
 	}
 
+	notBefore := metav1.NewTime(pem.NotBefore)
+	notAfter := metav1.NewTime(pem.NotAfter)
+
 	r.auditLogger.Audit(auditevent.TokenCredentialRequestAuthenticatedUser, &plog.AuditParams{
 		ReqCtx: ctx,
 		PIIKeysAndValues: []any{
@@ -184,7 +181,10 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 			"groups", userInfo.GetGroups(),
 		},
 		KeysAndValues: []any{
-			"issuedClientCertExpires", expires.Format(time.RFC3339),
+			"issuedClientCert", map[string]string{
+				"notBefore": notBefore.Format(time.RFC3339),
+				"notAfter":  notAfter.Format(time.RFC3339),
+			},
 			"authenticator", credentialRequest.Spec.Authenticator,
 		},
 	})
@@ -192,9 +192,9 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	return &loginapi.TokenCredentialRequest{
 		Status: loginapi.TokenCredentialRequestStatus{
 			Credential: &loginapi.ClusterCredential{
-				ExpirationTimestamp:   expires,
-				ClientCertificateData: string(certPEM),
-				ClientKeyData:         string(keyPEM),
+				ExpirationTimestamp:   notAfter,
+				ClientCertificateData: string(pem.CertPEM),
+				ClientKeyData:         string(pem.KeyPEM),
 			},
 		},
 	}, nil

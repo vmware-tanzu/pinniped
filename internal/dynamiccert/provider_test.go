@@ -114,13 +114,13 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				newCA, err := certauthority.New(names.SimpleNameGenerator.GenerateName("new-ca"), time.Hour)
 				require.NoError(t, err)
 
-				certPEM, keyPEM, err := newCA.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.2")}, time.Hour)
+				pem, err := newCA.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.2")}, time.Hour)
 				require.NoError(t, err)
 
-				err = certKey.SetCertKeyContent(certPEM, keyPEM)
+				err = certKey.SetCertKeyContent(pem.CertPEM, pem.KeyPEM)
 				require.NoError(t, err)
 
-				cert, err := tls.X509KeyPair(certPEM, keyPEM)
+				cert, err := tls.X509KeyPair(pem.CertPEM, pem.KeyPEM)
 				require.NoError(t, err)
 
 				return []tls.Certificate{cert}
@@ -144,13 +144,13 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 				newCA, err := certauthority.New(names.SimpleNameGenerator.GenerateName("new-ca"), time.Hour)
 				require.NoError(t, err)
 
-				certPEM, keyPEM, err := newCA.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.3")}, time.Hour)
+				pem, err := newCA.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.3")}, time.Hour)
 				require.NoError(t, err)
 
-				err = certKey.SetCertKeyContent(certPEM, keyPEM)
+				err = certKey.SetCertKeyContent(pem.CertPEM, pem.KeyPEM)
 				require.NoError(t, err)
 
-				cert, err := tls.X509KeyPair(certPEM, keyPEM)
+				cert, err := tls.X509KeyPair(pem.CertPEM, pem.KeyPEM)
 				require.NoError(t, err)
 
 				return []tls.Certificate{cert}
@@ -170,10 +170,10 @@ func TestProviderWithDynamicServingCertificateController(t *testing.T) {
 			err = caContent.SetCertKeyContent(ca.Bundle(), caKey)
 			require.NoError(t, err)
 
-			cert, key, err := ca.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
+			pem, err := ca.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
 			require.NoError(t, err)
 			certKeyContent := NewServingCert("cert-key")
-			err = certKeyContent.SetCertKeyContent(cert, key)
+			err = certKeyContent.SetCertKeyContent(pem.CertPEM, pem.KeyPEM)
 			require.NoError(t, err)
 
 			tlsConfig := ptls.Default(nil)

@@ -10,6 +10,7 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	"go.pinniped.dev/internal/cert"
 	"go.pinniped.dev/internal/constable"
 )
 
@@ -17,7 +18,7 @@ const defaultCertIssuerErr = constable.Error("failed to issue cert")
 
 type ClientCertIssuer interface {
 	Name() string
-	IssueClientCertPEM(username string, groups []string, ttl time.Duration) (certPEM, keyPEM []byte, err error)
+	IssueClientCertPEM(username string, groups []string, ttl time.Duration) (pem *cert.PEM, err error)
 }
 
 var _ ClientCertIssuer = ClientCertIssuers{}
@@ -37,20 +38,20 @@ func (c ClientCertIssuers) Name() string {
 	return strings.Join(names, ",")
 }
 
-func (c ClientCertIssuers) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
+func (c ClientCertIssuers) IssueClientCertPEM(username string, groups []string, ttl time.Duration) (*cert.PEM, error) {
 	errs := make([]error, 0, len(c))
 
 	for _, issuer := range c {
-		certPEM, keyPEM, err := issuer.IssueClientCertPEM(username, groups, ttl)
+		pem, err := issuer.IssueClientCertPEM(username, groups, ttl)
 		if err == nil {
-			return certPEM, keyPEM, nil
+			return pem, nil
 		}
 		errs = append(errs, fmt.Errorf("%s failed to issue client cert: %w", issuer.Name(), err))
 	}
 
 	if err := utilerrors.NewAggregate(errs); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return nil, nil, defaultCertIssuerErr
+	return nil, defaultCertIssuerErr
 }

@@ -499,7 +499,10 @@ the Kubernetes audit logs for the same request, allowing them to be correlated.
     "username": "pinny@example.com",
     "groups": ["developers", "auditors"]
   },
-  "issuedClientCertExpires": "2024-11-21T17:54:11Z",
+  "issuedClientCert": {
+    "notAfter": "2024-11-21T17:54:11Z",
+    "notBefore": "2024-11-21T17:44:11Z"
+  },
   "authenticator": {
     "apiGroup": "authentication.concierge.pinniped.dev",
     "kind": "JWTAuthenticator",

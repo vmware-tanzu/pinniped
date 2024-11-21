@@ -1783,8 +1783,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		externallyProvidedCA, err = certauthority.New("Impersonation Proxy Integration Test CA", 1*time.Hour)
 		require.NoError(t, err)
 
-		var externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM []byte
-		externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM, err = externallyProvidedCA.IssueServerCertPEM([]string{proxyServiceEndpoint}, nil, 1*time.Hour)
+		externallyProvidedTLSServingCertPEM, err := externallyProvidedCA.IssueServerCertPEM([]string{proxyServiceEndpoint}, nil, 1*time.Hour)
 		require.NoError(t, err)
 
 		// Specifically use corev1.Secret.StringData
@@ -1796,8 +1795,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			corev1.SecretTypeTLS,
 			map[string]string{
 				"ca.crt":                string(externallyProvidedCA.Bundle()),
-				corev1.TLSCertKey:       string(externallyProvidedTLSServingCertPEM),
-				corev1.TLSPrivateKeyKey: string(externallyProvidedTLSServingKeyPEM),
+				corev1.TLSCertKey:       string(externallyProvidedTLSServingCertPEM.CertPEM),
+				corev1.TLSPrivateKeyKey: string(externallyProvidedTLSServingCertPEM.KeyPEM),
 			})
 
 		_, originalInternallyGeneratedCAPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
@@ -1855,8 +1854,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		externallyProvidedCA, err = certauthority.New("Impersonation Proxy Integration Test CA", 1*time.Hour)
 		require.NoError(t, err)
 
-		var externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM []byte
-		externallyProvidedTLSServingCertPEM, externallyProvidedTLSServingKeyPEM, err = externallyProvidedCA.IssueServerCertPEM([]string{proxyServiceEndpoint}, nil, 1*time.Hour)
+		externallyProvidedTLSServingCertPEM, err := externallyProvidedCA.IssueServerCertPEM([]string{proxyServiceEndpoint}, nil, 1*time.Hour)
 		require.NoError(t, err)
 
 		// Specifically use corev1.Secret.Data
@@ -1868,8 +1866,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			corev1.SecretTypeTLS,
 			map[string][]byte{
 				"ca.crt":                externallyProvidedCA.Bundle(),
-				corev1.TLSCertKey:       externallyProvidedTLSServingCertPEM,
-				corev1.TLSPrivateKeyKey: externallyProvidedTLSServingKeyPEM,
+				corev1.TLSCertKey:       externallyProvidedTLSServingCertPEM.CertPEM,
+				corev1.TLSPrivateKeyKey: externallyProvidedTLSServingCertPEM.KeyPEM,
 			})
 
 		_, originalInternallyGeneratedCAPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)

@@ -190,10 +190,10 @@ func TestAuditLogsDuringLogin_Disruptive(t *testing.T) {
 		timeBeforeLogin,
 	)
 	removeSomeKeysFromEachAuditLogEvent(allConciergeTCRLogs)
-	// Also remove issuedClientCertExpires, which is a timestamp that we can't easily predict for the assertions below.
+	// Also remove issuedClientCert, which contains timestamps that we can't easily predict for the assertions below.
 	for _, log := range allConciergeTCRLogs {
-		require.NotEmpty(t, log["issuedClientCertExpires"])
-		delete(log, "issuedClientCertExpires")
+		require.NotEmpty(t, log["issuedClientCert"])
+		delete(log, "issuedClientCert")
 	}
 
 	// All values in the personalInfo map should be redacted by default.
@@ -338,10 +338,10 @@ func TestAuditLogsDuringLogin_Disruptive(t *testing.T) {
 		timeBeforeLogin,
 	)
 	removeSomeKeysFromEachAuditLogEvent(allConciergeTCRLogs)
-	// Also remove issuedClientCertExpires, which is a timestamp that we can't easily predict for the assertions below.
+	// Also remove issuedClientCert, which contains timestamps that we can't easily predict for the assertions below.
 	for _, log := range allConciergeTCRLogs {
-		require.NotEmpty(t, log["issuedClientCertExpires"])
-		delete(log, "issuedClientCertExpires")
+		require.NotEmpty(t, log["issuedClientCert"])
+		delete(log, "issuedClientCert")
 	}
 
 	// All values in the personalInfo map should not be redacted anymore.

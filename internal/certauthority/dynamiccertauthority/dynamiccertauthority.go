@@ -1,4 +1,4 @@
-// Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package dynamiccertauthority implements a x509 certificate authority capable of issuing
@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
+	"go.pinniped.dev/internal/cert"
 	"go.pinniped.dev/internal/certauthority"
 	"go.pinniped.dev/internal/clientcertissuer"
 )
@@ -32,15 +33,15 @@ func (c *ca) Name() string {
 }
 
 // IssueClientCertPEM issues a new client certificate for the given identity and duration, returning it as a
-// pair of PEM-formatted byte slices for the certificate and private key.
-func (c *ca) IssueClientCertPEM(username string, groups []string, ttl time.Duration) ([]byte, []byte, error) {
+// pair of PEM-formatted byte slices for the certificate and private key, along with the notBefore and notAfter values.
+func (c *ca) IssueClientCertPEM(username string, groups []string, ttl time.Duration) (*cert.PEM, error) {
 	caCrtPEM, caKeyPEM := c.provider.CurrentCertKeyContent()
 	// in the future we could split dynamiccert.Private into two interfaces (Private and PrivateRead)
 	// and have this code take PrivateRead as input.  We would then add ourselves as a listener to
 	// the PrivateRead.  This would allow us to only reload the CA contents when they actually change.
 	ca, err := certauthority.Load(string(caCrtPEM), string(caKeyPEM))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	return ca.IssueClientCertPEM(username, groups, ttl)

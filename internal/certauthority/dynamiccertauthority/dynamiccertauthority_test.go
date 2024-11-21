@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"go.pinniped.dev/internal/cert"
 	"go.pinniped.dev/internal/clientcertissuer"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/testutil"
@@ -93,36 +94,35 @@ func TestCAIssuePEM(t *testing.T) {
 			// Can't run these steps in parallel, because each one depends on the previous steps being
 			// run.
 
-			crtPEM, keyPEM, err := issuePEM(provider, ca, step.caCrtPEM, step.caKeyPEM)
+			pem, err := issuePEM(provider, ca, step.caCrtPEM, step.caKeyPEM)
 
 			if step.wantError != "" {
 				require.EqualError(t, err, step.wantError)
-				require.Empty(t, crtPEM)
-				require.Empty(t, keyPEM)
+				require.Nil(t, pem)
 			} else {
 				require.NoError(t, err)
-				require.NotEmpty(t, crtPEM)
-				require.NotEmpty(t, keyPEM)
+				require.NotEmpty(t, pem.CertPEM)
+				require.NotEmpty(t, pem.KeyPEM)
 
 				caCrtPEM, _ := provider.CurrentCertKeyContent()
-				crtAssertions := testutil.ValidateClientCertificate(t, string(caCrtPEM), string(crtPEM))
+				crtAssertions := testutil.ValidateClientCertificate(t, string(caCrtPEM), string(pem.CertPEM))
 				crtAssertions.RequireCommonName("some-username")
 				crtAssertions.RequireOrganizations([]string{"some-group1", "some-group2"})
 				crtAssertions.RequireLifetime(time.Now(), time.Now().Add(time.Hour*24), time.Minute*10)
-				crtAssertions.RequireMatchesPrivateKey(string(keyPEM))
+				crtAssertions.RequireMatchesPrivateKey(string(pem.KeyPEM))
 			}
 		})
 	}
 }
 
-func issuePEM(provider dynamiccert.Provider, ca clientcertissuer.ClientCertIssuer, caCrt, caKey []byte) ([]byte, []byte, error) {
+func issuePEM(provider dynamiccert.Provider, ca clientcertissuer.ClientCertIssuer, caCrt, caKey []byte) (*cert.PEM, error) {
 	// if setting fails, look at that error
 	if caCrt != nil || caKey != nil {
 		if err := provider.SetCertKeyContent(caCrt, caKey); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
-	// otherwise check to see if their is an issuing error
+	// otherwise check to see if there is an issuing error
 	return ca.IssueClientCertPEM("some-username", []string{"some-group1", "some-group2"}, time.Hour*24)
 }

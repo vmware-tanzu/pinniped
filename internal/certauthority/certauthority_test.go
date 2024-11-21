@@ -228,7 +228,7 @@ func (e *errSigner) Sign(_ io.Reader, _ []byte, _ crypto.SignerOpts) ([]byte, er
 func TestIssue(t *testing.T) {
 	const numRandBytes = 64 * 2 // each call to issue a cert will consume 64 bytes from the reader
 
-	now := time.Date(2020, 7, 10, 12, 41, 12, 1234, time.UTC)
+	now := time.Date(2020, 7, 10, 12, 41, 12, 0, time.UTC)
 
 	realCA, err := Load(testCert, testKey)
 	require.NoError(t, err)
@@ -323,6 +323,8 @@ func TestIssue(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, got)
+				require.Equal(t, now.Add(-5*time.Minute), got.Leaf.NotBefore) // always back-dated
+				require.Equal(t, now.Add(10*time.Minute), got.Leaf.NotAfter)
 			}
 			got, err = tt.ca.IssueClientCert("test-user", []string{"group1", "group2"}, 10*time.Minute)
 			if tt.wantErr != "" {
@@ -331,6 +333,8 @@ func TestIssue(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, got)
+				require.Equal(t, now.Add(-5*time.Minute), got.Leaf.NotBefore) // always back-dated
+				require.Equal(t, now.Add(10*time.Minute), got.Leaf.NotAfter)
 			}
 		})
 	}
@@ -341,26 +345,26 @@ func TestToPEM(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("error from input", func(t *testing.T) {
-		certPEM, keyPEM, err := toPEM(nil, fmt.Errorf("some error"))
+		pem, err := toPEM(nil, fmt.Errorf("some error"))
 		require.EqualError(t, err, "some error")
-		require.Nil(t, certPEM)
-		require.Nil(t, keyPEM)
+		require.Nil(t, pem)
 	})
 
 	t.Run("invalid private key", func(t *testing.T) {
 		cert := realCert
 		cert.PrivateKey = nil
-		certPEM, keyPEM, err := toPEM(&cert, nil)
+		pem, err := toPEM(&cert, nil)
 		require.EqualError(t, err, "failed to marshal private key into PKCS8: x509: unknown key type while marshaling PKCS#8: <nil>")
-		require.Nil(t, certPEM)
-		require.Nil(t, keyPEM)
+		require.Nil(t, pem)
 	})
 
 	t.Run("success", func(t *testing.T) {
-		certPEM, keyPEM, err := toPEM(&realCert, nil)
+		pem, err := toPEM(&realCert, nil)
 		require.NoError(t, err)
-		require.NotEmpty(t, certPEM)
-		require.NotEmpty(t, keyPEM)
+		require.NotEmpty(t, pem.CertPEM)
+		require.NotEmpty(t, pem.KeyPEM)
+		require.Equal(t, time.Date(2020, time.July, 25, 21, 4, 18, 0, time.UTC), pem.NotBefore)
+		require.Equal(t, time.Date(2030, time.July, 23, 21, 4, 18, 0, time.UTC), pem.NotAfter)
 	})
 }
 
@@ -381,21 +385,21 @@ func TestIssueMethods(t *testing.T) {
 		require.NoError(t, err)
 		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, user, groups, ttl)
 
-		certPEM, keyPEM, err = ca.IssueClientCertPEM(user, groups, ttl)
+		pem, err := ca.IssueClientCertPEM(user, groups, ttl)
 		require.NoError(t, err)
-		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, user, groups, ttl)
+		validateClientCert(t, ca.Bundle(), pem.CertPEM, pem.KeyPEM, user, groups, ttl)
 
-		certPEM, keyPEM, err = ca.IssueClientCertPEM(user, nil, ttl)
+		pem, err = ca.IssueClientCertPEM(user, nil, ttl)
 		require.NoError(t, err)
-		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, user, nil, ttl)
+		validateClientCert(t, ca.Bundle(), pem.CertPEM, pem.KeyPEM, user, nil, ttl)
 
-		certPEM, keyPEM, err = ca.IssueClientCertPEM(user, []string{}, ttl)
+		pem, err = ca.IssueClientCertPEM(user, []string{}, ttl)
 		require.NoError(t, err)
-		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, user, nil, ttl)
+		validateClientCert(t, ca.Bundle(), pem.CertPEM, pem.KeyPEM, user, nil, ttl)
 
-		certPEM, keyPEM, err = ca.IssueClientCertPEM("", []string{}, ttl)
+		pem, err = ca.IssueClientCertPEM("", []string{}, ttl)
 		require.NoError(t, err)
-		validateClientCert(t, ca.Bundle(), certPEM, keyPEM, "", nil, ttl)
+		validateClientCert(t, ca.Bundle(), pem.CertPEM, pem.KeyPEM, "", nil, ttl)
 	})
 
 	t.Run("server certs", func(t *testing.T) {
@@ -408,25 +412,25 @@ func TestIssueMethods(t *testing.T) {
 		require.NoError(t, err)
 		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, dnsNames, ips, ttl)
 
-		certPEM, keyPEM, err = ca.IssueServerCertPEM(dnsNames, ips, ttl)
+		pem, err := ca.IssueServerCertPEM(dnsNames, ips, ttl)
 		require.NoError(t, err)
-		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, dnsNames, ips, ttl)
+		validateServerCert(t, ca.Bundle(), pem.CertPEM, pem.KeyPEM, dnsNames, ips, ttl)
 
-		certPEM, keyPEM, err = ca.IssueServerCertPEM(nil, ips, ttl)
+		pem, err = ca.IssueServerCertPEM(nil, ips, ttl)
 		require.NoError(t, err)
-		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, nil, ips, ttl)
+		validateServerCert(t, ca.Bundle(), pem.CertPEM, pem.KeyPEM, nil, ips, ttl)
 
-		certPEM, keyPEM, err = ca.IssueServerCertPEM(dnsNames, nil, ttl)
+		pem, err = ca.IssueServerCertPEM(dnsNames, nil, ttl)
 		require.NoError(t, err)
-		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, dnsNames, nil, ttl)
+		validateServerCert(t, ca.Bundle(), pem.CertPEM, pem.KeyPEM, dnsNames, nil, ttl)
 
-		certPEM, keyPEM, err = ca.IssueServerCertPEM([]string{}, ips, ttl)
+		pem, err = ca.IssueServerCertPEM([]string{}, ips, ttl)
 		require.NoError(t, err)
-		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, nil, ips, ttl)
+		validateServerCert(t, ca.Bundle(), pem.CertPEM, pem.KeyPEM, nil, ips, ttl)
 
-		certPEM, keyPEM, err = ca.IssueServerCertPEM(dnsNames, []net.IP{}, ttl)
+		pem, err = ca.IssueServerCertPEM(dnsNames, []net.IP{}, ttl)
 		require.NoError(t, err)
-		validateServerCert(t, ca.Bundle(), certPEM, keyPEM, dnsNames, nil, ttl)
+		validateServerCert(t, ca.Bundle(), pem.CertPEM, pem.KeyPEM, dnsNames, nil, ttl)
 	})
 }
 

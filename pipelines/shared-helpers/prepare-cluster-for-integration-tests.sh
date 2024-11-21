@@ -321,9 +321,17 @@ ldap_test_password="${PINNIPED_LDAP_TEST_USER_PASSWORD:-$(openssl rand -hex 16)}
 
 # Check if the BackendConfig resource exists (i.e. if it is a GKE cluster).
 cluster_has_gke_backend_config="no"
-if kubectl api-resources --api-group cloud.google.com -o name | grep -q backendconfigs.cloud.google.com; then
+api_resource_output=$(kubectl api-resources --api-group cloud.google.com -o name)
+if [[ $? -ne 0 ]]; then
+  echo "Got error from kubectl api-resources"
+fi
+if echo "$api_resource_output" | grep -q backendconfigs.cloud.google.com; then
   echo "Found backendconfigs.cloud.google.com API on this cluster."
   cluster_has_gke_backend_config="yes"
+else
+  echo "Did not find backendconfigs.cloud.google.com API on this cluster."
+  echo "kubectl api-resources stdout was:"
+  echo "$api_resource_output"
 fi
 
 # Save this file for possible later use. Sometimes we want to remove the CPU requests,

@@ -404,8 +404,8 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 							}),
 							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
-								"sessionID":       sessionID,
-								"tokenIdentifier": idTokenToHash(idToken),
+								"sessionID": sessionID,
+								"tokenID":   idTokenToHash(idToken),
 							}),
 						}
 					},
@@ -479,8 +479,8 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 							testutil.WantAuditLog("HTTP Request Basic Auth", map[string]any{"clientID": dynamicClientID}),
 							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
-								"sessionID":       sessionID,
-								"tokenIdentifier": idTokenToHash(idToken),
+								"sessionID": sessionID,
+								"tokenID":   idTokenToHash(idToken),
 							}),
 						}
 					},
@@ -1229,8 +1229,8 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 							}),
 							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
-								"sessionID":       sessionID,
-								"tokenIdentifier": idTokenToHash(idToken),
+								"sessionID": sessionID,
+								"tokenID":   idTokenToHash(idToken),
 							}),
 						}
 					},
@@ -1252,8 +1252,8 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					}),
 					testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 					testutil.WantAuditLog("ID Token Issued", map[string]any{
-						"sessionID":       sessionID,
-						"tokenIdentifier": idTokenToHash(idToken),
+						"sessionID": sessionID,
+						"tokenID":   idTokenToHash(idToken),
 					}),
 				}
 			},
@@ -2413,8 +2413,8 @@ func TestRefreshGrant(t *testing.T) {
 								},
 							}),
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
-								"sessionID":       sessionID,
-								"tokenIdentifier": idTokenToHash(idToken),
+								"sessionID": sessionID,
+								"tokenID":   idTokenToHash(idToken),
 							}),
 						}
 					},
@@ -2669,8 +2669,8 @@ func TestRefreshGrant(t *testing.T) {
 							}),
 							testutil.WantAuditLog("Session Found", map[string]any{"sessionID": sessionID}),
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
-								"sessionID":       sessionID,
-								"tokenIdentifier": idTokenToHash(idToken),
+								"sessionID": sessionID,
+								"tokenID":   idTokenToHash(idToken),
 							}),
 						}
 					},
@@ -3061,8 +3061,8 @@ func TestRefreshGrant(t *testing.T) {
 								},
 							}),
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
-								"sessionID":       sessionID,
-								"tokenIdentifier": idTokenToHash(idToken),
+								"sessionID": sessionID,
+								"tokenID":   idTokenToHash(idToken),
 							}),
 						}
 					},

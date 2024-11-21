@@ -92,7 +92,7 @@ correlate an audit event log line to other logs. The values for these keys are o
 - When applicable, audit logs have an `authorizeID` which is a unique ID to allow audit events to be correlated
   across some of the browser redirects which relate to a single login attempt by an end user. This is only applicable
   to those browser-based login flows which use redirects to identity providers and/or interstitial pages in the login flow.
-- When applicable, audit logs have a `tokenIdentifier` which is a unique ID of a token to allow audit events to be correlated
+- When applicable, audit logs have a `tokenID` which is a unique ID of a token to allow audit events to be correlated
   between where a token is issued to an end user in the Supervisor and where a token is used to gain access to a
   Kubernetes cluster in the Concierge.
 
@@ -392,7 +392,7 @@ The logs from the token endpoint are shown below.
   "auditEvent": true,
   "auditID": "4effaac3-3f56-4133-9fa8-15104a3022c9",
   "sessionID": "316fa17f-2ea3-47fd-b7b0-2b02097d8c87",
-  "tokenIdentifier": "255b785220fe841e950aaf2f78df167991f2b38d2f0b25cc4449301e91d63913"
+  "tokenID": "255b785220fe841e950aaf2f78df167991f2b38d2f0b25cc4449301e91d63913"
 }
 {
   "level": "info",
@@ -455,7 +455,7 @@ for the target workload cluster (technically, an ID token with a different `aud`
   "auditEvent": true,
   "auditID": "b49b0a29-b1af-4902-a4fc-bea2c851fcb6",
   "sessionID": "316fa17f-2ea3-47fd-b7b0-2b02097d8c87",
-  "tokenIdentifier": "931aabb59f2ecedb1ae9ed1d3c94dd37d169aecce5cbd3dd2096295d3b409720"
+  "tokenID": "931aabb59f2ecedb1ae9ed1d3c94dd37d169aecce5cbd3dd2096295d3b409720"
 }
 {
   "level": "info",
@@ -470,12 +470,12 @@ for the target workload cluster (technically, an ID token with a different `aud`
 }
 ```
 
-Note that when the ID token is issued, it prints a `tokenIdentifier` which is a unique identifier for that
+Note that when the ID token is issued, it prints a `tokenID` which is a unique identifier for that
 specific token. Technically, it is a sha256sum of the token. This can be used to cross-reference the usage
 of this specific token to other systems.
 
 Finally, that ID token is submitted to the workload cluster's Concierge to get a temporary credential which
-grants access to that workload cluster. In those logs below, you can see how the `tokenIdentifier` can be used
+grants access to that workload cluster. In those logs below, you can see how the `tokenID` can be used
 to follow the user's session to another cluster by following the token. This `TokenCredentialRequest` endpoint
 s a Kubernetes API, so the `auditID` value from the Concierge pod logs will match the `auditID` value in
 the Kubernetes audit logs, allowing them to be correlated.
@@ -487,7 +487,7 @@ the Kubernetes audit logs, allowing them to be correlated.
   "message": "TokenCredentialRequest Token Received",
   "auditEvent": true,
   "auditID": "6776ad70-b587-4bfd-ae41-74ab5e3e00f5",
-  "tokenIdentifier": "931aabb59f2ecedb1ae9ed1d3c94dd37d169aecce5cbd3dd2096295d3b409720"
+  "tokenID": "931aabb59f2ecedb1ae9ed1d3c94dd37d169aecce5cbd3dd2096295d3b409720"
 }
 {
   "level": "info",
@@ -509,7 +509,7 @@ the Kubernetes audit logs, allowing them to be correlated.
 ```
 
 As we've seen, a user's entire authentication journey across clusters can be followed by using the
-`auditID`, `authorizeID`, `sessionID`, and `tokenIdentifier` correlation values to find related audit log events.
+`auditID`, `authorizeID`, `sessionID`, and `tokenID` correlation values to find related audit log events.
 
 ## Watching the audit logs
 

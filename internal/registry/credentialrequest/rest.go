@@ -117,7 +117,7 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	r.auditLogger.Audit(auditevent.TokenCredentialRequestTokenReceived, &plog.AuditParams{
 		ReqCtx: ctx,
 		KeysAndValues: []any{
-			"tokenIdentifier", fmt.Sprintf("%x", sha256.Sum256([]byte(credentialRequest.Spec.Token))),
+			"tokenID", fmt.Sprintf("%x", sha256.Sum256([]byte(credentialRequest.Spec.Token))),
 		},
 	})
 

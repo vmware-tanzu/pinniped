@@ -131,8 +131,8 @@ func TestCreate(t *testing.T) {
 
 			wantAuditLog = []testutil.WantedAuditLog{
 				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
-					"auditID":         "fake-audit-id",
-					"tokenIdentifier": tokenToHash(req.Spec.Token),
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
 				}),
 				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
 					"auditID": "fake-audit-id",
@@ -172,8 +172,8 @@ func TestCreate(t *testing.T) {
 
 			wantAuditLog = []testutil.WantedAuditLog{
 				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
-					"auditID":         "fake-audit-id",
-					"tokenIdentifier": tokenToHash(req.Spec.Token),
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
 				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unexpected Error", map[string]any{
 					"auditID": "fake-audit-id",
@@ -202,8 +202,8 @@ func TestCreate(t *testing.T) {
 
 			wantAuditLog = []testutil.WantedAuditLog{
 				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
-					"auditID":         "fake-audit-id",
-					"tokenIdentifier": tokenToHash(req.Spec.Token),
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
 				}),
 				testutil.WantAuditLog("TokenCredentialRequest Authentication Failed", map[string]any{
 					"auditID": "fake-audit-id",
@@ -232,8 +232,8 @@ func TestCreate(t *testing.T) {
 
 			wantAuditLog = []testutil.WantedAuditLog{
 				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
-					"auditID":         "fake-audit-id",
-					"tokenIdentifier": tokenToHash(req.Spec.Token),
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
 				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unexpected Error", map[string]any{
 					"auditID": "fake-audit-id",
@@ -263,8 +263,8 @@ func TestCreate(t *testing.T) {
 
 			wantAuditLog = []testutil.WantedAuditLog{
 				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
-					"auditID":         "fake-audit-id",
-					"tokenIdentifier": tokenToHash(req.Spec.Token),
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
 				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
 					"auditID": "fake-audit-id",
@@ -303,8 +303,8 @@ func TestCreate(t *testing.T) {
 
 			wantAuditLog = []testutil.WantedAuditLog{
 				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
-					"auditID":         "fake-audit-id",
-					"tokenIdentifier": tokenToHash(req.Spec.Token),
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
 				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
 					"auditID": "fake-audit-id",
@@ -343,8 +343,8 @@ func TestCreate(t *testing.T) {
 
 			wantAuditLog = []testutil.WantedAuditLog{
 				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
-					"auditID":         "fake-audit-id",
-					"tokenIdentifier": tokenToHash(req.Spec.Token),
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
 				}),
 				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
 					"auditID": "fake-audit-id",
@@ -423,8 +423,8 @@ func TestCreate(t *testing.T) {
 
 			wantAuditLog = []testutil.WantedAuditLog{
 				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
-					"auditID":         "fake-audit-id",
-					"tokenIdentifier": tokenToHash(req.Spec.Token),
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
 				}),
 				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
 					"auditID": "fake-audit-id",
@@ -474,8 +474,8 @@ func TestCreate(t *testing.T) {
 
 			wantAuditLog = []testutil.WantedAuditLog{
 				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
-					"auditID":         "fake-audit-id",
-					"tokenIdentifier": tokenToHash(req.Spec.Token),
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
 				}),
 				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
 					"auditID": "fake-audit-id",

@@ -439,7 +439,7 @@ func auditLogIDToken(
 		ReqCtx:  reqCtx,
 		Session: accessRequest,
 		KeysAndValues: []any{
-			"tokenIdentifier", fmt.Sprintf("%x", sha256.Sum256([]byte(idToken))),
+			"tokenID", fmt.Sprintf("%x", sha256.Sum256([]byte(idToken))),
 		},
 	})
 }

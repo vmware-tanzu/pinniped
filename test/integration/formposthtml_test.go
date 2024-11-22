@@ -1,4 +1,4 @@
-// Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -76,15 +76,16 @@ func TestFormPostHTML_Browser_Parallel(t *testing.T) {
 		require.Equal(t, responseParams.Get("code"), actualCode)
 	})
 
-	t.Run("timeout", func(t *testing.T) {
+	t.Run("timeout followed by eventual success", func(t *testing.T) {
 		browser := browsertest.OpenBrowser(t)
 
 		// Serve the form_post template with successful parameters.
 		responseParams := formpostRandomParams(t)
 		formpostInitiate(t, browser, formpostTemplateServer(t, callbackURL, responseParams))
 
-		// Sleep for longer than the two second timeout.
-		// During this sleep we are blocking the callback from returning.
+		// Sleep for longer than the two-second timeout hardcoded in form_post.js.
+		// During this sleep we are blocking the callback from returning because we
+		// have not yet called expectCallback().
 		time.Sleep(3 * time.Second)
 
 		// Assert that the timeout fires and we see the manual instructions.
@@ -92,7 +93,7 @@ func TestFormPostHTML_Browser_Parallel(t *testing.T) {
 		require.Equal(t, responseParams.Get("code"), actualCode)
 
 		// Now simulate the callback finally succeeding, in which case
-		// the manual instructions should disappear and we should see the success
+		// the manual instructions should disappear, and we should see the success
 		// div instead.
 		expectCallback(t, responseParams)
 		formpostExpectSuccessState(t, browser)
@@ -117,9 +118,7 @@ func formpostCallbackServer(t *testing.T) (string, func(*testing.T, url.Values))
 			return
 		}
 
-		// Allow CORS requests. This will be needed for this test in the future if we change
-		// the Javascript code from using mode 'no-cors' to instead use mode 'cors'. At the
-		// moment it should be ignored by the browser.
+		// Allow CORS requests.
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
 		assert.NoError(t, r.ParseForm())
@@ -132,8 +131,9 @@ func formpostCallbackServer(t *testing.T) (string, func(*testing.T, url.Values))
 			}
 		}
 
-		// Send the form parameters back on the results channel, giving up if the
-		// request context is cancelled (such as if the client disconnects).
+		// Send the form parameters back on the results channel, blocking until the test calls
+		// the function returned by formpostCallbackServer() to read this message, but also
+		// giving up if the request context is cancelled (such as if the client disconnects).
 		select {
 		case results <- postParams:
 		case <-r.Context().Done():
@@ -235,8 +235,23 @@ func formpostExpectFavicon(t *testing.T, b *browsertest.Browser, expected string
 // loading animation to be shown.
 func formpostInitiate(t *testing.T, b *browsertest.Browser, url string) {
 	t.Helper()
+
 	t.Logf("navigating to mock form_post template URL %s...", url)
+	navigationStartTime := time.Now()
 	b.Navigate(t, url)
+
+	// There is a race here, because the JS code will only show this loading animation
+	// for two seconds, and then will automatically hide it and instead show the manual
+	// copy/paste UI. So if this test runs on a very busy/slow machine that takes more
+	// than two seconds to start waiting for the loading div after opening the page,
+	// then it would fail. This is rare but does happen occasionally, so just skip these
+	// assertions in that case.
+	if time.Since(navigationStartTime) > 1500*time.Millisecond {
+		// Took too long to navigate to the page to be able to consistently see the
+		// loading animation, which is only supposed to last for 2 seconds.
+		t.Logf("skipping loading animation assertions because test was too slow...")
+		return
+	}
 
 	t.Logf("expecting to see loading animation...")
 	b.WaitForVisibleElements(t, "div#loading")

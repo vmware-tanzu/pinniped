@@ -268,13 +268,23 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("could not get CredentialIssuer to update: %w", err)
 	}
 
-	// Find the latest healthy kube-controller-manager Pod in kube-system.
+	// List kube-controller-manager Pods in the kube-system namespace by label.
 	controllerManagerPods, err := c.kubeSystemPods.Lister().Pods(ControllerManagerNamespace).List(controllerManagerLabels)
 	if err != nil {
 		err := fmt.Errorf("could not list controller manager pods: %w", err)
 		return c.failStrategyAndErr(ctx.Context, credIssuer, err, conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
-	newestControllerManager := newestRunningPod(controllerManagerPods)
+
+	// Pick the latest running pod, preferring pods on schedulable nodes when possible.
+	// Draining or cordoning a node will mark it as unschedulable. See
+	// https://kubernetes.io/docs/concepts/nodes/node/#manual-node-administration.
+	// When that happens, we would prefer to relocate our agent pod to a different node
+	// because the cluster admin has indicated that they would prefer those pods go elsewhere.
+	newestControllerManager, err := c.newestRunningPodOnSchedulableNode(ctx.Context, controllerManagerPods)
+	if err != nil {
+		err := fmt.Errorf("error while looking for controller manager pod: %w", err)
+		return c.failStrategyAndErr(ctx.Context, credIssuer, err, conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason)
+	}
 
 	// If there are no healthy controller manager pods, we alert the user that we can't find the keypair via
 	// the CredentialIssuer.
@@ -289,7 +299,7 @@ func (c *agentController) Sync(ctx controllerlib.Context) error {
 		return c.failStrategyAndErr(ctx.Context, credIssuer, err, conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason)
 	}
 
-	depErr := c.createOrUpdateDeployment(ctx, newestControllerManager)
+	depErr := c.createOrUpdateDeployment(ctx.Context, newestControllerManager)
 	if depErr != nil {
 		// it is fine if this call fails because a different concierge pod may have already created a compatible deployment
 		// thus if the later code is able to find pods with the agent labels that we expect, we will attempt to use them
@@ -390,7 +400,7 @@ func (c *agentController) loadSigningKey(ctx context.Context, agentPod *corev1.P
 	return nil
 }
 
-func (c *agentController) createOrUpdateDeployment(ctx controllerlib.Context, newestControllerManager *corev1.Pod) error {
+func (c *agentController) createOrUpdateDeployment(ctx context.Context, newestControllerManager *corev1.Pod) error {
 	// Build the expected Deployment based on the kube-controller-manager Pod as a template.
 	expectedDeployment := c.newAgentDeployment(newestControllerManager)
 
@@ -409,7 +419,7 @@ func (c *agentController) createOrUpdateDeployment(ctx controllerlib.Context, ne
 	// If the Deployment did not exist, create it and be done.
 	if notFound {
 		log.Info("creating new deployment")
-		_, err := c.client.Kubernetes.AppsV1().Deployments(expectedDeployment.Namespace).Create(ctx.Context, expectedDeployment, metav1.CreateOptions{})
+		_, err := c.client.Kubernetes.AppsV1().Deployments(expectedDeployment.Namespace).Create(ctx, expectedDeployment, metav1.CreateOptions{})
 		return err
 	}
 
@@ -434,7 +444,7 @@ func (c *agentController) createOrUpdateDeployment(ctx controllerlib.Context, ne
 	// those versions we take extra care to handle this case.
 	if desireSelectorUpdate {
 		log.Info("deleting deployment to update immutable Selector field")
-		err = c.client.Kubernetes.AppsV1().Deployments(existingDeployment.Namespace).Delete(ctx.Context, existingDeployment.Name, metav1.DeleteOptions{
+		err = c.client.Kubernetes.AppsV1().Deployments(existingDeployment.Namespace).Delete(ctx, existingDeployment.Name, metav1.DeleteOptions{
 			Preconditions: &metav1.Preconditions{
 				UID:             &existingDeployment.UID,
 				ResourceVersion: &existingDeployment.ResourceVersion,
@@ -444,13 +454,13 @@ func (c *agentController) createOrUpdateDeployment(ctx controllerlib.Context, ne
 			return err
 		}
 		log.Info("creating new deployment to update immutable Selector field")
-		_, err = c.client.Kubernetes.AppsV1().Deployments(expectedDeployment.Namespace).Create(ctx.Context, expectedDeployment, metav1.CreateOptions{})
+		_, err = c.client.Kubernetes.AppsV1().Deployments(expectedDeployment.Namespace).Create(ctx, expectedDeployment, metav1.CreateOptions{})
 		return err
 	}
 
 	// Otherwise, update the Deployment.
 	log.Info("updating existing deployment")
-	_, err = c.client.Kubernetes.AppsV1().Deployments(updatedDeployment.Namespace).Update(ctx.Context, updatedDeployment, metav1.UpdateOptions{})
+	_, err = c.client.Kubernetes.AppsV1().Deployments(updatedDeployment.Namespace).Update(ctx, updatedDeployment, metav1.UpdateOptions{})
 	return err
 }
 
@@ -490,23 +500,84 @@ func (c *agentController) extractAPIInfo(configMap *corev1.ConfigMap) (*concierg
 	return nil, fmt.Errorf("kubeconfig in key %q does not contain any clusters", clusterInfoConfigMapKey)
 }
 
+func sortPodsByAgeNewestFirstAndFilterRunningOnly(pods []*corev1.Pod) []*corev1.Pod {
+	// Copy and sort the pointers to the pods.
+	sortedPods := make([]*corev1.Pod, len(pods))
+	copy(sortedPods, pods)
+
+	// Sort based on creation timestamp, breaking ties by name, sorting the newest first.
+	slices.SortStableFunc(sortedPods, func(a, b *corev1.Pod) int {
+		switch {
+		case a.CreationTimestamp.Time.Equal(b.CreationTimestamp.Time):
+			return strings.Compare(a.Name, b.Name)
+		case a.CreationTimestamp.After(b.CreationTimestamp.Time):
+			// Indicates a < b. We want the pod which was created more recently (after the other) to come first.
+			return -1
+		default:
+			// Indicates a > b.
+			return 1
+		}
+	})
+
+	// Remove non-running pods.
+	sortedPods = slices.DeleteFunc(sortedPods, func(pod *corev1.Pod) bool {
+		return pod.Status.Phase != corev1.PodRunning
+	})
+
+	return sortedPods
+}
+
 // newestRunningPod takes a list of pods and returns the newest one with status.phase == "Running".
 func newestRunningPod(pods []*corev1.Pod) *corev1.Pod {
-	// Compare two pods based on creation timestamp, breaking ties by name
-	newer := func(a, b *corev1.Pod) bool {
-		if a.CreationTimestamp.Time.Equal(b.CreationTimestamp.Time) {
-			return a.Name < b.Name
-		}
-		return a.CreationTimestamp.After(b.CreationTimestamp.Time)
+	pods = sortPodsByAgeNewestFirstAndFilterRunningOnly(pods)
+	if len(pods) == 0 {
+		return nil
+	}
+	return pods[0]
+}
+
+// newestRunningPodOnSchedulableNode takes a list of pods and returns the newest one with status.phase == "Running",
+// but prefers to return one that is running on a scheduleable node, when there is such an alternative available.
+func (c *agentController) newestRunningPodOnSchedulableNode(ctx context.Context, pods []*corev1.Pod) (*corev1.Pod, error) {
+	pods = sortPodsByAgeNewestFirstAndFilterRunningOnly(pods)
+	if len(pods) == 0 {
+		// Did not find any running pods.
+		return nil, nil
+	}
+	if len(pods) == 1 {
+		// Don't really have a choice, so skip the logic below as a performance optimization
+		// because we already know the only possible answer.
+		return pods[0], nil
 	}
 
-	var result *corev1.Pod
+	// Get the nodes.
+	nodes, err := c.client.Kubernetes.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Make a lookup table of the nodes by name.
+	nodesByName := map[string]*corev1.Node{}
+	for _, node := range nodes.Items {
+		if len(node.Name) == 0 {
+			// This shouldn't really happen, but would break our lookup table.
+			return nil, fmt.Errorf("a node from the list of all nodes has no name")
+		}
+		nodesByName[node.Name] = &node
+	}
+
+	// Prefer to return the newest pod that is running on a scheduleable node, when possible.
 	for _, pod := range pods {
-		if pod.Status.Phase == corev1.PodRunning && (result == nil || newer(pod, result)) {
-			result = pod
+		// NodeName field may be empty for an unscheduled pod, in which case this lookup will return nil.
+		if node := nodesByName[pod.Spec.NodeName]; node != nil {
+			if !node.Spec.Unschedulable {
+				return pod, nil
+			}
 		}
 	}
-	return result
+
+	// Fallback to using the newest pod regardless of node.
+	return pods[0], nil
 }
 
 func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *appsv1.Deployment {

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"go.pinniped.dev/internal/cert"
 	"go.pinniped.dev/internal/mocks/mockissuer"
 )
 
@@ -85,7 +86,7 @@ func TestIssueClientCertPEM(t *testing.T) {
 				errClientCertIssuer.EXPECT().Name().Return("error cert issuer")
 				errClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
-					Return(nil, nil, errors.New("error from wrapped cert issuer"))
+					Return(nil, errors.New("error from wrapped cert issuer"))
 				return ClientCertIssuers{errClientCertIssuer}
 			},
 			wantErrorMessage: "error cert issuer failed to issue client cert: error from wrapped cert issuer",
@@ -96,7 +97,7 @@ func TestIssueClientCertPEM(t *testing.T) {
 				validClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				validClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
-					Return([]byte("cert"), []byte("key"), nil)
+					Return(&cert.PEM{CertPEM: []byte("cert"), KeyPEM: []byte("key")}, nil)
 				return ClientCertIssuers{validClientCertIssuer}
 			},
 			wantCert: []byte("cert"),
@@ -109,12 +110,12 @@ func TestIssueClientCertPEM(t *testing.T) {
 				errClientCertIssuer.EXPECT().Name().Return("error cert issuer")
 				errClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
-					Return(nil, nil, errors.New("error from wrapped cert issuer"))
+					Return(nil, errors.New("error from wrapped cert issuer"))
 
 				validClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				validClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
-					Return([]byte("cert"), []byte("key"), nil)
+					Return(&cert.PEM{CertPEM: []byte("cert"), KeyPEM: []byte("key")}, nil)
 				return ClientCertIssuers{
 					errClientCertIssuer,
 					validClientCertIssuer,
@@ -130,13 +131,13 @@ func TestIssueClientCertPEM(t *testing.T) {
 				err1ClientCertIssuer.EXPECT().Name().Return("error1 cert issuer")
 				err1ClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
-					Return(nil, nil, errors.New("error1 from wrapped cert issuer"))
+					Return(nil, errors.New("error1 from wrapped cert issuer"))
 
 				err2ClientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
 				err2ClientCertIssuer.EXPECT().Name().Return("error2 cert issuer")
 				err2ClientCertIssuer.EXPECT().
 					IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second).
-					Return(nil, nil, errors.New("error2 from wrapped cert issuer"))
+					Return(nil, errors.New("error2 from wrapped cert issuer"))
 
 				return ClientCertIssuers{
 					err1ClientCertIssuer,
@@ -152,17 +153,16 @@ func TestIssueClientCertPEM(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			t.Parallel()
 
-			certPEM, keyPEM, err := testcase.buildIssuerMocks().
+			pem, err := testcase.buildIssuerMocks().
 				IssueClientCertPEM("username", []string{"group1", "group2"}, 32*time.Second)
 
 			if testcase.wantErrorMessage != "" {
 				require.ErrorContains(t, err, testcase.wantErrorMessage)
-				require.Empty(t, certPEM)
-				require.Empty(t, keyPEM)
+				require.Nil(t, pem)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, testcase.wantCert, certPEM)
-				require.Equal(t, testcase.wantKey, keyPEM)
+				require.Equal(t, testcase.wantCert, pem.CertPEM)
+				require.Equal(t, testcase.wantKey, pem.KeyPEM)
 			}
 		})
 	}

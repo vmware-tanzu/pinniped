@@ -39,6 +39,7 @@ type ExtraConfig struct {
 	Secrets                            corev1client.SecretInterface
 	OIDCClients                        configv1alpha1clientset.OIDCClientInterface
 	Namespace                          string
+	AuditLogger                        plog.AuditLogger
 }
 
 type PinnipedServer struct {
@@ -92,6 +93,7 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 				rand.Reader,
 				bcrypt.GenerateFromPassword,
 				metav1.Now,
+				c.ExtraConfig.AuditLogger,
 			)
 			return clientSecretReqGVR, clientSecretReqStorage
 		},

@@ -374,7 +374,7 @@ func CreateTestFederationDomain(
 
 	federationDomainsClient := NewSupervisorClientset(t).ConfigV1alpha1().FederationDomains(testEnv.SupervisorNamespace)
 	federationDomain, err := federationDomainsClient.Create(createContext, &supervisorconfigv1alpha1.FederationDomain{
-		ObjectMeta: TestObjectMeta(t, "oidc-provider"),
+		ObjectMeta: TestObjectMeta(t, "federation-domain"),
 		Spec:       spec,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err, "could not create test FederationDomain")

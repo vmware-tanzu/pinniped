@@ -6,10 +6,14 @@ package login
 import (
 	"net/http"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/endpoints/login/loginhtml"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/plog"
@@ -19,9 +23,16 @@ import (
 type HandlerFunc func(
 	w http.ResponseWriter,
 	r *http.Request,
-	encodedState string,
+	encodedState stateparam.Encoded,
 	decodedState *oidc.UpstreamStateParamData,
 ) error
+
+func paramsSafeToLog() sets.Set[string] {
+	return sets.New[string](
+		// This param is sometimes added by the POST login handler when redirecting back to the GET login handler.
+		"err",
+	)
+}
 
 // NewHandler returns a http.Handler that serves the login endpoint for IDPs that don't have their own web UI for login.
 //
@@ -38,8 +49,14 @@ func NewHandler(
 	cookieDecoder oidc.Decoder,
 	getHandler HandlerFunc, // use NewGetHandler() for production
 	postHandler HandlerFunc, // use NewPostHandler() for production
+	auditLogger plog.AuditLogger,
 ) http.Handler {
 	loginHandler := httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		if err := auditLogger.AuditRequestParams(r, paramsSafeToLog()); err != nil {
+			plog.DebugErr("error parsing callback request params", err)
+			return httperr.New(http.StatusBadRequest, "error parsing request params")
+		}
+
 		var handler HandlerFunc
 		switch r.Method {
 		case http.MethodGet:
@@ -55,6 +72,11 @@ func NewHandler(
 			plog.InfoErr("state or CSRF error", err)
 			return err
 		}
+
+		auditLogger.Audit(auditevent.AuthorizeIDFromParameters, &plog.AuditParams{
+			ReqCtx:        r.Context(),
+			KeysAndValues: []any{"authorizeID", encodedState.AuthorizeID()},
+		})
 
 		switch decodedState.UpstreamType {
 		case string(idpdiscoveryv1alpha1.IDPTypeLDAP), string(idpdiscoveryv1alpha1.IDPTypeActiveDirectory):

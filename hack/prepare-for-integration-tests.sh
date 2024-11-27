@@ -317,6 +317,8 @@ custom_labels: $supervisor_custom_labels
 service_https_nodeport_port: $service_https_nodeport_port
 service_https_nodeport_nodeport: $service_https_nodeport_nodeport
 service_https_clusterip_port: $service_https_clusterip_port
+audit:
+  log_usernames_and_groups: ${LOG_USERNAMES_AND_GROUPS:-disabled}
 EOF
 
 if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then
@@ -361,6 +363,8 @@ custom_labels: $concierge_custom_labels
 image_repo: $registry_repo
 image_tag: $tag
 discovery_url: $discovery_url
+audit:
+  log_usernames_and_groups: ${LOG_USERNAMES_AND_GROUPS:-disabled}
 EOF
 
 if [[ "${FIREWALL_IDPS:-no}" == "yes" ]]; then

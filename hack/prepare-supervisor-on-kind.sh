@@ -44,8 +44,20 @@ use_ldap_upstream=no
 use_ad_upstream=no
 use_github_upstream=no
 use_flow=""
+api_group_suffix="pinniped.dev" # same default as in the values.yaml ytt file
+
 while (("$#")); do
   case "$1" in
+  -g | --api-group-suffix)
+    shift
+    # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error
+    if [[ "$#" == "0" || "$1" == -* ]]; then
+      log_error "-g|--api-group-suffix requires a group name to be specified"
+      exit 1
+    fi
+    api_group_suffix=$1
+    shift
+    ;;
   --flow)
     shift
     # If there are no more command line arguments, or there is another command line argument but it starts with a dash, then error
@@ -183,7 +195,7 @@ fi
 if [[ "$use_oidc_upstream" == "yes" ]]; then
   # Make an OIDCIdentityProvider which uses Dex to provide identity.
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
-apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+apiVersion: idp.supervisor.${api_group_suffix}/v1alpha1
 kind: OIDCIdentityProvider
 metadata:
   name: my-oidc-provider
@@ -222,7 +234,7 @@ fi
 if [[ "$use_ldap_upstream" == "yes" ]]; then
   # Make an LDAPIdentityProvider which uses OpenLDAP to provide identity.
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
-apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+apiVersion: idp.supervisor.${api_group_suffix}/v1alpha1
 kind: LDAPIdentityProvider
 metadata:
   name: my-ldap-provider
@@ -265,7 +277,7 @@ fi
 if [[ "$use_ad_upstream" == "yes" ]]; then
   # Make an ActiveDirectoryIdentityProvider. Needs to be pointed to a real AD server by env vars.
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
-apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+apiVersion: idp.supervisor.${api_group_suffix}/v1alpha1
 kind: ActiveDirectoryIdentityProvider
 metadata:
   name: my-ad-provider
@@ -298,7 +310,7 @@ fi
 if [[ "$use_github_upstream" == "yes" ]]; then
   # Make an GitHubIdentityProvider.  Needs to be configured with an actual GitHub App or GitHub OAuth App.
   cat <<EOF | kubectl apply --namespace "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" -f -
-apiVersion: idp.supervisor.pinniped.dev/v1alpha1
+apiVersion: idp.supervisor.${api_group_suffix}/v1alpha1
 kind: GitHubIdentityProvider
 metadata:
   name: my-github-provider
@@ -351,7 +363,7 @@ kubectl create secret tls -n "$PINNIPED_TEST_SUPERVISOR_NAMESPACE" my-federation
 # Make a FederationDomain using the TLS Secret and identity providers from above in a temp file.
 fd_file="/tmp/federationdomain.yaml"
 cat <<EOF >$fd_file
-apiVersion: config.supervisor.pinniped.dev/v1alpha1
+apiVersion: config.supervisor.${api_group_suffix}/v1alpha1
 kind: FederationDomain
 metadata:
   name: my-federation-domain
@@ -368,7 +380,7 @@ if [[ "$use_oidc_upstream" == "yes" ]]; then
 
     - displayName: "My OIDC IDP 🚀"
       objectRef:
-        apiGroup: idp.supervisor.pinniped.dev
+        apiGroup: idp.supervisor.${api_group_suffix}
         kind: OIDCIdentityProvider
         name: my-oidc-provider
       transforms:
@@ -392,7 +404,7 @@ if [[ "$use_ldap_upstream" == "yes" ]]; then
 
     - displayName: "My LDAP IDP 🚀"
       objectRef:
-        apiGroup: idp.supervisor.pinniped.dev
+        apiGroup: idp.supervisor.${api_group_suffix}
         kind: LDAPIdentityProvider
         name: my-ldap-provider
       transforms: # these are contrived to exercise all the available features
@@ -446,7 +458,7 @@ if [[ "$use_ad_upstream" == "yes" ]]; then
 
     - displayName: "My AD IDP 🚀"
       objectRef:
-        apiGroup: idp.supervisor.pinniped.dev
+        apiGroup: idp.supervisor.${api_group_suffix}
         kind: ActiveDirectoryIdentityProvider
         name: my-ad-provider
 EOF
@@ -458,7 +470,7 @@ if [[ "$use_github_upstream" == "yes" ]]; then
 
     - displayName: "My GitHub IDP 🚀"
       objectRef:
-        apiGroup: idp.supervisor.pinniped.dev
+        apiGroup: idp.supervisor.${api_group_suffix}
         kind: GitHubIdentityProvider
         name: my-github-provider
 EOF
@@ -501,7 +513,7 @@ fi
 # The issuer URL must be accessible from within the cluster for OIDC discovery.
 echo "Creating JWTAuthenticator..."
 cat <<EOF | kubectl apply -f -
-apiVersion: authentication.concierge.pinniped.dev/v1alpha1
+apiVersion: authentication.concierge.${api_group_suffix}/v1alpha1
 kind: JWTAuthenticator
 metadata:
   name: my-jwt-authenticator
@@ -534,22 +546,26 @@ fi
 if [[ "$use_oidc_upstream" == "yes" ]]; then
   echo "Generating OIDC kubeconfig..."
   https_proxy="$proxy_server" no_proxy="$proxy_except" \
-    ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type oidc >kubeconfig-oidc.yaml
+    ./pinniped get kubeconfig --concierge-api-group-suffix "$api_group_suffix" \
+    --oidc-skip-browser $flow_arg --upstream-identity-provider-type oidc >kubeconfig-oidc.yaml
 fi
 if [[ "$use_ldap_upstream" == "yes" ]]; then
   echo "Generating LDAP kubeconfig..."
   https_proxy="$proxy_server" no_proxy="$proxy_except" \
-    ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type ldap >kubeconfig-ldap.yaml
+    ./pinniped get kubeconfig --concierge-api-group-suffix "$api_group_suffix" \
+    --oidc-skip-browser $flow_arg --upstream-identity-provider-type ldap >kubeconfig-ldap.yaml
 fi
 if [[ "$use_ad_upstream" == "yes" ]]; then
   echo "Generating AD kubeconfig..."
   https_proxy="$proxy_server" no_proxy="$proxy_except" \
-    ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type activedirectory >kubeconfig-ad.yaml
+    ./pinniped get kubeconfig --concierge-api-group-suffix "$api_group_suffix" \
+    --oidc-skip-browser $flow_arg --upstream-identity-provider-type activedirectory >kubeconfig-ad.yaml
 fi
 if [[ "$use_github_upstream" == "yes" ]]; then
   echo "Generating GitHub kubeconfig..."
   https_proxy="$proxy_server" no_proxy="$proxy_except" \
-    ./pinniped get kubeconfig --oidc-skip-browser $flow_arg --upstream-identity-provider-type github >kubeconfig-github.yaml
+    ./pinniped get kubeconfig --concierge-api-group-suffix "$api_group_suffix" \
+    --oidc-skip-browser $flow_arg --upstream-identity-provider-type github >kubeconfig-github.yaml
 fi
 
 # Clear the local CLI cache to ensure that the kubectl command below will need to perform a fresh login.
@@ -558,6 +574,12 @@ rm -f "$HOME/.config/pinniped/credentials.yaml"
 
 echo
 echo "Ready! 🚀"
+
+if [[ "$api_group_suffix" == "pinniped.dev" ]]; then
+  api_group_flag=""
+else
+  api_group_flag=" --api-group-suffix $api_group_suffix"
+fi
 
 # These instructions only apply when you are not using Contour and you will need a browser to log in.
 if [[ "${PINNIPED_USE_CONTOUR:-}" == "" && ("$use_oidc_upstream" == "yes" || "$use_flow" == "browser_authcode") ]]; then
@@ -601,21 +623,21 @@ fi
 # they expire, so you should not be prompted to log in again for the rest of the day.
 if [[ "$use_oidc_upstream" == "yes" ]]; then
   echo "To log in using OIDC:"
-  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-oidc.yaml"
+  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-oidc.yaml${api_group_flag}"
   echo
 fi
 if [[ "$use_ldap_upstream" == "yes" ]]; then
   echo "To log in using LDAP:"
-  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-ldap.yaml"
+  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-ldap.yaml${api_group_flag}"
   echo
 fi
 if [[ "$use_ad_upstream" == "yes" ]]; then
   echo "To log in using AD:"
-  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-ad.yaml"
+  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-ad.yaml${api_group_flag}"
   echo
 fi
 if [[ "$use_github_upstream" == "yes" ]]; then
   echo "To log in using GitHub:"
-  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-github.yaml"
+  echo "PINNIPED_DEBUG=true ${proxy_env_vars}./pinniped whoami --kubeconfig ./kubeconfig-github.yaml${api_group_flag}"
   echo
 fi

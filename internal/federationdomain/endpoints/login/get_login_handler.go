@@ -9,6 +9,7 @@ import (
 	"go.pinniped.dev/internal/federationdomain/endpoints/login/loginhtml"
 	"go.pinniped.dev/internal/federationdomain/endpoints/loginurl"
 	"go.pinniped.dev/internal/federationdomain/oidc"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 )
 
 const (
@@ -17,12 +18,12 @@ const (
 )
 
 func NewGetHandler(loginPath string) HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
+	return func(w http.ResponseWriter, r *http.Request, encodedState stateparam.Encoded, decodedState *oidc.UpstreamStateParamData) error {
 		alertMessage, hasAlert := getAlert(r)
 
 		pageInputs := &loginhtml.PageData{
 			PostPath:      loginPath,
-			State:         encodedState,
+			State:         encodedState.String(),
 			IDPName:       decodedState.UpstreamName,
 			HasAlertError: hasAlert,
 			AlertMessage:  alertMessage,

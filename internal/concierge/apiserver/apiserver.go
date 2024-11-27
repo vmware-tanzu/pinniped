@@ -39,6 +39,7 @@ type ExtraConfig struct {
 	LoginConciergeGroupVersion    schema.GroupVersion
 	IdentityConciergeGroupVersion schema.GroupVersion
 	TokenClient                   *tokenclient.TokenClient
+	AuditLogger                   plog.AuditLogger
 }
 
 type PinnipedServer struct {
@@ -82,7 +83,12 @@ func (c completedConfig) New() (*PinnipedServer, error) {
 	for _, f := range []func() (schema.GroupVersionResource, rest.Storage){
 		func() (schema.GroupVersionResource, rest.Storage) {
 			tokenCredReqGVR := c.ExtraConfig.LoginConciergeGroupVersion.WithResource("tokencredentialrequests")
-			tokenCredStorage := credentialrequest.NewREST(c.ExtraConfig.Authenticator, c.ExtraConfig.Issuer, tokenCredReqGVR.GroupResource())
+			tokenCredStorage := credentialrequest.NewREST(
+				c.ExtraConfig.Authenticator,
+				c.ExtraConfig.Issuer,
+				tokenCredReqGVR.GroupResource(),
+				c.ExtraConfig.AuditLogger,
+			)
 			return tokenCredReqGVR, tokenCredStorage
 		},
 		func() (schema.GroupVersionResource, rest.Storage) {

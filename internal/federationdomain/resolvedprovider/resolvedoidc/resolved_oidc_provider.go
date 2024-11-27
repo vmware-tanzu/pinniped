@@ -118,7 +118,7 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamAuthorizeRedirect
 	}
 
 	redirectURL := upstreamOAuthConfig.AuthCodeURL(
-		state.EncodedStateParam,
+		state.EncodedStateParam.String(),
 		authCodeOptions...,
 	)
 

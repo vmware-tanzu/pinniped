@@ -7,8 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
+	"github.com/ory/fosite"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -18,6 +21,7 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/auditevent"
 	pinnipedcontroller "go.pinniped.dev/internal/controller"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/crud"
@@ -35,10 +39,12 @@ import (
 const minimumRepeatInterval = 30 * time.Second
 
 type garbageCollectorController struct {
-	idpCache              UpstreamOIDCIdentityProviderICache
-	secretInformer        corev1informers.SecretInformer
-	kubeClient            kubernetes.Interface
-	clock                 clock.Clock
+	idpCache       UpstreamOIDCIdentityProviderICache
+	secretInformer corev1informers.SecretInformer
+	kubeClient     kubernetes.Interface
+	clock          clock.Clock
+	auditLogger    plog.AuditLogger
+
 	timeOfMostRecentSweep time.Time
 }
 
@@ -53,6 +59,7 @@ func GarbageCollectorController(
 	kubeClient kubernetes.Interface,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
+	auditLogger plog.AuditLogger,
 ) controllerlib.Controller {
 	isSecretWithGCAnnotation := func(obj metav1.Object) bool {
 		secret, ok := obj.(*corev1.Secret)
@@ -70,6 +77,7 @@ func GarbageCollectorController(
 				secretInformer: secretInformer,
 				kubeClient:     kubeClient,
 				clock:          clock,
+				auditLogger:    auditLogger,
 			},
 		},
 		withInformer(
@@ -107,6 +115,11 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Sort secrets by name so that audit log tests are deterministic
+	slices.SortStableFunc(listOfSecrets, func(a, b *corev1.Secret) int {
+		return strings.Compare(a.ObjectMeta.Name, b.ObjectMeta.Name)
+	})
 
 	for i := range listOfSecrets {
 		secret := listOfSecrets[i]
@@ -163,6 +176,7 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 			plog.WarningErr("failed to garbage collect resource", err, logKV(secret)...)
 			continue
 		}
+		c.maybeAuditLogGC(storageType, secret)
 		plog.Info("storage garbage collector deleted resource", logKV(secret)...)
 	}
 
@@ -192,7 +206,10 @@ func (c *garbageCollectorController) maybeRevokeUpstreamOIDCToken(ctx context.Co
 			return nil
 		}
 		// When the downstream authcode was never used, then its storage must contain the latest upstream token.
-		return c.tryRevokeUpstreamOIDCToken(ctx, authorizeCodeSession.Request.Session.(*psession.PinnipedSession).Custom, secret)
+		return c.tryRevokeUpstreamOIDCToken(ctx,
+			authorizeCodeSession.Request.Session.(*psession.PinnipedSession).Custom,
+			authorizeCodeSession.Request,
+			secret)
 
 	case accesstoken.TypeLabelValue:
 		// For access token storage, check if the "offline_access" scope was granted on the downstream session.
@@ -203,11 +220,13 @@ func (c *garbageCollectorController) maybeRevokeUpstreamOIDCToken(ctx context.Co
 		if err != nil {
 			return err
 		}
-		pinnipedSession := accessTokenSession.Request.Session.(*psession.PinnipedSession)
 		if accessTokenSession.Request.GetGrantedScopes().Has(oidcapi.ScopeOfflineAccess) {
 			return nil
 		}
-		return c.tryRevokeUpstreamOIDCToken(ctx, pinnipedSession.Custom, secret)
+		return c.tryRevokeUpstreamOIDCToken(ctx,
+			accessTokenSession.Request.Session.(*psession.PinnipedSession).Custom,
+			accessTokenSession.Request,
+			secret)
 
 	case refreshtoken.TypeLabelValue:
 		// For refresh token storage, always revoke its upstream token. This refresh token storage could be
@@ -217,7 +236,10 @@ func (c *garbageCollectorController) maybeRevokeUpstreamOIDCToken(ctx context.Co
 		if err != nil {
 			return err
 		}
-		return c.tryRevokeUpstreamOIDCToken(ctx, refreshTokenSession.Request.Session.(*psession.PinnipedSession).Custom, secret)
+		return c.tryRevokeUpstreamOIDCToken(ctx,
+			refreshTokenSession.Request.Session.(*psession.PinnipedSession).Custom,
+			refreshTokenSession.Request,
+			secret)
 
 	case pkce.TypeLabelValue:
 		// For PKCE storage, its very existence means that the downstream authcode was never exchanged, because
@@ -237,7 +259,12 @@ func (c *garbageCollectorController) maybeRevokeUpstreamOIDCToken(ctx context.Co
 	}
 }
 
-func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Context, customSessionData *psession.CustomSessionData, secret *corev1.Secret) error {
+func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(
+	ctx context.Context,
+	customSessionData *psession.CustomSessionData,
+	request *fosite.Request,
+	secret *corev1.Secret,
+) error {
 	// When session was for another upstream IDP type, e.g. LDAP, there is no upstream OIDC token involved.
 	if customSessionData.ProviderType != psession.ProviderTypeOIDC {
 		return nil
@@ -264,6 +291,10 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Cont
 		if err != nil {
 			return err
 		}
+		c.auditLogger.Audit(auditevent.UpstreamOIDCTokenRevoked, &plog.AuditParams{
+			Session:       request,
+			KeysAndValues: []any{"type", upstreamprovider.RefreshTokenType},
+		})
 		plog.Trace("garbage collector successfully revoked upstream OIDC refresh token (or provider has no revocation endpoint)", logKV(secret)...)
 	}
 
@@ -272,10 +303,59 @@ func (c *garbageCollectorController) tryRevokeUpstreamOIDCToken(ctx context.Cont
 		if err != nil {
 			return err
 		}
+		c.auditLogger.Audit(auditevent.UpstreamOIDCTokenRevoked, &plog.AuditParams{
+			Session:       request,
+			KeysAndValues: []any{"type", upstreamprovider.AccessTokenType},
+		})
 		plog.Trace("garbage collector successfully revoked upstream OIDC access token (or provider has no revocation endpoint)", logKV(secret)...)
 	}
 
 	return nil
+}
+
+func (c *garbageCollectorController) maybeAuditLogGC(storageType string, secret *corev1.Secret) {
+	r, err := c.requestFromSecret(storageType, secret)
+	if err == nil && r != nil {
+		c.auditLogger.Audit(auditevent.SessionGarbageCollected, &plog.AuditParams{
+			Session:       r,
+			KeysAndValues: []any{"storageType", storageType},
+		})
+	}
+}
+
+func (c *garbageCollectorController) requestFromSecret(storageType string, secret *corev1.Secret) (*fosite.Request, error) {
+	switch storageType {
+	case authorizationcode.TypeLabelValue:
+		authorizeCodeSession, err := authorizationcode.ReadFromSecret(secret)
+		if err != nil {
+			return nil, err
+		}
+		return authorizeCodeSession.Request, nil
+
+	case accesstoken.TypeLabelValue:
+		accessTokenSession, err := accesstoken.ReadFromSecret(secret)
+		if err != nil {
+			return nil, err
+		}
+		return accessTokenSession.Request, nil
+
+	case refreshtoken.TypeLabelValue:
+		refreshTokenSession, err := refreshtoken.ReadFromSecret(secret)
+		if err != nil {
+			return nil, err
+		}
+		return refreshTokenSession.Request, nil
+
+	case pkce.TypeLabelValue:
+		return nil, nil // if this still exists, then it means that the user never exchanged their authcode
+
+	case openidconnect.TypeLabelValue:
+		return nil, nil // if this still exists, then it means that the user never exchanged their authcode
+
+	default:
+		// There are no other storage types, so this should never happen in practice.
+		return nil, errors.New("garbage collector saw invalid label on Secret when trying to determine session ID")
+	}
 }
 
 func logKV(secret *corev1.Secret) []any {

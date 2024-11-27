@@ -149,6 +149,7 @@ func prepareControllers(
 	pinnipedInformers supervisorinformers.SharedInformerFactory,
 	leaderElector controllerinit.RunnerWrapper,
 	podInfo *downward.PodInfo,
+	auditLogger plog.AuditLogger,
 ) controllerinit.RunnerBuilder {
 	const certificateName string = "pinniped-supervisor-api-tls-serving-certificate"
 	clientSecretSupervisorGroupData := groupsuffix.SupervisorAggregatedGroups(*cfg.APIGroupSuffix)
@@ -167,6 +168,7 @@ func prepareControllers(
 				kubeClient,
 				secretInformer,
 				controllerlib.WithInformer,
+				auditLogger,
 			),
 			singletonWorker,
 		).
@@ -450,6 +452,10 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		return fmt.Errorf("cannot create k8s client without leader election: %w", err)
 	}
 
+	auditLogger := plog.NewAuditLogger(plog.AuditLogConfig{
+		LogUsernamesAndGroupNames: cfg.Audit.LogUsernamesAndGroups.Enabled(),
+	})
+
 	kubeInformers := k8sinformers.NewSharedInformerFactoryWithOptions(
 		client.Kubernetes,
 		defaultResyncInterval,
@@ -483,6 +489,8 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		&secretCache,
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace), // writes to kube storage are allowed for non-leaders
 		client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
+		auditLogger,
+		cfg.Audit.LogInternalPaths,
 	)
 
 	// Get the "real" name of the client secret supervisor API group (i.e., the API group name with the
@@ -505,6 +513,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		pinnipedInformers,
 		leaderElector,
 		podInfo,
+		auditLogger,
 	)
 
 	shutdown := &sync.WaitGroup{}
@@ -520,6 +529,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		clientWithoutLeaderElection.Kubernetes.CoreV1().Secrets(serverInstallationNamespace),
 		client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
 		serverInstallationNamespace,
+		auditLogger,
 	)
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
@@ -544,7 +554,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		}
 
 		defer func() { _ = httpListener.Close() }()
-		startServer(ctx, shutdown, httpListener, oidProvidersManager)
+		startServer(ctx, shutdown, httpListener, oidProvidersManager.HandlerChain())
 		plog.Debug("supervisor http listener started", "address", httpListener.Addr().String())
 	}
 
@@ -601,7 +611,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		}
 
 		defer func() { _ = httpsListener.Close() }()
-		startServer(ctx, shutdown, httpsListener, oidProvidersManager)
+		startServer(ctx, shutdown, httpsListener, oidProvidersManager.HandlerChain())
 		plog.Debug("supervisor https listener started", "address", httpsListener.Addr().String())
 	}
 
@@ -630,6 +640,7 @@ func getAggregatedAPIServerConfig(
 	secrets corev1client.SecretInterface,
 	oidcClients v1alpha1.OIDCClientInterface,
 	serverInstallationNamespace string,
+	auditLogger plog.AuditLogger,
 ) (*apiserver.Config, error) {
 	codecs := serializer.NewCodecFactory(scheme)
 
@@ -696,6 +707,7 @@ func getAggregatedAPIServerConfig(
 			Secrets:                            secrets,
 			OIDCClients:                        oidcClients,
 			Namespace:                          serverInstallationNamespace,
+			AuditLogger:                        auditLogger,
 		},
 	}
 	return apiServerConfig, nil

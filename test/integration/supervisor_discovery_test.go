@@ -73,10 +73,10 @@ func TestSupervisorOIDCDiscovery_Disruptive(t *testing.T) {
 		Name     string
 		Scheme   string
 		Address  string
-		CABundle string
+		CABundle []byte
 	}{
-		{Name: "direct https", Scheme: "https", Address: env.SupervisorHTTPSAddress, CABundle: string(defaultCA.Bundle())},
-		{Name: "ingress https", Scheme: "https", Address: env.SupervisorHTTPSIngressAddress, CABundle: env.SupervisorHTTPSIngressCABundle},
+		{Name: "direct https", Scheme: "https", Address: env.SupervisorHTTPSAddress, CABundle: defaultCA.Bundle()},
+		{Name: "ingress https", Scheme: "https", Address: env.SupervisorHTTPSIngressAddress, CABundle: []byte(env.SupervisorHTTPSIngressCABundle)},
 	}
 
 	for _, test := range tests {
@@ -219,7 +219,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
-	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1.Bundle()), issuer1, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, ca1.Bundle(), issuer1, nil)
 
 	// Delete the default TLS secret as well
 	err := kubeClient.CoreV1().Secrets(env.SupervisorNamespace).Delete(ctx, env.DefaultTLSCertSecretName(), metav1.DeleteOptions{})
@@ -251,7 +251,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	)
 
 	// Now that the Secret exists at the new name, we should be able to access the endpoints by hostname using the CA.
-	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, string(ca1update.Bundle()), issuer1, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, address, ca1update.Bundle(), issuer1, nil)
 
 	// To test SNI virtual hosting, send requests to discovery endpoints when the public address is different from the issuer name.
 	hostname2 := "some-issuer-host-and-port-that-doesnt-match-public-supervisor-address.com"
@@ -278,7 +278,7 @@ func TestSupervisorTLSTerminationWithSNI_Disruptive(t *testing.T) {
 	)
 
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA.
-	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, string(ca2.Bundle()), issuer2, map[string]string{
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, hostname2+":"+hostnamePort2, ca2.Bundle(), issuer2, map[string]string{
 		hostname2 + ":" + hostnamePort2: address,
 	})
 }
@@ -336,7 +336,7 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	)
 
 	// Now that the Secret exists, we should be able to access the endpoints by IP address using the CA.
-	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, defaultCA.Bundle(), issuerUsingIPAddress, nil)
 
 	// Create an FederationDomain with a spec.tls.secretName.
 	certSecretName := "integration-test-cert-1"
@@ -360,12 +360,12 @@ func TestSupervisorTLSTerminationWithDefaultCerts_Disruptive(t *testing.T) {
 	// Now that the Secret exists, we should be able to access the endpoints by hostname using the CA from the SNI cert.
 	// Hostnames are case-insensitive, so the request should still work even if the case of the hostname is different
 	// from the case of the issuer URL's hostname.
-	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, string(certCA.Bundle()), issuerUsingHostname, nil)
+	_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, strings.ToUpper(hostname)+":"+port, certCA.Bundle(), issuerUsingHostname, nil)
 
 	if !supervisorIssuer.IsIPAddress() {
 		// And we can still access the other issuer using the default cert,
 		// except when we have an IP address, because in that case we just overwrote the default cert
-		_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, string(defaultCA.Bundle()), issuerUsingIPAddress, nil)
+		_ = requireStandardDiscoveryEndpointsAreWorking(t, scheme, ipWithPort, defaultCA.Bundle(), issuerUsingIPAddress, nil)
 	}
 }
 
@@ -492,7 +492,7 @@ func wellKnownURLForIssuer(scheme, host, path string) string {
 	return fmt.Sprintf("%s://%s/%s/.well-known/openid-configuration", scheme, host, strings.TrimPrefix(path, "/"))
 }
 
-func requireDiscoveryEndpointsAreNotFound(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string) {
+func requireDiscoveryEndpointsAreNotFound(t *testing.T, supervisorScheme, supervisorAddress string, supervisorCABundle []byte, issuerName string) {
 	t.Helper()
 	issuerURL, err := url.Parse(issuerName)
 	require.NoError(t, err)
@@ -500,7 +500,7 @@ func requireDiscoveryEndpointsAreNotFound(t *testing.T, supervisorScheme, superv
 	requireEndpointNotFound(t, jwksURLForIssuer(supervisorScheme, supervisorAddress, issuerURL.Path), issuerURL.Host, supervisorCABundle)
 }
 
-func requireEndpointNotFound(t *testing.T, url, host, caBundle string) {
+func requireEndpointNotFound(t *testing.T, url, host string, caBundle []byte) {
 	t.Helper()
 	httpClient := newHTTPClient(t, caBundle, nil)
 
@@ -555,7 +555,8 @@ func requireEndpointHasBootstrapTLSErrorBecauseCertificatesAreNotReady(t *testin
 func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
 	ctx context.Context,
 	t *testing.T,
-	supervisorScheme, supervisorAddress, supervisorCABundle string,
+	supervisorScheme, supervisorAddress string,
+	supervisorCABundle []byte,
 	issuerName string,
 	client supervisorclientset.Interface,
 ) (*supervisorconfigv1alpha1.FederationDomain, *ExpectedJWKSResponseFormat) {
@@ -566,7 +567,7 @@ func requireCreatingFederationDomainCausesDiscoveryEndpointsToAppear(
 	return newFederationDomain, jwksResult
 }
 
-func requireStandardDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
+func requireStandardDiscoveryEndpointsAreWorking(t *testing.T, supervisorScheme, supervisorAddress string, supervisorCABundle []byte, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
 	requireWellKnownEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, dnsOverrides)
 	jwksResult := requireJWKSEndpointIsWorking(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName, dnsOverrides)
 	return jwksResult
@@ -577,7 +578,8 @@ func requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(
 	existingFederationDomain *supervisorconfigv1alpha1.FederationDomain,
 	client supervisorclientset.Interface,
 	ns string,
-	supervisorScheme, supervisorAddress, supervisorCABundle string,
+	supervisorScheme, supervisorAddress string,
+	supervisorCABundle []byte,
 	issuerName string,
 ) {
 	t.Helper()
@@ -592,11 +594,11 @@ func requireDeletingFederationDomainCausesDiscoveryEndpointsToDisappear(
 	requireDiscoveryEndpointsAreNotFound(t, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName)
 }
 
-func requireWellKnownEndpointIsWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string, dnsOverrides map[string]string) {
+func requireWellKnownEndpointIsWorking(t *testing.T, supervisorScheme, supervisorAddress string, supervisorCABundle []byte, issuerName string, dnsOverrides map[string]string) {
 	t.Helper()
 	issuerURL, err := url.Parse(issuerName)
 	require.NoError(t, err)
-	response, responseBody := requireSuccessEndpointResponse(t, wellKnownURLForIssuer(supervisorScheme, supervisorAddress, issuerURL.Path), issuerName, supervisorCABundle, dnsOverrides) //nolint:bodyclose
+	response, responseBody, _ := requireSuccessEndpointResponse(t, wellKnownURLForIssuer(supervisorScheme, supervisorAddress, issuerURL.Path), issuerName, supervisorCABundle, dnsOverrides) //nolint:bodyclose
 
 	// Check that the response matches our expectations.
 	expectedResultTemplate := here.Doc(`{
@@ -624,12 +626,12 @@ type ExpectedJWKSResponseFormat struct {
 	Keys []map[string]string
 }
 
-func requireJWKSEndpointIsWorking(t *testing.T, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
+func requireJWKSEndpointIsWorking(t *testing.T, supervisorScheme, supervisorAddress string, supervisorCABundle []byte, issuerName string, dnsOverrides map[string]string) *ExpectedJWKSResponseFormat {
 	t.Helper()
 
 	issuerURL, err := url.Parse(issuerName)
 	require.NoError(t, err)
-	response, responseBody := requireSuccessEndpointResponse(t, //nolint:bodyclose
+	response, responseBody, _ := requireSuccessEndpointResponse(t, //nolint:bodyclose
 		jwksURLForIssuer(supervisorScheme, supervisorAddress, issuerURL.Path),
 		issuerName,
 		supervisorCABundle,
@@ -664,14 +666,18 @@ func printServerCert(t *testing.T, address string, dnsOverrides map[string]strin
 	addressURL, err := url.Parse(address)
 	require.NoError(t, err)
 
-	host := addressURL.Host
-	if _, ok := dnsOverrides[host]; ok {
-		host = dnsOverrides[host]
+	require.Equal(t, "https", addressURL.Scheme,
+		"can only print server certificates for TLS-enabled endpoints")
+
+	if !strings.Contains(addressURL.Host, ":") {
+		// tls.Dial() requires a port number, but there was no port number in the host, so assume 443.
+		addressURL.Host += ":443"
 	}
 
-	if !strings.Contains(host, ":") {
-		// tls.Dial() requires a port number, but there was no port number in the host, so assume 443.
-		host += ":443"
+	host := addressURL.Host
+	if _, ok := dnsOverrides[host]; ok {
+		t.Logf("printServerCert replacing addr %s with %s", host, dnsOverrides[host])
+		host = dnsOverrides[host]
 	}
 
 	conn, err := tls.Dial("tcp", host, conf)
@@ -688,7 +694,13 @@ func printServerCert(t *testing.T, address string, dnsOverrides map[string]strin
 	}
 }
 
-func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle string, dnsOverrides map[string]string) (*http.Response, string) {
+func requireEndpointResponse(
+	t *testing.T,
+	endpointURL, issuer string,
+	caBundle []byte,
+	dnsOverrides map[string]string,
+	wantStatusCode int,
+) (*http.Response, string, string) {
 	t.Helper()
 	httpClient := newHTTPClient(t, caBundle, dnsOverrides)
 
@@ -714,6 +726,7 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 		// Set the host header on the request to match the issuer's hostname, which could potentially be different
 		// from the public ingress address, e.g. when a load balancer is used, so we want to test here that the host
 		// header is respected by the supervisor server.
+		// TODO: Why is this set?
 		requestDiscoveryEndpoint.Host = issuerURL.Host
 
 		printServerCert(t, endpointURL, dnsOverrides)
@@ -722,8 +735,9 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 		requireEventually.NoError(err)
 		defer func() { _ = response.Body.Close() }()
 
-		t.Logf("successful GET requestDiscoveryEndpoint=%q, found serverName=%s, with %d certificates",
+		t.Logf("GET requestDiscoveryEndpoint=%q, statusCode=%d, found serverName=%s, with %d certificates",
 			requestDiscoveryEndpoint.URL.String(),
+			response.StatusCode,
 			response.TLS.ServerName,
 			len(response.TLS.PeerCertificates))
 		for _, peerCertificate := range response.TLS.PeerCertificates {
@@ -732,13 +746,21 @@ func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer, caBundle 
 				peerCertificate.IPAddresses)
 		}
 
-		requireEventually.Equal(http.StatusOK, response.StatusCode)
+		requireEventually.Equal(wantStatusCode, response.StatusCode)
 
 		responseBody, err = io.ReadAll(response.Body)
 		requireEventually.NoError(err)
 	}, 2*time.Minute, 200*time.Millisecond)
 
-	return response, string(responseBody)
+	require.NotNil(t, response)
+	auditID := response.Header.Get("Audit-Id")
+	require.NotEmpty(t, auditID)
+
+	return response, string(responseBody), auditID
+}
+
+func requireSuccessEndpointResponse(t *testing.T, endpointURL, issuer string, caBundle []byte, dnsOverrides map[string]string) (*http.Response, string, string) {
+	return requireEndpointResponse(t, endpointURL, issuer, caBundle, dnsOverrides, http.StatusOK)
 }
 
 func editFederationDomainIssuerName(
@@ -824,7 +846,7 @@ func requireStatus(t *testing.T, client supervisorclientset.Interface, ns, name 
 	}, 5*time.Minute, 200*time.Millisecond)
 }
 
-func newHTTPClient(t *testing.T, caBundle string, dnsOverrides map[string]string) *http.Client {
+func newHTTPClient(t *testing.T, caBundle []byte, dnsOverrides map[string]string) *http.Client {
 	c := &http.Client{}
 
 	realDialer := &net.Dialer{}
@@ -834,14 +856,14 @@ func newHTTPClient(t *testing.T, caBundle string, dnsOverrides map[string]string
 			t.Logf("DialContext replacing addr %s with %s", addr, replacementAddr)
 			addr = replacementAddr
 		} else if dnsOverrides != nil {
-			t.Fatal("dnsOverrides was provided but not used, which was probably a mistake")
+			t.Fatalf("dnsOverrides was provided but not used, which was probably a mistake. addr %s", addr)
 		}
 		return realDialer.DialContext(ctx, network, addr)
 	}
 
-	if caBundle != "" { // CA bundle is optional
+	if len(caBundle) > 0 { // CA bundle is optional
 		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM([]byte(caBundle))
+		caCertPool.AppendCertsFromPEM(caBundle)
 		c.Transport = &http.Transport{
 			DialContext:     overrideDialContext,
 			TLSClientConfig: &tls.Config{MinVersion: ptls.SecureTLSConfigMinTLSVersion, RootCAs: caCertPool}, //nolint:gosec // this seems to be a false flag, min tls version is 1.3 in normal mode or 1.2 in fips mode
@@ -860,7 +882,9 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 	env *testlib.TestEnv,
 	ctx context.Context,
 	kubeClient kubernetes.Interface,
-	ns, supervisorScheme, supervisorAddress, supervisorCABundle, issuerName string) *supervisorconfigv1alpha1.FederationDomain {
+	ns, supervisorScheme, supervisorAddress string,
+	supervisorCABundle []byte,
+	issuerName string) *supervisorconfigv1alpha1.FederationDomain {
 	// github
 	gitHubIDPSecretName := "github-idp-secret" //nolint:gosec // this is not a credential
 	_, err := kubeClient.CoreV1().Secrets(ns).Create(ctx, &corev1.Secret{
@@ -999,7 +1023,7 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 	issuer8URL, err := url.Parse(issuerName)
 	require.NoError(t, err)
 	wellKnownURL := wellKnownURLForIssuer(supervisorScheme, supervisorAddress, issuer8URL.Path)
-	_, wellKnownResponseBody := requireSuccessEndpointResponse(t, wellKnownURL, issuerName, supervisorCABundle, nil) //nolint:bodyclose
+	_, wellKnownResponseBody, _ := requireSuccessEndpointResponse(t, wellKnownURL, issuerName, supervisorCABundle, nil) //nolint:bodyclose
 
 	type WellKnownResponse struct {
 		Issuer                string `json:"issuer"`
@@ -1014,7 +1038,7 @@ func requireIDPsListedByIDPDiscoveryEndpoint(
 	err = json.Unmarshal([]byte(wellKnownResponseBody), &wellKnownResponse)
 	require.NoError(t, err)
 	discoveryIDPEndpoint := wellKnownResponse.DiscoverySupervisor.IdentityProvidersEndpoint
-	_, discoveryIDPResponseBody := requireSuccessEndpointResponse(t, discoveryIDPEndpoint, issuerName, supervisorCABundle, nil) //nolint:bodyclose
+	_, discoveryIDPResponseBody, _ := requireSuccessEndpointResponse(t, discoveryIDPEndpoint, issuerName, supervisorCABundle, nil) //nolint:bodyclose
 	type IdentityProviderListResponse struct {
 		IdentityProviders []struct {
 			Name string `json:"name"`

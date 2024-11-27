@@ -6,6 +6,7 @@ package token
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"k8s.io/apiserver/pkg/warning"
 
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/idtokenlifespan"
 	"go.pinniped.dev/internal/federationdomain/oidc"
@@ -30,13 +32,33 @@ import (
 	"go.pinniped.dev/internal/psession"
 )
 
+func paramsSafeToLog() sets.Set[string] {
+	return sets.New(
+		// Standard params from https://openid.net/specs/openid-connect-core-1_0.html for authcode and refresh grants.
+		// Redacting code, client_secret, refresh_token, and PKCE code_verifier params.
+		"grant_type", "client_id", "redirect_uri", "scope",
+		// Token exchange params from https://datatracker.ietf.org/doc/html/rfc8693#section-2.1.
+		// Redact subject_token and actor_token.
+		// We don't allow all of these, but they should be safe to log.
+		// "scope" is already included from the authcode grant.
+		"audience", "resource", "requested_token_type", "actor_token_type", "subject_token_type",
+	)
+}
+
 func NewHandler(
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
 	oauthHelper fosite.OAuth2Provider,
 	overrideAccessTokenLifespan timeouts.OverrideLifespan,
 	overrideIDTokenLifespan timeouts.OverrideLifespan,
+	auditLogger plog.AuditLogger,
 ) http.Handler {
 	return httperr.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+		if err := auditLogger.AuditRequestParams(r, paramsSafeToLog()); err != nil {
+			oauthHelper.WriteAccessError(r.Context(), w, nil, err)
+			return nil
+		}
+		auditLogBasicAuthClientID(r, auditLogger)
+
 		session := psession.NewPinnipedSession()
 		accessRequest, err := oauthHelper.NewAccessRequest(r.Context(), r, session)
 		if err != nil {
@@ -45,13 +67,19 @@ func NewHandler(
 			return nil
 		}
 
+		// Log sessionID for cross-request correlation purposes.
+		auditLogger.Audit(auditevent.SessionFound, &plog.AuditParams{
+			ReqCtx:  r.Context(),
+			Session: accessRequest,
+		})
+
 		// Check if we are performing a refresh grant.
 		if accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeRefreshToken) {
 			// The above call to NewAccessRequest has loaded the session from storage into the accessRequest variable.
 			// The session, requested scopes, and requested audience from the original authorize request was retrieved
 			// from the Kube storage layer and added to the accessRequest. Additionally, the audience and scopes may
 			// have already been granted on the accessRequest.
-			err = upstreamRefresh(r.Context(), accessRequest, idpLister)
+			err = upstreamRefresh(r.Context(), accessRequest, idpLister, auditLogger)
 			if err != nil {
 				plog.Info("upstream refresh error", oidc.FositeErrorForLog(err)...)
 				oauthHelper.WriteAccessError(r.Context(), w, accessRequest, err)
@@ -87,6 +115,9 @@ func NewHandler(
 			oauthHelper.WriteAccessError(r.Context(), w, accessRequest, err)
 			return nil
 		}
+
+		// Allow cross-referencing the token with the Concierge's audit logs.
+		auditLogIDToken(r.Context(), auditLogger, accessRequest, accessResponse)
 
 		oauthHelper.WriteAccessResponse(r.Context(), w, accessRequest, accessResponse)
 
@@ -128,6 +159,7 @@ func upstreamRefresh(
 	ctx context.Context,
 	accessRequest fosite.AccessRequester,
 	idpLister federationdomainproviders.FederationDomainIdentityProvidersListerI,
+	auditLogger plog.AuditLogger,
 ) error {
 	session := accessRequest.GetSession().(*psession.PinnipedSession)
 
@@ -136,6 +168,7 @@ func upstreamRefresh(
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
 	}
 	providerName := customSessionData.ProviderName
+	providerType := customSessionData.ProviderType
 	providerUID := customSessionData.ProviderUID
 	if providerUID == "" || providerName == "" {
 		return errorsx.WithStack(errMissingUpstreamSessionInternalError())
@@ -188,6 +221,15 @@ func upstreamRefresh(
 		return err
 	}
 
+	auditLogger.Audit(auditevent.IdentityRefreshedFromUpstreamIDP, &plog.AuditParams{
+		ReqCtx:  ctx,
+		Session: accessRequest,
+		PIIKeysAndValues: []any{
+			"upstreamUsername", refreshedIdentity.UpstreamUsername,
+			"upstreamGroups", refreshedIdentity.UpstreamGroups,
+		},
+	})
+
 	// If the idp wants to update the session with new information from the refresh, then update it.
 	if refreshedIdentity.IDPSpecificSessionData != nil {
 		idp.ApplyIDPSpecificSessionDataToSession(session.Custom, refreshedIdentity.IDPSpecificSessionData)
@@ -203,16 +245,29 @@ func upstreamRefresh(
 		refreshedIdentity.UpstreamGroups = oldUntransformedGroups
 	}
 
-	refreshedTransformedGroups, err := applyIdentityTransformationsDuringRefresh(ctx,
+	refreshedTransformedUsername, refreshedTransformedGroups, fositeErr := applyIdentityTransformationsDuringRefresh(ctx,
 		idp.GetTransforms(),
-		oldTransformedUsername, // this function validates that the old and new transformed usernames match
 		refreshedIdentity.UpstreamUsername,
 		refreshedIdentity.UpstreamGroups,
-		session.Custom.ProviderName,
-		session.Custom.ProviderType,
+		providerName,
+		providerType,
 	)
-	if err != nil {
-		return err
+	if fositeErr != nil {
+		// The HintField is always populated by applyIdentityTransformationsDuringRefresh,
+		// and more descriptive than fositeErr.Error() which is just "error".
+		auditLogger.Audit(auditevent.AuthenticationRejectedByTransforms, &plog.AuditParams{
+			ReqCtx:        ctx,
+			Session:       accessRequest,
+			KeysAndValues: []any{"reason", fositeErr.HintField},
+		})
+		return fositeErr
+	}
+
+	if oldTransformedUsername != refreshedTransformedUsername {
+		return errUpstreamRefreshError().WithHintf(
+			"Upstream refresh failed.").
+			WithTrace(errors.New("username in upstream refresh does not match previous value")).
+			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
 	}
 
 	if !skipGroups {
@@ -220,6 +275,15 @@ func upstreamRefresh(
 		// Replace the old value for the downstream groups in the user's session with the new value.
 		session.Fosite.Claims.Extra[oidcapi.IDTokenClaimGroups] = refreshedTransformedGroups
 	}
+
+	auditLogger.Audit(auditevent.SessionRefreshed, &plog.AuditParams{
+		ReqCtx:  ctx,
+		Session: accessRequest,
+		PIIKeysAndValues: []any{
+			"username", oldTransformedUsername, // not allowed to change above so must be the same as old
+			"groups", refreshedTransformedGroups,
+			"subject", previousIdentity.DownstreamSubject},
+	})
 
 	return nil
 }
@@ -255,38 +319,30 @@ func validateSessionHasUsername(session *psession.PinnipedSession) error {
 }
 
 // applyIdentityTransformationsDuringRefresh is similar to downstreamsession.applyIdentityTransformations
-// but with validation that the username has not changed, and with slightly different error messaging.
+// but with slightly different error messaging.
 func applyIdentityTransformationsDuringRefresh(
 	ctx context.Context,
 	transforms *idtransform.TransformationPipeline,
-	oldTransformedUsername string,
 	upstreamUsername string,
 	upstreamGroups []string,
 	providerName string,
 	providerType psession.ProviderType,
-) ([]string, error) {
+) (string, []string, *fosite.RFC6749Error) {
 	transformationResult, err := transforms.Evaluate(ctx, upstreamUsername, upstreamGroups)
 	if err != nil {
-		return nil, errUpstreamRefreshError().WithHintf(
+		return "", nil, errUpstreamRefreshError().WithHintf(
 			"Upstream refresh error while applying configured identity transformations.").
 			WithTrace(err).
 			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
 	}
 
 	if !transformationResult.AuthenticationAllowed {
-		return nil, errUpstreamRefreshError().WithHintf(
+		return "", nil, errUpstreamRefreshError().WithHintf(
 			"Upstream refresh rejected by configured identity policy: %s.", transformationResult.RejectedAuthenticationMessage).
 			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
 	}
 
-	if oldTransformedUsername != transformationResult.Username {
-		return nil, errUpstreamRefreshError().WithHintf(
-			"Upstream refresh failed.").
-			WithTrace(errors.New("username in upstream refresh does not match previous value")).
-			WithDebugf("provider name: %q, provider type: %q", providerName, providerType)
-	}
-
-	return transformationResult.Groups, nil
+	return transformationResult.Username, transformationResult.Groups, nil
 }
 
 func validateAndGetDownstreamGroupsFromSession(session *psession.PinnipedSession) ([]string, error) {
@@ -339,4 +395,51 @@ func diffSortedGroups(oldGroups, newGroups []string) ([]string, []string) {
 	added := newGroupsAsSet.Difference(oldGroupsAsSet)   // groups in newGroups that are not in oldGroups i.e. added
 	removed := oldGroupsAsSet.Difference(newGroupsAsSet) // groups in oldGroups that are not in newGroups i.e. removed
 	return added.List(), removed.List()
+}
+
+func auditLogBasicAuthClientID(r *http.Request, auditLogger plog.AuditLogger) {
+	// For dynamic clients, the client ID is from basic auth, not from the request parameters.
+	clientIDFromBasicAuth, _, basicAuthUsed := r.BasicAuth()
+	if basicAuthUsed {
+		auditLogger.Audit(auditevent.HTTPRequestBasicAuthUsed, &plog.AuditParams{
+			ReqCtx:        r.Context(),
+			KeysAndValues: []any{"clientID", clientIDFromBasicAuth},
+		})
+	}
+}
+
+func auditLogIDToken(
+	reqCtx context.Context,
+	auditLogger plog.AuditLogger,
+	accessRequest fosite.AccessRequester,
+	accessResponse fosite.AccessResponder,
+) {
+	var idToken string
+
+	if accessRequest.GetGrantTypes().ExactOne(oidcapi.GrantTypeTokenExchange) {
+		// Token exchanges return the ID token in the access token field of the response.
+		idToken = accessResponse.GetAccessToken()
+	} else {
+		// For other grant types, there may not be an access token, e.g. when the openid scope was not granted.
+		tok := accessResponse.GetExtra("id_token")
+		if tok != nil {
+			// This should always be a string. Checking just to be safe.
+			tokAsStr, ok := tok.(string)
+			if ok {
+				idToken = tokAsStr
+			}
+		}
+	}
+
+	if len(idToken) == 0 {
+		return
+	}
+
+	auditLogger.Audit(auditevent.IDTokenIssued, &plog.AuditParams{
+		ReqCtx:  reqCtx,
+		Session: accessRequest,
+		KeysAndValues: []any{
+			"tokenID", fmt.Sprintf("%x", sha256.Sum256([]byte(idToken))),
+		},
+	})
 }

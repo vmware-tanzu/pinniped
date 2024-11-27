@@ -166,7 +166,7 @@ as aggregated API endpoints, which makes them appear to a client almost as if th
   as that user.
   It is in [internal/registry/credentialrequest/rest.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/registry/credentialrequest/rest.go).
 
-- `WhoAmI` will return basic details about the currently authenticated user.
+- `WhoAmIRequest` will return basic details about the currently authenticated user.
   It is in [internal/registry/whoamirequest/rest.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/registry/whoamirequest/rest.go).
 
 The Concierge may also run an impersonation proxy service. This is not an aggregated API endpoint, so it needs to be
@@ -200,6 +200,8 @@ The per-FederationDomain endpoints are:
   See [internal/federationdomain/endpoints/discovery/discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/discovery/discovery_handler.go).
 - `<issuer_path>/jwks.json` is the standard OIDC JWKS discovery endpoint.
   See [internal/federationdomain/endpoints/jwks/jwks_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/jwks/jwks_handler.go).
+- `<issuer_path>/v1alpha1/pinniped_identity_providers` is a custom discovery endpoint for clients to learn about available upstream identity providers.
+  See [internal/federationdomain/endpoints/idpdiscovery/idp_discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/idpdiscovery/idp_discovery_handler.go).
 - `<issuer_path>/oauth2/authorize` is the standard OIDC authorize endpoint.
   See [internal/federationdomain/endpoints/auth/auth_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/auth/auth_handler.go).
 - `<issuer_path>/oauth2/token` is the standard OIDC token endpoint.
@@ -210,9 +212,9 @@ The per-FederationDomain endpoints are:
   reduce the applicable scope (technically, the `aud` claim) of ID tokens.
 - `<issuer_path>/callback` is a special endpoint that is used as the redirect URL when performing an OAuth 2.0 or OIDC authcode flow against an upstream OIDC identity provider as configured by an OIDCIdentityProvider or GitHubIdentityProvider custom resource.
   See [internal/federationdomain/endpoints/callback/callback_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/callback/callback_handler.go).
-- `<issuer_path>/v1alpha1/pinniped_identity_providers` is a custom discovery endpoint for clients to learn about available upstream identity providers.
-  See [internal/federationdomain/endpoints/idpdiscovery/idp_discovery_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/idpdiscovery/idp_discovery_handler.go).
-- `<issuer_path>/login` is a login UI page to support the optional browser-based login flow for LDAP and Active Directory identity providers.
+- `<issuer_path>/choose_identity_provider` is a UI page which allows users to choose which identity provider they would like to use during a browser-based login flow.
+  See [internal/federationdomain/endpoints/chooseidp/choose_idp_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/chooseidp/choose_idp_handler.go).
+- `<issuer_path>/login` is a UI page which prompts for username and password to support the optional browser-based login flow for LDAP and Active Directory identity providers.
   See [internal/federationdomain/endpoints/login/login_handler.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/federationdomain/endpoints/login/login_handler.go).
 
 The OIDC specifications implemented by the Supervisor can be found at [openid.net](https://openid.net/connect).

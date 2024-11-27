@@ -79,7 +79,7 @@ func TestController(t *testing.T) {
 	require.NoError(t, err)
 	someUnknownHostNames := []string{"some-dns-name", "some-other-dns-name"}
 	someLocalIPAddress := []net.IP{net.ParseIP("10.2.3.4")}
-	pemServerCertForUnknownServer, _, err := caForUnknownServer.IssueServerCertPEM(
+	pemServerCertForUnknownServer, err := caForUnknownServer.IssueServerCertPEM(
 		someUnknownHostNames,
 		someLocalIPAddress,
 		time.Hour,
@@ -216,7 +216,7 @@ func TestController(t *testing.T) {
 	badWebhookAuthenticatorSpecGoodEndpointButUnknownCA := authenticationv1alpha1.WebhookAuthenticatorSpec{
 		Endpoint: goodWebhookDefaultServingCertEndpoint,
 		TLS: &authenticationv1alpha1.TLSSpec{
-			CertificateAuthorityData: base64.StdEncoding.EncodeToString(pemServerCertForUnknownServer),
+			CertificateAuthorityData: base64.StdEncoding.EncodeToString(pemServerCertForUnknownServer.CertPEM),
 		},
 	}
 

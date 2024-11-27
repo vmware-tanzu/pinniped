@@ -28,8 +28,11 @@ import (
 	"k8s.io/utils/trace"
 
 	clientsecretapi "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	configv1alpha1clientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/oidcclientsecretstorage"
+	"go.pinniped.dev/internal/plog"
 )
 
 // Cost is a good bcrypt cost for 2022, should take about 250 ms to validate.
@@ -48,6 +51,7 @@ func NewREST(
 	randByteGenerator io.Reader,
 	byteHasher byteHasher,
 	timeNowFunc timeNowFunc,
+	auditLogger plog.AuditLogger,
 ) *REST {
 	return &REST{
 		secretStorage:     oidcclientsecretstorage.New(secretsClient),
@@ -58,6 +62,7 @@ func NewREST(
 		byteHasher:        byteHasher,
 		tableConvertor:    rest.NewDefaultTableConvertor(resource),
 		timeNowFunc:       timeNowFunc,
+		auditLogger:       auditLogger,
 	}
 }
 
@@ -70,6 +75,7 @@ type REST struct {
 	byteHasher        byteHasher
 	tableConvertor    rest.TableConvertor
 	timeNowFunc       timeNowFunc
+	auditLogger       plog.AuditLogger
 }
 
 // Assert that our *REST implements all the optional interfaces that we expect it to implement.
@@ -121,7 +127,12 @@ func (*REST) GetSingularName() string {
 	return "oidcclientsecretrequest"
 }
 
-func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+func (r *REST) Create(
+	ctx context.Context,
+	obj runtime.Object,
+	createValidation rest.ValidateObjectFunc,
+	options *metav1.CreateOptions,
+) (runtime.Object, error) {
 	t := trace.FromContext(ctx).Nest("create",
 		trace.Field{Key: "kind", Value: "OIDCClientSecretRequest"},
 		trace.Field{Key: "metadata.name", Value: name(obj)},
@@ -137,14 +148,9 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 	t.Step("validateRequest")
 
 	// Find the specified OIDCClient.
-	oidcClient, err := r.oidcClientsClient.Get(ctx, req.Name, metav1.GetOptions{})
+	oidcClient, err := r.findClient(ctx, req.Name, t)
 	if err != nil {
-		traceFailureWithError(t, "oidcClientsClient.Get", err)
-		if apierrors.IsNotFound(err) {
-			errs := field.ErrorList{field.NotFound(field.NewPath("metadata", "name"), req.Name)}
-			return nil, apierrors.NewInvalid(kindFromContext(ctx), req.Name, errs)
-		}
-		return nil, apierrors.NewInternalError(fmt.Errorf("getting client %q failed", req.Name))
+		return nil, err
 	}
 	t.Step("oidcClientsClient.Get")
 
@@ -155,19 +161,20 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 		traceFailureWithError(t, "secretStorage.Get", err)
 		return nil, apierrors.NewInternalError(fmt.Errorf("getting secret for client %q failed", req.Name))
 	}
+	numPreviouslyStoredHashes := len(hashes)
 	t.Step("secretStorage.Get")
 
 	// If requested, generate a new client secret and add it to the list.
-	var secret string
+	var generatedSecret string
 	if req.Spec.GenerateNewSecret {
-		secret, err = generateSecret(r.randByteGenerator)
+		generatedSecret, err = generateSecret(r.randByteGenerator)
 		if err != nil {
 			traceFailureWithError(t, "generateSecret", err)
 			return nil, apierrors.NewInternalError(fmt.Errorf("client secret generation failed"))
 		}
 		t.Step("generateSecret")
 
-		hash, err := r.byteHasher([]byte(secret), r.cost)
+		hash, err := r.byteHasher([]byte(generatedSecret), r.cost)
 		if err != nil {
 			traceFailureWithError(t, "bcrypt.GenerateFromPassword", err)
 			return nil, apierrors.NewInternalError(fmt.Errorf("hash generation failed"))
@@ -179,8 +186,16 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 
 	// If requested, remove all client secrets except for the most recent one.
 	needsRevoke := req.Spec.RevokeOldSecrets && len(hashes) > 0
+	numRevokedHashes := 0
 	if needsRevoke {
 		hashes = []string{hashes[0]}
+		if generatedSecret == "" {
+			// There is no newly generated secret, so one old hash is retained and all others are revoked.
+			numRevokedHashes = numPreviouslyStoredHashes - 1
+		} else {
+			// The newly generated secret was added to the list, and all old hashes are revoked.
+			numRevokedHashes = numPreviouslyStoredHashes
+		}
 	}
 
 	// If anything was requested to change...
@@ -204,6 +219,16 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 			return nil, apierrors.NewInternalError(fmt.Errorf("setting client secret failed"))
 		}
 		t.Step("secretStorage.Set")
+
+		r.auditLogger.Audit(auditevent.OIDCClientSecretRequestUpdatedSecrets, &plog.AuditParams{
+			ReqCtx: ctx,
+			KeysAndValues: []any{
+				"clientID", req.Name,
+				"generatedSecret", len(generatedSecret) > 0,
+				"revokedSecrets", numRevokedHashes,
+				"totalSecrets", len(hashes),
+			},
+		})
 	}
 
 	// Return the new secret in plaintext, if one was generated, along with the total number of secrets.
@@ -218,10 +243,23 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, createValidation 
 			RevokeOldSecrets:  req.Spec.RevokeOldSecrets,
 		},
 		Status: clientsecretapi.OIDCClientSecretRequestStatus{
-			GeneratedSecret:    secret,
+			GeneratedSecret:    generatedSecret,
 			TotalClientSecrets: len(hashes),
 		},
 	}, nil
+}
+
+func (r *REST) findClient(ctx context.Context, clientName string, tracer *trace.Trace) (*supervisorconfigv1alpha1.OIDCClient, error) {
+	oidcClient, err := r.oidcClientsClient.Get(ctx, clientName, metav1.GetOptions{})
+	if err != nil {
+		traceFailureWithError(tracer, "oidcClientsClient.Get", err)
+		if apierrors.IsNotFound(err) {
+			errs := field.ErrorList{field.NotFound(field.NewPath("metadata", "name"), clientName)}
+			return nil, apierrors.NewInvalid(kindFromContext(ctx), clientName, errs)
+		}
+		return nil, apierrors.NewInternalError(fmt.Errorf("getting client %q failed", clientName))
+	}
+	return oidcClient, nil
 }
 
 func (r *REST) validateRequest(

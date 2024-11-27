@@ -17,6 +17,7 @@ import (
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/client-go/transport"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
@@ -34,10 +35,11 @@ type Option func(*Client) error
 
 // Client is a configuration for talking to the Pinniped concierge.
 type Client struct {
-	authenticator  *corev1.TypedLocalObjectReference
-	caBundle       string
-	endpoint       *url.URL
-	apiGroupSuffix string
+	authenticator    *corev1.TypedLocalObjectReference
+	caBundle         string
+	endpoint         *url.URL
+	apiGroupSuffix   string
+	transportWrapper transport.WrapperFunc
 }
 
 // WithAuthenticator configures the authenticator reference (spec.authenticator) of the TokenCredentialRequests.
@@ -116,6 +118,16 @@ func WithAPIGroupSuffix(apiGroupSuffix string) Option {
 	}
 }
 
+func WithTransportWrapper(wrapper transport.WrapperFunc) Option {
+	return func(c *Client) error {
+		if wrapper == nil {
+			return fmt.Errorf("transport wrapper cannot be nil")
+		}
+		c.transportWrapper = wrapper
+		return nil
+	}
+}
+
 // New validates the specified options and returns a newly initialized *Client.
 func New(opts ...Option) (*Client, error) {
 	c := Client{apiGroupSuffix: groupsuffix.PinnipedDefaultSuffix}
@@ -158,6 +170,7 @@ func (c *Client) clientset() (conciergeclientset.Interface, error) {
 	client, err := kubeclient.New(
 		kubeclient.WithConfig(cfg),
 		kubeclient.WithMiddleware(groupsuffix.New(c.apiGroupSuffix)),
+		kubeclient.WithTransportWrapper(c.transportWrapper),
 	)
 	if err != nil {
 		return nil, err

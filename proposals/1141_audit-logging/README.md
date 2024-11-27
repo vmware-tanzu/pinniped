@@ -1,10 +1,17 @@
 ---
 title: "Audit Logging"
 authors: [ "@cfryanr" ]
-status: "accepted"
+status: "implemented"
 sponsor: [ ]
-approval_date: ""
+approval_date: "June 28, 2022"
 ---
+
+*IMPORTANT NOTE*: This proposal was written in May 2022 and implemented much later in November 2024.
+Due to changes in the Kubernetes ecosystem in the intervening years, this design underwent some
+redesign before implementation. Please see the
+[audit logging documentation](https://pinniped.dev/docs/reference/audit-logging/)
+for a more accurate and up-to-date description of how audit logging
+works. The document below is retained only for historical purposes.
 
 *Disclaimer*: Proposals are point-in-time designs and decisions. Once approved and implemented, they become historical
 documents. If you are reading an old proposal, please be aware that the features described herein might have continued

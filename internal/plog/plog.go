@@ -28,13 +28,57 @@
 package plog
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 	"os"
+	"reflect"
 	"slices"
 
 	"github.com/go-logr/logr"
+	"github.com/ory/fosite"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apiserver/pkg/audit"
+
+	"go.pinniped.dev/internal/auditevent"
 )
 
 const errorKey = "error" // this matches zapr's default for .Error calls (which is asserted via tests)
+
+type SessionIDGetter interface {
+	GetID() string
+}
+
+type AuditParams struct {
+	// ReqCtx may be nil. When possible, pass the http request's context as ReqCtx,
+	// so we may read the audit ID from the context.
+	ReqCtx context.Context
+
+	// Session may be nil. When possible, pass the fosite.Requester or fosite.Request as the Session,
+	// so we can log the session ID.
+	Session SessionIDGetter
+
+	// PIIKeysAndValues can optionally be used to pass along more keys are values.
+	// Use these when the values might contain personally identifiable information (PII).
+	// These values may be redacted by configuration.
+	// They must come in alternating pairs of string keys and any values.
+	PIIKeysAndValues []any
+
+	// KeysAndValues can optionally be used to pass along more keys are values.
+	// These values are never redacted and therefore should never contain PII.
+	// They must come in alternating pairs of string keys and any values.
+	KeysAndValues []any
+}
+
+// AuditLogger is the interface for audit logging. There is no global function for Audit because
+// that would make unit testing of audit logs harder.
+type AuditLogger interface {
+	Audit(msg auditevent.Message, p *AuditParams)
+	AuditRequestParams(r *http.Request, reqParamsSafeToLog sets.Set[string]) error
+}
 
 // Logger implements the plog logging convention described above.  The global functions in this package
 // such as Info should be used when one does not intend to write tests assertions for specific log messages.
@@ -60,6 +104,7 @@ type Logger interface {
 	// for internal and test use only
 	withDepth(d int) Logger
 	withLogrMod(mod func(logr.Logger) logr.Logger) Logger
+	audit(msg string, keysAndValues ...any)
 }
 
 // MinLogger is the overlap between Logger and logr.Logger.
@@ -75,10 +120,110 @@ type pLogger struct {
 	depth int
 }
 
+type AuditLogConfig struct {
+	LogUsernamesAndGroupNames bool
+}
+
+type auditLogger struct {
+	cfg    AuditLogConfig
+	logger Logger
+}
+
 func New() Logger {
 	return pLogger{}
 }
 
+func NewAuditLogger(cfg AuditLogConfig) AuditLogger {
+	return &auditLogger{
+		cfg:    cfg,
+		logger: New(),
+	}
+}
+
+// Audit logs show in the pod log output as `"level":"info","message":"some msg","auditEvent":true`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Audit logs cannot be suppressed by the global log level configuration. This is because Audit logs should always
+// be printed, regardless of global log level. Audit logs offer their own configuration options, such as a way to
+// avoid potential PII (e.g. usernames and group names) in their pod logs.
+// msg is required. All fields of p, and p itself, are optional.
+func (a *auditLogger) Audit(msg auditevent.Message, p *AuditParams) {
+	// Always add a key/value auditEvent=true.
+	allKV := []any{"auditEvent", true}
+
+	var auditID string
+	if p != nil && p.ReqCtx != nil {
+		auditID = audit.GetAuditIDTruncated(p.ReqCtx)
+	}
+	if len(auditID) > 0 {
+		allKV = slices.Concat(allKV, []any{"auditID", auditID})
+	}
+
+	var sessionID string
+	if p != nil && p.Session != nil {
+		sessionID = p.Session.GetID()
+	}
+	if len(sessionID) > 0 {
+		allKV = slices.Concat(allKV, []any{"sessionID", sessionID})
+	}
+
+	if p != nil && len(p.PIIKeysAndValues) > 1 {
+		allKV = slices.Concat(allKV, []any{
+			"personalInfo", &piiKeysAndValues{
+				kv:                        p.PIIKeysAndValues,
+				logUsernamesAndGroupNames: a.cfg.LogUsernamesAndGroupNames,
+			},
+		})
+	}
+
+	if p != nil && p.KeysAndValues != nil {
+		allKV = slices.Concat(allKV, p.KeysAndValues)
+	}
+
+	a.logger.audit(string(msg), allKV...)
+}
+
+// AuditRequestParams parses the URL's query params and/or POST body form params, and then audit logs them with
+// redaction as specified by reqParamsSafeToLog. It can return an error, or in the case of success it has the side
+// effect of leaving the parsed form params on the http.Request in the Form field. Note that request body parameters
+// take precedence over URL query values.
+func (a *auditLogger) AuditRequestParams(r *http.Request, reqParamsSafeToLog sets.Set[string]) error {
+	// The style of form parsing and the text of the error is inspired by fosite's implementation of NewAuthorizeRequest().
+	// Fosite only calls ParseMultipartForm() there. However, although ParseMultipartForm() calls ParseForm(),
+	// it swallows errors from ParseForm() sometimes. To avoid having any errors swallowed, we call both.
+	// When fosite calls ParseMultipartForm() later, it will be a noop.
+	if err := r.ParseForm(); err != nil {
+		return fosite.ErrInvalidRequest.
+			WithHint("Unable to parse form params, make sure to send a properly formatted query params or form request body.").
+			WithWrap(err).WithDebug(err.Error())
+	}
+	if err := r.ParseMultipartForm(1 << 20); err != nil && !errors.Is(err, http.ErrNotMultipart) {
+		return fosite.ErrInvalidRequest.
+			WithHint("Unable to parse multipart HTTP body, make sure to send a properly formatted form request body.").
+			WithWrap(err).WithDebug(err.Error())
+	}
+
+	a.Audit(auditevent.HTTPRequestParameters, &AuditParams{
+		ReqCtx:        r.Context(),
+		KeysAndValues: sanitizeRequestParams(r.Form, reqParamsSafeToLog),
+	})
+
+	return nil
+}
+
+// audit is used internally by AuditLogger to print an audit log event to the pLogger's output.
+func (p pLogger) audit(msg string, keysAndValues ...any) {
+	// Always print log message (klogLevelWarning cannot be suppressed by configuration),
+	// and always use the Info function because audit logs are not warnings or errors.
+	p.logr().V(klogLevelWarning).WithCallDepth(p.depth+2).Info(msg, keysAndValues...)
+}
+
+// Error logs show in the pod log output as `"level":"error","message":"some error msg"`
+// where the message text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Error logs cannot be suppressed by the global log level configuration.
 func (p pLogger) Error(msg string, err error, keysAndValues ...any) {
 	p.logr().WithCallDepth(p.depth+1).Error(err, msg, keysAndValues...)
 }
@@ -94,10 +239,20 @@ func (p pLogger) warningDepth(msg string, depth int, keysAndValues ...any) {
 	}
 }
 
+// Warning logs show in the pod log output as `"level":"info","message":"some msg","warning":true`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Warning logs cannot be suppressed by the global log level configuration.
 func (p pLogger) Warning(msg string, keysAndValues ...any) {
 	p.warningDepth(msg, p.depth+1, keysAndValues...)
 }
 
+// WarningErr logs show in the pod log output as `"level":"info","message":"some msg","warning":true,"error":"some error msg"`
+// where the message text comes from the msg parameter and the error text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// WarningErr logs cannot be suppressed by the global log level configuration.
 func (p pLogger) WarningErr(msg string, err error, keysAndValues ...any) {
 	p.warningDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
@@ -108,10 +263,20 @@ func (p pLogger) infoDepth(msg string, depth int, keysAndValues ...any) {
 	}
 }
 
+// Info logs show in the pod log output as `"level":"info","message":"some msg"`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Info logs are suppressed by the global log level configuration, unless it is set to "info" or above.
 func (p pLogger) Info(msg string, keysAndValues ...any) {
 	p.infoDepth(msg, p.depth+1, keysAndValues...)
 }
 
+// InfoErr logs show in the pod log output as `"level":"info","message":"some msg","error":"some error msg"`
+// where the message text comes from the msg parameter and the error text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// InfoErr logs are suppressed by the global log level configuration, unless it is set to "info" or above.
 func (p pLogger) InfoErr(msg string, err error, keysAndValues ...any) {
 	p.infoDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
@@ -122,10 +287,20 @@ func (p pLogger) debugDepth(msg string, depth int, keysAndValues ...any) {
 	}
 }
 
+// Debug logs show in the pod log output as `"level":"debug","message":"some msg"`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Debug logs are suppressed by the global log level configuration, unless it is set to "debug" or above.
 func (p pLogger) Debug(msg string, keysAndValues ...any) {
 	p.debugDepth(msg, p.depth+1, keysAndValues...)
 }
 
+// DebugErr logs show in the pod log output as `"level":"debug","message":"some msg","error":"some error msg"`
+// where the message text comes from the msg parameter and the error text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// DebugErr logs are suppressed by the global log level configuration, unless it is set to "debug" or above.
 func (p pLogger) DebugErr(msg string, err error, keysAndValues ...any) {
 	p.debugDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
@@ -136,20 +311,39 @@ func (p pLogger) traceDepth(msg string, depth int, keysAndValues ...any) {
 	}
 }
 
+// Trace logs show in the pod log output as `"level":"trace","message":"some msg"`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Trace logs are suppressed by the global log level configuration, unless it is set to "trace" or above.
 func (p pLogger) Trace(msg string, keysAndValues ...any) {
 	p.traceDepth(msg, p.depth+1, keysAndValues...)
 }
 
+// TraceErr logs show in the pod log output as `"level":"trace","message":"some msg","error":"some error msg"`
+// where the message text comes from the msg parameter and the error text comes from the err parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// TraceErr logs are suppressed by the global log level configuration, unless it is set to "trace" or above.
 func (p pLogger) TraceErr(msg string, err error, keysAndValues ...any) {
 	p.traceDepth(msg, p.depth+1, slices.Concat([]any{errorKey, err}, keysAndValues)...)
 }
 
+// All logs show in the pod log output as `"level":"all","message":"some msg"`
+// where the message text comes from the msg parameter.
+// They also contain the standard `timestamp` and `caller` keys, along with any other keysAndValues.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// All logs are suppressed by the global log level configuration, unless it is set to "all" or above.
 func (p pLogger) All(msg string, keysAndValues ...any) {
 	if p.logr().V(klogLevelAll).Enabled() {
 		p.logr().V(klogLevelAll).WithCallDepth(p.depth+1).Info(msg, keysAndValues...)
 	}
 }
 
+// Always logs show in the pod log output exactly the same as an Info() message,
+// except Always logs are always logged regardless of log level configuration.
+// Only when the global log level is configured to "trace" or "all", then they will also include a `stacktrace` key.
+// Always logs cannot be suppressed by the global log level configuration.
 func (p pLogger) Always(msg string, keysAndValues ...any) {
 	p.logr().WithCallDepth(p.depth+1).Info(msg, keysAndValues...)
 }
@@ -257,4 +451,130 @@ func Fatal(err error, keysAndValues ...any) {
 	logger.Error("unrecoverable error encountered", err, keysAndValues...)
 	globalFlush()
 	os.Exit(1)
+}
+
+// piiKeysAndValues can be used to serialize the keys and values as a JSON map without losing their order,
+// and optionally redacting values.
+type piiKeysAndValues struct {
+	kv                        []any
+	logUsernamesAndGroupNames bool
+}
+
+func (p *piiKeysAndValues) MarshalJSON() ([]byte, error) {
+	var buf []byte
+	var k string
+	var wroteOne bool
+
+	buf = append(buf, '{')
+
+	for i, v := range p.kv {
+		if i%2 == 0 {
+			// Interpret even indices (0, 2, 4, etc.) as a key.
+			// Remember its value for the next loop iteration.
+			k = p.asJSONKey(v)
+		} else {
+			// Interpret odd indices as a value.
+			// Write it using the key from the previous loop iteration.
+			// First write a comma if needed.
+			if wroteOne {
+				buf = append(buf, ',')
+			}
+			buf = append(buf, []byte(k)...)
+			buf = append(buf, ':')
+			buf = append(buf, []byte(p.asJSONValue(v))...)
+			wroteOne = true
+		}
+	}
+
+	buf = append(buf, '}')
+
+	return buf, nil
+}
+
+func (p *piiKeysAndValues) asJSONKey(v any) string {
+	vStr, ok := v.(string)
+	if !ok {
+		// Indicates programmer error that will hopefully be caught by unit tests of usages of Audit().
+		return `"cannotCastKeyNameToString"`
+	}
+	// Encode the string to get proper JSON escaping if needed.
+	b, err := json.Marshal(vStr)
+	if err != nil {
+		// Shouldn't really happen because the argument to Marshal was a string.
+		return `"cannotMarshalKeyNameToJSON"`
+	}
+	return string(b)
+}
+
+func (p *piiKeysAndValues) asJSONValue(v any) string {
+	rt := reflect.TypeOf(v) // note that rt can be nil when v is nil
+	if p.logUsernamesAndGroupNames {
+		// Encode the original value without redacting.
+		switch {
+		case v != nil && rt.Kind() == reflect.Slice && reflect.ValueOf(v).IsNil():
+			// Handle the special case where v is a nil slice by showing it as an empty slice.
+			return "[]"
+		case v != nil && rt.Kind() == reflect.Map && reflect.ValueOf(v).IsNil():
+			// Handle the special case where v is a nil map by showing it as an empty map.
+			return "{}"
+		default:
+			b, err := json.Marshal(v)
+			if err != nil {
+				// Hopefully this would be caught by unit tests of usages of Audit().
+				return `"cannotMarshalValueToJSON"`
+			}
+			return string(b)
+		}
+	} else {
+		// Redact the value.
+		switch {
+		case rt != nil && rt.Kind() == reflect.Slice:
+			// Handle the special case where v is a slice by showing it as a slice with redacted values.
+			return fmt.Sprintf(`["redacted %d values"]`, reflect.ValueOf(v).Len())
+		case rt != nil && rt.Kind() == reflect.Map:
+			// Handle the special case where v is a map by showing it as a map with redacted values.
+			return fmt.Sprintf(`{"redacted": "redacted %d keys"}`, reflect.ValueOf(v).Len())
+		default:
+			// For anything else, just redact it without worrying about the original type.
+			return `"redacted"`
+		}
+	}
+}
+
+// sanitizeRequestParams can be used to redact all params not included in the allowedKeys set.
+// Useful when audit logging HTTPRequestParameters events.
+func sanitizeRequestParams(inputParams url.Values, allowedKeys sets.Set[string]) []any {
+	params := make(map[string]string)
+	multiValueParams := make(url.Values)
+
+	transform := func(key, value string) string {
+		if !allowedKeys.Has(key) {
+			return "redacted"
+		}
+
+		unescape, err := url.QueryUnescape(value)
+		if err != nil {
+			// ignore these errors and just use the original query parameter
+			unescape = value
+		}
+		return unescape
+	}
+
+	for key := range inputParams {
+		for i, p := range inputParams[key] {
+			transformed := transform(key, p)
+			if i == 0 {
+				params[key] = transformed
+			}
+
+			if len(inputParams[key]) > 1 {
+				multiValueParams[key] = append(multiValueParams[key], transformed)
+			}
+		}
+	}
+
+	if len(multiValueParams) > 0 {
+		return []any{"params", params, "multiValueParams", multiValueParams}
+	}
+	return []any{"params", params}
 }

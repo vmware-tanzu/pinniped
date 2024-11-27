@@ -113,6 +113,7 @@ func runStaticLogin(cmd *cobra.Command, deps staticLoginDeps, flags staticLoginP
 			conciergeclient.WithBase64CABundle(flags.conciergeCABundle),
 			conciergeclient.WithAuthenticator(flags.conciergeAuthenticatorType, flags.conciergeAuthenticatorName),
 			conciergeclient.WithAPIGroupSuffix(flags.conciergeAPIGroupSuffix),
+			conciergeclient.WithTransportWrapper(LogAuditIDTransportWrapper),
 		)
 		if err != nil {
 			return fmt.Errorf("invalid Concierge parameters: %w", err)

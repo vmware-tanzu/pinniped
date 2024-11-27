@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	idpdiscoveryv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 )
 
 // ExpectedUpstreamStateParamFormat is a separate type from the production code to ensure that the state
@@ -28,10 +29,10 @@ type ExpectedUpstreamStateParamFormat struct {
 
 type UpstreamStateParamBuilder ExpectedUpstreamStateParamFormat
 
-func (b *UpstreamStateParamBuilder) Build(t *testing.T, stateEncoder *securecookie.SecureCookie) string {
+func (b *UpstreamStateParamBuilder) Build(t *testing.T, stateEncoder *securecookie.SecureCookie) stateparam.Encoded {
 	state, err := stateEncoder.Encode("s", b)
 	require.NoError(t, err)
-	return state
+	return stateparam.Encoded(state)
 }
 
 func (b *UpstreamStateParamBuilder) WithAuthorizeRequestParams(params string) *UpstreamStateParamBuilder {

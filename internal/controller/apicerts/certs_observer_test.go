@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -173,10 +173,10 @@ func TestObserverControllerSync(t *testing.T) {
 				ca, err := certauthority.Load(string(caCrt), string(caKey))
 				require.NoError(t, err)
 
-				crt, key, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
+				pem, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
 				require.NoError(t, err)
 
-				err = dynamicCertProvider.SetCertKeyContent(crt, key)
+				err = dynamicCertProvider.SetCertKeyContent(pem.CertPEM, pem.KeyPEM)
 				r.NoError(err)
 			})
 
@@ -202,7 +202,7 @@ func TestObserverControllerSync(t *testing.T) {
 				ca, err := certauthority.Load(string(caCrt), string(caKey))
 				require.NoError(t, err)
 
-				crt, key, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
+				pem, err := ca.IssueServerCertPEM(nil, nil, time.Hour)
 				require.NoError(t, err)
 
 				apiServingCertSecret := &corev1.Secret{
@@ -212,8 +212,8 @@ func TestObserverControllerSync(t *testing.T) {
 					},
 					Data: map[string][]byte{
 						"caCertificate":       []byte("fake cert"),
-						"tlsPrivateKey":       key,
-						"tlsCertificateChain": crt,
+						"tlsPrivateKey":       pem.KeyPEM,
+						"tlsCertificateChain": pem.CertPEM,
 					},
 				}
 				err = kubeInformerClient.Tracker().Add(apiServingCertSecret)

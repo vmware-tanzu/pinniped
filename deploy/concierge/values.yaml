@@ -231,3 +231,15 @@ no_proxy: "$(KUBERNETES_SERVICE_HOST),169.254.169.254,127.0.0.1,localhost,.svc,.
 #! An empty array is perfectly valid, as is any array of strings.
 allowed_ciphers_for_tls_onedottwo:
 - ""
+
+#@schema/title "Audit logging configuration"
+#@schema/desc "Customize the content of audit log events."
+audit:
+
+  #@schema/title "Log usernames and groups"
+  #@ log_usernames_and_groups_desc = "Enables or disables printing usernames and group names in audit logs. Options are 'enabled' or 'disabled'. \
+  #@ If enabled, usernames are group names may be printed in audit log events. \
+  #@ If disabled, usernames and group names will be redacted from audit logs because they might contain personally identifiable information."
+  #@schema/desc log_usernames_and_groups_desc
+  #@schema/validation one_of=["enabled", "disabled"]
+  log_usernames_and_groups: disabled

@@ -127,7 +127,7 @@ func TestController(t *testing.T) {
 
 	caForUnknownServer, err := certauthority.New("Some Unknown CA", time.Hour)
 	require.NoError(t, err)
-	unknownServerCABytes, _, err := caForUnknownServer.IssueServerCertPEM(
+	unknownServerPEM, err := caForUnknownServer.IssueServerCertPEM(
 		[]string{"some-dns-name", "some-other-dns-name"},
 		[]net.IP{net.ParseIP("10.2.3.4")},
 		time.Hour,
@@ -1849,7 +1849,7 @@ func TestController(t *testing.T) {
 				func() runtime.Object {
 					badIDP := validFilledOutIDP.DeepCopy()
 					badIDP.Spec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
-						CertificateAuthorityData: base64.StdEncoding.EncodeToString(unknownServerCABytes),
+						CertificateAuthorityData: base64.StdEncoding.EncodeToString(unknownServerPEM.CertPEM),
 					}
 					return badIDP
 				}(),
@@ -1861,7 +1861,7 @@ func TestController(t *testing.T) {
 					Spec: func() idpv1alpha1.GitHubIdentityProviderSpec {
 						badSpec := validFilledOutIDP.Spec.DeepCopy()
 						badSpec.GitHubAPI.TLS = &idpv1alpha1.TLSSpec{
-							CertificateAuthorityData: base64.StdEncoding.EncodeToString(unknownServerCABytes),
+							CertificateAuthorityData: base64.StdEncoding.EncodeToString(unknownServerPEM.CertPEM),
 						}
 						return *badSpec
 					}(),
@@ -2555,12 +2555,7 @@ func TestController(t *testing.T) {
 				require.Len(t, actualIDP.Status.Conditions, countExpectedConditions)
 				require.Equal(t, tt.wantResultingUpstreams[i], *actualIDP)
 			}
-
-			expectedLogs := ""
-			if len(tt.wantLogs) > 0 {
-				expectedLogs = strings.Join(tt.wantLogs, "\n") + "\n"
-			}
-			require.Equal(t, expectedLogs, log.String())
+			testutil.RequireLogLines(t, tt.wantLogs, log)
 
 			// This needs to happen after the expected condition LastTransitionTime has been updated.
 			wantActions := make([]coretesting.Action, 3+len(tt.wantResultingUpstreams))

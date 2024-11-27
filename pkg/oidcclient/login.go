@@ -33,6 +33,7 @@ import (
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/httputil/httperr"
+	"go.pinniped.dev/internal/httputil/roundtripper"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/net/phttp"
 	"go.pinniped.dev/internal/plog"
@@ -357,6 +358,54 @@ type nopCache struct{}
 func (*nopCache) GetToken(SessionCacheKey) *oidctypes.Token  { return nil }
 func (*nopCache) PutToken(SessionCacheKey, *oidctypes.Token) {}
 
+type auditIDLoggerFunc func(path string, statusCode int, auditID string)
+
+func logFailedRequest(path string, statusCode int, auditID string) {
+	plog.Info("Received auditID for failed request",
+		"path", path,
+		"statusCode", statusCode,
+		"auditID", auditID)
+}
+
+// maybePrintAuditID will choose to log the auditID when certain failure cases are detected,
+// to give a breadcrumb for an admin to follow.
+// Older Supervisors and other OIDC identity providers may not provide this header.
+func maybePrintAuditID(rt http.RoundTripper, logFunc auditIDLoggerFunc) http.RoundTripper {
+	return roundtripper.WrapFunc(rt, func(r *http.Request) (*http.Response, error) {
+		response, responseErr := rt.RoundTrip(r)
+
+		if response == nil ||
+			responseErr != nil ||
+			response.Header.Get("audit-ID") == "" ||
+			response.Request == nil ||
+			response.Request.URL == nil {
+			return response, responseErr
+		}
+
+		auditID := response.Header.Get("audit-ID")
+		// Use the request from the response in case other round-trippers modified the request
+		path := response.Request.URL.Path
+
+		switch statusCode := response.StatusCode; {
+		case statusCode < http.StatusMultipleChoices: // (-inf,300)
+			break // noop
+		case response.StatusCode < http.StatusBadRequest: // [300,400)
+			// Rejected oauth2/authorize redirects from audit-enabled Supervisors will ALWAYS include
+			// the "error" parameter since it is required.
+			// See https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1 for more details.
+			location, err := url.Parse(response.Header.Get(httpLocationHeaderName))
+			if err != nil || location == nil || location.Query().Get("error") == "" {
+				break
+			}
+			logFunc(path, statusCode, auditID)
+		default: // [400,inf)
+			// failing discovery, oauth2/authorize, or oauth2/token responses from audit-enabled Supervisors.
+			logFunc(path, statusCode, auditID)
+		}
+		return response, responseErr
+	})
+}
+
 // Login performs an OAuth2/OIDC authorization code login using a localhost listener.
 func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, error) {
 	h := handlerState{
@@ -379,7 +428,15 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 		getEnv:        os.Getenv,
 		listen:        net.Listen,
 		stdinIsTTY:    func() bool { return term.IsTerminal(stdin()) },
-		getProvider:   upstreamoidc.New,
+		getProvider: func(config *oauth2.Config, provider *coreosoidc.Provider, client *http.Client) upstreamprovider.UpstreamOIDCIdentityProviderI {
+			// can't use upstreamoidc.New here since it does not set the Name
+			return &upstreamoidc.ProviderConfig{
+				Name:     issuer, // use the issuer as the Name
+				Config:   config,
+				Provider: provider,
+				Client:   client,
+			}
+		},
 		validateIDToken: func(ctx context.Context, provider *coreosoidc.Provider, audience string, token string) (*coreosoidc.IDToken, error) {
 			return provider.Verifier(&coreosoidc.Config{ClientID: audience}).Verify(ctx, token)
 		},
@@ -392,6 +449,8 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 			return nil, err
 		}
 	}
+
+	h.httpClient.Transport = maybePrintAuditID(h.httpClient.Transport, logFailedRequest)
 
 	if h.cliToSendCredentials {
 		if h.loginFlow != "" {

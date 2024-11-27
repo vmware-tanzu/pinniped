@@ -10,17 +10,24 @@ import (
 
 	"github.com/ory/fosite"
 
+	"go.pinniped.dev/internal/auditevent"
 	"go.pinniped.dev/internal/federationdomain/downstreamsession"
 	"go.pinniped.dev/internal/federationdomain/endpoints/loginurl"
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/oidc"
 	"go.pinniped.dev/internal/federationdomain/resolvedprovider/resolvedldap"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/plog"
 )
 
-func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersFinderI, oauthHelper fosite.OAuth2Provider) HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request, encodedState string, decodedState *oidc.UpstreamStateParamData) error {
+func NewPostHandler(
+	issuerURL string,
+	upstreamIDPs federationdomainproviders.FederationDomainIdentityProvidersFinderI,
+	oauthHelper fosite.OAuth2Provider,
+	auditLogger plog.AuditLogger,
+) HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request, encodedState stateparam.Encoded, decodedState *oidc.UpstreamStateParamData) error {
 		// Note that the login handler prevents this handler from being called with OIDC upstreams.
 		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
 		if err != nil {
@@ -29,6 +36,16 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 			plog.Error("error finding upstream provider", err)
 			return httperr.Wrap(http.StatusUnprocessableEntity, "error finding upstream provider", err)
 		}
+
+		auditLogger.Audit(auditevent.UsingUpstreamIDP, &plog.AuditParams{
+			ReqCtx: r.Context(),
+			KeysAndValues: []any{
+				"displayName", idp.GetDisplayName(),
+				"resourceName", idp.GetProvider().GetResourceName(),
+				"resourceUID", idp.GetProvider().GetResourceUID(),
+				"type", idp.GetSessionProviderType(),
+			},
+		})
 
 		// Get the original params that were used at the authorization endpoint.
 		downstreamAuthParams, err := url.ParseQuery(decodedState.AuthParams)
@@ -74,6 +91,10 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 				// The user may try to log in again if they'd like, so redirect back to the login page with an error.
 				return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowInternalError)
 			case err == resolvedldap.ErrAccessDeniedDueToUsernamePasswordNotAccepted:
+				auditLogger.Audit(auditevent.IncorrectUsernameOrPassword, &plog.AuditParams{
+					ReqCtx: r.Context(),
+				})
+
 				// The upstream did not accept the username/password combination.
 				// The user may try to log in again if they'd like, so redirect back to the login page with an error.
 				return redirectToLoginPage(r, w, issuerURL, encodedState, loginurl.ShowBadUserPassErr)
@@ -84,11 +105,13 @@ func NewPostHandler(issuerURL string, upstreamIDPs federationdomainproviders.Fed
 			}
 		}
 
-		session, err := downstreamsession.NewPinnipedSession(r.Context(), idp, &downstreamsession.SessionConfig{
+		session, err := downstreamsession.NewPinnipedSession(r.Context(), auditLogger, &downstreamsession.SessionConfig{
 			UpstreamIdentity:    identity,
 			UpstreamLoginExtras: loginExtras,
 			ClientID:            authorizeRequester.GetClient().GetID(),
 			GrantedScopes:       authorizeRequester.GetGrantedScopes(),
+			IdentityProvider:    idp,
+			SessionIDGetter:     authorizeRequester,
 		})
 		if err != nil {
 			err = fosite.ErrAccessDenied.WithHintf("Reason: %s.", err.Error())
@@ -107,7 +130,7 @@ func redirectToLoginPage(
 	r *http.Request,
 	w http.ResponseWriter,
 	downstreamIssuer string,
-	encodedStateParamValue string,
+	encodedStateParamValue stateparam.Encoded,
 	errToDisplay loginurl.ErrorParamValue,
 ) error {
 	loginURL, err := loginurl.URL(downstreamIssuer, encodedStateParamValue, errToDisplay)

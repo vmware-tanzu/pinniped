@@ -10,6 +10,7 @@ import (
 	"github.com/ory/fosite"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
+	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/federationdomain/upstreamprovider"
 	"go.pinniped.dev/internal/idtransform"
 	"go.pinniped.dev/internal/psession"
@@ -86,7 +87,7 @@ type RefreshedIdentity struct {
 // upstream authorization request does not allow PKCE, then implementations of
 // FederationDomainResolvedIdentityProvider.UpstreamAuthorizeRedirectURL may choose to ignore that struct field.
 type UpstreamAuthorizeRequestState struct {
-	EncodedStateParam string
+	EncodedStateParam stateparam.Encoded
 	PKCE              pkce.Code
 	Nonce             nonce.Nonce
 }

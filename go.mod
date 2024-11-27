@@ -23,7 +23,7 @@ require (
 	github.com/go-logr/stdr v1.2.2
 	github.com/go-logr/zapr v1.3.0
 	github.com/gofrs/flock v0.12.1
-	github.com/google/cel-go v0.22.0
+	github.com/google/cel-go v0.22.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-github/v66 v66.0.0
 	github.com/google/gofuzz v1.2.0
@@ -39,8 +39,8 @@ require (
 	github.com/sclevine/spec v1.4.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.9.0
-	github.com/tdewolff/minify/v2 v2.21.1
+	github.com/stretchr/testify v1.10.0
+	github.com/tdewolff/minify/v2 v2.21.2
 	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.29.0
@@ -138,7 +138,7 @@ require (
 	github.com/spf13/viper v1.16.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
-	github.com/tdewolff/parse/v2 v2.7.18 // indirect
+	github.com/tdewolff/parse/v2 v2.7.19 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.14 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.14 // indirect

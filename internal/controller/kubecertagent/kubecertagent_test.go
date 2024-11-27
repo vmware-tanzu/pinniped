@@ -83,8 +83,16 @@ func TestAgentController(t *testing.T) {
 					},
 				},
 			}},
+			NodeName:     "schedulable-node-name-1",
+			NodeSelector: map[string]string{"some-selector-key": "some-selector-value"},
+			Tolerations:  []corev1.Toleration{{Key: "some-toleration-key"}},
 		},
 		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+
+	schedulableControllerManagerNode := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "schedulable-node-name-1"},
+		Spec:       corev1.NodeSpec{Unschedulable: false},
 	}
 
 	healthyAgentDeployment := &appsv1.Deployment{
@@ -150,6 +158,9 @@ func TestAgentController(t *testing.T) {
 							},
 						},
 					}},
+					NodeName:     "schedulable-node-name-1",
+					NodeSelector: map[string]string{"some-selector-key": "some-selector-value"},
+					Tolerations:  []corev1.Toleration{{Key: "some-toleration-key"}},
 				},
 			},
 			MinReadySeconds: 10,
@@ -169,61 +180,16 @@ func TestAgentController(t *testing.T) {
 	healthyAgentDeploymentWithOldStyleSelector.UID = "fake-uid-abc123"                        // needs UID to test delete options
 	healthyAgentDeploymentWithOldStyleSelector.ResourceVersion = "fake-resource-version-1234" // needs ResourceVersion to test delete options
 
-	// The host network setting from the kube-controller-manager pod should be applied on the
-	// deployment.
-	healthyKubeControllerManagerPodWithHostNetwork := healthyKubeControllerManagerPod.DeepCopy()
-	healthyKubeControllerManagerPodWithHostNetwork.Spec.HostNetwork = true
-
-	//  We create an agent deployment that does not use host network and expect the
-	// controller to add 'hostNetwork: true' to the spec.
-	healthyAgentDeploymentWithHostNetwork := healthyAgentDeployment.DeepCopy()
-	healthyAgentDeploymentWithHostNetwork.Spec.Template.Spec.HostNetwork = true
-
-	// Make another kube-controller-manager pod that's similar, but has alternate CLI flags which we also support.
-	healthyKubeControllerManagerPodWithAlternateArgs := healthyKubeControllerManagerPod.DeepCopy()
-	healthyKubeControllerManagerPodWithAlternateArgs.Spec.Containers[0].Command = []string{
-		"kube-controller-manager",
-		"--some-flag",
-		"--cluster-signing-kube-apiserver-client-cert-file", "/path/to/signing.crt",
-		"--cluster-signing-kube-apiserver-client-key-file=/path/to/signing.key",
-		"some arguments here",
-		"--and-another-flag",
+	modifiedHealthyKubeControllerManagerPod := func(edit func(pod *corev1.Pod)) *corev1.Pod {
+		pod := healthyKubeControllerManagerPod.DeepCopy()
+		edit(pod)
+		return pod
 	}
-
-	// Make another kube-controller-manager pod that's similar, but has both the standard and the alternate CLI flags,
-	// which shouldn't really happen in practice because the Kubernetes docs say that you cannot use both style of flags,
-	// but can be unit tested anyway.
-	healthyKubeControllerManagerPodWithStandardAndAlternateArgs := healthyKubeControllerManagerPod.DeepCopy()
-	healthyKubeControllerManagerPodWithStandardAndAlternateArgs.Spec.Containers[0].Command = []string{
-		"kube-controller-manager",
-		"--some-flag",
-		"--cluster-signing-kube-apiserver-client-cert-file", "/path/to/should-be-ignored.crt",
-		"--cluster-signing-kube-apiserver-client-key-file=/path/to/should-be-ignored.key",
-		"--cluster-signing-cert-file", "/path/to/signing.crt",
-		"--cluster-signing-key-file=/path/to/signing.key",
-		"some arguments here",
-		"--and-another-flag",
+	modifiedHealthyHealthyAgentDeployment := func(edit func(deployment *appsv1.Deployment)) *appsv1.Deployment {
+		deployment := healthyAgentDeployment.DeepCopy()
+		edit(deployment)
+		return deployment
 	}
-
-	// Make another kube-controller-manager pod that's similar, but does not have the CLI flags we're expecting.
-	// We should handle this by falling back to default values for the cert and key paths.
-	healthyKubeControllerManagerPodWithoutArgs := healthyKubeControllerManagerPod.DeepCopy()
-	healthyKubeControllerManagerPodWithoutArgs.Spec.Containers[0].Command = []string{"kube-controller-manager"}
-	healthyAgentDeploymentWithDefaultedPaths := healthyAgentDeployment.DeepCopy()
-	healthyAgentDeploymentWithDefaultedPaths.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{
-		{Name: "CERT_PATH", Value: "/etc/kubernetes/ca/ca.pem"},
-		{Name: "KEY_PATH", Value: "/etc/kubernetes/ca/ca.key"},
-	}
-
-	// If an admission controller sets extra labels or annotations, that's okay.
-	// We test this by ensuring that if a Deployment exists with extra labels, we don't try to delete them.
-	healthyAgentDeploymentWithExtraLabels := healthyAgentDeployment.DeepCopy()
-	healthyAgentDeploymentWithExtraLabels.Labels["some-additional-label"] = "some-additional-value"
-	healthyAgentDeploymentWithExtraLabels.Annotations = map[string]string{"some-additional-annotation": "some-additional-value"}
-
-	// If a Deployment with the wrong image exists, we want to change that.
-	agentDeploymentWithExtraLabelsAndWrongImage := healthyAgentDeploymentWithExtraLabels.DeepCopy()
-	agentDeploymentWithExtraLabelsAndWrongImage.Spec.Template.Spec.Containers[0].Image = "wrong-image"
 
 	healthyAgentPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -327,7 +293,7 @@ func TestAgentController(t *testing.T) {
 						Name:      "kube-controller-manager-1",
 						Labels:    map[string]string{"component": "kube-controller-manager"},
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodPending},
 				},
 				&corev1.Pod{
@@ -336,9 +302,10 @@ func TestAgentController(t *testing.T) {
 						Name:      "kube-controller-manager-2",
 						Labels:    map[string]string{"component": "kube-controller-manager"},
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodUnknown},
 				},
+				schedulableControllerManagerNode,
 			},
 			wantDistinctErrors: []string{
 				"could not find a healthy kube-controller-manager pod (2 candidates)",
@@ -358,6 +325,7 @@ func TestAgentController(t *testing.T) {
 			},
 			kubeObjects: []runtime.Object{
 				healthyKubeControllerManagerPod,
+				schedulableControllerManagerNode,
 			},
 			addKubeReactions: func(clientset *kubefake.Clientset) {
 				clientset.PrependReactor("create", "deployments", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -391,7 +359,7 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 				healthyKubeControllerManagerPod,
@@ -402,10 +370,11 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 				pendingAgentPod,
+				schedulableControllerManagerNode,
 			},
 			wantDistinctErrors: []string{
 				"could not find a healthy agent pod (1 candidate)",
@@ -440,10 +409,20 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
-				healthyKubeControllerManagerPodWithAlternateArgs,
+				modifiedHealthyKubeControllerManagerPod(func(pod *corev1.Pod) {
+					// Make kube-controller-manager pod that has alternate CLI flags which we also support.
+					pod.Spec.Containers[0].Command = []string{
+						"kube-controller-manager",
+						"--some-flag",
+						"--cluster-signing-kube-apiserver-client-cert-file", "/path/to/signing.crt",
+						"--cluster-signing-kube-apiserver-client-key-file=/path/to/signing.key",
+						"some arguments here",
+						"--and-another-flag",
+					}
+				}),
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace:         "kube-system",
@@ -451,10 +430,11 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 				pendingAgentPod,
+				schedulableControllerManagerNode,
 			},
 			wantDistinctErrors: []string{
 				"could not find a healthy agent pod (1 candidate)",
@@ -489,10 +469,24 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
-				healthyKubeControllerManagerPodWithStandardAndAlternateArgs,
+				modifiedHealthyKubeControllerManagerPod(func(pod *corev1.Pod) {
+					// Make a kube-controller-manager pod that has both the standard and the alternate CLI flags,
+					// which shouldn't really happen in practice because the Kubernetes docs say that you cannot
+					// use both style of flags, but can be unit tested anyway.
+					pod.Spec.Containers[0].Command = []string{
+						"kube-controller-manager",
+						"--some-flag",
+						"--cluster-signing-kube-apiserver-client-cert-file", "/path/to/should-be-ignored.crt",
+						"--cluster-signing-kube-apiserver-client-key-file=/path/to/should-be-ignored.key",
+						"--cluster-signing-cert-file", "/path/to/signing.crt",
+						"--cluster-signing-key-file=/path/to/signing.key",
+						"some arguments here",
+						"--and-another-flag",
+					}
+				}),
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace:         "kube-system",
@@ -500,10 +494,11 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 				pendingAgentPod,
+				schedulableControllerManagerNode,
 			},
 			wantDistinctErrors: []string{
 				"could not find a healthy agent pod (1 candidate)",
@@ -538,10 +533,14 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
-				healthyKubeControllerManagerPodWithoutArgs,
+				modifiedHealthyKubeControllerManagerPod(func(pod *corev1.Pod) {
+					// Make a kube-controller-manager pod that does not have the CLI flags we're expecting.
+					// We should handle this by falling back to default values for the cert and key paths.
+					pod.Spec.Containers[0].Command = []string{"kube-controller-manager"}
+				}),
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace:         "kube-system",
@@ -549,10 +548,11 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 				pendingAgentPod,
+				schedulableControllerManagerNode,
 			},
 			wantDistinctErrors: []string{
 				"could not find a healthy agent pod (1 candidate)",
@@ -564,7 +564,220 @@ func TestAgentController(t *testing.T) {
 			wantDistinctLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
-			wantAgentDeployment:       healthyAgentDeploymentWithDefaultedPaths,
+			wantAgentDeployment: modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+				// Fall back to default values for the cert and key paths.
+				deployment.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{
+					{Name: "CERT_PATH", Value: "/etc/kubernetes/ca/ca.pem"},
+					{Name: "KEY_PATH", Value: "/etc/kubernetes/ca/ca.key"},
+				}
+			}),
+			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not find a healthy agent pod (1 candidate)",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "created new deployment when newest controller manager pod is running on unschedulable node and another is available on schedulable node, no agent pods running yet",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				// The newest healthy controller manager pod is on an unschedulable node.
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-3",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-30 * time.Minute)),
+					},
+					Spec:   corev1.PodSpec{NodeName: "unschedulable-node"},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				// The next newest is on a schedulable node, so it should pick this one.
+				modifiedHealthyKubeControllerManagerPod(func(pod *corev1.Pod) {
+					pod.Spec.NodeName = "schedulable-node-2"
+				}),
+				// The least new is also on a schedulable node.
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-2",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{NodeName: "schedulable-node-1"},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				pendingAgentPod,
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-node"},
+					Spec:       corev1.NodeSpec{Unschedulable: true},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: "schedulable-node-1"},
+					Spec:       corev1.NodeSpec{Unschedulable: false},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: "schedulable-node-2"},
+					Spec:       corev1.NodeSpec{Unschedulable: false},
+				},
+			},
+			wantDistinctErrors: []string{
+				"could not find a healthy agent pod (1 candidate)",
+			},
+			alsoAllowUndesiredDistinctErrors: []string{
+				// due to the high amount of nondeterminism in this test, this error will sometimes also happen, but is not required to happen
+				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
+			},
+			wantDistinctLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+			},
+			wantAgentDeployment: modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+				deployment.Spec.Template.Spec.NodeName = "schedulable-node-2"
+			}),
+			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not find a healthy agent pod (1 candidate)",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "created new deployment when all running controller manager pods are running on unschedulable nodes so it just picks the newest running one, no agent pods running yet",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-3",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{NodeName: "unschedulable-node"},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				modifiedHealthyKubeControllerManagerPod(func(pod *corev1.Pod) {
+					pod.Spec.NodeName = "unschedulable-node"
+				}),
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-2",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{NodeName: "unschedulable-node"},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-4",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-30 * time.Minute)), // newest but not running
+					},
+					Spec:   corev1.PodSpec{NodeName: "schedulable-node"},
+					Status: corev1.PodStatus{Phase: corev1.PodPending},
+				},
+				pendingAgentPod,
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: "unschedulable-node"},
+					Spec:       corev1.NodeSpec{Unschedulable: true},
+				},
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: "schedulable-node"},
+					Spec:       corev1.NodeSpec{Unschedulable: false},
+				},
+			},
+			wantDistinctErrors: []string{
+				"could not find a healthy agent pod (1 candidate)",
+			},
+			alsoAllowUndesiredDistinctErrors: []string{
+				// due to the high amount of nondeterminism in this test, this error will sometimes also happen, but is not required to happen
+				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
+			},
+			wantDistinctLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+			},
+			wantAgentDeployment: modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+				deployment.Spec.Template.Spec.NodeName = "unschedulable-node"
+			}),
+			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not find a healthy agent pod (1 candidate)",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "created new deployment when all running controller manager pods do not have a nodeName, no agent pods running yet",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-3",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{NodeName: ""},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				modifiedHealthyKubeControllerManagerPod(func(pod *corev1.Pod) {
+					pod.Spec.NodeName = ""
+				}),
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-2",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{NodeName: ""},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-4",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-30 * time.Minute)), // newest but not running
+					},
+					Spec:   corev1.PodSpec{NodeName: ""},
+					Status: corev1.PodStatus{Phase: corev1.PodPending},
+				},
+				pendingAgentPod,
+				&corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: "schedulable-node"},
+					Spec:       corev1.NodeSpec{Unschedulable: false},
+				},
+			},
+			wantDistinctErrors: []string{
+				"could not find a healthy agent pod (1 candidate)",
+			},
+			alsoAllowUndesiredDistinctErrors: []string{
+				// due to the high amount of nondeterminism in this test, this error will sometimes also happen, but is not required to happen
+				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
+			},
+			wantDistinctLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+			},
+			wantAgentDeployment: modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+				// Picks the newest running pod and copies its nodeName, which is blank.
+				deployment.Spec.Template.Spec.NodeName = ""
+			}),
 			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
 			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
 				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
@@ -583,6 +796,7 @@ func TestAgentController(t *testing.T) {
 				healthyKubeControllerManagerPod,
 				healthyAgentDeploymentWithOldStyleSelector,
 				pendingAgentPod,
+				schedulableControllerManagerNode,
 			},
 			wantDistinctErrors: []string{
 				"could not find a healthy agent pod (1 candidate)",
@@ -613,6 +827,7 @@ func TestAgentController(t *testing.T) {
 				healthyKubeControllerManagerPod,
 				healthyAgentDeploymentWithOldStyleSelector,
 				pendingAgentPod,
+				schedulableControllerManagerNode,
 			},
 			addKubeReactions: func(clientset *kubefake.Clientset) {
 				clientset.PrependReactor("delete", "deployments", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -649,6 +864,7 @@ func TestAgentController(t *testing.T) {
 				healthyKubeControllerManagerPod,
 				healthyAgentDeploymentWithOldStyleSelector,
 				pendingAgentPod,
+				schedulableControllerManagerNode,
 			},
 			addKubeReactions: func(clientset *kubefake.Clientset) {
 				clientset.PrependReactor("create", "deployments", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -691,7 +907,7 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 				&corev1.Pod{
@@ -701,11 +917,16 @@ func TestAgentController(t *testing.T) {
 						Labels:            map[string]string{"component": "kube-controller-manager"},
 						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
 					},
-					Spec:   corev1.PodSpec{},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
 					Status: corev1.PodStatus{Phase: corev1.PodRunning},
 				},
-				agentDeploymentWithExtraLabelsAndWrongImage,
+				modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+					deployment.Labels["some-additional-label"] = "some-additional-value"
+					deployment.Annotations = map[string]string{"some-additional-annotation": "some-additional-value"}
+					deployment.Spec.Template.Spec.Containers[0].Image = "wrong-image"
+				}),
 				pendingAgentPod,
+				schedulableControllerManagerNode,
 			},
 			wantDistinctErrors: []string{
 				"could not find a healthy agent pod (1 candidate)",
@@ -713,7 +934,12 @@ func TestAgentController(t *testing.T) {
 			wantDistinctLogs: []string{
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"updating existing deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
-			wantAgentDeployment:       healthyAgentDeploymentWithExtraLabels,
+			wantAgentDeployment: modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+				// If an admission controller sets extra labels or annotations, that's okay.
+				// We test this by ensuring that if a Deployment exists with extra labels, we don't try to delete them.
+				deployment.Labels["some-additional-label"] = "some-additional-value"
+				deployment.Annotations = map[string]string{"some-additional-annotation": "some-additional-value"}
+			}),
 			wantDeploymentActionVerbs: []string{"list", "watch", "update"},
 			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
 				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
@@ -729,14 +955,20 @@ func TestAgentController(t *testing.T) {
 				initialCredentialIssuer,
 			},
 			kubeObjects: []runtime.Object{
-				healthyKubeControllerManagerPodWithHostNetwork,
+				modifiedHealthyKubeControllerManagerPod(func(pod *corev1.Pod) {
+					// The host network setting from the kube-controller-manager pod should be applied on the deployment.
+					pod.Spec.HostNetwork = true
+				}),
 				healthyAgentDeployment,
 				healthyAgentPod,
+				schedulableControllerManagerNode,
 			},
 			wantDistinctErrors: []string{
 				"failed to get kube-public/cluster-info configmap: configmap \"cluster-info\" not found",
 			},
-			wantAgentDeployment:       healthyAgentDeploymentWithHostNetwork,
+			wantAgentDeployment: modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+				deployment.Spec.Template.Spec.HostNetwork = true
+			}),
 			wantDeploymentActionVerbs: []string{"list", "watch", "update"},
 			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
 				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
@@ -758,6 +990,7 @@ func TestAgentController(t *testing.T) {
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
 				healthyAgentPod,
+				schedulableControllerManagerNode,
 			},
 			wantDistinctErrors: []string{
 				"failed to get kube-public/cluster-info configmap: configmap \"cluster-info\" not found",
@@ -781,6 +1014,7 @@ func TestAgentController(t *testing.T) {
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
 				healthyAgentPod,
+				schedulableControllerManagerNode,
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "kube-public", Name: "cluster-info"},
 					Data:       map[string]string{},
@@ -808,6 +1042,7 @@ func TestAgentController(t *testing.T) {
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
 				healthyAgentPod,
+				schedulableControllerManagerNode,
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "kube-public", Name: "cluster-info"},
 					Data:       map[string]string{"kubeconfig": "'"},
@@ -835,6 +1070,7 @@ func TestAgentController(t *testing.T) {
 				healthyKubeControllerManagerPod,
 				healthyAgentDeployment,
 				healthyAgentPod,
+				schedulableControllerManagerNode,
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "kube-public", Name: "cluster-info"},
 					Data:       map[string]string{"kubeconfig": "{}"},
@@ -863,6 +1099,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentDeployment,
 				healthyAgentPod,
 				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
 				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "sleeper", "pinniped-concierge-kube-cert-agent", "print").
@@ -892,6 +1129,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentDeployment,
 				healthyAgentPod,
 				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
 				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "sleeper", "pinniped-concierge-kube-cert-agent", "print").
@@ -921,6 +1159,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentDeployment,
 				healthyAgentPod,
 				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
 				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "sleeper", "pinniped-concierge-kube-cert-agent", "print").
@@ -950,6 +1189,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentDeployment,
 				healthyAgentPod,
 				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
 				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "sleeper", "pinniped-concierge-kube-cert-agent", "print").
@@ -979,6 +1219,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentDeployment,
 				healthyAgentPod,
 				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
 				executor.Exec(gomock.Any(), "concierge", "pinniped-concierge-kube-cert-agent-xyz-1234", "sleeper", "pinniped-concierge-kube-cert-agent", "print").
@@ -1011,6 +1252,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentDeployment,
 				healthyAgentPod,
 				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
 			},
 			mocks: func(t *testing.T, executor *mocks.MockPodCommandExecutorMockRecorder, dynamicCert *mocks.MockDynamicCertPrivateMockRecorder, execCache *cache.Expiring) {
 				// If we pre-fill the cache here, we should never see any calls to the executor or dynamicCert mocks.
@@ -1044,6 +1286,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentDeploymentWithOldStyleSelector,
 				healthyAgentPod,
 				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
 			},
 			addKubeReactions: func(clientset *kubefake.Clientset) {
 				clientset.PrependReactor("delete", "deployments", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -1083,6 +1326,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentDeployment,
 				healthyAgentPod,
 				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
 			},
 			mocks:                     mockExecSucceeds,
 			wantDistinctErrors:        []string{""},
@@ -1116,6 +1360,7 @@ func TestAgentController(t *testing.T) {
 				healthyAgentDeployment,
 				healthyAgentPod,
 				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
 			},
 			discoveryURLOverride:      ptr.To("https://overridden-server.example.com/some/path"),
 			mocks:                     mockExecSucceeds,
@@ -1138,6 +1383,71 @@ func TestAgentController(t *testing.T) {
 						CertificateAuthorityData: "dGVzdC1rdWJlcm5ldGVzLWNh",
 					},
 				},
+			},
+		},
+		{
+			name: "error while listing nodes",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-2",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+			},
+			addKubeReactions: func(clientset *kubefake.Clientset) {
+				clientset.PrependReactor("list", "nodes", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("some node list error")
+				})
+			},
+			wantDistinctErrors: []string{
+				"error while looking for controller manager pod: some node list error",
+			},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "error while looking for controller manager pod: some node list error",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name: "listing nodes returns a node without a name, which shouldn't really happen but can be unit tested",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-2",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "some-node"}},
+				&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: ""}},
+			},
+			wantDistinctErrors: []string{
+				"error while looking for controller manager pod: a node from the list of all nodes has no name",
+			},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "error while looking for controller manager pod: a node from the list of all nodes has no name",
+				LastUpdateTime: metav1.NewTime(now),
 			},
 		},
 	}

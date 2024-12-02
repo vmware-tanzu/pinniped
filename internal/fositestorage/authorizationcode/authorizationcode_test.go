@@ -198,7 +198,7 @@ func TestInvalidateWhenConflictOnUpdateHappens(t *testing.T) {
 	err := storage.CreateAuthorizeCodeSession(ctx, "fancy-signature", request)
 	require.NoError(t, err)
 	err = storage.InvalidateAuthorizeCodeSession(ctx, "fancy-signature")
-	require.EqualError(t, err, `The request could not be completed due to concurrent access: failed to update authcode for signature fancy-signature at resource version : Operation cannot be fulfilled on secrets "some-secret-name": there was a conflict`)
+	require.EqualError(t, err, `error: failed to update authcode for signature fancy-signature at resource version : Operation cannot be fulfilled on secrets "some-secret-name": there was a conflict`)
 }
 
 func TestWrongVersion(t *testing.T) {

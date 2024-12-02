@@ -21,7 +21,7 @@ ARG BASE_IMAGE=gcr.io/distroless/static:nonroot@sha256:6cd937e9155bdfd805d1b94e0
 
 # This is not currently using --platform to prepare to cross-compile because we use gcc below to build
 # platform-specific GCO code. This makes multi-arch builds slow due to target platform emulation.
-FROM $BUILD_IMAGE as build-env
+FROM $BUILD_IMAGE AS build-env
 
 WORKDIR /work
 

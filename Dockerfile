@@ -7,7 +7,7 @@ ARG BUILD_IMAGE=golang:1.23.3@sha256:73f06be4578c9987ce560087e2e2ea6485fb605e391
 ARG BASE_IMAGE=gcr.io/distroless/static:nonroot@sha256:6cd937e9155bdfd805d1b94e037f9d6a899603306030936a3b11680af0c2ed58
 
 # Prepare to cross-compile by always running the build stage in the build platform, not the target platform.
-FROM --platform=$BUILDPLATFORM $BUILD_IMAGE as build-env
+FROM --platform=$BUILDPLATFORM $BUILD_IMAGE AS build-env
 
 WORKDIR /work
 

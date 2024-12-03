@@ -94,13 +94,13 @@ meta:
   kube_version_v1-27-x: &kube_version_v1-27-x
     KUBE_VERSION: v1.27.16
   kube_version_v1-28-x: &kube_version_v1-28-x
-    KUBE_VERSION: v1.28.13
+    KUBE_VERSION: v1.28.15
   kube_version_v1-29-x: &kube_version_v1-29-x
-    KUBE_VERSION: v1.29.8
+    KUBE_VERSION: v1.29.10
   kube_version_v1-30-x: &kube_version_v1-30-x
-    KUBE_VERSION: v1.30.4
+    KUBE_VERSION: v1.30.6
   kube_version_v1-31-x: &kube_version_v1-31-x
-    KUBE_VERSION: v1.31.1
+    KUBE_VERSION: v1.31.2
   kube_version_k8s-main: &kube_version_k8s-main
     KUBE_VERSION: "k8s-main"
     KIND_NODE_IMAGE: "ghcr.io/pinniped-ci-bot/kind-node-image:latest"

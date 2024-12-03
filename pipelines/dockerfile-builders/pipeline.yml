@@ -46,7 +46,7 @@ meta:
     # container images. We use a commit sha instead of a release semver because this project
     # does not create releases very often. They seem to only release 1-2 times per year, but
     # commit to main more often.
-    BUILD_ARG_CRD_REF_DOCS_COMMIT_SHA: 69dc361
+    BUILD_ARG_CRD_REF_DOCS_COMMIT_SHA: 6d9cbb2
 
 resources:
 
@@ -794,7 +794,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.29.10
+            BUILD_ARG_K8S_PKG_VERSION: 0.29.11
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
@@ -830,7 +830,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.30.6
+            BUILD_ARG_K8S_PKG_VERSION: 0.30.7
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
@@ -866,7 +866,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.31.2
+            BUILD_ARG_K8S_PKG_VERSION: 0.31.3
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms

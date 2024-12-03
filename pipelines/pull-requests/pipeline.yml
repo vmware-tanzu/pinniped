@@ -106,7 +106,7 @@ meta:
   kube_version_v1-21-x: &kube_version_v1-21-x
     KUBE_VERSION: v1.21.14
   kube_version_v1-31-x: &kube_version_v1-31-x
-    KUBE_VERSION: v1.31.1
+    KUBE_VERSION: v1.31.2
   kube_version_k8s-main: &kube_version_k8s-main
     KUBE_VERSION: "k8s-main"
     KIND_NODE_IMAGE: "ghcr.io/pinniped-ci-bot/kind-node-image:latest"

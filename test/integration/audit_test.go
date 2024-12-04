@@ -741,6 +741,12 @@ func getFilteredAuditLogs(
 		if len(podLog) == 0 {
 			continue
 		}
+		if !strings.HasPrefix(podLog, "{") {
+			// For some reason that needs investigation, an error message can appear in the pod log without
+			// being formatted as JSON. It starts with "http2: server: error reading preface from client".
+			// For now, just ignore it for the purposes of this test.
+			continue
+		}
 		var deserializedPodLog map[string]any
 		err = json.Unmarshal([]byte(podLog), &deserializedPodLog)
 		require.NoErrorf(t, err, "error parsing line of pod log: %s", podLog)

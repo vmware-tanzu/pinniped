@@ -2,7 +2,7 @@ module go.pinniped.dev
 
 go 1.23
 
-toolchain go1.23.3
+toolchain go1.23.4
 
 // see https://github.com/kubernetes/apimachinery/blob/v0.31.2/go.mod#L30
 replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.1
@@ -33,7 +33,7 @@ require (
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/migueleliasweb/go-github-mock v1.1.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/ory/fosite v0.47.1-0.20241128121544-db74aa7abd9f
+	github.com/ory/fosite v0.48.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/spec v1.4.0
@@ -46,7 +46,7 @@ require (
 	golang.org/x/crypto v0.29.0
 	golang.org/x/net v0.31.0
 	golang.org/x/oauth2 v0.24.0
-	golang.org/x/sync v0.9.0
+	golang.org/x/sync v0.10.0
 	golang.org/x/term v0.26.0
 	golang.org/x/text v0.20.0
 	k8s.io/api v0.31.3

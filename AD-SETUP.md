@@ -37,13 +37,14 @@ gcloud compute networks subnets create domain-controllers \
   --enable-private-ip-google-access
 
 # Create a firewall rule to allow RDP. Find out what your public IP address is by going to https://whatismyipaddress.com.
-# Copy/paste your IPv4 address into this rule. Replace the X.X.X.X placeholder address shown here with your real IP.
+# Replace the X.X.X.X placeholder address shown here with your real IPv4 address.
+my_ip=X.X.X.X
 gcloud compute firewall-rules create allow-rdp-ingress-to-addc \
   --project ${project} \
   --direction INGRESS \
   --action allow \
   --rules tcp:3389 \
-  --source-ranges "X.X.X.X/32" \
+  --source-ranges "${my_ip}/32" \
   --target-tags ad-domaincontroller \
   --network ${vpc_name} \
   --priority 10000
@@ -100,7 +101,7 @@ gcloud secrets add-iam-policy-binding active-directory-dc1-password \
   --role=roles/secretmanager.secretAccessor \
   --condition="title=Expires after 1h,expression=request.time < timestamp('$one_hour_from_now')"
 
-# Optional: list all bindings to see the binding that you just created. 
+# Optional: list all bindings to see the binding that you just created.
 gcloud secrets get-iam-policy active-directory-dc1-password \
   --project ${project}
 
@@ -256,7 +257,7 @@ New-ADUser -Name "Bind User" -SamAccountName "bind-user" -GivenName "Bind" -Surn
   -UserPrincipalName "bind-user@activedirectory.test.pinniped.dev" `
   -Path "OU=Users,OU=pinniped-ad,DC=activedirectory,DC=test,DC=pinniped,DC=dev" `
   -AccountPassword (ConvertTo-SecureString "REDACTED_BIND_USER_PASSWORD" -AsPlainText -Force) `
-  -Enabled $true
+  -Enabled $true -PasswordNeverExpires $true
 
 # Note that the value of EmailAddress is not a real email address, but that's okay.
 New-ADUser -Name "Pinny Seal" -SamAccountName "pinny" -GivenName "Pinny" -Surname "Seal" -DisplayName "Pinny Seal" `
@@ -264,13 +265,13 @@ New-ADUser -Name "Pinny Seal" -SamAccountName "pinny" -GivenName "Pinny" -Surnam
   -Path "OU=Users,OU=pinniped-ad,DC=activedirectory,DC=test,DC=pinniped,DC=dev" `
   -EmailAddress "tanzu-user-authentication@groups.vmware.com" `
   -AccountPassword (ConvertTo-SecureString "REDACTED_PINNY_USER_PASSWORD" -AsPlainText -Force) `
-  -Enabled $true
+  -Enabled $true -PasswordNeverExpires $true
 
 New-ADUser -Name "Deactivated User" -SamAccountName "deactivated-user" -GivenName "Deactivated" -Surname "User" -DisplayName "Deactivated User" `
   -UserPrincipalName "deactivated-user@activedirectory.test.pinniped.dev" `
   -Path "OU=Users,OU=pinniped-ad,DC=activedirectory,DC=test,DC=pinniped,DC=dev" `
   -AccountPassword (ConvertTo-SecureString "REDACTED_DEACTIVATED_USER_PASSWORD" -AsPlainText -Force) `
-  -Enabled $false
+  -Enabled $false -PasswordNeverExpires $true
 
 # Take note of the pinny account's ObjectGUID. You will need to edit the concourse-secrets secret later to update this GUID value.
 # This value should look something like "288188dd-ab76-4f61-b6e4-c72e081502c5".

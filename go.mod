@@ -9,7 +9,7 @@ replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-dif
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20241202193831-ec840381567d
+	github.com/chromedp/cdproto v0.0.0-20241208230723-d1c7de7e5dd2
 	github.com/chromedp/chromedp v0.11.2
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/coreos/go-semver v0.3.1

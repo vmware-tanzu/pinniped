@@ -18,7 +18,6 @@ import (
 	"go.pinniped.dev/internal/federationdomain/federationdomainproviders"
 	"go.pinniped.dev/internal/federationdomain/formposthtml"
 	"go.pinniped.dev/internal/federationdomain/oidc"
-	"go.pinniped.dev/internal/federationdomain/stateparam"
 	"go.pinniped.dev/internal/httputil/httperr"
 	"go.pinniped.dev/internal/httputil/securityheader"
 	"go.pinniped.dev/internal/plog"
@@ -46,15 +45,10 @@ func NewHandler(
 			return httperr.New(http.StatusBadRequest, "error parsing request params")
 		}
 
-		encodedState, decodedState, err := validateRequest(r, stateDecoder, cookieDecoder)
+		decodedState, err := validateRequest(r, stateDecoder, cookieDecoder, auditLogger)
 		if err != nil {
 			return err
 		}
-
-		auditLogger.Audit(auditevent.AuthorizeIDFromParameters, &plog.AuditParams{
-			ReqCtx:        r.Context(),
-			KeysAndValues: []any{"authorizeID", encodedState.AuthorizeID()},
-		})
 
 		idp, err := upstreamIDPs.FindUpstreamIDPByDisplayName(decodedState.UpstreamName)
 		if err != nil || idp == nil {
@@ -141,23 +135,28 @@ func authcode(r *http.Request) string {
 	return r.FormValue("code")
 }
 
-func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder) (stateparam.Encoded, *oidc.UpstreamStateParamData, error) {
+func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder, auditLogger plog.AuditLogger) (*oidc.UpstreamStateParamData, error) {
 	if r.Method != http.MethodGet {
-		return "", nil, httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET)", r.Method)
+		return nil, httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET)", r.Method)
 	}
 
 	encodedState, decodedState, err := oidc.ReadStateParamAndValidateCSRFCookie(r, cookieDecoder, stateDecoder)
 	if err != nil {
 		plog.InfoErr("state or CSRF error", err)
-		return "", nil, err
+		return nil, err
 	}
+
+	auditLogger.Audit(auditevent.AuthorizeIDFromParameters, &plog.AuditParams{
+		ReqCtx:        r.Context(),
+		KeysAndValues: []any{"authorizeID", encodedState.AuthorizeID()},
+	})
 
 	if authcode(r) == "" {
 		plog.Info("code param not found")
-		return "", nil, httperr.New(http.StatusBadRequest, errorMsgForNoCodeParam(r))
+		return nil, httperr.New(http.StatusBadRequest, errorMsgForNoCodeParam(r))
 	}
 
-	return encodedState, decodedState, nil
+	return decodedState, nil
 }
 
 func errorMsgForNoCodeParam(r *http.Request) string {

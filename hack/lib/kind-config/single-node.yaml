@@ -1,31 +1,31 @@
 #@ load("@ytt:data", "data")
-
+---
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
-  - role: control-plane
-    extraPortMappings:
-    - protocol: TCP
-      #! This same port number is hardcoded in the integration test setup
-      #! when creating a Service on a kind cluster. It is used to talk to
-      #! the supervisor app via HTTPS.
-      containerPort: 31243
-      hostPort: 12344
-      listenAddress: 127.0.0.1
-    - protocol: TCP
-      #! This same port number is hardcoded in the integration test setup
-      #! when creating a Service on a kind cluster. It is used to talk to
-      #! the Dex app.
-      containerPort: 31235
-      hostPort: 12346
-      listenAddress: 127.0.0.1
-    #@ if data.values.enable_audit_logs:
-    #! mount the local file on the control plane
-    extraMounts:
-      - hostPath: /tmp/metadata-audit-policy.yaml
-        containerPath: /etc/kubernetes/policies/audit-policy.yaml
-        readOnly: true
-    #@ end
+- role: control-plane
+  extraPortMappings:
+  - protocol: TCP
+    #! This same port number is hardcoded in the integration test setup
+    #! when creating a Service on a kind cluster. It is used to talk to
+    #! the supervisor app via HTTPS.
+    containerPort: 31243
+    hostPort: 12344
+    listenAddress: 127.0.0.1
+  - protocol: TCP
+    #! This same port number is hardcoded in the integration test setup
+    #! when creating a Service on a kind cluster. It is used to talk to
+    #! the Dex app.
+    containerPort: 31235
+    hostPort: 12346
+    listenAddress: 127.0.0.1
+  #@ if data.values.enable_audit_logs:
+  #! mount the local file on the control plane
+  extraMounts:
+  - hostPath: /tmp/metadata-audit-policy.yaml
+    containerPath: /etc/kubernetes/policies/audit-policy.yaml
+    readOnly: true
+  #@ end
 #! Apply these patches to all nodes.
 kubeadmConfigPatches:
 - |
@@ -45,20 +45,20 @@ kubeadmConfigPatches:
 - |
   kind: ClusterConfiguration
   apiServer:
-      #! enable auditing flags on the API server
-      extraArgs:
-        audit-log-path: /var/log/kubernetes/kube-apiserver-audit.log
-        audit-policy-file: /etc/kubernetes/policies/audit-policy.yaml
-      #! mount new files / directories on the control plane
-      extraVolumes:
-        - name: audit-policies
-          hostPath: /etc/kubernetes/policies
-          mountPath: /etc/kubernetes/policies
-          readOnly: true
-          pathType: "DirectoryOrCreate"
-        - name: "audit-logs"
-          hostPath: "/var/log/kubernetes"
-          mountPath: "/var/log/kubernetes"
-          readOnly: false
-          pathType: DirectoryOrCreate
+    #! enable auditing flags on the API server
+    extraArgs:
+      audit-log-path: /var/log/kubernetes/kube-apiserver-audit.log
+      audit-policy-file: /etc/kubernetes/policies/audit-policy.yaml
+    #! mount new files / directories on the control plane
+    extraVolumes:
+    - name: audit-policies
+      hostPath: /etc/kubernetes/policies
+      mountPath: /etc/kubernetes/policies
+      readOnly: true
+      pathType: "DirectoryOrCreate"
+    - name: "audit-logs"
+      hostPath: "/var/log/kubernetes"
+      mountPath: "/var/log/kubernetes"
+      readOnly: false
+      pathType: DirectoryOrCreate
 #@ end

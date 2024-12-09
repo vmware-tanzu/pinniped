@@ -1206,6 +1206,9 @@ func TestCallbackEndpoint(t *testing.T) {
 							"error_uri":         "some uri",
 						},
 					}),
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
 				}
 			},
 		},
@@ -1233,6 +1236,9 @@ func TestCallbackEndpoint(t *testing.T) {
 							"error_description": "some description",
 						},
 					}),
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
 				}
 			},
 		},
@@ -1254,6 +1260,9 @@ func TestCallbackEndpoint(t *testing.T) {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{"state": "redacted"},
+					}),
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
 					}),
 				}
 			},

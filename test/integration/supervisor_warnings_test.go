@@ -193,7 +193,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		pinnipedSession.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"} // update downstream groups
 
 		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, refreshTokenSignature))
-		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, refreshTokenSignature, storedRefreshSession))
+		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, refreshTokenSignature, "ignored", storedRefreshSession))
 
 		// remove the credential cache, which includes the cached cert, so it won't be reused and the refresh flow will be triggered.
 		err = os.Remove(credentialCachePath)
@@ -529,7 +529,7 @@ func TestSupervisorWarnings_Browser(t *testing.T) {
 		pinnipedSession.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
 
 		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, refreshTokenSignature))
-		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, refreshTokenSignature, storedRefreshSession))
+		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, refreshTokenSignature, "ignored", storedRefreshSession))
 
 		// remove the credential cache, which includes the cached cert, so it won't be reused and the refresh flow will be triggered.
 		err = os.Remove(credentialCachePath)

@@ -3201,7 +3201,7 @@ func testSupervisorLogin(
 		// Then save the mutated Secret back to Kubernetes.
 		// There is no update function, so delete and create again at the same name.
 		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
-		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
+		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, "ignored", storedRefreshSession))
 	}
 
 	// Use the refresh token to get new tokens by calling the token endpoint again.
@@ -3275,7 +3275,7 @@ func testSupervisorLogin(
 		// Then save the mutated Secret back to Kubernetes.
 		// There is no update function, so delete and create again at the same name.
 		require.NoError(t, oauthStore.DeleteRefreshTokenSession(ctx, signatureOfLatestRefreshToken))
-		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, storedRefreshSession))
+		require.NoError(t, oauthStore.CreateRefreshTokenSession(ctx, signatureOfLatestRefreshToken, "ignored", storedRefreshSession))
 
 		// Now try to perform a downstream refresh again, knowing that the corresponding upstream refresh should fail.
 		_, err = downstreamOAuth2Config.TokenSource(oidcHTTPClientContext, &oauth2.Token{RefreshToken: latestRefreshToken}).Token()

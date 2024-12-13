@@ -109,7 +109,7 @@ func TestRefreshTokenStorage(t *testing.T) {
 		RequestedAudience: nil,
 		GrantedAudience:   nil,
 	}
-	err := storage.CreateRefreshTokenSession(ctx, "fancy-signature", request)
+	err := storage.CreateRefreshTokenSession(ctx, "fancy-signature", "ignored", request)
 	require.NoError(t, err)
 	require.Equal(t, 1, storageLifetimeFuncCallCount)
 	require.Equal(t, request, storageLifetimeFuncCallRequesterArg)
@@ -172,7 +172,7 @@ func TestRefreshTokenStorageRevocation(t *testing.T) {
 		Form:    url.Values{"key": []string{"val"}},
 		Session: testutil.NewFakePinnipedSession(),
 	}
-	err := storage.CreateRefreshTokenSession(ctx, "fancy-signature", request)
+	err := storage.CreateRefreshTokenSession(ctx, "fancy-signature", "ignored", request)
 	require.NoError(t, err)
 
 	// Revoke the request ID of the session that we just created
@@ -227,12 +227,12 @@ func TestRefreshTokenStorageRevokeRefreshTokenMaybeGracePeriod(t *testing.T) {
 		Form:    url.Values{"key": []string{"val"}},
 		Session: testutil.NewFakePinnipedSession(),
 	}
-	err := storage.CreateRefreshTokenSession(ctx, "fancy-signature", request)
+	err := storage.CreateRefreshTokenSession(ctx, "fancy-signature", "ignored", request)
 	require.NoError(t, err)
 
-	// Revoke the request ID of the session that we just created. We don't support grace periods, so this
+	// Revoke the request ID of the session that we just created. This
 	// should work exactly like the regular RevokeRefreshToken() function.
-	err = storage.RevokeRefreshTokenMaybeGracePeriod(ctx, "abcd-1", "fancy-signature")
+	err = storage.RotateRefreshToken(ctx, "abcd-1", "fancy-signature")
 	require.NoError(t, err)
 
 	testutil.LogActualJSONFromCreateAction(t, client, 0) // makes it easier to update expected values when needed
@@ -306,7 +306,7 @@ func TestNilSessionRequest(t *testing.T) {
 func TestCreateWithNilRequester(t *testing.T) {
 	ctx, _, _, storage := makeTestSubject(lifetimeFunc)
 
-	err := storage.CreateRefreshTokenSession(ctx, "signature-doesnt-matter", nil)
+	err := storage.CreateRefreshTokenSession(ctx, "signature-doesnt-matter", "ignored", nil)
 	require.EqualError(t, err, "requester must be of type fosite.Request")
 }
 
@@ -317,14 +317,14 @@ func TestCreateWithWrongRequesterDataTypes(t *testing.T) {
 		Session: nil,
 		Client:  &clientregistry.Client{},
 	}
-	err := storage.CreateRefreshTokenSession(ctx, "signature-doesnt-matter", request)
+	err := storage.CreateRefreshTokenSession(ctx, "signature-doesnt-matter", "ignored", request)
 	require.EqualError(t, err, "requester's session must be of type PinnipedSession")
 
 	request = &fosite.Request{
 		Session: &psession.PinnipedSession{},
 		Client:  nil,
 	}
-	err = storage.CreateRefreshTokenSession(ctx, "signature-doesnt-matter", request)
+	err = storage.CreateRefreshTokenSession(ctx, "signature-doesnt-matter", "ignored", request)
 	require.EqualError(t, err, "requester's client must be of type clientregistry.Client")
 }
 
@@ -336,7 +336,7 @@ func TestCreateWithoutRequesterID(t *testing.T) {
 		Session: &psession.PinnipedSession{},
 		Client:  &clientregistry.Client{},
 	}
-	err := storage.CreateRefreshTokenSession(ctx, "signature-doesnt-matter", request)
+	err := storage.CreateRefreshTokenSession(ctx, "signature-doesnt-matter", "ignored", request)
 	require.NoError(t, err)
 
 	// the blank ID was filled in with an auto-generated ID

@@ -168,6 +168,20 @@ var (
 		}
 	`)
 
+	fositeInvalidRefreshTokenErrorBody = here.Doc(`
+		{
+			"error":             "invalid_grant",
+			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The refresh token is malformed or not valid."
+		}
+	`)
+
+	fositeExpiredRefreshTokenErrorBody = here.Doc(`
+		{
+			"error":             "invalid_grant",
+			"error_description": "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client. The refresh token expired."
+		}
+	`)
+
 	fositeReusedAuthCodeErrorBody = here.Doc(`
 		{
 			"error":             "invalid_grant",
@@ -3766,7 +3780,7 @@ func TestRefreshGrant(t *testing.T) {
 			refreshRequest: refreshRequestInputs{
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
-					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+					wantErrorResponseBody: fositeExpiredRefreshTokenErrorBody,
 				},
 			},
 		},
@@ -3793,7 +3807,7 @@ func TestRefreshGrant(t *testing.T) {
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
-					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+					wantErrorResponseBody: fositeInvalidRefreshTokenErrorBody,
 				},
 			},
 		},
@@ -3820,7 +3834,7 @@ func TestRefreshGrant(t *testing.T) {
 				},
 				want: tokenEndpointResponseExpectedValues{
 					wantStatus:            http.StatusBadRequest,
-					wantErrorResponseBody: fositeInvalidAuthCodeErrorBody,
+					wantErrorResponseBody: fositeInvalidRefreshTokenErrorBody,
 				},
 			},
 		},
@@ -4831,7 +4845,7 @@ func TestRefreshGrant(t *testing.T) {
 				session.Fosite = &openid.DefaultSession{}
 				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
 				require.NoError(t, err)
-				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, "ignored", firstRequester)
 				require.NoError(t, err)
 			},
 			refreshRequest: refreshRequestInputs{
@@ -4869,7 +4883,7 @@ func TestRefreshGrant(t *testing.T) {
 				delete(session.Fosite.Claims.Extra, "groups")
 				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
 				require.NoError(t, err)
-				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, "ignored", firstRequester)
 				require.NoError(t, err)
 			},
 			refreshRequest: refreshRequestInputs{
@@ -4907,7 +4921,7 @@ func TestRefreshGrant(t *testing.T) {
 				session.Custom.Username = ""
 				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
 				require.NoError(t, err)
-				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, "ignored", firstRequester)
 				require.NoError(t, err)
 			},
 			refreshRequest: refreshRequestInputs{
@@ -4989,7 +5003,7 @@ func TestRefreshGrant(t *testing.T) {
 				session.Fosite.Claims = fositeSessionClaims
 				err = oauthStore.DeleteRefreshTokenSession(context.Background(), refreshTokenSignature)
 				require.NoError(t, err)
-				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, firstRequester)
+				err = oauthStore.CreateRefreshTokenSession(context.Background(), refreshTokenSignature, "ignored", firstRequester)
 				require.NoError(t, err)
 			},
 			refreshRequest: refreshRequestInputs{

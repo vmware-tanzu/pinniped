@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package storage
@@ -39,7 +39,7 @@ func (NullStorage) RevokeRefreshToken(_ context.Context, _ string) error {
 	return errNullStorageNotImplemented
 }
 
-func (NullStorage) RevokeRefreshTokenMaybeGracePeriod(_ context.Context, _ string, _ string) error {
+func (NullStorage) RotateRefreshToken(_ context.Context, _ string, _ string) error {
 	return errNullStorageNotImplemented
 }
 
@@ -47,7 +47,7 @@ func (NullStorage) RevokeAccessToken(_ context.Context, _ string) error {
 	return errNullStorageNotImplemented
 }
 
-func (NullStorage) CreateRefreshTokenSession(_ context.Context, _ string, _ fosite.Requester) (err error) {
+func (NullStorage) CreateRefreshTokenSession(_ context.Context, _ string, _ string, _ fosite.Requester) (err error) {
 	return nil
 }
 

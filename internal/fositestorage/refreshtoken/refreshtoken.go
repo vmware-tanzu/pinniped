@@ -42,7 +42,7 @@ const (
 type RevocationStorage interface {
 	fositeoauth2.RefreshTokenStorage
 	RevokeRefreshToken(ctx context.Context, requestID string) error
-	RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error
+	RotateRefreshToken(ctx context.Context, requestID string, refreshTokenSignature string) error
 }
 
 var _ RevocationStorage = &refreshTokenStorage{}
@@ -82,12 +82,12 @@ func (a *refreshTokenStorage) RevokeRefreshToken(ctx context.Context, requestID 
 	return a.storage.DeleteByLabel(ctx, fositestorage.StorageRequestIDLabelName, requestID)
 }
 
-func (a *refreshTokenStorage) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, _signature string) error {
-	// We don't support a grace period, so always call the regular RevokeRefreshToken().
+func (a *refreshTokenStorage) RotateRefreshToken(ctx context.Context, requestID string, _refreshTokenSignature string) error {
+	// Rotation is called to revoke an old token during a refresh, so we can always call RevokeRefreshToken().
 	return a.RevokeRefreshToken(ctx, requestID)
 }
 
-func (a *refreshTokenStorage) CreateRefreshTokenSession(ctx context.Context, signature string, requester fosite.Requester) error {
+func (a *refreshTokenStorage) CreateRefreshTokenSession(ctx context.Context, signature string, _accessTokenSignature string, requester fosite.Requester) error {
 	request, err := fositestorage.ValidateAndExtractAuthorizeRequest(requester)
 	if err != nil {
 		return err

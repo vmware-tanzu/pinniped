@@ -158,7 +158,7 @@ func (k KubeStorage) RevokeAccessToken(ctx context.Context, requestID string) er
 //
 // These are keyed by the signature of the refresh token.
 //
-// Fosite will create these in the token endpoint whenever it wants to hand out an refresh token, including the original
+// Fosite will create these in the token endpoint whenever it wants to hand out a refresh token, including the original
 // authcode redemption and also during refresh. Refresh tokens are only handed out when the user requested the
 // offline_access scope on the original authorization request.
 //
@@ -169,8 +169,8 @@ func (k KubeStorage) RevokeAccessToken(ctx context.Context, requestID string) er
 // refresh token will never be deleted.
 //
 
-func (k KubeStorage) CreateRefreshTokenSession(ctx context.Context, signatureOfRefreshToken string, request fosite.Requester) (err error) {
-	return k.refreshTokenStorage.CreateRefreshTokenSession(ctx, signatureOfRefreshToken, request)
+func (k KubeStorage) CreateRefreshTokenSession(ctx context.Context, signatureOfRefreshToken string, accessTokenSignature string, request fosite.Requester) (err error) {
+	return k.refreshTokenStorage.CreateRefreshTokenSession(ctx, signatureOfRefreshToken, accessTokenSignature, request)
 }
 
 func (k KubeStorage) GetRefreshTokenSession(ctx context.Context, signatureOfRefreshToken string, session fosite.Session) (request fosite.Requester, err error) {
@@ -185,8 +185,14 @@ func (k KubeStorage) RevokeRefreshToken(ctx context.Context, requestID string) e
 	return k.refreshTokenStorage.RevokeRefreshToken(ctx, requestID)
 }
 
-func (k KubeStorage) RevokeRefreshTokenMaybeGracePeriod(ctx context.Context, requestID string, signature string) error {
-	return k.refreshTokenStorage.RevokeRefreshTokenMaybeGracePeriod(ctx, requestID, signature)
+func (k KubeStorage) RotateRefreshToken(ctx context.Context, requestID string, _refreshTokenSignature string) error {
+	// RotateRefreshToken was added in fosite v0.49.0, replacing RevokeRefreshTokenMaybeGracePeriod.
+	// Confusingly, its job is to both revoke the old refresh token and also revoke the old access token.
+	// See their sample storage implementation here: https://github.com/ory/fosite/blob/v0.49.0/storage/memory.go#L497-L504
+	if err := k.refreshTokenStorage.RevokeRefreshToken(ctx, requestID); err != nil {
+		return err
+	}
+	return k.accessTokenStorage.RevokeAccessToken(ctx, requestID)
 }
 
 //

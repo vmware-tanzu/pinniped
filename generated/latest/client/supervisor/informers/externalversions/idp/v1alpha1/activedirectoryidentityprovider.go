@@ -6,13 +6,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	supervisoridpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	versioned "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	internalinterfaces "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/internalinterfaces"
-	v1alpha1 "go.pinniped.dev/generated/latest/client/supervisor/listers/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/client/supervisor/listers/idp/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -23,7 +23,7 @@ import (
 // ActiveDirectoryIdentityProviders.
 type ActiveDirectoryIdentityProviderInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.ActiveDirectoryIdentityProviderLister
+	Lister() idpv1alpha1.ActiveDirectoryIdentityProviderLister
 }
 
 type activeDirectoryIdentityProviderInformer struct {
@@ -58,7 +58,7 @@ func NewFilteredActiveDirectoryIdentityProviderInformer(client versioned.Interfa
 				return client.IDPV1alpha1().ActiveDirectoryIdentityProviders(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&idpv1alpha1.ActiveDirectoryIdentityProvider{},
+		&supervisoridpv1alpha1.ActiveDirectoryIdentityProvider{},
 		resyncPeriod,
 		indexers,
 	)
@@ -69,9 +69,9 @@ func (f *activeDirectoryIdentityProviderInformer) defaultInformer(client version
 }
 
 func (f *activeDirectoryIdentityProviderInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&idpv1alpha1.ActiveDirectoryIdentityProvider{}, f.defaultInformer)
+	return f.factory.InformerFor(&supervisoridpv1alpha1.ActiveDirectoryIdentityProvider{}, f.defaultInformer)
 }
 
-func (f *activeDirectoryIdentityProviderInformer) Lister() v1alpha1.ActiveDirectoryIdentityProviderLister {
-	return v1alpha1.NewActiveDirectoryIdentityProviderLister(f.Informer().GetIndexer())
+func (f *activeDirectoryIdentityProviderInformer) Lister() idpv1alpha1.ActiveDirectoryIdentityProviderLister {
+	return idpv1alpha1.NewActiveDirectoryIdentityProviderLister(f.Informer().GetIndexer())
 }

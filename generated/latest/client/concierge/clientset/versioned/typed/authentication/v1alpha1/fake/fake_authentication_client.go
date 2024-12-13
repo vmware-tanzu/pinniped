@@ -16,11 +16,11 @@ type FakeAuthenticationV1alpha1 struct {
 }
 
 func (c *FakeAuthenticationV1alpha1) JWTAuthenticators() v1alpha1.JWTAuthenticatorInterface {
-	return &FakeJWTAuthenticators{c}
+	return newFakeJWTAuthenticators(c)
 }
 
 func (c *FakeAuthenticationV1alpha1) WebhookAuthenticators() v1alpha1.WebhookAuthenticatorInterface {
-	return &FakeWebhookAuthenticators{c}
+	return newFakeWebhookAuthenticators(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

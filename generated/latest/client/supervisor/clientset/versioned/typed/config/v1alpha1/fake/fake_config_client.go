@@ -16,11 +16,11 @@ type FakeConfigV1alpha1 struct {
 }
 
 func (c *FakeConfigV1alpha1) FederationDomains(namespace string) v1alpha1.FederationDomainInterface {
-	return &FakeFederationDomains{c, namespace}
+	return newFakeFederationDomains(c, namespace)
 }
 
 func (c *FakeConfigV1alpha1) OIDCClients(namespace string) v1alpha1.OIDCClientInterface {
-	return &FakeOIDCClients{c, namespace}
+	return newFakeOIDCClients(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

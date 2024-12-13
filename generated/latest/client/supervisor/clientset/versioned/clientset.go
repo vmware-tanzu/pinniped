@@ -6,8 +6,8 @@
 package versioned
 
 import (
-	"fmt"
-	"net/http"
+	fmt "fmt"
+	http "net/http"
 
 	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/clientsecret/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/config/v1alpha1"

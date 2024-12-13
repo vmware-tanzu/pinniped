@@ -6,8 +6,8 @@
 package versioned
 
 import (
-	"fmt"
-	"net/http"
+	fmt "fmt"
+	http "net/http"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/typed/authentication/v1alpha1"
 	configv1alpha1 "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/typed/config/v1alpha1"

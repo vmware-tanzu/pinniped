@@ -16,7 +16,7 @@ type FakeClientsecretV1alpha1 struct {
 }
 
 func (c *FakeClientsecretV1alpha1) OIDCClientSecretRequests(namespace string) v1alpha1.OIDCClientSecretRequestInterface {
-	return &FakeOIDCClientSecretRequests{c, namespace}
+	return newFakeOIDCClientSecretRequests(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

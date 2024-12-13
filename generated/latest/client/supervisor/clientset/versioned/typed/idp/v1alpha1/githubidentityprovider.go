@@ -6,9 +6,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	scheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -24,33 +24,34 @@ type GitHubIdentityProvidersGetter interface {
 
 // GitHubIdentityProviderInterface has methods to work with GitHubIdentityProvider resources.
 type GitHubIdentityProviderInterface interface {
-	Create(ctx context.Context, gitHubIdentityProvider *v1alpha1.GitHubIdentityProvider, opts v1.CreateOptions) (*v1alpha1.GitHubIdentityProvider, error)
-	Update(ctx context.Context, gitHubIdentityProvider *v1alpha1.GitHubIdentityProvider, opts v1.UpdateOptions) (*v1alpha1.GitHubIdentityProvider, error)
+	Create(ctx context.Context, gitHubIdentityProvider *idpv1alpha1.GitHubIdentityProvider, opts v1.CreateOptions) (*idpv1alpha1.GitHubIdentityProvider, error)
+	Update(ctx context.Context, gitHubIdentityProvider *idpv1alpha1.GitHubIdentityProvider, opts v1.UpdateOptions) (*idpv1alpha1.GitHubIdentityProvider, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, gitHubIdentityProvider *v1alpha1.GitHubIdentityProvider, opts v1.UpdateOptions) (*v1alpha1.GitHubIdentityProvider, error)
+	UpdateStatus(ctx context.Context, gitHubIdentityProvider *idpv1alpha1.GitHubIdentityProvider, opts v1.UpdateOptions) (*idpv1alpha1.GitHubIdentityProvider, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.GitHubIdentityProvider, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.GitHubIdentityProviderList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*idpv1alpha1.GitHubIdentityProvider, error)
+	List(ctx context.Context, opts v1.ListOptions) (*idpv1alpha1.GitHubIdentityProviderList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.GitHubIdentityProvider, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *idpv1alpha1.GitHubIdentityProvider, err error)
 	GitHubIdentityProviderExpansion
 }
 
 // gitHubIdentityProviders implements GitHubIdentityProviderInterface
 type gitHubIdentityProviders struct {
-	*gentype.ClientWithList[*v1alpha1.GitHubIdentityProvider, *v1alpha1.GitHubIdentityProviderList]
+	*gentype.ClientWithList[*idpv1alpha1.GitHubIdentityProvider, *idpv1alpha1.GitHubIdentityProviderList]
 }
 
 // newGitHubIdentityProviders returns a GitHubIdentityProviders
 func newGitHubIdentityProviders(c *IDPV1alpha1Client, namespace string) *gitHubIdentityProviders {
 	return &gitHubIdentityProviders{
-		gentype.NewClientWithList[*v1alpha1.GitHubIdentityProvider, *v1alpha1.GitHubIdentityProviderList](
+		gentype.NewClientWithList[*idpv1alpha1.GitHubIdentityProvider, *idpv1alpha1.GitHubIdentityProviderList](
 			"githubidentityproviders",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.GitHubIdentityProvider { return &v1alpha1.GitHubIdentityProvider{} },
-			func() *v1alpha1.GitHubIdentityProviderList { return &v1alpha1.GitHubIdentityProviderList{} }),
+			func() *idpv1alpha1.GitHubIdentityProvider { return &idpv1alpha1.GitHubIdentityProvider{} },
+			func() *idpv1alpha1.GitHubIdentityProviderList { return &idpv1alpha1.GitHubIdentityProviderList{} },
+		),
 	}
 }

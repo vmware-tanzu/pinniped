@@ -16,19 +16,19 @@ type FakeIDPV1alpha1 struct {
 }
 
 func (c *FakeIDPV1alpha1) ActiveDirectoryIdentityProviders(namespace string) v1alpha1.ActiveDirectoryIdentityProviderInterface {
-	return &FakeActiveDirectoryIdentityProviders{c, namespace}
+	return newFakeActiveDirectoryIdentityProviders(c, namespace)
 }
 
 func (c *FakeIDPV1alpha1) GitHubIdentityProviders(namespace string) v1alpha1.GitHubIdentityProviderInterface {
-	return &FakeGitHubIdentityProviders{c, namespace}
+	return newFakeGitHubIdentityProviders(c, namespace)
 }
 
 func (c *FakeIDPV1alpha1) LDAPIdentityProviders(namespace string) v1alpha1.LDAPIdentityProviderInterface {
-	return &FakeLDAPIdentityProviders{c, namespace}
+	return newFakeLDAPIdentityProviders(c, namespace)
 }
 
 func (c *FakeIDPV1alpha1) OIDCIdentityProviders(namespace string) v1alpha1.OIDCIdentityProviderInterface {
-	return &FakeOIDCIdentityProviders{c, namespace}
+	return newFakeOIDCIdentityProviders(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

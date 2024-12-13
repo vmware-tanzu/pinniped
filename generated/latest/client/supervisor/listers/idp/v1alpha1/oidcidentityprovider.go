@@ -6,10 +6,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // OIDCIdentityProviderLister helps list OIDCIdentityProviders.
@@ -17,7 +17,7 @@ import (
 type OIDCIdentityProviderLister interface {
 	// List lists all OIDCIdentityProviders in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.OIDCIdentityProvider, err error)
+	List(selector labels.Selector) (ret []*idpv1alpha1.OIDCIdentityProvider, err error)
 	// OIDCIdentityProviders returns an object that can list and get OIDCIdentityProviders.
 	OIDCIdentityProviders(namespace string) OIDCIdentityProviderNamespaceLister
 	OIDCIdentityProviderListerExpansion
@@ -25,17 +25,17 @@ type OIDCIdentityProviderLister interface {
 
 // oIDCIdentityProviderLister implements the OIDCIdentityProviderLister interface.
 type oIDCIdentityProviderLister struct {
-	listers.ResourceIndexer[*v1alpha1.OIDCIdentityProvider]
+	listers.ResourceIndexer[*idpv1alpha1.OIDCIdentityProvider]
 }
 
 // NewOIDCIdentityProviderLister returns a new OIDCIdentityProviderLister.
 func NewOIDCIdentityProviderLister(indexer cache.Indexer) OIDCIdentityProviderLister {
-	return &oIDCIdentityProviderLister{listers.New[*v1alpha1.OIDCIdentityProvider](indexer, v1alpha1.Resource("oidcidentityprovider"))}
+	return &oIDCIdentityProviderLister{listers.New[*idpv1alpha1.OIDCIdentityProvider](indexer, idpv1alpha1.Resource("oidcidentityprovider"))}
 }
 
 // OIDCIdentityProviders returns an object that can list and get OIDCIdentityProviders.
 func (s *oIDCIdentityProviderLister) OIDCIdentityProviders(namespace string) OIDCIdentityProviderNamespaceLister {
-	return oIDCIdentityProviderNamespaceLister{listers.NewNamespaced[*v1alpha1.OIDCIdentityProvider](s.ResourceIndexer, namespace)}
+	return oIDCIdentityProviderNamespaceLister{listers.NewNamespaced[*idpv1alpha1.OIDCIdentityProvider](s.ResourceIndexer, namespace)}
 }
 
 // OIDCIdentityProviderNamespaceLister helps list and get OIDCIdentityProviders.
@@ -43,15 +43,15 @@ func (s *oIDCIdentityProviderLister) OIDCIdentityProviders(namespace string) OID
 type OIDCIdentityProviderNamespaceLister interface {
 	// List lists all OIDCIdentityProviders in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.OIDCIdentityProvider, err error)
+	List(selector labels.Selector) (ret []*idpv1alpha1.OIDCIdentityProvider, err error)
 	// Get retrieves the OIDCIdentityProvider from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.OIDCIdentityProvider, error)
+	Get(name string) (*idpv1alpha1.OIDCIdentityProvider, error)
 	OIDCIdentityProviderNamespaceListerExpansion
 }
 
 // oIDCIdentityProviderNamespaceLister implements the OIDCIdentityProviderNamespaceLister
 // interface.
 type oIDCIdentityProviderNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.OIDCIdentityProvider]
+	listers.ResourceIndexer[*idpv1alpha1.OIDCIdentityProvider]
 }

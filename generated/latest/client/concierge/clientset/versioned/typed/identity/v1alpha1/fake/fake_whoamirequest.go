@@ -6,29 +6,26 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	testing "k8s.io/client-go/testing"
+	identityv1alpha1 "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/typed/identity/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeWhoAmIRequests implements WhoAmIRequestInterface
-type FakeWhoAmIRequests struct {
+// fakeWhoAmIRequests implements WhoAmIRequestInterface
+type fakeWhoAmIRequests struct {
+	*gentype.FakeClient[*v1alpha1.WhoAmIRequest]
 	Fake *FakeIdentityV1alpha1
 }
 
-var whoamirequestsResource = v1alpha1.SchemeGroupVersion.WithResource("whoamirequests")
-
-var whoamirequestsKind = v1alpha1.SchemeGroupVersion.WithKind("WhoAmIRequest")
-
-// Create takes the representation of a whoAmIRequest and creates it.  Returns the server's representation of the whoAmIRequest, and an error, if there is any.
-func (c *FakeWhoAmIRequests) Create(ctx context.Context, whoAmIRequest *v1alpha1.WhoAmIRequest, opts v1.CreateOptions) (result *v1alpha1.WhoAmIRequest, err error) {
-	emptyResult := &v1alpha1.WhoAmIRequest{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(whoamirequestsResource, whoAmIRequest, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeWhoAmIRequests(fake *FakeIdentityV1alpha1) identityv1alpha1.WhoAmIRequestInterface {
+	return &fakeWhoAmIRequests{
+		gentype.NewFakeClient[*v1alpha1.WhoAmIRequest](
+			fake.Fake,
+			"",
+			v1alpha1.SchemeGroupVersion.WithResource("whoamirequests"),
+			v1alpha1.SchemeGroupVersion.WithKind("WhoAmIRequest"),
+			func() *v1alpha1.WhoAmIRequest { return &v1alpha1.WhoAmIRequest{} },
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.WhoAmIRequest), err
 }

@@ -6,7 +6,7 @@
 package externalversions
 
 import (
-	"fmt"
+	fmt "fmt"
 
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"

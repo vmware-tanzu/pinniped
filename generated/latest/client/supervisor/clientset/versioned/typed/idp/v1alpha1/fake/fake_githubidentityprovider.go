@@ -6,129 +6,34 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/idp/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeGitHubIdentityProviders implements GitHubIdentityProviderInterface
-type FakeGitHubIdentityProviders struct {
+// fakeGitHubIdentityProviders implements GitHubIdentityProviderInterface
+type fakeGitHubIdentityProviders struct {
+	*gentype.FakeClientWithList[*v1alpha1.GitHubIdentityProvider, *v1alpha1.GitHubIdentityProviderList]
 	Fake *FakeIDPV1alpha1
-	ns   string
 }
 
-var githubidentityprovidersResource = v1alpha1.SchemeGroupVersion.WithResource("githubidentityproviders")
-
-var githubidentityprovidersKind = v1alpha1.SchemeGroupVersion.WithKind("GitHubIdentityProvider")
-
-// Get takes name of the gitHubIdentityProvider, and returns the corresponding gitHubIdentityProvider object, and an error if there is any.
-func (c *FakeGitHubIdentityProviders) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.GitHubIdentityProvider, err error) {
-	emptyResult := &v1alpha1.GitHubIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(githubidentityprovidersResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeGitHubIdentityProviders(fake *FakeIDPV1alpha1, namespace string) idpv1alpha1.GitHubIdentityProviderInterface {
+	return &fakeGitHubIdentityProviders{
+		gentype.NewFakeClientWithList[*v1alpha1.GitHubIdentityProvider, *v1alpha1.GitHubIdentityProviderList](
+			fake.Fake,
+			namespace,
+			v1alpha1.SchemeGroupVersion.WithResource("githubidentityproviders"),
+			v1alpha1.SchemeGroupVersion.WithKind("GitHubIdentityProvider"),
+			func() *v1alpha1.GitHubIdentityProvider { return &v1alpha1.GitHubIdentityProvider{} },
+			func() *v1alpha1.GitHubIdentityProviderList { return &v1alpha1.GitHubIdentityProviderList{} },
+			func(dst, src *v1alpha1.GitHubIdentityProviderList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.GitHubIdentityProviderList) []*v1alpha1.GitHubIdentityProvider {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.GitHubIdentityProviderList, items []*v1alpha1.GitHubIdentityProvider) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.GitHubIdentityProvider), err
-}
-
-// List takes label and field selectors, and returns the list of GitHubIdentityProviders that match those selectors.
-func (c *FakeGitHubIdentityProviders) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.GitHubIdentityProviderList, err error) {
-	emptyResult := &v1alpha1.GitHubIdentityProviderList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(githubidentityprovidersResource, githubidentityprovidersKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.GitHubIdentityProviderList{ListMeta: obj.(*v1alpha1.GitHubIdentityProviderList).ListMeta}
-	for _, item := range obj.(*v1alpha1.GitHubIdentityProviderList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested gitHubIdentityProviders.
-func (c *FakeGitHubIdentityProviders) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(githubidentityprovidersResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a gitHubIdentityProvider and creates it.  Returns the server's representation of the gitHubIdentityProvider, and an error, if there is any.
-func (c *FakeGitHubIdentityProviders) Create(ctx context.Context, gitHubIdentityProvider *v1alpha1.GitHubIdentityProvider, opts v1.CreateOptions) (result *v1alpha1.GitHubIdentityProvider, err error) {
-	emptyResult := &v1alpha1.GitHubIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateActionWithOptions(githubidentityprovidersResource, c.ns, gitHubIdentityProvider, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.GitHubIdentityProvider), err
-}
-
-// Update takes the representation of a gitHubIdentityProvider and updates it. Returns the server's representation of the gitHubIdentityProvider, and an error, if there is any.
-func (c *FakeGitHubIdentityProviders) Update(ctx context.Context, gitHubIdentityProvider *v1alpha1.GitHubIdentityProvider, opts v1.UpdateOptions) (result *v1alpha1.GitHubIdentityProvider, err error) {
-	emptyResult := &v1alpha1.GitHubIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateActionWithOptions(githubidentityprovidersResource, c.ns, gitHubIdentityProvider, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.GitHubIdentityProvider), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeGitHubIdentityProviders) UpdateStatus(ctx context.Context, gitHubIdentityProvider *v1alpha1.GitHubIdentityProvider, opts v1.UpdateOptions) (result *v1alpha1.GitHubIdentityProvider, err error) {
-	emptyResult := &v1alpha1.GitHubIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceActionWithOptions(githubidentityprovidersResource, "status", c.ns, gitHubIdentityProvider, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.GitHubIdentityProvider), err
-}
-
-// Delete takes name of the gitHubIdentityProvider and deletes it. Returns an error if one occurs.
-func (c *FakeGitHubIdentityProviders) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(githubidentityprovidersResource, c.ns, name, opts), &v1alpha1.GitHubIdentityProvider{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeGitHubIdentityProviders) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionActionWithOptions(githubidentityprovidersResource, c.ns, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.GitHubIdentityProviderList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched gitHubIdentityProvider.
-func (c *FakeGitHubIdentityProviders) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.GitHubIdentityProvider, err error) {
-	emptyResult := &v1alpha1.GitHubIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceActionWithOptions(githubidentityprovidersResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.GitHubIdentityProvider), err
 }

@@ -242,6 +242,16 @@ resources:
       password: ((ci-ghcr-pusher-token))
       tag: latest
 
+  - name: k8s-code-generator-1.32-image-ghcr
+    type: registry-image
+    icon: docker
+    <<: *check-every-for-image
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.32
+      username: ((ci-ghcr-pusher-username))
+      password: ((ci-ghcr-pusher-token))
+      tag: latest
+
   - name: k8s-code-generator-dockerfile
     type: git
     icon: github
@@ -794,7 +804,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.29.11
+            BUILD_ARG_K8S_PKG_VERSION: 0.29.12
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
@@ -830,7 +840,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.30.7
+            BUILD_ARG_K8S_PKG_VERSION: 0.30.8
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
@@ -866,7 +876,7 @@ jobs:
             - path: cache
           params:
             CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
-            BUILD_ARG_K8S_PKG_VERSION: 0.31.3
+            BUILD_ARG_K8S_PKG_VERSION: 0.31.4
             <<: *codegen-versions
             OUTPUT_OCI: true # needed for building multi-arch images
             IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
@@ -875,6 +885,42 @@ jobs:
           format: oci # needed for multi-arch images
         params:
           image: image/image # this is a directory for OCI (multi-arch images)
+
+  - name: build-k8s-code-generator-1.32
+    public: true # all logs are publicly visible
+    serial: true
+    plan:
+    - get: k8s-code-generator-dockerfile
+      trigger: true
+    - get: daily
+      trigger: true
+    - task: build-image
+      privileged: true
+      config:
+        platform: linux
+        image_resource:
+          type: registry-image
+          source:
+            repository: concourse/oci-build-task
+        inputs:
+        - name: k8s-code-generator-dockerfile
+        outputs:
+        - name: image
+        run:
+          path: build
+        caches:
+        - path: cache
+        params:
+          CONTEXT: k8s-code-generator-dockerfile/dockerfiles/k8s-code-generator
+          BUILD_ARG_K8S_PKG_VERSION: 0.32.0
+          <<: *codegen-versions
+          OUTPUT_OCI: true # needed for building multi-arch images
+          IMAGE_PLATFORM: "linux/amd64,linux/arm64" # build a multi-arch images which includes these platforms
+    - put: k8s-code-generator-1.32-image-ghcr
+      get_params:
+        format: oci # needed for multi-arch images
+      params:
+        image: image/image # this is a directory for OCI (multi-arch images)
 
   - name: build-test-forward-proxy
     public: true # all logs are publicly visible

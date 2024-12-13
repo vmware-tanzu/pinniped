@@ -10,7 +10,7 @@ meta:
   trivy_ignores: &trivy_ignores
     IGNORE_VULNERABILITY_IDS: |
       # Medium CVE in gopkg.in/square/go-jose.v2. That project is archived, so they will never fix this.
-      # That is an indirect dependency of our project, which we inherit from our direct dep of k8s.io/apiserver@v0.31.2.
+      # That is an indirect dependency of our project, which we inherit from our direct dep of k8s.io/apiserver@v0.32.0.
       # However, the Kubernetes maintainers say that k8s is not impacted and they won't upgrade to v3.
       # See https://github.com/kubernetes/kubernetes/issues/128039. So we will ignore this for now.
       CVE-2024-28180
@@ -100,7 +100,9 @@ meta:
   kube_version_v1-30-x: &kube_version_v1-30-x
     KUBE_VERSION: v1.30.6
   kube_version_v1-31-x: &kube_version_v1-31-x
-    KUBE_VERSION: v1.31.2
+    KUBE_VERSION: v1.31.4
+  kube_version_v1-32-x: &kube_version_v1-32-x
+    KUBE_VERSION: v1.32.0
   kube_version_k8s-main: &kube_version_k8s-main
     KUBE_VERSION: "k8s-main"
     KIND_NODE_IMAGE: "ghcr.io/pinniped-ci-bot/kind-node-image:latest"
@@ -110,7 +112,7 @@ meta:
   oldest_kind_kube_version: &oldest_kind_kube_version
     <<: *kube_version_v1-21-x
   latest_kind_kube_version: &latest_kind_kube_version
-    <<: *kube_version_v1-31-x
+    <<: *kube_version_v1-32-x
 
   okta_integration_env_vars: &okta_integration_env_vars
     OKTA_CLI_CALLBACK: ((okta-cli-callback))
@@ -383,6 +385,15 @@ resources:
       username: ((ci-ghcr-puller-username))
       password: ((ci-ghcr-puller-token))
 
+  - name: k8s-code-generator-1.32-image
+    type: registry-image
+    icon: docker
+    check_every: 3m
+    source:
+      repository: ((ci-ghcr-registry))/k8s-code-generator-1.32
+      username: ((ci-ghcr-puller-username))
+      password: ((ci-ghcr-puller-token))
+
   - name: kind-release
     type: github-release
     check_every: 10m
@@ -492,6 +503,7 @@ jobs:
           - get: k8s-code-generator-1.29-image
           - get: k8s-code-generator-1.30-image
           - get: k8s-code-generator-1.31-image
+          - get: k8s-code-generator-1.32-image
       - in_parallel:
           - task: verify-go-mod-tidy
             timeout: 20m
@@ -541,6 +553,12 @@ jobs:
             image: k8s-code-generator-1.31-image
             params:
               KUBE_MINOR_VERSION: "1.31"
+          - task: codegen-1.32
+            timeout: 20m
+            file: pinniped-ci/pipelines/shared-tasks/run-verify-codegen/task.yml
+            image: k8s-code-generator-1.32-image
+            params:
+              KUBE_MINOR_VERSION: "1.32"
 
   - name: unit-test
     public: true # all logs are publicly visible
@@ -1901,7 +1919,7 @@ jobs:
         params:
           <<: *gcp_account_params
 
-  # Run the changed-api-group test on the oldest and the newest versions of Kubernetes that we support to give
+  # Run the changed-api-group test on the oldest and the latest versions of Kubernetes that we support to give
   # us confidence that the middleware code works for versions within that range, without needing to pay the
   # cost of running it on every version within the range.
   - name: integration-test-changed-api-group-oldest
@@ -1961,7 +1979,7 @@ jobs:
         params:
           <<: *gcp_account_params
 
-  # Run the changed-api-group test on the oldest and the newest versions of Kubernetes that we support to give
+  # Run the changed-api-group test on the oldest and the latest versions of Kubernetes that we support to give
   # us confidence that the middleware code works for versions within that range, without needing to pay the
   # cost of running it on every version within the range.
   - name: integration-test-changed-api-group-latest
@@ -2651,7 +2669,8 @@ jobs:
               params:
                 <<: *aws_account_params
 
-  - name: integration-test-eks-newest
+  - name: integration-test-eks-latest
+    old_name: integration-test-eks-newest
     public: true # all logs are publicly visible
     serial: true
     plan:

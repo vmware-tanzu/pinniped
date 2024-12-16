@@ -6,29 +6,26 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	testing "k8s.io/client-go/testing"
+	loginv1alpha1 "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/typed/login/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeTokenCredentialRequests implements TokenCredentialRequestInterface
-type FakeTokenCredentialRequests struct {
+// fakeTokenCredentialRequests implements TokenCredentialRequestInterface
+type fakeTokenCredentialRequests struct {
+	*gentype.FakeClient[*v1alpha1.TokenCredentialRequest]
 	Fake *FakeLoginV1alpha1
 }
 
-var tokencredentialrequestsResource = v1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests")
-
-var tokencredentialrequestsKind = v1alpha1.SchemeGroupVersion.WithKind("TokenCredentialRequest")
-
-// Create takes the representation of a tokenCredentialRequest and creates it.  Returns the server's representation of the tokenCredentialRequest, and an error, if there is any.
-func (c *FakeTokenCredentialRequests) Create(ctx context.Context, tokenCredentialRequest *v1alpha1.TokenCredentialRequest, opts v1.CreateOptions) (result *v1alpha1.TokenCredentialRequest, err error) {
-	emptyResult := &v1alpha1.TokenCredentialRequest{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(tokencredentialrequestsResource, tokenCredentialRequest, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeTokenCredentialRequests(fake *FakeLoginV1alpha1) loginv1alpha1.TokenCredentialRequestInterface {
+	return &fakeTokenCredentialRequests{
+		gentype.NewFakeClient[*v1alpha1.TokenCredentialRequest](
+			fake.Fake,
+			"",
+			v1alpha1.SchemeGroupVersion.WithResource("tokencredentialrequests"),
+			v1alpha1.SchemeGroupVersion.WithKind("TokenCredentialRequest"),
+			func() *v1alpha1.TokenCredentialRequest { return &v1alpha1.TokenCredentialRequest{} },
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.TokenCredentialRequest), err
 }

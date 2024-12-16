@@ -6,9 +6,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
+	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	scheme "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
@@ -22,23 +22,24 @@ type WhoAmIRequestsGetter interface {
 
 // WhoAmIRequestInterface has methods to work with WhoAmIRequest resources.
 type WhoAmIRequestInterface interface {
-	Create(ctx context.Context, whoAmIRequest *v1alpha1.WhoAmIRequest, opts v1.CreateOptions) (*v1alpha1.WhoAmIRequest, error)
+	Create(ctx context.Context, whoAmIRequest *identityv1alpha1.WhoAmIRequest, opts v1.CreateOptions) (*identityv1alpha1.WhoAmIRequest, error)
 	WhoAmIRequestExpansion
 }
 
 // whoAmIRequests implements WhoAmIRequestInterface
 type whoAmIRequests struct {
-	*gentype.Client[*v1alpha1.WhoAmIRequest]
+	*gentype.Client[*identityv1alpha1.WhoAmIRequest]
 }
 
 // newWhoAmIRequests returns a WhoAmIRequests
 func newWhoAmIRequests(c *IdentityV1alpha1Client) *whoAmIRequests {
 	return &whoAmIRequests{
-		gentype.NewClient[*v1alpha1.WhoAmIRequest](
+		gentype.NewClient[*identityv1alpha1.WhoAmIRequest](
 			"whoamirequests",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha1.WhoAmIRequest { return &v1alpha1.WhoAmIRequest{} }),
+			func() *identityv1alpha1.WhoAmIRequest { return &identityv1alpha1.WhoAmIRequest{} },
+		),
 	}
 }

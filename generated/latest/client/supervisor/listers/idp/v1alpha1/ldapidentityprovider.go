@@ -6,10 +6,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // LDAPIdentityProviderLister helps list LDAPIdentityProviders.
@@ -17,7 +17,7 @@ import (
 type LDAPIdentityProviderLister interface {
 	// List lists all LDAPIdentityProviders in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.LDAPIdentityProvider, err error)
+	List(selector labels.Selector) (ret []*idpv1alpha1.LDAPIdentityProvider, err error)
 	// LDAPIdentityProviders returns an object that can list and get LDAPIdentityProviders.
 	LDAPIdentityProviders(namespace string) LDAPIdentityProviderNamespaceLister
 	LDAPIdentityProviderListerExpansion
@@ -25,17 +25,17 @@ type LDAPIdentityProviderLister interface {
 
 // lDAPIdentityProviderLister implements the LDAPIdentityProviderLister interface.
 type lDAPIdentityProviderLister struct {
-	listers.ResourceIndexer[*v1alpha1.LDAPIdentityProvider]
+	listers.ResourceIndexer[*idpv1alpha1.LDAPIdentityProvider]
 }
 
 // NewLDAPIdentityProviderLister returns a new LDAPIdentityProviderLister.
 func NewLDAPIdentityProviderLister(indexer cache.Indexer) LDAPIdentityProviderLister {
-	return &lDAPIdentityProviderLister{listers.New[*v1alpha1.LDAPIdentityProvider](indexer, v1alpha1.Resource("ldapidentityprovider"))}
+	return &lDAPIdentityProviderLister{listers.New[*idpv1alpha1.LDAPIdentityProvider](indexer, idpv1alpha1.Resource("ldapidentityprovider"))}
 }
 
 // LDAPIdentityProviders returns an object that can list and get LDAPIdentityProviders.
 func (s *lDAPIdentityProviderLister) LDAPIdentityProviders(namespace string) LDAPIdentityProviderNamespaceLister {
-	return lDAPIdentityProviderNamespaceLister{listers.NewNamespaced[*v1alpha1.LDAPIdentityProvider](s.ResourceIndexer, namespace)}
+	return lDAPIdentityProviderNamespaceLister{listers.NewNamespaced[*idpv1alpha1.LDAPIdentityProvider](s.ResourceIndexer, namespace)}
 }
 
 // LDAPIdentityProviderNamespaceLister helps list and get LDAPIdentityProviders.
@@ -43,15 +43,15 @@ func (s *lDAPIdentityProviderLister) LDAPIdentityProviders(namespace string) LDA
 type LDAPIdentityProviderNamespaceLister interface {
 	// List lists all LDAPIdentityProviders in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.LDAPIdentityProvider, err error)
+	List(selector labels.Selector) (ret []*idpv1alpha1.LDAPIdentityProvider, err error)
 	// Get retrieves the LDAPIdentityProvider from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.LDAPIdentityProvider, error)
+	Get(name string) (*idpv1alpha1.LDAPIdentityProvider, error)
 	LDAPIdentityProviderNamespaceListerExpansion
 }
 
 // lDAPIdentityProviderNamespaceLister implements the LDAPIdentityProviderNamespaceLister
 // interface.
 type lDAPIdentityProviderNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.LDAPIdentityProvider]
+	listers.ResourceIndexer[*idpv1alpha1.LDAPIdentityProvider]
 }

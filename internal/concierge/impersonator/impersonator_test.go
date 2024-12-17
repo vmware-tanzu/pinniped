@@ -59,6 +59,7 @@ import (
 	"go.pinniped.dev/internal/tokenclient"
 )
 
+//nolint:gocyclo // this is a large test function
 func TestImpersonator(t *testing.T) {
 	const (
 		priorityLevelConfigurationsVersion = "v1beta3"

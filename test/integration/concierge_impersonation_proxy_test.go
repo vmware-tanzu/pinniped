@@ -167,6 +167,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	}
 
 	refreshCredential := func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential {
+		t.Helper()
+
 		// Use an anonymous client which goes through the impersonation proxy to make the request because that's
 		// what would normally happen when a user is using a kubeconfig where the server is the impersonation proxy,
 		// so it more closely simulates the normal use case, and also because we want this to work on AKS clusters
@@ -2073,7 +2075,11 @@ func createServiceAccountToken(ctx context.Context, t *testing.T, adminClient ku
 	return serviceAccount.Name, string(secret.Data[corev1.ServiceAccountTokenKey]), serviceAccount.UID
 }
 
-func expectedWhoAmIRequestResponse(username string, groups []string, extra map[string]identityv1alpha1.ExtraValue) *identityv1alpha1.WhoAmIRequest {
+func expectedWhoAmIRequestResponse(
+	username string,
+	groups []string,
+	extra map[string]identityv1alpha1.ExtraValue,
+) *identityv1alpha1.WhoAmIRequest {
 	return &identityv1alpha1.WhoAmIRequest{
 		Status: identityv1alpha1.WhoAmIRequestStatus{
 			KubernetesUserInfo: identityv1alpha1.KubernetesUserInfo{
@@ -2088,9 +2094,14 @@ func expectedWhoAmIRequestResponse(username string, groups []string, extra map[s
 	}
 }
 
-func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testlib.TestEnv,
-	adminClient kubernetes.Interface, adminConciergeClient conciergeclientset.Interface,
-	refreshCredential func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential) (string, []byte) {
+func performImpersonatorDiscovery(
+	ctx context.Context,
+	t *testing.T,
+	env *testlib.TestEnv,
+	adminClient kubernetes.Interface,
+	adminConciergeClient conciergeclientset.Interface,
+	refreshCredential func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential,
+) (string, []byte) {
 	t.Helper()
 
 	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)

@@ -6,10 +6,10 @@
 package v1alpha1
 
 import (
-	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // FederationDomainLister helps list FederationDomains.
@@ -17,7 +17,7 @@ import (
 type FederationDomainLister interface {
 	// List lists all FederationDomains in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.FederationDomain, err error)
+	List(selector labels.Selector) (ret []*configv1alpha1.FederationDomain, err error)
 	// FederationDomains returns an object that can list and get FederationDomains.
 	FederationDomains(namespace string) FederationDomainNamespaceLister
 	FederationDomainListerExpansion
@@ -25,17 +25,17 @@ type FederationDomainLister interface {
 
 // federationDomainLister implements the FederationDomainLister interface.
 type federationDomainLister struct {
-	listers.ResourceIndexer[*v1alpha1.FederationDomain]
+	listers.ResourceIndexer[*configv1alpha1.FederationDomain]
 }
 
 // NewFederationDomainLister returns a new FederationDomainLister.
 func NewFederationDomainLister(indexer cache.Indexer) FederationDomainLister {
-	return &federationDomainLister{listers.New[*v1alpha1.FederationDomain](indexer, v1alpha1.Resource("federationdomain"))}
+	return &federationDomainLister{listers.New[*configv1alpha1.FederationDomain](indexer, configv1alpha1.Resource("federationdomain"))}
 }
 
 // FederationDomains returns an object that can list and get FederationDomains.
 func (s *federationDomainLister) FederationDomains(namespace string) FederationDomainNamespaceLister {
-	return federationDomainNamespaceLister{listers.NewNamespaced[*v1alpha1.FederationDomain](s.ResourceIndexer, namespace)}
+	return federationDomainNamespaceLister{listers.NewNamespaced[*configv1alpha1.FederationDomain](s.ResourceIndexer, namespace)}
 }
 
 // FederationDomainNamespaceLister helps list and get FederationDomains.
@@ -43,15 +43,15 @@ func (s *federationDomainLister) FederationDomains(namespace string) FederationD
 type FederationDomainNamespaceLister interface {
 	// List lists all FederationDomains in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.FederationDomain, err error)
+	List(selector labels.Selector) (ret []*configv1alpha1.FederationDomain, err error)
 	// Get retrieves the FederationDomain from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.FederationDomain, error)
+	Get(name string) (*configv1alpha1.FederationDomain, error)
 	FederationDomainNamespaceListerExpansion
 }
 
 // federationDomainNamespaceLister implements the FederationDomainNamespaceLister
 // interface.
 type federationDomainNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.FederationDomain]
+	listers.ResourceIndexer[*configv1alpha1.FederationDomain]
 }

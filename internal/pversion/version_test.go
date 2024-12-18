@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
-	utilversion "k8s.io/apiserver/pkg/util/version"
+	utilversion "k8s.io/component-base/version"
 )
 
 func TestGet(t *testing.T) {

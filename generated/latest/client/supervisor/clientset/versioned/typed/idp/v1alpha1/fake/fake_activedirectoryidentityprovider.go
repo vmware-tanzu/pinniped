@@ -6,129 +6,36 @@
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/typed/idp/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeActiveDirectoryIdentityProviders implements ActiveDirectoryIdentityProviderInterface
-type FakeActiveDirectoryIdentityProviders struct {
+// fakeActiveDirectoryIdentityProviders implements ActiveDirectoryIdentityProviderInterface
+type fakeActiveDirectoryIdentityProviders struct {
+	*gentype.FakeClientWithList[*v1alpha1.ActiveDirectoryIdentityProvider, *v1alpha1.ActiveDirectoryIdentityProviderList]
 	Fake *FakeIDPV1alpha1
-	ns   string
 }
 
-var activedirectoryidentityprovidersResource = v1alpha1.SchemeGroupVersion.WithResource("activedirectoryidentityproviders")
-
-var activedirectoryidentityprovidersKind = v1alpha1.SchemeGroupVersion.WithKind("ActiveDirectoryIdentityProvider")
-
-// Get takes name of the activeDirectoryIdentityProvider, and returns the corresponding activeDirectoryIdentityProvider object, and an error if there is any.
-func (c *FakeActiveDirectoryIdentityProviders) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ActiveDirectoryIdentityProvider, err error) {
-	emptyResult := &v1alpha1.ActiveDirectoryIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(activedirectoryidentityprovidersResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeActiveDirectoryIdentityProviders(fake *FakeIDPV1alpha1, namespace string) idpv1alpha1.ActiveDirectoryIdentityProviderInterface {
+	return &fakeActiveDirectoryIdentityProviders{
+		gentype.NewFakeClientWithList[*v1alpha1.ActiveDirectoryIdentityProvider, *v1alpha1.ActiveDirectoryIdentityProviderList](
+			fake.Fake,
+			namespace,
+			v1alpha1.SchemeGroupVersion.WithResource("activedirectoryidentityproviders"),
+			v1alpha1.SchemeGroupVersion.WithKind("ActiveDirectoryIdentityProvider"),
+			func() *v1alpha1.ActiveDirectoryIdentityProvider { return &v1alpha1.ActiveDirectoryIdentityProvider{} },
+			func() *v1alpha1.ActiveDirectoryIdentityProviderList {
+				return &v1alpha1.ActiveDirectoryIdentityProviderList{}
+			},
+			func(dst, src *v1alpha1.ActiveDirectoryIdentityProviderList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.ActiveDirectoryIdentityProviderList) []*v1alpha1.ActiveDirectoryIdentityProvider {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.ActiveDirectoryIdentityProviderList, items []*v1alpha1.ActiveDirectoryIdentityProvider) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.ActiveDirectoryIdentityProvider), err
-}
-
-// List takes label and field selectors, and returns the list of ActiveDirectoryIdentityProviders that match those selectors.
-func (c *FakeActiveDirectoryIdentityProviders) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ActiveDirectoryIdentityProviderList, err error) {
-	emptyResult := &v1alpha1.ActiveDirectoryIdentityProviderList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(activedirectoryidentityprovidersResource, activedirectoryidentityprovidersKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.ActiveDirectoryIdentityProviderList{ListMeta: obj.(*v1alpha1.ActiveDirectoryIdentityProviderList).ListMeta}
-	for _, item := range obj.(*v1alpha1.ActiveDirectoryIdentityProviderList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested activeDirectoryIdentityProviders.
-func (c *FakeActiveDirectoryIdentityProviders) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(activedirectoryidentityprovidersResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a activeDirectoryIdentityProvider and creates it.  Returns the server's representation of the activeDirectoryIdentityProvider, and an error, if there is any.
-func (c *FakeActiveDirectoryIdentityProviders) Create(ctx context.Context, activeDirectoryIdentityProvider *v1alpha1.ActiveDirectoryIdentityProvider, opts v1.CreateOptions) (result *v1alpha1.ActiveDirectoryIdentityProvider, err error) {
-	emptyResult := &v1alpha1.ActiveDirectoryIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateActionWithOptions(activedirectoryidentityprovidersResource, c.ns, activeDirectoryIdentityProvider, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ActiveDirectoryIdentityProvider), err
-}
-
-// Update takes the representation of a activeDirectoryIdentityProvider and updates it. Returns the server's representation of the activeDirectoryIdentityProvider, and an error, if there is any.
-func (c *FakeActiveDirectoryIdentityProviders) Update(ctx context.Context, activeDirectoryIdentityProvider *v1alpha1.ActiveDirectoryIdentityProvider, opts v1.UpdateOptions) (result *v1alpha1.ActiveDirectoryIdentityProvider, err error) {
-	emptyResult := &v1alpha1.ActiveDirectoryIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateActionWithOptions(activedirectoryidentityprovidersResource, c.ns, activeDirectoryIdentityProvider, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ActiveDirectoryIdentityProvider), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeActiveDirectoryIdentityProviders) UpdateStatus(ctx context.Context, activeDirectoryIdentityProvider *v1alpha1.ActiveDirectoryIdentityProvider, opts v1.UpdateOptions) (result *v1alpha1.ActiveDirectoryIdentityProvider, err error) {
-	emptyResult := &v1alpha1.ActiveDirectoryIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceActionWithOptions(activedirectoryidentityprovidersResource, "status", c.ns, activeDirectoryIdentityProvider, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ActiveDirectoryIdentityProvider), err
-}
-
-// Delete takes name of the activeDirectoryIdentityProvider and deletes it. Returns an error if one occurs.
-func (c *FakeActiveDirectoryIdentityProviders) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(activedirectoryidentityprovidersResource, c.ns, name, opts), &v1alpha1.ActiveDirectoryIdentityProvider{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeActiveDirectoryIdentityProviders) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionActionWithOptions(activedirectoryidentityprovidersResource, c.ns, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.ActiveDirectoryIdentityProviderList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched activeDirectoryIdentityProvider.
-func (c *FakeActiveDirectoryIdentityProviders) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ActiveDirectoryIdentityProvider, err error) {
-	emptyResult := &v1alpha1.ActiveDirectoryIdentityProvider{}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceActionWithOptions(activedirectoryidentityprovidersResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.ActiveDirectoryIdentityProvider), err
 }

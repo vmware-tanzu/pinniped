@@ -45,10 +45,10 @@ import (
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/pkg/server/filters"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	utilversion "k8s.io/apiserver/pkg/util/version"
 	auditfake "k8s.io/apiserver/plugin/pkg/audit/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
+	utilversion "k8s.io/component-base/version"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crypto/ptls"

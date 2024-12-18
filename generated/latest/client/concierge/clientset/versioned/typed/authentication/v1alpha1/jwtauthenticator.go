@@ -6,9 +6,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	scheme "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -24,33 +24,36 @@ type JWTAuthenticatorsGetter interface {
 
 // JWTAuthenticatorInterface has methods to work with JWTAuthenticator resources.
 type JWTAuthenticatorInterface interface {
-	Create(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.CreateOptions) (*v1alpha1.JWTAuthenticator, error)
-	Update(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.UpdateOptions) (*v1alpha1.JWTAuthenticator, error)
+	Create(ctx context.Context, jWTAuthenticator *authenticationv1alpha1.JWTAuthenticator, opts v1.CreateOptions) (*authenticationv1alpha1.JWTAuthenticator, error)
+	Update(ctx context.Context, jWTAuthenticator *authenticationv1alpha1.JWTAuthenticator, opts v1.UpdateOptions) (*authenticationv1alpha1.JWTAuthenticator, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, jWTAuthenticator *v1alpha1.JWTAuthenticator, opts v1.UpdateOptions) (*v1alpha1.JWTAuthenticator, error)
+	UpdateStatus(ctx context.Context, jWTAuthenticator *authenticationv1alpha1.JWTAuthenticator, opts v1.UpdateOptions) (*authenticationv1alpha1.JWTAuthenticator, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.JWTAuthenticator, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.JWTAuthenticatorList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*authenticationv1alpha1.JWTAuthenticator, error)
+	List(ctx context.Context, opts v1.ListOptions) (*authenticationv1alpha1.JWTAuthenticatorList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.JWTAuthenticator, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *authenticationv1alpha1.JWTAuthenticator, err error)
 	JWTAuthenticatorExpansion
 }
 
 // jWTAuthenticators implements JWTAuthenticatorInterface
 type jWTAuthenticators struct {
-	*gentype.ClientWithList[*v1alpha1.JWTAuthenticator, *v1alpha1.JWTAuthenticatorList]
+	*gentype.ClientWithList[*authenticationv1alpha1.JWTAuthenticator, *authenticationv1alpha1.JWTAuthenticatorList]
 }
 
 // newJWTAuthenticators returns a JWTAuthenticators
 func newJWTAuthenticators(c *AuthenticationV1alpha1Client) *jWTAuthenticators {
 	return &jWTAuthenticators{
-		gentype.NewClientWithList[*v1alpha1.JWTAuthenticator, *v1alpha1.JWTAuthenticatorList](
+		gentype.NewClientWithList[*authenticationv1alpha1.JWTAuthenticator, *authenticationv1alpha1.JWTAuthenticatorList](
 			"jwtauthenticators",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha1.JWTAuthenticator { return &v1alpha1.JWTAuthenticator{} },
-			func() *v1alpha1.JWTAuthenticatorList { return &v1alpha1.JWTAuthenticatorList{} }),
+			func() *authenticationv1alpha1.JWTAuthenticator { return &authenticationv1alpha1.JWTAuthenticator{} },
+			func() *authenticationv1alpha1.JWTAuthenticatorList {
+				return &authenticationv1alpha1.JWTAuthenticatorList{}
+			},
+		),
 	}
 }

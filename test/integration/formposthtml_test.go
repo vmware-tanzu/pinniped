@@ -268,6 +268,7 @@ func formpostExpectSuccessState(t *testing.T, b *browsertest.Browser) {
 	require.Contains(t, successDivText, "Login succeeded")
 	require.Contains(t, successDivText, "You have successfully logged in. You may now close this tab.")
 	require.Equal(t, "Login succeeded", b.Title(t))
+	t.Log("login succeeded")
 	formpostExpectFavicon(t, b, "✅")
 }
 

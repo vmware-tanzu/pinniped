@@ -35,6 +35,9 @@ ENV KUBE_GIT_VERSION=$KUBE_GIT_VERSION
 ARG TARGETOS
 ARG TARGETARCH
 
+# If provided, must be a comma-separated list of Go build tags.
+ARG ADDITIONAL_BUILD_TAGS
+
 # Build the executable binary (CGO_ENABLED=1 is required for go boring).
 # Even though we need cgo to call the boring crypto C functions, these
 # functions are statically linked into the binary.  We also want to statically
@@ -59,8 +62,8 @@ RUN \
   --mount=type=cache,target=/cache/gocache \
   --mount=type=cache,target=/cache/gomodcache \
   export GOCACHE=/cache/gocache GOMODCACHE=/cache/gomodcache CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH GOEXPERIMENT=boringcrypto && \
-  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
-  go build -tags fips_strict,osusergo,netgo -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
+  go build -tags fips_strict,osusergo,netgo,$ADDITIONAL_BUILD_TAGS -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-concierge-kube-cert-agent ./cmd/pinniped-concierge-kube-cert-agent/... && \
+  go build -tags fips_strict,osusergo,netgo,$ADDITIONAL_BUILD_TAGS -v -trimpath -ldflags "$(hack/get-ldflags.sh) -w -linkmode=external -extldflags -static" -o /usr/local/bin/pinniped-server ./cmd/pinniped-server/... && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-concierge && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/pinniped-supervisor && \
   ln -s /usr/local/bin/pinniped-server /usr/local/bin/local-user-authenticator

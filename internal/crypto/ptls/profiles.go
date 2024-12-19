@@ -86,11 +86,9 @@ func init() { //nolint:gochecknoinits
 	// this init runs before we have parsed our config to determine our log level
 	// thus we must use a log statement that will always print instead of conditionally print
 	plog.Always("this server was not compiled in FIPS-only mode",
-		"go version", runtime.Version())
+		"go version", runtime.Version(),
+		"SecureProfileMinTLSVersionForNonFIPS", tls.VersionName(SecureProfileMinTLSVersionForNonFIPS))
 }
-
-// SecureTLSConfigMinTLSVersion is the minimum tls version in the format expected by tls.Config.
-const SecureTLSConfigMinTLSVersion = tls.VersionTLS13
 
 // Default TLS profile should be used by:
 // A. servers whose clients are outside our control and who may reasonably wish to use TLS 1.2, and
@@ -127,8 +125,12 @@ func Secure(rootCAs *x509.CertPool) *tls.Config {
 	// - Safari 12.1
 	// https://ssl-config.mozilla.org/#server=go&version=1.17.2&config=modern&guideline=5.6
 	c := Default(rootCAs)
-	c.MinVersion = SecureTLSConfigMinTLSVersion // max out the security
-	c.CipherSuites = nil                        // TLS 1.3 ciphers are not configurable
+	// Max out the security by requiring TLS 1.3 by default. Allow it to be overridden by a build tag.
+	c.MinVersion = SecureProfileMinTLSVersionForNonFIPS
+	if c.MinVersion == tls.VersionTLS13 {
+		// Go ignores this setting for TLS 1.3 anyway, so set this to nil just to be explicit when only supporting TLS 1.3.
+		c.CipherSuites = nil
+	}
 	return c
 }
 

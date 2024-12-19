@@ -34,7 +34,6 @@ import (
 	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	supervisorclientset "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	"go.pinniped.dev/internal/certauthority"
-	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/test/testlib"
 )
@@ -866,7 +865,7 @@ func newHTTPClient(t *testing.T, caBundle []byte, dnsOverrides map[string]string
 		caCertPool.AppendCertsFromPEM(caBundle)
 		c.Transport = &http.Transport{
 			DialContext:     overrideDialContext,
-			TLSClientConfig: &tls.Config{MinVersion: ptls.SecureTLSConfigMinTLSVersion, RootCAs: caCertPool}, //nolint:gosec // this seems to be a false flag, min tls version is 1.3 in normal mode or 1.2 in fips mode
+			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: caCertPool},
 		}
 	} else {
 		c.Transport = &http.Transport{

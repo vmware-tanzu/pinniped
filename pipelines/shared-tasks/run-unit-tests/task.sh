@@ -14,5 +14,4 @@ export GOCACHE="$PWD/cache/gocache"
 export GOMODCACHE="$PWD/cache/gomodcache"
 
 cd pinniped
-# Temporarily remove "-race" from the next line due to https://github.com/vmware-tanzu/pinniped/pull/2160
-go test -short -coverprofile "${COVERAGE_OUTPUT}" -covermode atomic ./...
+go test -short -race -coverprofile "${COVERAGE_OUTPUT}" -covermode atomic ./...

@@ -4,8 +4,19 @@ go 1.23.0
 
 toolchain go1.23.4
 
-// see https://github.com/kubernetes/apimachinery/blob/v0.31.2/go.mod#L30
-replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.1
+replace (
+	k8s.io/api => k8s.io/api v0.31.4
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.31.4
+	k8s.io/apimachinery => k8s.io/apimachinery v0.31.4
+	k8s.io/apiserver => k8s.io/apiserver v0.31.4
+	k8s.io/client-go => k8s.io/client-go v0.31.4
+	k8s.io/component-base => k8s.io/component-base v0.31.4
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.31.4
+	// see https://github.com/kubernetes/apiserver/blob/v0.31.4/go.mod#L54
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
+	// see https://github.com/kubernetes/apimachinery/blob/v0.31.4/go.mod#L30
+	sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.1
+)
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
@@ -71,7 +82,6 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
-	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
@@ -96,7 +106,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/btree v1.0.1 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-github/v64 v64.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect

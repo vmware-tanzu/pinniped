@@ -21,6 +21,13 @@ meta:
     GCP_USERNAME: ((gcp-instance-admin-username))
     GCP_JSON_KEY: ((gcp-instance-admin-json-key))
 
+  # GKE account info and which zone the clusters should be created in and deleted from.
+  gke_account_params: &gke_account_params
+    CLUSTER_ZONE: us-central1-c
+    GCP_PROJECT: ((gcp-project-name))
+    GCP_SERVICE_ACCOUNT: ((gke-test-pool-manager-username))
+    GCP_JSON_KEY: ((gke-test-pool-manager-json-key))
+
 resources:
 
   - name: pinniped-ci
@@ -123,3 +130,19 @@ jobs:
         image: gcloud-image
         params:
           <<: *gcp_account_params
+
+  - name: remove-orphaned-gke-clusters
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-ci
+          - get: gcloud-image
+          - get: hourly
+            trigger: true
+      - task: remove-orphaned-gke-clusters
+        attempts: 2
+        timeout: 25m
+        file: pinniped-ci/pipelines/shared-tasks/remove-orphaned-gke-clusters/task.yml
+        image: gcloud-image
+        params:
+          <<: *gke_account_params

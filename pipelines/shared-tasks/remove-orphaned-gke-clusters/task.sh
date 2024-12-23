@@ -58,7 +58,7 @@ if [[ ${#clusters_to_remove[@]} -eq 0 ]]; then
   echo "No old orphaned GKE clusters found to remove."
 else
   echo "Removing ${#clusters_to_remove[@]} GKE clusters(s) which are older than $hours_ago_to_delete hours in $CLUSTER_ZONE: ${clusters_to_remove[*]} ..."
-  echo Would run command: gcloud container clusters delete --zone "${CLUSTER_ZONE}" --quiet ${clusters_to_remove[*]}
+  gcloud container clusters delete --zone "${CLUSTER_ZONE}" --quiet ${clusters_to_remove[*]}
 fi
 
 echo

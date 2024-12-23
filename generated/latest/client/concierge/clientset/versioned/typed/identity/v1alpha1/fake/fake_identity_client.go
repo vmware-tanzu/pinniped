@@ -16,7 +16,7 @@ type FakeIdentityV1alpha1 struct {
 }
 
 func (c *FakeIdentityV1alpha1) WhoAmIRequests() v1alpha1.WhoAmIRequestInterface {
-	return &FakeWhoAmIRequests{c}
+	return newFakeWhoAmIRequests(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

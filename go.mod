@@ -4,9 +4,6 @@ go 1.23.0
 
 toolchain go1.23.4
 
-// see https://github.com/kubernetes/apimachinery/blob/v0.32.0/go.mod#L34
-replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.2
-
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/chromedp/cdproto v0.0.0-20241208230723-d1c7de7e5dd2

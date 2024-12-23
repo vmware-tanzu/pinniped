@@ -22,7 +22,7 @@ gcloud auth activate-service-account \
 
 all_cloud=($(gcloud container clusters list \
   --zone "$CLUSTER_ZONE" --project "$GCP_PROJECT" \
-  --filter "name:gke-*-zone-${CLUSTER_ZONE}" --format 'table[no-heading](name)' | sort))
+  --filter "name~gke-[a-f0-9]+-zone-${CLUSTER_ZONE}" --format 'table[no-heading](name)' | sort))
 
 now_in_seconds_since_epoch=$(date +"%s")
 hours_ago_to_delete=2

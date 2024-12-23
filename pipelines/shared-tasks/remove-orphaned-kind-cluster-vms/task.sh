@@ -38,7 +38,7 @@ fi
 
 all_cloud=($(gcloud compute instances list \
   --zones "$INSTANCE_ZONE" --project "$GCP_PROJECT" \
-  --filter 'name:kind-worker-*' --format 'table[no-heading](name)' | sort))
+  --filter 'name~kind-worker-[a-f0-9]+' --format 'table[no-heading](name)' | sort))
 
 exists_in_local_but_not_cloud=()
 for i in "${all_local[@]}"; do

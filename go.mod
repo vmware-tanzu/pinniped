@@ -4,12 +4,8 @@ go 1.23.0
 
 toolchain go1.23.4
 
-replace (
-	// see https://github.com/kubernetes/apimachinery/blob/v0.32.0/go.mod#L31
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
-	// see https://github.com/kubernetes/apimachinery/blob/v0.32.0/go.mod#L34
-	sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.2
-)
+// see https://github.com/kubernetes/apimachinery/blob/v0.32.0/go.mod#L31
+replace k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
@@ -99,7 +95,7 @@ require (
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.0.1 // indirect
-	github.com/google/gnostic-models v0.6.9 // indirect
+	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-github/v64 v64.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect

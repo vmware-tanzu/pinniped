@@ -87,10 +87,6 @@ func TestMergeStrategy(t *testing.T) {
 						},
 					},
 				},
-				KubeConfigInfo: &conciergeconfigv1alpha1.CredentialIssuerKubeConfigInfo{
-					Server:                   "https://test-server",
-					CertificateAuthorityData: "test-ca-bundle",
-				},
 			},
 		},
 		{

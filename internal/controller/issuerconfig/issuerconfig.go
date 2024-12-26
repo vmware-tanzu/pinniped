@@ -49,14 +49,6 @@ func mergeStrategy(configToUpdate *conciergeconfigv1alpha1.CredentialIssuerStatu
 		configToUpdate.Strategies = append(configToUpdate.Strategies, strategy)
 	}
 	sort.Stable(sortableStrategies(configToUpdate.Strategies))
-
-	// Special case: the "TokenCredentialRequestAPI" data is mirrored into the deprecated status.kubeConfigInfo field.
-	if strategy.Frontend != nil && strategy.Frontend.Type == conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType {
-		configToUpdate.KubeConfigInfo = &conciergeconfigv1alpha1.CredentialIssuerKubeConfigInfo{
-			Server:                   strategy.Frontend.TokenCredentialRequestAPIInfo.Server,
-			CertificateAuthorityData: strategy.Frontend.TokenCredentialRequestAPIInfo.CertificateAuthorityData,
-		}
-	}
 }
 
 // weights are a set of priorities for each strategy type.

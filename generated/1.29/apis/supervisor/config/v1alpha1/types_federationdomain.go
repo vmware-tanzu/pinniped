@@ -209,6 +209,7 @@ type FederationDomainSpec struct {
 	// See
 	// https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:message="issuer must be an HTTPS URL",rule="isURL(self) && url(self).getScheme() == 'https'"
 	Issuer string `json:"issuer"`
 
 	// TLS specifies a secret which will contain Transport Layer Security (TLS) configuration for the FederationDomain.

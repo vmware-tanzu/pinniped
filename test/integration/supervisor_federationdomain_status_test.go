@@ -567,12 +567,15 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 	usingKubeVersionInCluster24Through31Inclusive := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 24, 31)
 	usingKubeVersionInCluster32OrNewer := !usingKubeVersionInCluster23OrOlder && !usingKubeVersionInCluster24Through31Inclusive
 
+	performCELTests := testutil.KubeServerMinorVersionAtLeastInclusive(t, adminClient.Discovery(), 27)
+
 	objectMeta := testlib.ObjectMetaWithRandomName(t, "federation-domain")
 
 	tests := []struct {
-		name     string
-		fd       *supervisorconfigv1alpha1.FederationDomain
-		wantErrs []string
+		name        string
+		fd          *supervisorconfigv1alpha1.FederationDomain
+		wantErrs    []string
+		wantCELErrs []string
 
 		// optionally override wantErr for one or more specific versions of Kube, due to changing validation error text
 		wantKube23OrOlderErrs            []string
@@ -587,7 +590,28 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					Issuer: "",
 				},
 			},
-			wantErrs: []string{`spec.issuer: Invalid value: "": spec.issuer in body should be at least 1 chars long`},
+			wantErrs:    []string{`spec.issuer: Invalid value: "": spec.issuer in body should be at least 1 chars long`},
+			wantCELErrs: []string{`spec.issuer: Invalid value: "string": issuer must be an HTTPS URL`},
+		},
+		{
+			name: "issuer must be a URL",
+			fd: &supervisorconfigv1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
+					Issuer: "foo",
+				},
+			},
+			wantCELErrs: []string{`spec.issuer: Invalid value: "string": issuer must be an HTTPS URL`},
+		},
+		{
+			name: "issuer URL scheme must be 'https'",
+			fd: &supervisorconfigv1alpha1.FederationDomain{
+				ObjectMeta: objectMeta,
+				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
+					Issuer: "http://example.com",
+				},
+			},
+			wantCELErrs: []string{`spec.issuer: Invalid value: "string": issuer must be an HTTPS URL`},
 		},
 		{
 			name: "IDP display names cannot be empty",
@@ -678,6 +702,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 			wantKube23OrOlderErrs:            []string{`spec.identityProviders.transforms.constants.name: Invalid value: "12345678901234567890123456789012345678901234567890123456789012345": spec.identityProviders.transforms.constants.name in body should be at most 64 chars long`},
 			wantKube24Through31InclusiveErrs: []string{`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be longer than 64`},
 			wantKube32OrNewerErrs:            []string{`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be more than 64 bytes`},
+			wantCELErrs:                      []string{`<nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`},
 		},
 		{
 			name: "IDP transform constant names must be a legal CEL variable name",
@@ -733,7 +758,8 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErrs: []string{`spec.identityProviders[0].transforms.constants[0].type: Unsupported value: "this is invalid": supported values: "string", "stringList"`},
+			wantErrs:    []string{`spec.identityProviders[0].transforms.constants[0].type: Unsupported value: "this is invalid": supported values: "string", "stringList"`},
+			wantCELErrs: []string{`<nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`},
 		},
 		{
 			name: "IDP transform expression types must be one of the allowed enum strings",
@@ -759,7 +785,8 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErrs: []string{`spec.identityProviders[0].transforms.expressions[0].type: Unsupported value: "this is invalid": supported values: "policy/v1", "username/v1", "groups/v1"`},
+			wantErrs:    []string{`spec.identityProviders[0].transforms.expressions[0].type: Unsupported value: "this is invalid": supported values: "policy/v1", "username/v1", "groups/v1"`},
+			wantCELErrs: []string{`<nil>: Invalid value: "null": some validation rules were not checked because the object was invalid; correct the existing errors to complete validation`},
 		},
 		{
 			name: "IDP transform expressions cannot be empty",
@@ -883,48 +910,57 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 				require.Fail(t, "test setup problem: wanted every possible kind of error, which would cause tt.wantErr to be unused")
 			}
 
-			if len(tt.wantErrs) == 0 && len(tt.wantKube23OrOlderErrs) == 0 && len(tt.wantKube24Through31InclusiveErrs) == 0 && len(tt.wantKube32OrNewerErrs) == 0 { //nolint:nestif
+			if len(tt.wantErrs) == 0 && len(tt.wantCELErrs) == 0 && len(tt.wantKube23OrOlderErrs) == 0 && len(tt.wantKube24Through31InclusiveErrs) == 0 && len(tt.wantKube32OrNewerErrs) == 0 {
 				// Did not want any error.
 				require.NoError(t, actualCreateErr)
-			} else {
-				wantErr := tt.wantErrs
-				if usingKubeVersionInCluster23OrOlder {
-					// Old versions of Kubernetes did not show the index where the error occurred in some of the messages,
-					// so remove the indices from the expected messages when running against an old version of Kube.
-					// For the above tests, it should be enough to assume that there will only be indices up to 10.
-					// This is useful when the only difference in the message between old and new is the missing indices.
-					// Otherwise, use wantKube23OrOlderErr to say what the expected message should be for old versions.
-					for i := range wantErr {
-						for j := range 10 {
-							wantErr[i] = strings.ReplaceAll(wantErr[i], fmt.Sprintf("[%d]", j), "")
-						}
+				return
+			}
+
+			wantErr := tt.wantErrs
+			if usingKubeVersionInCluster23OrOlder {
+				// Old versions of Kubernetes did not show the index where the error occurred in some of the messages,
+				// so remove the indices from the expected messages when running against an old version of Kube.
+				// For the above tests, it should be enough to assume that there will only be indices up to 10.
+				// This is useful when the only difference in the message between old and new is the missing indices.
+				// Otherwise, use wantKube23OrOlderErr to say what the expected message should be for old versions.
+				for i := range wantErr {
+					for j := range 10 {
+						wantErr[i] = strings.ReplaceAll(wantErr[i], fmt.Sprintf("[%d]", j), "")
 					}
 				}
-				if usingKubeVersionInCluster23OrOlder && len(tt.wantKube23OrOlderErrs) > 0 {
-					// Sometimes there are other difference in older Kubernetes messages, so also allow exact
-					// expectation strings for those cases in wantKube23OrOlderErr. When provided, use it on these Kube clusters.
-					wantErr = tt.wantKube23OrOlderErrs
-				}
-				if usingKubeVersionInCluster24Through31Inclusive && len(tt.wantKube24Through31InclusiveErrs) > 0 {
-					// Also allow overriding with an exact expected error for these Kube versions.
-					wantErr = tt.wantKube24Through31InclusiveErrs
-				}
-				if usingKubeVersionInCluster32OrNewer && len(tt.wantKube32OrNewerErrs) > 0 {
-					// Also allow overriding with an exact expected error for these Kube versions.
-					wantErr = tt.wantKube32OrNewerErrs
-				}
-
-				wantErrStr := fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: ",
-					env.APIGroupSuffix, objectMeta.Name)
-
-				if len(wantErr) == 1 {
-					wantErrStr += wantErr[0]
-				} else {
-					wantErrStr += "[" + strings.Join(wantErr, ", ") + "]"
-				}
-
-				require.EqualError(t, actualCreateErr, wantErrStr)
 			}
+			if usingKubeVersionInCluster23OrOlder && len(tt.wantKube23OrOlderErrs) > 0 {
+				// Sometimes there are other difference in older Kubernetes messages, so also allow exact
+				// expectation strings for those cases in wantKube23OrOlderErr. When provided, use it on these Kube clusters.
+				wantErr = tt.wantKube23OrOlderErrs
+			}
+			if usingKubeVersionInCluster24Through31Inclusive && len(tt.wantKube24Through31InclusiveErrs) > 0 {
+				// Also allow overriding with an exact expected error for these Kube versions.
+				wantErr = tt.wantKube24Through31InclusiveErrs
+			}
+			if usingKubeVersionInCluster32OrNewer && len(tt.wantKube32OrNewerErrs) > 0 {
+				// Also allow overriding with an exact expected error for these Kube versions.
+				wantErr = tt.wantKube32OrNewerErrs
+			}
+
+			if performCELTests {
+				wantErr = append(wantErr, tt.wantCELErrs...)
+			} else if len(wantErr) == len(tt.wantCELErrs) {
+				// on old K8s versions, don't check for errors when all we expect are CEL errors
+				require.NoError(t, actualCreateErr)
+				return
+			}
+
+			wantErrStr := fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: ",
+				env.APIGroupSuffix, objectMeta.Name)
+
+			if len(wantErr) == 1 {
+				wantErrStr += wantErr[0]
+			} else {
+				wantErrStr += "[" + strings.Join(wantErr, ", ") + "]"
+			}
+
+			require.EqualError(t, actualCreateErr, wantErrStr)
 		})
 	}
 }

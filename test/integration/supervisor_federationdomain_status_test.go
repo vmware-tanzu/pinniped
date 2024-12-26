@@ -570,14 +570,14 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 	objectMeta := testlib.ObjectMetaWithRandomName(t, "federation-domain")
 
 	tests := []struct {
-		name    string
-		fd      *supervisorconfigv1alpha1.FederationDomain
-		wantErr string
+		name     string
+		fd       *supervisorconfigv1alpha1.FederationDomain
+		wantErrs []string
 
 		// optionally override wantErr for one or more specific versions of Kube, due to changing validation error text
-		wantKube23OrOlderErr            string
-		wantKube24Through31InclusiveErr string
-		wantKube32OrNewerErr            string
+		wantKube23OrOlderErrs            []string
+		wantKube24Through31InclusiveErrs []string
+		wantKube32OrNewerErrs            []string
 	}{
 		{
 			name: "issuer cannot be empty",
@@ -587,7 +587,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					Issuer: "",
 				},
 			},
-			wantErr: `spec.issuer: Invalid value: "": spec.issuer in body should be at least 1 chars long`,
+			wantErrs: []string{`spec.issuer: Invalid value: "": spec.issuer in body should be at least 1 chars long`},
 		},
 		{
 			name: "IDP display names cannot be empty",
@@ -605,7 +605,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `spec.identityProviders[0].displayName: Invalid value: "": spec.identityProviders[0].displayName in body should be at least 1 chars long`,
+			wantErrs: []string{`spec.identityProviders[0].displayName: Invalid value: "": spec.identityProviders[0].displayName in body should be at least 1 chars long`},
 		},
 		{
 			name: "IDP transform constants must have unique names",
@@ -629,7 +629,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `spec.identityProviders[0].transforms.constants[1]: Duplicate value: map[string]interface {}{"name":"notUnique"}`,
+			wantErrs: []string{`spec.identityProviders[0].transforms.constants[1]: Duplicate value: map[string]interface {}{"name":"notUnique"}`},
 		},
 		{
 			name: "IDP transform constant names cannot be empty",
@@ -652,7 +652,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `spec.identityProviders[0].transforms.constants[0].name: Invalid value: "": spec.identityProviders[0].transforms.constants[0].name in body should be at least 1 chars long`,
+			wantErrs: []string{`spec.identityProviders[0].transforms.constants[0].name: Invalid value: "": spec.identityProviders[0].transforms.constants[0].name in body should be at least 1 chars long`},
 		},
 		{
 			name: "IDP transform constant names cannot be more than 64 characters",
@@ -675,9 +675,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantKube23OrOlderErr:            `spec.identityProviders.transforms.constants.name: Invalid value: "12345678901234567890123456789012345678901234567890123456789012345": spec.identityProviders.transforms.constants.name in body should be at most 64 chars long`,
-			wantKube24Through31InclusiveErr: `spec.identityProviders[0].transforms.constants[0].name: Too long: may not be longer than 64`,
-			wantKube32OrNewerErr:            `spec.identityProviders[0].transforms.constants[0].name: Too long: may not be more than 64 bytes`,
+			wantKube23OrOlderErrs:            []string{`spec.identityProviders.transforms.constants.name: Invalid value: "12345678901234567890123456789012345678901234567890123456789012345": spec.identityProviders.transforms.constants.name in body should be at most 64 chars long`},
+			wantKube24Through31InclusiveErrs: []string{`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be longer than 64`},
+			wantKube32OrNewerErrs:            []string{`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be more than 64 bytes`},
 		},
 		{
 			name: "IDP transform constant names must be a legal CEL variable name",
@@ -704,13 +704,11 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantKube23OrOlderErr: `spec.identityProviders.transforms.constants.name: Invalid value: "cannot have spaces": spec.identityProviders.transforms.constants.name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`,
-			wantErr: `[spec.identityProviders[0].transforms.constants[0].name: Invalid value: "cannot have spaces": ` +
-				`spec.identityProviders[0].transforms.constants[0].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$', ` +
-				`spec.identityProviders[0].transforms.constants[1].name: Invalid value: "1mustStartWithLetter": ` +
-				`spec.identityProviders[0].transforms.constants[1].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$', ` +
-				`spec.identityProviders[0].transforms.constants[2].name: Invalid value: "_mustStartWithLetter": ` +
-				`spec.identityProviders[0].transforms.constants[2].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$']`,
+			wantKube23OrOlderErrs: []string{`spec.identityProviders.transforms.constants.name: Invalid value: "cannot have spaces": spec.identityProviders.transforms.constants.name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`},
+			wantErrs: []string{
+				`spec.identityProviders[0].transforms.constants[0].name: Invalid value: "cannot have spaces": spec.identityProviders[0].transforms.constants[0].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`,
+				`spec.identityProviders[0].transforms.constants[1].name: Invalid value: "1mustStartWithLetter": spec.identityProviders[0].transforms.constants[1].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`,
+				`spec.identityProviders[0].transforms.constants[2].name: Invalid value: "_mustStartWithLetter": spec.identityProviders[0].transforms.constants[2].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`},
 		},
 		{
 			name: "IDP transform constant types must be one of the allowed enum strings",
@@ -735,7 +733,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `spec.identityProviders[0].transforms.constants[0].type: Unsupported value: "this is invalid": supported values: "string", "stringList"`,
+			wantErrs: []string{`spec.identityProviders[0].transforms.constants[0].type: Unsupported value: "this is invalid": supported values: "string", "stringList"`},
 		},
 		{
 			name: "IDP transform expression types must be one of the allowed enum strings",
@@ -761,7 +759,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `spec.identityProviders[0].transforms.expressions[0].type: Unsupported value: "this is invalid": supported values: "policy/v1", "username/v1", "groups/v1"`,
+			wantErrs: []string{`spec.identityProviders[0].transforms.expressions[0].type: Unsupported value: "this is invalid": supported values: "policy/v1", "username/v1", "groups/v1"`},
 		},
 		{
 			name: "IDP transform expressions cannot be empty",
@@ -784,7 +782,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `spec.identityProviders[0].transforms.expressions[0].expression: Invalid value: "": spec.identityProviders[0].transforms.expressions[0].expression in body should be at least 1 chars long`,
+			wantErrs: []string{`spec.identityProviders[0].transforms.expressions[0].expression: Invalid value: "": spec.identityProviders[0].transforms.expressions[0].expression in body should be at least 1 chars long`},
 		},
 		{
 			name: "IDP transform example usernames cannot be empty",
@@ -808,7 +806,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: `spec.identityProviders[0].transforms.examples[0].username: Invalid value: "": spec.identityProviders[0].transforms.examples[0].username in body should be at least 1 chars long`,
+			wantErrs: []string{`spec.identityProviders[0].transforms.examples[0].username: Invalid value: "": spec.identityProviders[0].transforms.examples[0].username in body should be at least 1 chars long`},
 		},
 		{
 			name: "minimum valid",
@@ -881,43 +879,51 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 				}
 			})
 
-			if tt.wantErr != "" && tt.wantKube23OrOlderErr != "" && tt.wantKube24Through31InclusiveErr != "" && tt.wantKube32OrNewerErr != "" {
+			if len(tt.wantErrs) > 0 && len(tt.wantKube23OrOlderErrs) > 0 && len(tt.wantKube24Through31InclusiveErrs) > 0 && len(tt.wantKube32OrNewerErrs) > 0 {
 				require.Fail(t, "test setup problem: wanted every possible kind of error, which would cause tt.wantErr to be unused")
 			}
 
-			if tt.wantErr == "" && tt.wantKube23OrOlderErr == "" && tt.wantKube24Through31InclusiveErr == "" && tt.wantKube32OrNewerErr == "" { //nolint:nestif
+			if len(tt.wantErrs) == 0 && len(tt.wantKube23OrOlderErrs) == 0 && len(tt.wantKube24Through31InclusiveErrs) == 0 && len(tt.wantKube32OrNewerErrs) == 0 { //nolint:nestif
 				// Did not want any error.
 				require.NoError(t, actualCreateErr)
 			} else {
-				wantErr := tt.wantErr
+				wantErr := tt.wantErrs
 				if usingKubeVersionInCluster23OrOlder {
 					// Old versions of Kubernetes did not show the index where the error occurred in some of the messages,
 					// so remove the indices from the expected messages when running against an old version of Kube.
 					// For the above tests, it should be enough to assume that there will only be indices up to 10.
 					// This is useful when the only difference in the message between old and new is the missing indices.
 					// Otherwise, use wantKube23OrOlderErr to say what the expected message should be for old versions.
-					for i := range 10 {
-						wantErr = strings.ReplaceAll(wantErr, fmt.Sprintf("[%d]", i), "")
+					for i := range wantErr {
+						for j := range 10 {
+							wantErr[i] = strings.ReplaceAll(wantErr[i], fmt.Sprintf("[%d]", j), "")
+						}
 					}
 				}
-				if usingKubeVersionInCluster23OrOlder && tt.wantKube23OrOlderErr != "" {
+				if usingKubeVersionInCluster23OrOlder && len(tt.wantKube23OrOlderErrs) > 0 {
 					// Sometimes there are other difference in older Kubernetes messages, so also allow exact
 					// expectation strings for those cases in wantKube23OrOlderErr. When provided, use it on these Kube clusters.
-					wantErr = tt.wantKube23OrOlderErr
+					wantErr = tt.wantKube23OrOlderErrs
 				}
-				if usingKubeVersionInCluster24Through31Inclusive && tt.wantKube24Through31InclusiveErr != "" {
+				if usingKubeVersionInCluster24Through31Inclusive && len(tt.wantKube24Through31InclusiveErrs) > 0 {
 					// Also allow overriding with an exact expected error for these Kube versions.
-					wantErr = tt.wantKube24Through31InclusiveErr
+					wantErr = tt.wantKube24Through31InclusiveErrs
 				}
-				if usingKubeVersionInCluster32OrNewer && tt.wantKube32OrNewerErr != "" {
+				if usingKubeVersionInCluster32OrNewer && len(tt.wantKube32OrNewerErrs) > 0 {
 					// Also allow overriding with an exact expected error for these Kube versions.
-					wantErr = tt.wantKube32OrNewerErr
+					wantErr = tt.wantKube32OrNewerErrs
 				}
 
-				wantErr = fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: %s",
-					env.APIGroupSuffix, objectMeta.Name, wantErr)
+				wantErrStr := fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: ",
+					env.APIGroupSuffix, objectMeta.Name)
 
-				require.EqualError(t, actualCreateErr, wantErr)
+				if len(wantErr) == 1 {
+					wantErrStr += wantErr[0]
+				} else {
+					wantErrStr += "[" + strings.Join(wantErr, ", ") + "]"
+				}
+
+				require.EqualError(t, actualCreateErr, wantErrStr)
 			}
 		})
 	}

@@ -587,9 +587,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					Issuer: "",
 				},
 			},
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.issuer: Invalid value: "": spec.issuer in body should be at least 1 chars long`,
-				env.APIGroupSuffix, objectMeta.Name),
+			wantErr: `spec.issuer: Invalid value: "": spec.issuer in body should be at least 1 chars long`,
 		},
 		{
 			name: "IDP display names cannot be empty",
@@ -607,10 +605,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].displayName: Invalid value: "": `+
-				"spec.identityProviders[0].displayName in body should be at least 1 chars long",
-				env.APIGroupSuffix, objectMeta.Name),
+			wantErr: `spec.identityProviders[0].displayName: Invalid value: "": spec.identityProviders[0].displayName in body should be at least 1 chars long`,
 		},
 		{
 			name: "IDP transform constants must have unique names",
@@ -634,12 +629,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantKube23OrOlderErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].transforms.constants[1]: Duplicate value: map[string]interface {}{"name":"notUnique"}`,
-				env.APIGroupSuffix, objectMeta.Name),
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].transforms.constants[1]: Duplicate value: map[string]interface {}{"name":"notUnique"}`,
-				env.APIGroupSuffix, objectMeta.Name),
+			wantErr: `spec.identityProviders[0].transforms.constants[1]: Duplicate value: map[string]interface {}{"name":"notUnique"}`,
 		},
 		{
 			name: "IDP transform constant names cannot be empty",
@@ -662,10 +652,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].transforms.constants[0].name: Invalid value: "": `+
-				`spec.identityProviders[0].transforms.constants[0].name in body should be at least 1 chars long`,
-				env.APIGroupSuffix, objectMeta.Name),
+			wantErr: `spec.identityProviders[0].transforms.constants[0].name: Invalid value: "": spec.identityProviders[0].transforms.constants[0].name in body should be at least 1 chars long`,
 		},
 		{
 			name: "IDP transform constant names cannot be more than 64 characters",
@@ -688,16 +675,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantKube23OrOlderErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders.transforms.constants.name: Invalid value: "12345678901234567890123456789012345678901234567890123456789012345": `+
-				`spec.identityProviders.transforms.constants.name in body should be at most 64 chars long`,
-				env.APIGroupSuffix, objectMeta.Name),
-			wantKube24Through31InclusiveErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be longer than 64`,
-				env.APIGroupSuffix, objectMeta.Name),
-			wantKube32OrNewerErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].transforms.constants[0].name: Too long: may not be more than 64 bytes`,
-				env.APIGroupSuffix, objectMeta.Name),
+			wantKube23OrOlderErr:            `spec.identityProviders.transforms.constants.name: Invalid value: "12345678901234567890123456789012345678901234567890123456789012345": spec.identityProviders.transforms.constants.name in body should be at most 64 chars long`,
+			wantKube24Through31InclusiveErr: `spec.identityProviders[0].transforms.constants[0].name: Too long: may not be longer than 64`,
+			wantKube32OrNewerErr:            `spec.identityProviders[0].transforms.constants[0].name: Too long: may not be more than 64 bytes`,
 		},
 		{
 			name: "IDP transform constant names must be a legal CEL variable name",
@@ -724,18 +704,13 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantKube23OrOlderErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders.transforms.constants.name: Invalid value: "cannot have spaces": `+
-				`spec.identityProviders.transforms.constants.name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`,
-				env.APIGroupSuffix, objectMeta.Name),
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`[spec.identityProviders[0].transforms.constants[0].name: Invalid value: "cannot have spaces": `+
-				`spec.identityProviders[0].transforms.constants[0].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$', `+
-				`spec.identityProviders[0].transforms.constants[1].name: Invalid value: "1mustStartWithLetter": `+
-				`spec.identityProviders[0].transforms.constants[1].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$', `+
-				`spec.identityProviders[0].transforms.constants[2].name: Invalid value: "_mustStartWithLetter": `+
+			wantKube23OrOlderErr: `spec.identityProviders.transforms.constants.name: Invalid value: "cannot have spaces": spec.identityProviders.transforms.constants.name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$'`,
+			wantErr: `[spec.identityProviders[0].transforms.constants[0].name: Invalid value: "cannot have spaces": ` +
+				`spec.identityProviders[0].transforms.constants[0].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$', ` +
+				`spec.identityProviders[0].transforms.constants[1].name: Invalid value: "1mustStartWithLetter": ` +
+				`spec.identityProviders[0].transforms.constants[1].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$', ` +
+				`spec.identityProviders[0].transforms.constants[2].name: Invalid value: "_mustStartWithLetter": ` +
 				`spec.identityProviders[0].transforms.constants[2].name in body should match '^[a-zA-Z][_a-zA-Z0-9]*$']`,
-				env.APIGroupSuffix, objectMeta.Name),
 		},
 		{
 			name: "IDP transform constant types must be one of the allowed enum strings",
@@ -760,10 +735,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].transforms.constants[0].type: Unsupported value: "this is invalid": `+
-				`supported values: "string", "stringList"`,
-				env.APIGroupSuffix, objectMeta.Name),
+			wantErr: `spec.identityProviders[0].transforms.constants[0].type: Unsupported value: "this is invalid": supported values: "string", "stringList"`,
 		},
 		{
 			name: "IDP transform expression types must be one of the allowed enum strings",
@@ -789,10 +761,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].transforms.expressions[0].type: Unsupported value: "this is invalid": `+
-				`supported values: "policy/v1", "username/v1", "groups/v1"`,
-				env.APIGroupSuffix, objectMeta.Name),
+			wantErr: `spec.identityProviders[0].transforms.expressions[0].type: Unsupported value: "this is invalid": supported values: "policy/v1", "username/v1", "groups/v1"`,
 		},
 		{
 			name: "IDP transform expressions cannot be empty",
@@ -815,10 +784,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].transforms.expressions[0].expression: Invalid value: "": `+
-				`spec.identityProviders[0].transforms.expressions[0].expression in body should be at least 1 chars long`,
-				env.APIGroupSuffix, objectMeta.Name),
+			wantErr: `spec.identityProviders[0].transforms.expressions[0].expression: Invalid value: "": spec.identityProviders[0].transforms.expressions[0].expression in body should be at least 1 chars long`,
 		},
 		{
 			name: "IDP transform example usernames cannot be empty",
@@ -842,10 +808,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					},
 				},
 			},
-			wantErr: fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: "+
-				`spec.identityProviders[0].transforms.examples[0].username: Invalid value: "": `+
-				`spec.identityProviders[0].transforms.examples[0].username in body should be at least 1 chars long`,
-				env.APIGroupSuffix, objectMeta.Name),
+			wantErr: `spec.identityProviders[0].transforms.examples[0].username: Invalid value: "": spec.identityProviders[0].transforms.examples[0].username in body should be at least 1 chars long`,
 		},
 		{
 			name: "minimum valid",
@@ -908,7 +871,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, createErr := fdClient.Create(ctx, tt.fd, metav1.CreateOptions{})
+			_, actualCreateErr := fdClient.Create(ctx, tt.fd, metav1.CreateOptions{})
 
 			t.Cleanup(func() {
 				// Delete it if it exists.
@@ -924,7 +887,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 
 			if tt.wantErr == "" && tt.wantKube23OrOlderErr == "" && tt.wantKube24Through31InclusiveErr == "" && tt.wantKube32OrNewerErr == "" { //nolint:nestif
 				// Did not want any error.
-				require.NoError(t, createErr)
+				require.NoError(t, actualCreateErr)
 			} else {
 				wantErr := tt.wantErr
 				if usingKubeVersionInCluster23OrOlder {
@@ -950,7 +913,11 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 					// Also allow overriding with an exact expected error for these Kube versions.
 					wantErr = tt.wantKube32OrNewerErr
 				}
-				require.EqualError(t, createErr, wantErr)
+
+				wantErr = fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: %s",
+					env.APIGroupSuffix, objectMeta.Name, wantErr)
+
+				require.EqualError(t, actualCreateErr, wantErr)
 			}
 		})
 	}

@@ -428,25 +428,6 @@ This field is only set when Type is "ImpersonationProxy". +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-26-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo"]
-==== CredentialIssuerKubeConfigInfo 
-
-CredentialIssuerKubeConfigInfo provides the information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
-This type is deprecated and will be removed in a future version.
-
-.Appears In:
-****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-26-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]
-****
-
-[cols="25a,75a", options="header"]
-|===
-| Field | Description
-| *`server`* __string__ | The K8s API server URL. +
-| *`certificateAuthorityData`* __string__ | The K8s API server CA bundle. +
-|===
-
-
 
 
 [id="{anchor_prefix}-go-pinniped-dev-generated-1-26-apis-concierge-config-v1alpha1-credentialissuerspec"]
@@ -480,8 +461,6 @@ CredentialIssuerStatus describes the status of the Concierge.
 |===
 | Field | Description
 | *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-26-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$] array__ | List of integration strategies that were attempted by Pinniped. +
-| *`kubeConfigInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-26-apis-concierge-config-v1alpha1-credentialissuerkubeconfiginfo[$$CredentialIssuerKubeConfigInfo$$]__ | Information needed to form a valid Pinniped-based kubeconfig using this credential issuer. +
-This field is deprecated and will be removed in a future version. +
 |===
 
 

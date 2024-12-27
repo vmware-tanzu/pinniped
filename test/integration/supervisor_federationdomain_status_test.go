@@ -569,11 +569,9 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 
 	performCELTests := testutil.KubeServerMinorVersionAtLeastInclusive(t, adminClient.Discovery(), 27)
 
-	objectMeta := testlib.ObjectMetaWithRandomName(t, "federation-domain")
-
 	tests := []struct {
 		name        string
-		fd          *supervisorconfigv1alpha1.FederationDomain
+		spec        *supervisorconfigv1alpha1.FederationDomainSpec
 		wantErrs    []string
 		wantCELErrs []string
 
@@ -584,47 +582,35 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 	}{
 		{
 			name: "issuer cannot be empty",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "",
-				},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "",
 			},
 			wantErrs:    []string{`spec.issuer: Invalid value: "": spec.issuer in body should be at least 1 chars long`},
 			wantCELErrs: []string{`spec.issuer: Invalid value: "string": issuer must be an HTTPS URL`},
 		},
 		{
 			name: "issuer must be a URL",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "foo",
-				},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "foo",
 			},
 			wantCELErrs: []string{`spec.issuer: Invalid value: "string": issuer must be an HTTPS URL`},
 		},
 		{
 			name: "issuer URL scheme must be 'https'",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "http://example.com",
-				},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "http://example.com",
 			},
 			wantCELErrs: []string{`spec.issuer: Invalid value: "string": issuer must be an HTTPS URL`},
 		},
 		{
 			name: "IDP display names cannot be empty",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 						},
 					},
 				},
@@ -633,21 +619,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constants must have unique names",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
-							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
-								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
-									{Name: "notUnique", Type: "string", StringValue: "foo"},
-									{Name: "notUnique", Type: "string", StringValue: "bar"},
-								},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+						},
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
+								{Name: "notUnique", Type: "string", StringValue: "foo"},
+								{Name: "notUnique", Type: "string", StringValue: "bar"},
 							},
 						},
 					},
@@ -657,20 +640,17 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constant names cannot be empty",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
-							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
-								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
-									{Name: "", Type: "string"},
-								},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+						},
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
+								{Name: "", Type: "string"},
 							},
 						},
 					},
@@ -680,20 +660,17 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constant names cannot be more than 64 characters",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
-							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
-								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
-									{Name: "12345678901234567890123456789012345678901234567890123456789012345", Type: "string"},
-								},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+						},
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
+								{Name: "12345678901234567890123456789012345678901234567890123456789012345", Type: "string"},
 							},
 						},
 					},
@@ -706,24 +683,21 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constant names must be a legal CEL variable name",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
-							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
-								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
-									{Name: "cannot have spaces", Type: "string"},
-									{Name: "1mustStartWithLetter", Type: "string"},
-									{Name: "_mustStartWithLetter", Type: "string"},
-									{Name: "canOnlyIncludeLettersAndNumbersAnd_", Type: "string"},
-									{Name: "CanStart1_withUpperCase", Type: "string"},
-								},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+						},
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
+								{Name: "cannot have spaces", Type: "string"},
+								{Name: "1mustStartWithLetter", Type: "string"},
+								{Name: "_mustStartWithLetter", Type: "string"},
+								{Name: "canOnlyIncludeLettersAndNumbersAnd_", Type: "string"},
+								{Name: "CanStart1_withUpperCase", Type: "string"},
 							},
 						},
 					},
@@ -737,22 +711,19 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform constant types must be one of the allowed enum strings",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
-							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
-								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
-									{Name: "a", Type: "this is invalid"},
-									{Name: "b", Type: "string"},
-									{Name: "c", Type: "stringList"},
-								},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+						},
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
+								{Name: "a", Type: "this is invalid"},
+								{Name: "b", Type: "string"},
+								{Name: "c", Type: "stringList"},
 							},
 						},
 					},
@@ -763,23 +734,20 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform expression types must be one of the allowed enum strings",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
-							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
-								Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
-									{Type: "this is invalid", Expression: "foo"},
-									{Type: "policy/v1", Expression: "foo"},
-									{Type: "username/v1", Expression: "foo"},
-									{Type: "groups/v1", Expression: "foo"},
-								},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+						},
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
+								{Type: "this is invalid", Expression: "foo"},
+								{Type: "policy/v1", Expression: "foo"},
+								{Type: "username/v1", Expression: "foo"},
+								{Type: "groups/v1", Expression: "foo"},
 							},
 						},
 					},
@@ -790,20 +758,17 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform expressions cannot be empty",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
-							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
-								Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
-									{Type: "username/v1", Expression: ""},
-								},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+						},
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
+								{Type: "username/v1", Expression: ""},
 							},
 						},
 					},
@@ -813,21 +778,18 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "IDP transform example usernames cannot be empty",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: objectMeta,
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
-							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
-								Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
-									{Username: ""},
-									{Username: "non-empty"},
-								},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+						},
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
+								{Username: ""},
+								{Username: "non-empty"},
 							},
 						},
 					},
@@ -837,25 +799,19 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "minimum valid",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "fd"),
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-				},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
 			},
 		},
 		{
 			name: "minimum valid when IDPs are included",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "fd"),
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
-							},
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
 						},
 					},
 				},
@@ -863,26 +819,23 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		},
 		{
 			name: "minimum valid when IDP has transform constants, expressions, and examples",
-			fd: &supervisorconfigv1alpha1.FederationDomain{
-				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "fd"),
-				Spec: supervisorconfigv1alpha1.FederationDomainSpec{
-					Issuer: "https://example.com",
-					IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
-						{
-							DisplayName: "foo",
-							ObjectRef: corev1.TypedLocalObjectReference{
-								APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+			spec: &supervisorconfigv1alpha1.FederationDomainSpec{
+				Issuer: "https://example.com",
+				IdentityProviders: []supervisorconfigv1alpha1.FederationDomainIdentityProvider{
+					{
+						DisplayName: "foo",
+						ObjectRef: corev1.TypedLocalObjectReference{
+							APIGroup: ptr.To("required in older versions of Kubernetes for each item in the identityProviders slice"),
+						},
+						Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
+							Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
+								{Name: "foo", Type: "string"},
 							},
-							Transforms: supervisorconfigv1alpha1.FederationDomainTransforms{
-								Constants: []supervisorconfigv1alpha1.FederationDomainTransformsConstant{
-									{Name: "foo", Type: "string"},
-								},
-								Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
-									{Type: "username/v1", Expression: "foo"},
-								},
-								Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
-									{Username: "foo"},
-								},
+							Expressions: []supervisorconfigv1alpha1.FederationDomainTransformsExpression{
+								{Type: "username/v1", Expression: "foo"},
+							},
+							Examples: []supervisorconfigv1alpha1.FederationDomainTransformsExample{
+								{Username: "foo"},
 							},
 						},
 					},
@@ -896,11 +849,16 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, actualCreateErr := fdClient.Create(ctx, tt.fd, metav1.CreateOptions{})
+			fd := &supervisorconfigv1alpha1.FederationDomain{
+				ObjectMeta: testlib.ObjectMetaWithRandomName(t, "federation-domain"),
+				Spec:       *tt.spec,
+			}
+
+			_, actualCreateErr := fdClient.Create(ctx, fd, metav1.CreateOptions{})
 
 			t.Cleanup(func() {
 				// Delete it if it exists.
-				delErr := fdClient.Delete(ctx, tt.fd.Name, metav1.DeleteOptions{})
+				delErr := fdClient.Delete(ctx, fd.Name, metav1.DeleteOptions{})
 				if !apierrors.IsNotFound(delErr) {
 					require.NoError(t, delErr)
 				}
@@ -917,7 +875,7 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 			}
 
 			wantErr := tt.wantErrs
-			if usingKubeVersionInCluster23OrOlder {
+			if usingKubeVersionInCluster23OrOlder && tt.name != "IDP transform constants must have unique names" {
 				// Old versions of Kubernetes did not show the index where the error occurred in some of the messages,
 				// so remove the indices from the expected messages when running against an old version of Kube.
 				// For the above tests, it should be enough to assume that there will only be indices up to 10.
@@ -945,14 +903,14 @@ func TestSupervisorFederationDomainCRDValidations_Parallel(t *testing.T) {
 
 			if performCELTests {
 				wantErr = append(wantErr, tt.wantCELErrs...)
-			} else if len(wantErr) == len(tt.wantCELErrs) {
+			} else if len(wantErr) == 0 && len(tt.wantCELErrs) > 0 {
 				// on old K8s versions, don't check for errors when all we expect are CEL errors
 				require.NoError(t, actualCreateErr)
 				return
 			}
 
 			wantErrStr := fmt.Sprintf("FederationDomain.config.supervisor.%s %q is invalid: ",
-				env.APIGroupSuffix, objectMeta.Name)
+				env.APIGroupSuffix, fd.Name)
 
 			if len(wantErr) == 1 {
 				wantErrStr += wantErr[0]

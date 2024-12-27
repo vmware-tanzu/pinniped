@@ -5,6 +5,11 @@
 
 set -eu
 
+if [[ -z "${PINNIPED_GCP_PROJECT:-}" ]]; then
+  echo "PINNIPED_GCP_PROJECT env var must be set"
+  exit 1
+fi
+
 script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 failed_scripts=()

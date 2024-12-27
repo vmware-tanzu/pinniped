@@ -96,9 +96,9 @@ meta:
   kube_version_v1-28-x: &kube_version_v1-28-x
     KUBE_VERSION: v1.28.15
   kube_version_v1-29-x: &kube_version_v1-29-x
-    KUBE_VERSION: v1.29.10
+    KUBE_VERSION: v1.29.12
   kube_version_v1-30-x: &kube_version_v1-30-x
-    KUBE_VERSION: v1.30.6
+    KUBE_VERSION: v1.30.8
   kube_version_v1-31-x: &kube_version_v1-31-x
     KUBE_VERSION: v1.31.4
   kube_version_v1-32-x: &kube_version_v1-32-x
@@ -1437,6 +1437,118 @@ jobs:
         image: gcloud-image
         params:
           <<: *kube_version_v1-30-x
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-1.31
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped
+            passed: [ run-int-k8s-versions ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ run-int-k8s-versions ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ run-int-k8s-versions ]
+          - get: integration-test-runner-image
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *kube_version_v1-31-x
+          <<: *gcp_account_params
+      - task: deploy
+        input_mapping:
+          cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          CLUSTER_CAPABILITIES_PATH: pinniped/test/cluster_capabilities/kind.yaml
+        file: pinniped-ci/pipelines/shared-tasks/deploy-to-integration/task.yml
+        image: integration-test-runner-image
+      - task: run-integration-tests
+        timeout: 75m
+        file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml
+        image: integration-test-runner-image
+        params:
+          START_GCLOUD_PROXY: "yes"
+          <<: *gcp_account_params
+    ensure:
+      task: export-cluster-diagnostics
+      <<: *cluster_diagnostics_task
+      input_mapping:
+        cluster-pool: deploy-kind-cluster-vm-output
+      ensure:
+        task: remove-kind-instance
+        attempts: 2
+        timeout: 20m
+        file: pinniped-ci/pipelines/shared-tasks/remove-kind-cluster-vm/task.yml
+        image: gcloud-image
+        input_mapping:
+          kind-cluster-pool: deploy-kind-cluster-vm-output
+        params:
+          <<: *gcp_account_params
+
+  - name: integration-test-1.32
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped
+            passed: [ run-int-k8s-versions ]
+            trigger: true
+          - get: pinniped-ci
+          - get: kind-release
+          - get: gcloud-image
+          - get: k8s-app-deployer-image
+          - get: ci-build-image
+            passed: [ run-int-k8s-versions ]
+            params:
+              skip_download: true
+          - get: ci-test-image
+            passed: [ run-int-k8s-versions ]
+          - get: integration-test-runner-image
+      - task: deploy-kind-instance
+        attempts: 5
+        timeout: 30m
+        file: pinniped-ci/pipelines/shared-tasks/deploy-kind-cluster-vm/task.yml
+        image: gcloud-image
+        params:
+          <<: *kube_version_v1-32-x
           <<: *gcp_account_params
       - task: deploy
         input_mapping:

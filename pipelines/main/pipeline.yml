@@ -5,6 +5,25 @@ display:
 
   background_image: https://upload.wikimedia.org/wikipedia/commons/2/27/Walruses_odobenus_rosmarus_largest_pinniped_marine_mammals.jpg
 
+groups:
+  - name: all
+    jobs:
+    - "*"
+  - name: pinniped-on-managed-k8s
+    jobs:
+    - deploy-and-test-acceptance-gke
+    - integration-test-gke-rapid
+    - integration-test-gke-stable
+    - integration-test-eks-oldest
+    - integration-test-eks-latest
+    - integration-test-aks-oldest
+    - integration-test-aks-latest
+  - name: kind-vanilla
+    jobs:
+    - integration-test-oldest
+    - "integration-test-1*"
+    - integration-test-latest
+
 meta:
 
   trivy_ignores: &trivy_ignores

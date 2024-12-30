@@ -18,11 +18,42 @@ groups:
     - integration-test-eks-latest
     - integration-test-aks-oldest
     - integration-test-aks-latest
-  - name: kind-vanilla
+  - name: kind-all
     jobs:
     - integration-test-oldest
     - "integration-test-1*"
     - integration-test-latest
+  - name: kind-supported
+    jobs:
+    - integration-test-latest
+    - integration-test-1.32
+    - integration-test-1.31
+    - integration-test-1.30
+    - integration-test-1.29
+  - name: kind-unsupported-old
+    jobs:
+    - integration-test-1.28
+    - integration-test-1.27
+    - integration-test-1.26
+    - integration-test-1.25
+    - integration-test-1.24
+    - integration-test-1.23
+    - integration-test-1.22
+    - integration-test-oldest
+    - integration-test-changed-api-group-oldest
+  - name: kind-other-tests
+    jobs:
+    - integration-test-latest-arm64
+    - integration-test-latest-with-external-idps
+    - integration-test-idps-firewalled
+    - integration-test-latest-fips
+    - integration-test-k8s-main
+    - kubectl-apply-test
+    - integration-test-changed-api-group-oldest
+    - integration-test-changed-api-group-latest
+    - integration-test-multiple-pinnipeds
+    - uninstall-test
+    - uninstall-existing-ns-test
 
 meta:
 

@@ -65,8 +65,8 @@ github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyY
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
-github.com/chromedp/cdproto v0.0.0-20241222144035-c16d098c0fb6 h1:dAUcp/W5RpJSZW/HksEHfAAoMBIvSFFIwslAFEte+6g=
-github.com/chromedp/cdproto v0.0.0-20241222144035-c16d098c0fb6/go.mod h1:4XqMl3iIW08jtieURWL6Tt5924w21pxirC6th662XUM=
+github.com/chromedp/cdproto v0.0.0-20250101192427-60a0ca35cb84 h1:NXWP4iSVz4BPGk7Z/fPXL0c44hiWbrbyhBY0LwKKZnY=
+github.com/chromedp/cdproto v0.0.0-20250101192427-60a0ca35cb84/go.mod h1:4XqMl3iIW08jtieURWL6Tt5924w21pxirC6th662XUM=
 github.com/chromedp/chromedp v0.11.2 h1:ZRHTh7DjbNTlfIv3NFTbB7eVeu5XCNkgrpcGSpn2oX0=
 github.com/chromedp/chromedp v0.11.2/go.mod h1:lr8dFRLKsdTTWb75C/Ttol2vnBKOSnt0BW8R9Xaupi8=
 github.com/chromedp/sysutil v1.1.0 h1:PUFNv5EcprjqXZD9nJb9b/c9ibAbxiYo4exNWZyipwM=
@@ -464,8 +464,8 @@ github.com/openzipkin/zipkin-go v0.4.3 h1:9EGwpqkgnwdEIJ+Od7QVSEIH+ocmm5nPat0G7s
 github.com/openzipkin/zipkin-go v0.4.3/go.mod h1:M9wCJZFWCo2RiY+o1eBCEMe0Dp2S5LDHcMZmk3RmK7c=
 github.com/orisano/pixelmatch v0.0.0-20220722002657-fb0b55479cde h1:x0TT0RDC7UhAVbbWWBzr41ElhJx5tXPWkIHA2HWPRuw=
 github.com/orisano/pixelmatch v0.0.0-20220722002657-fb0b55479cde/go.mod h1:nZgzbfBr3hhjoZnS66nKrHmduYNpc34ny7RK4z5/HM0=
-github.com/ory/fosite v0.49.1-0.20241230125256-d7b87ac91c72 h1:c0Bzq3cYUtkz/5bglrp/UjcDQhDG/eMNhmXDSauogec=
-github.com/ory/fosite v0.49.1-0.20241230125256-d7b87ac91c72/go.mod h1:6XCoaTdHP3fF76sy6uLFfUCTjgJNdNspjny7azuTxoQ=
+github.com/ory/fosite v0.49.1-0.20250102135636-049ed1924cd0 h1:/nSkF1lW5wwD2bfUy8PRPVoFTLl1am/sZlX2gkgnepA=
+github.com/ory/fosite v0.49.1-0.20250102135636-049ed1924cd0/go.mod h1:6XCoaTdHP3fF76sy6uLFfUCTjgJNdNspjny7azuTxoQ=
 github.com/ory/go-acc v0.2.9-0.20230103102148-6b1c9a70dbbe h1:rvu4obdvqR0fkSIJ8IfgzKOWwZ5kOT2UNfLq81Qk7rc=
 github.com/ory/go-acc v0.2.9-0.20230103102148-6b1c9a70dbbe/go.mod h1:z4n3u6as84LbV4YmgjHhnwtccQqzf4cZlSk9f1FhygI=
 github.com/ory/go-convenience v0.1.0 h1:zouLKfF2GoSGnJwGq+PE/nJAE6dj2Zj5QlTgmMTsTS8=

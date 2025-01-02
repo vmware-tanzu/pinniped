@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package token provides a handler for the OIDC token endpoint.
@@ -440,6 +440,16 @@ func auditLogIDToken(
 		Session: accessRequest,
 		KeysAndValues: []any{
 			"tokenID", fmt.Sprintf("%x", sha256.Sum256([]byte(idToken))),
+			"tokenSize", intToKB(len(idToken)),
 		},
 	})
+}
+
+func intToKB(i int) string {
+	oneKiB := 1024
+	if i > oneKiB {
+		return fmt.Sprintf("%.2f KiB", float64(i)/float64(oneKiB))
+	}
+
+	return fmt.Sprintf("%d Bytes", i)
 }

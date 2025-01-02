@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package token
@@ -420,6 +420,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
 								"sessionID": sessionID,
 								"tokenID":   idTokenToHash(idToken),
+								"tokenSize": "656 Bytes", // the token contents may be random, but the size is predictable
 							}),
 						}
 					},
@@ -495,6 +496,7 @@ func TestTokenEndpointAuthcodeExchange(t *testing.T) {
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
 								"sessionID": sessionID,
 								"tokenID":   idTokenToHash(idToken),
+								"tokenSize": "718 Bytes", // the token contents may be random, but the size is predictable
 							}),
 						}
 					},
@@ -1210,6 +1212,18 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 						"upstreamObj": map[string]string{
 							"name": "value",
 						},
+						"upstreamLargeStrings": []string{
+							"45721694-1b78-49cf-95fd-4e326fecb288",
+							"5578bc6d-a1a1-419b-9522-a35e4dbb4dc8",
+							"0fd65787-0848-4f64-8959-fda114e63a6c",
+							"dbfdf47a-ab4c-4dba-ad59-7284c8b935f2",
+							"f8e397ba-f18f-4a9e-92df-e1d92356d394",
+							"4f8153d5-bc9d-4859-8da4-2a4cbdcab9fc",
+							"28de15cb-86bd-48e3-b9f2-27a75c35c7eb",
+							"331253a2-fdf7-4f8b-9768-50d53a12668b",
+							"9ceef90d-6d1c-40de-92ee-e633362541c3",
+							"892da1d3-6fdc-4572-8a31-bfe282994329",
+						},
 					}
 				},
 				want: tokenEndpointResponseExpectedValues{
@@ -1229,6 +1243,18 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 						"upstreamObj": map[string]any{
 							"name": "value",
 						},
+						"upstreamLargeStrings": []any{
+							"45721694-1b78-49cf-95fd-4e326fecb288",
+							"5578bc6d-a1a1-419b-9522-a35e4dbb4dc8",
+							"0fd65787-0848-4f64-8959-fda114e63a6c",
+							"dbfdf47a-ab4c-4dba-ad59-7284c8b935f2",
+							"f8e397ba-f18f-4a9e-92df-e1d92356d394",
+							"4f8153d5-bc9d-4859-8da4-2a4cbdcab9fc",
+							"28de15cb-86bd-48e3-b9f2-27a75c35c7eb",
+							"331253a2-fdf7-4f8b-9768-50d53a12668b",
+							"9ceef90d-6d1c-40de-92ee-e633362541c3",
+							"892da1d3-6fdc-4572-8a31-bfe282994329",
+						},
 					},
 					wantAuditLogs: func(sessionID string, idToken string) []testutil.WantedAuditLog {
 						return []testutil.WantedAuditLog{
@@ -1245,6 +1271,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
 								"sessionID": sessionID,
 								"tokenID":   idTokenToHash(idToken),
+								"tokenSize": "1.41 KiB", // the token contents may be random, but the size is predictable
 							}),
 						}
 					},
@@ -1268,6 +1295,7 @@ func TestTokenEndpointTokenExchange(t *testing.T) { // tests for grant_type "urn
 					testutil.WantAuditLog("ID Token Issued", map[string]any{
 						"sessionID": sessionID,
 						"tokenID":   idTokenToHash(idToken),
+						"tokenSize": "1.28 KiB", // the token contents may be random, but the size is predictable
 					}),
 				}
 			},
@@ -2429,6 +2457,7 @@ func TestRefreshGrant(t *testing.T) {
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
 								"sessionID": sessionID,
 								"tokenID":   idTokenToHash(idToken),
+								"tokenSize": "567 Bytes", // the token contents may be random, but the size is predictable
 							}),
 						}
 					},
@@ -2685,6 +2714,7 @@ func TestRefreshGrant(t *testing.T) {
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
 								"sessionID": sessionID,
 								"tokenID":   idTokenToHash(idToken),
+								"tokenSize": "886 Bytes", // the token contents may be random, but the size is predictable
 							}),
 						}
 					},
@@ -3077,6 +3107,7 @@ func TestRefreshGrant(t *testing.T) {
 							testutil.WantAuditLog("ID Token Issued", map[string]any{
 								"sessionID": sessionID,
 								"tokenID":   idTokenToHash(idToken),
+								"tokenSize": "594 Bytes", // the token contents may be random, but the size is predictable
 							}),
 						}
 					},
@@ -6089,4 +6120,41 @@ func TestParamsSafeToLog(t *testing.T) {
 	}
 
 	require.ElementsMatch(t, wantParams, paramsSafeToLog().UnsortedList())
+}
+
+func TestIntToKB(t *testing.T) {
+	tests := []struct {
+		name string
+		i    int
+		want string
+	}{
+		{
+			name: "happy path <2^10",
+			i:    500,
+			want: "500 Bytes",
+		},
+		{
+			name: "happy path >2^10, will round",
+			i:    1175, // 1175 / 1024 = 1.14746094
+			want: "1.15 KiB",
+		},
+		{
+			name: "happy path >2^20, will round",
+			i:    12345678, // 12345678 / 1024 = 12,056.32617188
+			want: "12056.33 KiB",
+		},
+		{
+			name: "negative number prints negative",
+			i:    -1234,
+			want: "-1234 Bytes",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual := intToKB(test.i)
+			require.Equal(t, test.want, actual)
+		})
+	}
 }

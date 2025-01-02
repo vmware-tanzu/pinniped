@@ -10,7 +10,7 @@ replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-dif
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20241222144035-c16d098c0fb6
+	github.com/chromedp/cdproto v0.0.0-20250101192427-60a0ca35cb84
 	github.com/chromedp/chromedp v0.11.2
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/coreos/go-semver v0.3.1
@@ -34,7 +34,7 @@ require (
 	github.com/joshlf/go-acl v0.0.0-20200411065538-eae00ae38531
 	github.com/migueleliasweb/go-github-mock v1.1.0
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/ory/fosite v0.49.1-0.20241230125256-d7b87ac91c72
+	github.com/ory/fosite v0.49.1-0.20250102135636-049ed1924cd0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/spec v1.4.0

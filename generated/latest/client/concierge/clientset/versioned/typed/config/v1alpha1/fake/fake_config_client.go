@@ -16,7 +16,7 @@ type FakeConfigV1alpha1 struct {
 }
 
 func (c *FakeConfigV1alpha1) CredentialIssuers() v1alpha1.CredentialIssuerInterface {
-	return &FakeCredentialIssuers{c}
+	return newFakeCredentialIssuers(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

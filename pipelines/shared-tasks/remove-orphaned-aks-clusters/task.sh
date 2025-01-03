@@ -67,8 +67,7 @@ while IFS="" read -r line || [ -n "$line" ]; do
   # UTC date format example: 2025-01-03T20:13:02.5855661Z
   # Note that this date command may not work on MacOS.
   creation_time_seconds_since_epoch=$(date -u -d "$creation_time" '+%s')
-  # TODO: Revert this change the math below back to being hours_ago_to_delete * 60 * 60. This commit is only to manually test that this job will really delete clusters that it finds.
-  if (($((now_in_seconds_since_epoch - creation_time_seconds_since_epoch)) > $((60)))); then
+  if (($((now_in_seconds_since_epoch - creation_time_seconds_since_epoch)) > $((hours_ago_to_delete * 60 * 60)))); then
     clusters_to_remove+=("$cluster_name")
     echo "$cluster_name $creation_time (older than $hours_ago_to_delete hours)"
   else

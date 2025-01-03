@@ -29,6 +29,11 @@ az rest \
   --url "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID}/resources" \
   --url-parameters api-version=2024-08-01 \$expand=createdTime >all-resources.json
 
+if [[ $(jq '.value | length' all-resources.json) == "0" ]]; then
+  echo "No resources were found in the subscription. Does the service account have permissions to list all resources?"
+  exit 1
+fi
+
 # Filter resources by clusters in the expected resource group.
 # Write another file where each line is a cluster name, followed by a space, followed by its creation time.
 cat all-resources.json |

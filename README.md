@@ -155,8 +155,9 @@ This requires the following:
    Create the app in "My Organization Only". It does not need a redirect URI or any other optional settings.
    Create a client secret for this app. If you want the client secret to have a long lifetime, you can use the `az` CLI to create it.
    In the Subscription's IAM settings, assign this app the role "Azure Kubernetes Service Contributor Role" to allow
-   the app to manage AKS clusters. Do not grant this app permissions in any other Subscription or use it for any
-   other purpose.
+   the app to manage AKS clusters. Also assign this app the role "Reader" to allow it to read all resources
+   (used by the `remove-orphaned-aks-clusters` CI task).
+   Do not grant this app permissions in any other Subscription or use it for any other purpose.
 3. Configure the pipelines with the app's Application (client) ID, Client Secret, and Directory (tenant) ID
    as the appropriate secret values.
 

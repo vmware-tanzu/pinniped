@@ -44,9 +44,15 @@ cat all-clusters.txt
 echo
 
 # Remove clusters with unexpected name formats. They might have been created manually for testing.
-cat all-clusters.txt | grep -E '^aks-[a-f0-9]+ ' >ci-clusters.txt
+# The curly braces and "or true" syntax prevents errors when the grep fails to find any matches.
+cat all-clusters.txt | { grep -E '^aks-[a-f0-9]+ ' || true; } >ci-clusters.txt
 
-echo "Only those clusters with expected naming convention:"
+if [[ ! -s ci-clusters.txt ]]; then
+  echo "No clusters matching the expected naming convention were found."
+  exit 0
+fi
+
+echo "Only those clusters matched the expected naming convention:"
 cat ci-clusters.txt
 echo
 

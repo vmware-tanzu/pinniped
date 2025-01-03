@@ -30,6 +30,7 @@ groups:
       - deploy-and-test-acceptance-gke
       - integration-test-eks-latest
       - integration-test-aks-latest
+      - ready-to-release
   - name: int-k8s-versions
     jobs:
       - run-int-k8s-versions
@@ -65,7 +66,7 @@ groups:
       - integration-test-aks-oldest
   - name: release
     jobs:
-      - ready-to-release
+      - ready-to-release # this job is auto-triggered, but show it again here to make it easy to see in the UI which versions are ready to go
       - release
       - update-version-and-cli-docs
       - update-homebrew-formula

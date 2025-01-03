@@ -144,6 +144,24 @@ Using the `gcloud secrets list` command or the [web console](https://console.clo
 you can list the available secrets. The content of each secret is a YAML file with secret key/value pairs.
 You can also use the `./hack/edit-gcloud-secret.sh <secretName>` script to edit or inspect each secret.
 
+## Configure Azure for CI to test on AKS
+
+There are several CI jobs which test that Pinniped works when installed on Azure's AKS.
+For these jobs to run, they need to be able to create and delete ephemeral AKS clusters.
+This requires the following:
+
+1. An active Azure Subscription. (A "subscription" in Azure is the equivalent of an "account" in AWS or a "project" in GCP.)
+2. An Azure App Registration (basically, a service account) active in the same Directory (aka tenant) as the Subscription.
+   Create the app in "My Organization Only". It does not need a redirect URI or any other optional settings.
+   Create a client secret for this app. If you want the client secret to have a long lifetime, you can use the `az` CLI to create it.
+   In the Subscription's IAM settings, assign this app the role "Azure Kubernetes Service Contributor Role" to allow
+   the app to manage AKS clusters. Do not grant this app permissions in any other Subscription or use it for any
+   other purpose.
+3. Configure the pipelines with the app's Application (client) ID, Client Secret, and Directory (tenant) ID
+   as the appropriate secret values.
+
+The CI jobs will create and delete AKS clusters in a Resource Group called `pinniped-ci` within the provided Subscription.
+
 ## Setting Up Active Directory Test Environment
 
 To test the `ActiveDirectoryIdentityProvider` functionality, we have a long-running Active Directory Domain Controller

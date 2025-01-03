@@ -39,6 +39,7 @@ fi
 cat all-resources.json |
   jq -r ".value.[] | select(.type == \"Microsoft.ContainerService/managedClusters\") | select(.id | contains(\"/resourceGroups/${AZURE_RESOURCE_GROUP}/\")) | \"\(.name) \(.createdTime)\"" >all-clusters.txt
 
+echo
 echo "Found all clusters in expected resource group:"
 cat all-clusters.txt
 echo

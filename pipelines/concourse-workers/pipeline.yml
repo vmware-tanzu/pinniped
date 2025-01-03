@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 display:
@@ -28,6 +28,14 @@ meta:
     GCP_SERVICE_ACCOUNT: ((gke-test-pool-manager-username))
     GCP_JSON_KEY: ((gke-test-pool-manager-json-key))
 
+  # Azure account info and which resource group the clusters should be created in and deleted from.
+  azure_account_params: &azure_account_params
+    AZURE_SUBSCRIPTION_ID: ((azure-bot-subscription-id))
+    AZURE_TENANT: ((azure-bot-tenant-id))
+    AZURE_RESOURCE_GROUP: pinniped-ci
+    AZURE_USERNAME: ((azure-bot-app-id))
+    AZURE_PASSWORD: ((azure-bot-password))
+
 resources:
 
   - name: pinniped-ci
@@ -55,6 +63,13 @@ resources:
     source:
       repository: google/cloud-sdk
       tag: slim
+
+  - name: aks-deployer-image
+    type: registry-image
+    icon: docker
+    check_every: 5m
+    source:
+      repository: mcr.microsoft.com/azure-cli
 
   - name: hourly
     type: time
@@ -146,3 +161,19 @@ jobs:
         image: gcloud-image
         params:
           <<: *gke_account_params
+
+  - name: remove-orphaned-aks-clusters
+    public: true # all logs are publicly visible
+    plan:
+      - in_parallel:
+          - get: pinniped-ci
+          - get: aks-deployer-image
+          - get: hourly
+            trigger: true
+      - task: remove-orphaned-aks-clusters
+        attempts: 2
+        timeout: 25m
+        file: pinniped-ci/pipelines/shared-tasks/remove-orphaned-aks-clusters/task.yml
+        image: gcloud-image
+        params:
+          <<: *azure_account_params

@@ -1,0 +1,16 @@
+# Copyright 2025 the Pinniped contributors. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+platform: linux
+inputs:
+  - name: pinniped-ci
+outputs:
+params:
+  AZURE_TENANT:
+  AZURE_USERNAME:
+  AZURE_PASSWORD:
+  AZURE_SUBSCRIPTION_ID:
+  AZURE_RESOURCE_GROUP:
+run:
+  path: pinniped-ci/pipelines/shared-tasks/remove-orphaned-aks-clusters/task.sh

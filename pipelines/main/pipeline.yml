@@ -103,6 +103,7 @@ meta:
     AWS_SECRET_ACCESS_KEY: ((aws-concourse-ci-iam-key-secret))
     AWS_ROLE_ARN: ((aws-concourse-ci-role-arn))
 
+  # Azure account info and which resource group the clusters should be created in and deleted from.
   azure_account_params: &azure_account_params
     AZURE_REGION: westus2
     AZURE_TENANT: ((azure-bot-tenant-id))

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -14,12 +14,6 @@ az login \
 
 echo
 echo "Trying to use Kubernetes version $KUBE_VERSION"
-
-# mcr.microsoft.com/azure-cli image doesn't include jq anymore.
-# https://github.com/Azure/azure-cli/issues/29827#issuecomment-2326125769
-# https://github.com/MicrosoftDocs/azure-docs-cli/blob/main/docs-ref-conceptual/release-notes-azure-cli.md
-# But it does seem to include openssl!
-tdnf install jq --assumeyes
 
 # Look up the latest AKS Kubernetes version corresponding to $KUBE_VERSION.
 AKS_VERSIONS="$(az aks get-versions --location "$AZURE_REGION" -o json \

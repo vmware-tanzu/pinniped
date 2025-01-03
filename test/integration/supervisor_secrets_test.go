@@ -31,7 +31,7 @@ func TestSupervisorSecrets_Parallel(t *testing.T) {
 	// Create our FederationDomain under test.
 	federationDomain := testlib.CreateTestFederationDomain(ctx, t,
 		supervisorconfigv1alpha1.FederationDomainSpec{
-			Issuer: fmt.Sprintf("http://test-issuer-%s.pinniped.dev", testlib.RandHex(t, 8)),
+			Issuer: fmt.Sprintf("https://test-issuer-%s.pinniped.dev", testlib.RandHex(t, 8)),
 		},
 		supervisorconfigv1alpha1.FederationDomainPhaseError, // in phase error until there is an IDP created, but this test does not care
 	)

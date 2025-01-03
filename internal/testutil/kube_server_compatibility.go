@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -45,7 +45,7 @@ func KubeServerMinorVersionAtLeastInclusive(t *testing.T, discoveryClient discov
 	return !KubeServerMinorVersionInBetweenInclusive(t, discoveryClient, 0, min-1)
 }
 
-func KubeServerMinorVersionInBetweenInclusive(t *testing.T, discoveryClient discovery.DiscoveryInterface, min, max int) bool {
+func KubeServerMinorVersion(t *testing.T, discoveryClient discovery.DiscoveryInterface) int {
 	t.Helper()
 
 	version, err := discoveryClient.ServerVersion()
@@ -55,6 +55,12 @@ func KubeServerMinorVersionInBetweenInclusive(t *testing.T, discoveryClient disc
 
 	minor, err := strconv.Atoi(strings.TrimSuffix(version.Minor, "+"))
 	require.NoError(t, err)
+
+	return minor
+}
+
+func KubeServerMinorVersionInBetweenInclusive(t *testing.T, discoveryClient discovery.DiscoveryInterface, min, max int) bool {
+	minor := KubeServerMinorVersion(t, discoveryClient)
 
 	return minor >= min && minor <= max
 }

@@ -540,26 +540,15 @@ func getConciergeFrontend(credentialIssuer *conciergeconfigv1alpha1.CredentialIs
 			continue
 		}
 
-		// Backfill the .status.strategies[].frontend field from .status.kubeConfigInfo for backwards compatibility.
-		if strategy.Type == conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType && strategy.Frontend == nil && credentialIssuer.Status.KubeConfigInfo != nil {
-			strategy = *strategy.DeepCopy()
-			strategy.Frontend = &conciergeconfigv1alpha1.CredentialIssuerFrontend{
-				Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
-				TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
-					Server:                   credentialIssuer.Status.KubeConfigInfo.Server,
-					CertificateAuthorityData: credentialIssuer.Status.KubeConfigInfo.CertificateAuthorityData,
-				},
-			}
-		}
-
-		// If the strategy frontend is still nil, skip.
+		// If the strategy frontend is nil, skip.
 		if strategy.Frontend == nil {
 			continue
 		}
 
 		//	Skip any unknown frontend types.
 		switch strategy.Frontend.Type {
-		case conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType, conciergeconfigv1alpha1.ImpersonationProxyFrontendType:
+		case conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+			conciergeconfigv1alpha1.ImpersonationProxyFrontendType:
 		default:
 			continue
 		}

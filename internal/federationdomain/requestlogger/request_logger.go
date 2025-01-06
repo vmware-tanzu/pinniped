@@ -1,4 +1,4 @@
-// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2024-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package requestlogger
@@ -11,6 +11,7 @@ import (
 	"slices"
 	"time"
 
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apiserver/pkg/endpoints/responsewriter"
 	"k8s.io/utils/clock"
 
@@ -89,9 +90,21 @@ func (rl *requestLogger) logRequestReceived() {
 			"serverName", requestutil.SNIServerName(r),
 			"path", r.URL.Path,
 			"userAgent", rl.userAgent,
-			"remoteAddr", r.RemoteAddr,
+			"sourceIPs", sourceIPs(r),
 		},
 	})
+}
+
+func sourceIPs(r *http.Request) []string {
+	// Use the same utility function that calculate the sourceIPs field in the Kubernetes audit logs.
+	// See "sourceIPs" in https://kubernetes.io/docs/reference/config-api/apiserver-audit.v1 for docs.
+	// This can log useful information when the request was made through a proxy.
+	ips := utilnet.SourceIPs(r)
+	ipsAsStr := make([]string, len(ips))
+	for i := range ips {
+		ipsAsStr[i] = ips[i].String()
+	}
+	return ipsAsStr
 }
 
 func getLocationForAuditLogs(location string) string {

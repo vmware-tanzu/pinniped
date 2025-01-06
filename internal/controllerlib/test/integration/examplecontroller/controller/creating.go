@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package controller
@@ -20,7 +20,6 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
-//nolint:funlen
 func NewExampleCreatingController(
 	services corev1informers.ServiceInformer,
 	secrets corev1informers.SecretInformer,

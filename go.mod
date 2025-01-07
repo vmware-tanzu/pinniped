@@ -44,8 +44,8 @@ require (
 	github.com/tdewolff/minify/v2 v2.21.2
 	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.31.0
-	golang.org/x/net v0.33.0
+	golang.org/x/crypto v0.32.0
+	golang.org/x/net v0.34.0
 	golang.org/x/oauth2 v0.25.0
 	golang.org/x/sync v0.10.0
 	golang.org/x/term v0.28.0
@@ -56,7 +56,7 @@ require (
 	k8s.io/apiserver v0.31.4
 	k8s.io/client-go v0.31.4
 	k8s.io/component-base v0.31.4
-	k8s.io/gengo v0.0.0-20240911193312-2b36238f13e9
+	k8s.io/gengo v0.0.0-20250106234829-0359904fc2a6
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.31.4
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340

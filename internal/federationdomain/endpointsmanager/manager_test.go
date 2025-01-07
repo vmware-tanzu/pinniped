@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package endpointsmanager
@@ -184,7 +184,7 @@ func TestManager(t *testing.T) {
 			redirectStateParam := parsedLocation.Query().Get("state")
 			r.NotEmpty(redirectStateParam)
 
-			cookies := recorder.Result().Cookies() //nolint:bodyclose
+			cookies := recorder.Result().Cookies()
 			r.Len(cookies, 1)
 			csrfCookie := cookies[0]
 			r.Equal("__Host-pinniped-csrf", csrfCookie.Name)

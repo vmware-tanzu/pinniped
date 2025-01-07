@@ -1,4 +1,4 @@
-// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2024-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package requestlogger
@@ -21,7 +21,7 @@ import (
 func TestLogRequestReceived(t *testing.T) {
 	var noAuditEventsWanted []testutil.WantedAuditLog
 
-	happyAuditEventWanted := func(path string) []testutil.WantedAuditLog {
+	happyAuditEventWanted := func(path string, sourceIPs []any) []testutil.WantedAuditLog {
 		return []testutil.WantedAuditLog{
 			testutil.WantAuditLog("HTTP Request Received",
 				map[string]any{
@@ -31,7 +31,7 @@ func TestLogRequestReceived(t *testing.T) {
 					"serverName": "some-sni-server-name",
 					"path":       path,
 					"userAgent":  "some-user-agent",
-					"remoteAddr": "some-remote-addr",
+					"sourceIPs":  sourceIPs,
 				},
 			),
 		}
@@ -39,33 +39,84 @@ func TestLogRequestReceived(t *testing.T) {
 
 	tests := []struct {
 		name               string
-		path               string
+		reqPath            string
+		reqRemoteAddr      string
+		reqHeaders         map[string][]string
 		auditInternalPaths bool
 		wantAuditLogs      []testutil.WantedAuditLog
 	}{
 		{
 			name:               "when internal paths are not enabled, ignores internal paths",
-			path:               "/healthz",
+			reqPath:            "/healthz",
 			auditInternalPaths: false,
 			wantAuditLogs:      noAuditEventsWanted,
 		},
 		{
 			name:               "when internal paths are not enabled, audits external path",
-			path:               "/pretend-to-login",
+			reqPath:            "/pretend-to-login",
+			reqRemoteAddr:      "1.2.3.4",
 			auditInternalPaths: false,
-			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login"),
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", []any{"1.2.3.4"}),
 		},
 		{
 			name:               "when internal paths are enabled, audits internal paths",
-			path:               "/healthz",
+			reqPath:            "/healthz",
+			reqRemoteAddr:      "1.2.3.4",
 			auditInternalPaths: true,
-			wantAuditLogs:      happyAuditEventWanted("/healthz"),
+			wantAuditLogs:      happyAuditEventWanted("/healthz", []any{"1.2.3.4"}),
 		},
 		{
 			name:               "when internal paths are enabled, audits external paths",
-			path:               "/pretend-to-login",
+			reqPath:            "/pretend-to-login",
+			reqRemoteAddr:      "1.2.3.4",
 			auditInternalPaths: true,
-			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login"),
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", []any{"1.2.3.4"}),
+		},
+		{
+			name:               "when X-Forwarded-For header is present, includes its values in sourceIPs before the remoteAddr",
+			reqPath:            "/pretend-to-login",
+			reqRemoteAddr:      "1.2.3.4",
+			reqHeaders:         map[string][]string{"X-Forwarded-For": {"5.6.7.8, 9.10.11.12"}},
+			auditInternalPaths: true,
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", []any{"5.6.7.8", "9.10.11.12", "1.2.3.4"}),
+		},
+		{
+			name:               "when X-Real-Ip header is present, includes its value in sourceIPs before the remoteAddr",
+			reqPath:            "/pretend-to-login",
+			reqRemoteAddr:      "1.2.3.4",
+			reqHeaders:         map[string][]string{"X-Real-Ip": {"5.6.7.8"}},
+			auditInternalPaths: true,
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", []any{"5.6.7.8", "1.2.3.4"}),
+		},
+		{
+			name:          "when both X-Forwarded-For and X-Real-Ip headers are present, includes both headers' values in sourceIPs before the remoteAddr",
+			reqPath:       "/pretend-to-login",
+			reqRemoteAddr: "1.2.3.4",
+			reqHeaders: map[string][]string{
+				"X-Forwarded-For": {"5.6.7.8, 9.10.11.12"},
+				"X-Real-Ip":       {"13.14.15.16"},
+			},
+			auditInternalPaths: true,
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", []any{"5.6.7.8", "9.10.11.12", "13.14.15.16", "1.2.3.4"}),
+		},
+		{
+			name:          "when the X-Real-Ip is the same as remoteAddr, does not duplicate remoteAddr",
+			reqPath:       "/pretend-to-login",
+			reqRemoteAddr: "1.2.3.4",
+			reqHeaders: map[string][]string{
+				"X-Forwarded-For": {"5.6.7.8, 9.10.11.12"},
+				"X-Real-Ip":       {"1.2.3.4"},
+			},
+			auditInternalPaths: true,
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", []any{"5.6.7.8", "9.10.11.12", "1.2.3.4"}),
+		},
+		{
+			name:               "when the last value of X-Forwarded-For is the same as remoteAddr and there is no X-Real-Ip, does not duplicate remoteAddr",
+			reqPath:            "/pretend-to-login",
+			reqRemoteAddr:      "1.2.3.4",
+			reqHeaders:         map[string][]string{"X-Forwarded-For": {"5.6.7.8, 1.2.3.4"}},
+			auditInternalPaths: true,
+			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", []any{"5.6.7.8", "1.2.3.4"}),
 		},
 	}
 
@@ -81,9 +132,10 @@ func TestLogRequestReceived(t *testing.T) {
 					Proto:  "some-proto",
 					Host:   "some-host",
 					URL: &url.URL{
-						Path: test.path,
+						Path: test.reqPath,
 					},
-					RemoteAddr: "some-remote-addr",
+					RemoteAddr: test.reqRemoteAddr,
+					Header:     test.reqHeaders,
 					TLS: &tls.ConnectionState{
 						ServerName: "some-sni-server-name",
 					},
@@ -119,52 +171,52 @@ func TestLogRequestComplete(t *testing.T) {
 
 	tests := []struct {
 		name               string
-		path               string
+		reqPath            string
 		location           string
 		auditInternalPaths bool
 		wantAuditLogs      []testutil.WantedAuditLog
 	}{
 		{
 			name:               "when internal paths are not enabled, ignores internal paths",
-			path:               "/healthz",
+			reqPath:            "/healthz",
 			auditInternalPaths: false,
 			wantAuditLogs:      noAuditEventsWanted,
 		},
 		{
 			name:               "when internal paths are not enabled, audits external path with location (redacting unknown query params)",
-			path:               "/pretend-to-login",
+			reqPath:            "/pretend-to-login",
 			location:           "http://127.0.0.1?foo=bar&foo=quz&lorem=ipsum",
 			auditInternalPaths: false,
 			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", "http://127.0.0.1?foo=redacted&foo=redacted&lorem=redacted"),
 		},
 		{
 			name:               "when internal paths are enabled, audits internal paths",
-			path:               "/healthz",
+			reqPath:            "/healthz",
 			auditInternalPaths: true,
 			wantAuditLogs:      happyAuditEventWanted("/healthz", "no location header"),
 		},
 		{
 			name:               "when internal paths are enabled, audits external paths",
-			path:               "/pretend-to-login",
+			reqPath:            "/pretend-to-login",
 			location:           "some-location",
 			auditInternalPaths: true,
 			wantAuditLogs:      happyAuditEventWanted("/pretend-to-login", "some-location"),
 		},
 		{
 			name:          "audits path without location",
-			path:          "/pretend-to-login",
+			reqPath:       "/pretend-to-login",
 			location:      "", // make it obvious
 			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "no location header"),
 		},
 		{
 			name:          "audits path with invalid location",
-			path:          "/pretend-to-login",
+			reqPath:       "/pretend-to-login",
 			location:      "http://e x a m p l e.com",
 			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "unparsable location header"),
 		},
 		{
 			name:          "audits path with location redacting all query params except err, error, and error_description",
-			path:          "/pretend-to-login",
+			reqPath:       "/pretend-to-login",
 			location:      "http://127.0.0.1:1234?code=pin_ac_FAKE&foo=bar&foo=quz&lorem=ipsum&err=some-err&error=some-error&error_description=some-error-description&zzlast=some-value",
 			wantAuditLogs: happyAuditEventWanted("/pretend-to-login", "http://127.0.0.1:1234?code=redacted&err=some-err&error=some-error&error_description=some-error-description&foo=redacted&foo=redacted&lorem=redacted&zzlast=redacted"),
 		},
@@ -194,7 +246,7 @@ func TestLogRequestComplete(t *testing.T) {
 				clock:       frozenClock,
 				req: &http.Request{
 					URL: &url.URL{
-						Path: test.path,
+						Path: test.reqPath,
 					},
 				},
 				status:             777,

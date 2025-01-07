@@ -1,4 +1,4 @@
-// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2024-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -702,7 +702,7 @@ func removeSomeKeysFromEachAuditLogEvent(logs []map[string]any) {
 		delete(log, "level")
 		delete(log, "auditEvent")
 		delete(log, "caller")
-		delete(log, "remoteAddr")
+		delete(log, "sourceIPs")
 		delete(log, "userAgent")
 		delete(log, "timestamp")
 		delete(log, "latency")

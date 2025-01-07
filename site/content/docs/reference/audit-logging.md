@@ -98,6 +98,12 @@ correlate an audit event log line to other logs. The values for these keys are o
 
 Each audit event may also have more key-value pairs specific to the event's type.
 
+- Some audit logs for the Supervisor contain a `sourceIPs` key.
+  The value at this key is calculated using the same method as the `sourceIPs`
+  field in the Kubernetes audit logs. See the definition of the `sourceIPs` field in
+  [the Kubernetes auditing documentation](https://kubernetes.io/docs/reference/config-api/apiserver-audit.v1/)
+  for details.
+
 ## Configuration options for audit events
 
 Logging of audit events is always enabled. There are two configuration options available:
@@ -176,7 +182,7 @@ The logs from the authorize endpoint are shown below.
   "serverName": "example-supervisor.pinniped.dev",
   "path": "/oauth2/authorize",
   "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1.1 Safari/605.1.15",
-  "remoteAddr": "1.2.3.4:58586"
+  "sourceIPs": [ "1.2.3.4:58586" ]
 }
 {
   "level": "info",
@@ -258,7 +264,7 @@ with the logs from this callback request, shown below.
   "serverName": "example-supervisor.pinniped.dev",
   "path": "/callback",
   "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1.1 Safari/605.1.15",
-  "remoteAddr": "1.2.3.4:58586"
+  "sourceIPs": [ "1.2.3.4:58586" ]
 }
 {
   "level": "info",
@@ -354,7 +360,7 @@ The logs from the token endpoint are shown below.
   "serverName": "example-supervisor.pinniped.dev",
   "path": "/oauth2/token",
   "userAgent": "pinniped/v0.0.0 (darwin/arm64) kubernetes/$Format",
-  "remoteAddr": "1.2.3.4:59420"
+  "sourceIPs": [ "1.2.3.4:59420" ]
 }
 {
   "level": "info",
@@ -423,7 +429,7 @@ for the target workload cluster (technically, an ID token with a different `aud`
   "serverName": "example-supervisor.pinniped.dev",
   "path": "/oauth2/token",
   "userAgent": "pinniped/v0.0.0 (darwin/arm64) kubernetes/$Format",
-  "remoteAddr": "1.2.3.4:59420"
+  "sourceIPs": [ "1.2.3.4:59420" ]
 }
 {
   "level": "info",

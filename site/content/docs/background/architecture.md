@@ -14,7 +14,7 @@ The principal purpose of Pinniped is to allow users to access Kubernetes
 clusters. Pinniped hopes to enable this access across a wide range of Kubernetes
 environments with zero configuration.
 
-Pinniped is composed of two parts.
+Pinniped is composed of three parts.
 
 1. The Pinniped Supervisor is an OIDC server which allows users to authenticate
 with external identity providers (IDP), and then issues its own federation ID tokens
@@ -24,6 +24,8 @@ credential from an identity source (e.g., Pinniped Supervisor, proprietary IDP),
 authenticates the user via that credential, and returns another credential which is
 understood by the host Kubernetes cluster or by an impersonation proxy which acts
 on behalf of the user.
+1. The Pinniped CLI help generate Pinniped-compatible kubeconfigs for clusters
+and helps end-users authenticate using those kubeconfigs.
 
 ![Pinniped Architecture Sketch](/docs/img/pinniped_architecture_concierge_supervisor.svg)
 
@@ -37,7 +39,7 @@ Administrators will configure the Pinniped Supervisor to use IDPs via Kubernetes
 custom resources allowing Pinniped to be managed using GitOps and standard
 Kubernetes tools.
 
-Pinniped supports the following IDPs.
+Pinniped currently supports the following external identity provider types.
 
 1. Any [OIDC-compliant](https://openid.net/specs/openid-connect-core-1_0.html)
    identity provider (e.g., [Dex](https://github.com/dexidp/dex),
@@ -47,12 +49,12 @@ Pinniped supports the following IDPs.
 
 1. Any Active Directory identity provider (via LDAP).
 
+1. Identities from GitHub or GitHub Enterprise.
+
 The
 [`idp.supervisor.pinniped.dev`](https://github.com/vmware-tanzu/pinniped/blob/main/generated/latest/README.adoc#k8s-api-idp-supervisor-pinniped-dev-v1alpha1)
 API group contains the Kubernetes custom resources that configure the Pinniped
-Supervisor's upstream IDPs.
-
-More IDP integrations are coming soon.
+Supervisor's external IDPs.
 
 ## Authenticators
 
@@ -70,7 +72,7 @@ Pinniped supports the following authenticator types.
    serve as an extension point for Pinniped by allowing for integration of arbitrary custom authenticators.
    While a custom implementation may be in any language or framework, this project provides a
    sample implementation in Golang. See the `ServeHTTP` method of
-   [cmd/local-user-authenticator/main.go](https://github.com/vmware-tanzu/pinniped/blob/main/cmd/local-user-authenticator/main.go).
+   [internal/localuserauthenticator/localuserauthenticator.go](https://github.com/vmware-tanzu/pinniped/blob/main/internal/localuserauthenticator/localuserauthenticator.go).
 
 1. A JSON Web Token (JWT) authenticator, which will validate and parse claims
    from JWTs.  This can be used to validate tokens that are issued by the
@@ -89,20 +91,28 @@ Concierge's authenticators.
 
 ## Cluster Integration Strategies
 
-Pinniped will issue a cluster credential by leveraging cluster-specific
+The Pinniped Concierge will issue a cluster credential by leveraging cluster-specific
 functionality. In the longer term,
 Pinniped hopes to contribute and leverage upstream Kubernetes extension points that
 cleanly enable this integration.
 
-Pinniped supports the following cluster integration strategies.
+The Concierge hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
+This API returns a short-lived mTLS client certificate which can then be used to invoke the Kubernetes API.
+The method used to sign the short-lived cluster certificates depends on the cluster integration strategy selected
+for that cluster.
 
-* Token Credential Request API: Pinniped hosts a credential exchange API endpoint via a Kubernetes aggregated API server.
-This API returns a new cluster-specific credential using the cluster's signing keypair to
-issue short-lived cluster certificates. (In the future, when the Kubernetes CSR API
-provides a way to issue short-lived certificates, then the Pinniped credential exchange API
-will use that instead of using the cluster's signing keypair.)
-* Impersonation Proxy: Pinniped hosts an [impersonation](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#user-impersonation)
-proxy that sends requests to the Kubernetes API server with user information and permissions based on a token.
+The Concierge supports the following cluster integration strategies.
+
+* Kube Cluster Signing Certificate: Pinniped signs the short-lived client certificates using the
+  Kubernetes API server's signing key. These can be used to make Kubernetes API requests directly
+  to the Kubernetes API server.
+* Impersonation Proxy: Pinniped signs the short-lived client certificates using its own signing key.
+  Pinniped hosts an
+  [impersonation](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#user-impersonation)
+  proxy that relays requests to the Kubernetes API server with the end user's identity and group memberships.
+  When Kubernetes API requests are made through the impersonation proxy, Pinniped validates that the client's
+  certificate was signed by its own key before submitting the API request to the Kubernetes API server on
+  behalf of the user via impersonation as that user.
 
 ## kubectl Integration
 
@@ -114,11 +124,12 @@ built with the [Pinniped Go client library](https://github.com/vmware-tanzu/pinn
 
 
 ## Pinniped Deployment Strategies
+
 Pinniped can be configured to authenticate users in a variety of scenarios.
 Depending on the use case, administrators can deploy the Supervisor, the Concierge,
 both, or neither.
 
-### Full Integration-- Concierge, Supervisor, and CLI
+### Full Integration -- Concierge, Supervisor, and CLI
 
 Users can authenticate with the help of the Supervisor, which will issue tokens that
 can be exchanged at the Concierge for a credential that can be used to authenticate to
@@ -138,7 +149,7 @@ JWT authenticator via the Pinniped Concierge.
 
 ![concierge-with-supervisor-sequence-diagram](/docs/img/pinniped-concierge-supervisor-sequence.svg)
 
-### Dynamic Cluster Authentication-- Concierge and CLI
+### Dynamic Cluster Authentication -- Concierge and CLI
 
 Users can authenticate directly with their OIDC compliant external identity provider to get credentials which
 can be exchanged at the Concierge for a credential that can be used to authenticate to
@@ -154,7 +165,7 @@ that obtains an external credential to be sent to a webhook authenticator via th
 
 ![concierge-with-webhook-sequence-diagram](/docs/img/pinniped-concierge-sequence.svg)
 
-### Static Cluster Integration-- Supervisor and CLI
+### Static Cluster Integration -- Supervisor and CLI
 
 Users can authenticate with the help of the Supervisor, which will issue tokens that
 can be given directly to a Kubernetes API Server that has been configured with
@@ -162,7 +173,7 @@ can be given directly to a Kubernetes API Server that has been configured with
 The Supervisor enables users to log in to their external identity provider
 once per day and access each cluster in a domain with a distinct scoped-down token.
 
-### Minimal-- CLI only
+### Minimal -- CLI only
 
 Users can authenticate directly with their OIDC compliant external identity provider to get credentials
 that can be given directly to a Kubernetes API Server that has been configured with

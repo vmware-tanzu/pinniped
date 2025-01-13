@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package oidc contains common OIDC functionality needed by FederationDomains to implement
@@ -110,11 +110,14 @@ type UpstreamStateParamData struct {
 // DefaultOIDCTimeoutsConfiguration returns the default timeouts for the Supervisor server.
 func DefaultOIDCTimeoutsConfiguration() timeouts.Configuration {
 	// Note: The maximum time that users can access Kubernetes clusters without
-	// needing to do a Supervisor refresh is the sum of the access token lifetime,
-	// the ID token lifetime, and the Concierge's mTLS client cert lifetime.
-	// This is because a client can exchange the access token just before it expires
-	// for a new cluster-scoped ID token, and use that just before it expires to get
-	// a new mTLS client cert, which grants access to the cluster until it expires.
+	// needing to do a Supervisor refresh is the sum of the authorization code,
+	// the access token lifetime, the ID token lifetime, and the Concierge's mTLS
+	// client cert lifetime.
+	// This is because a client can exchange the authcode just before it expires,
+	// for an access token, then exchange the access token just before it expires
+	// for a new cluster-scoped ID token, and then use that just before it expires to
+	// get a new mTLS client cert, which grants access to the cluster until it expires.
+	// For a refresh, the lifetime of the authcode would not be not included.
 	//
 	// Note that the Concierge's mTLS client cert lifetime is 5 minutes, which can
 	// be seen in its source at credentialrequest/rest.go.
@@ -127,7 +130,9 @@ func DefaultOIDCTimeoutsConfiguration() timeouts.Configuration {
 	// identity provider that should be noticed by the Supervisor during an upstream
 	// refresh.
 	//
-	// Given the timeouts specified below, this is: 2 + 2 + 5 = 9 minutes.
+	// Given the timeouts specified below, this is:
+	// 10 + 2 + 2 + 5 = 19 minutes since an initial login, or
+	// 2 + 2 + 5 = 9 minutes since a refresh.
 	// Note that this may be different if an OIDCClient's configuration has changed
 	// the lifetime of the ID tokens issued to that client, but usually will not be
 	// different because that configuration does not change the lifetime of the

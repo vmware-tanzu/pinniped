@@ -161,24 +161,6 @@ type ImpersonationProxyServiceSpec struct {
 type CredentialIssuerStatus struct {
 	// List of integration strategies that were attempted by Pinniped.
 	Strategies []CredentialIssuerStrategy `json:"strategies"`
-
-	// Information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
-	// This field is deprecated and will be removed in a future version.
-	// +optional
-	KubeConfigInfo *CredentialIssuerKubeConfigInfo `json:"kubeConfigInfo,omitempty"`
-}
-
-// CredentialIssuerKubeConfigInfo provides the information needed to form a valid Pinniped-based kubeconfig using this credential issuer.
-// This type is deprecated and will be removed in a future version.
-type CredentialIssuerKubeConfigInfo struct {
-	// The K8s API server URL.
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:Pattern=`^https://|^http://`
-	Server string `json:"server"`
-
-	// The K8s API server CA bundle.
-	// +kubebuilder:validation:MinLength=1
-	CertificateAuthorityData string `json:"certificateAuthorityData"`
 }
 
 // CredentialIssuerStrategy describes the status of an integration strategy that was attempted by Pinniped.

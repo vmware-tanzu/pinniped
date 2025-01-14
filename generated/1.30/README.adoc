@@ -65,7 +65,6 @@ certificate bundle. +
 
 JWTAuthenticator describes the configuration of a JWT authenticator.
 
-
 Upon receiving a signed JWT, a JWTAuthenticator will performs some validation on it (e.g., valid
 signature, existence of claims, etc.) and extract the username and groups from the token.
 
@@ -566,7 +565,6 @@ ImpersonationProxyServiceSpec describes how the Concierge should provision a Ser
 | Field | Description
 | *`type`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-concierge-config-v1alpha1-impersonationproxyservicetype[$$ImpersonationProxyServiceType$$]__ | Type specifies the type of Service to provision for the impersonation proxy. +
 
-
 If the type is "None", then the "spec.impersonationProxy.externalEndpoint" field must be set to a non-empty +
 value so that the Concierge can properly advertise the endpoint in the CredentialIssuer's status. +
 | *`loadBalancerIP`* __string__ | LoadBalancerIP specifies the IP address to set in the spec.loadBalancerIP field of the provisioned Service. +
@@ -609,10 +607,8 @@ ImpersonationProxySpec describes the intended configuration of the Concierge imp
 | *`externalEndpoint`* __string__ | ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If not set, the proxy will +
 be served using the external name of the LoadBalancer service or the cluster service DNS name. +
 
-
 This field must be non-empty when spec.impersonationProxy.service.type is "None". +
 | *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-concierge-config-v1alpha1-impersonationproxytlsspec[$$ImpersonationProxyTLSSpec$$]__ | TLS contains information about how the Concierge impersonation proxy should serve TLS. +
-
 
 If this field is empty, the impersonation proxy will generate its own TLS certificate. +
 |===
@@ -624,10 +620,8 @@ If this field is empty, the impersonation proxy will generate its own TLS certif
 ImpersonationProxyTLSSpec contains information about how the Concierge impersonation proxy should
 serve TLS.
 
-
 If CertificateAuthorityData is not provided, the Concierge impersonation proxy will check the secret
 for a field called "ca.crt", which will be used as the CertificateAuthorityData.
-
 
 If neither CertificateAuthorityData nor ca.crt is provided, no CA bundle will be advertised for
 the impersonation proxy endpoint.
@@ -812,12 +806,10 @@ the base URL for any endpoints used by the OIDC Provider (e.g., if your issuer i
 https://example.com/foo, then your authorization endpoint will look like +
 https://example.com/foo/some/path/to/auth/endpoint). +
 
-
 See +
 https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information. +
 | *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-config-v1alpha1-federationdomaintlsspec[$$FederationDomainTLSSpec$$]__ | TLS specifies a secret which will contain Transport Layer Security (TLS) configuration for the FederationDomain. +
 | *`identityProviders`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-config-v1alpha1-federationdomainidentityprovider[$$FederationDomainIdentityProvider$$] array__ | IdentityProviders is the list of identity providers available for use by this FederationDomain. +
-
 
 An identity provider CR (e.g. OIDCIdentityProvider or LDAPIdentityProvider) describes how to connect to a server, +
 how to talk in a specific protocol for authentication, and how to use the schema of that server/protocol to +
@@ -830,7 +822,6 @@ accidental conflicts when multiple identity providers have different users with 
 rejection policies. Even though a user was able to authenticate with the identity provider, a policy can disallow +
 the authentication to the Kubernetes clusters that belong to this FederationDomain. For example, a policy could +
 disallow the authentication unless the user belongs to a specific group in the identity provider. +
-
 
 For backwards compatibility with versions of Pinniped which predate support for multiple identity providers, +
 an empty IdentityProviders list will cause the FederationDomain to use all available identity providers which +
@@ -880,20 +871,16 @@ the TLS serving certificate for the HTTPS endpoints served by this FederationDom
 named here must contain keys named `tls.crt` and `tls.key` that contain the certificate and private key to use +
 for TLS. +
 
-
 Server Name Indication (SNI) is an extension to the Transport Layer Security (TLS) supported by all major browsers. +
-
 
 SecretName is required if you would like to use different TLS certificates for issuers of different hostnames. +
 SNI requests do not include port numbers, so all issuers with the same DNS hostname must use the same +
 SecretName value even if they have different port numbers. +
 
-
 SecretName is not required when you would like to use only the HTTP endpoints (e.g. when the HTTP listener is +
 configured to listen on loopback interfaces or UNIX domain sockets for traffic from a service mesh sidecar). +
 It is also not required when you would like all requests to this OIDC Provider's HTTPS endpoints to +
 use the default TLS certificate, which is configured elsewhere. +
-
 
 When your Issuer URL's host is an IP address, then this field is ignored. SNI does not work for IP addresses. +
 |===
@@ -919,13 +906,11 @@ Each is a CEL expression. It may use the basic CEL language as defined in +
 https://github.com/google/cel-spec/blob/master/doc/langdef.md plus the CEL string extensions defined in +
 https://github.com/google/cel-go/tree/master/ext#strings. +
 
-
 The username and groups extracted from the identity provider, and the constants defined in this CR, are +
 available as variables in all expressions. The username is provided via a variable called `username` and +
 the list of group names is provided via a variable called `groups` (which may be an empty list). +
 Each user-provided constants is provided via a variable named `strConst.varName` for string constants +
 and `strListConst.varName` for string list constants. +
-
 
 The only allowed types for expressions are currently policy/v1, username/v1, and groups/v1. +
 Each policy/v1 must return a boolean, and when it returns false, no more expressions from the list are evaluated +
@@ -938,7 +923,6 @@ Each groups/v1 transform must return the new groups list (list of strings), whic
 groups list. +
 Transformations of type groups/v1 do not return usernames, and therefore cannot change the usernames. +
 After each expression, the new (potentially changed) username or groups get passed to the following expression. +
-
 
 Any compilation or static type-checking failure of any expression will cause an error status on the FederationDomain. +
 During an authentication attempt, any unexpected runtime evaluation errors (e.g. division by zero) cause the +
@@ -1109,7 +1093,6 @@ Port numbers are not required for 127.0.0.1 or ::1 and are ignored when checking
 | *`allowedGrantTypes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-config-v1alpha1-granttype[$$GrantType$$] array__ | allowedGrantTypes is a list of the allowed grant_type param values that should be accepted during OIDC flows with this +
 client. +
 
-
 Must only contain the following values: +
 - authorization_code: allows the client to perform the authorization code grant flow, i.e. allows the webapp to +
 authenticate users. This grant must always be listed. +
@@ -1119,7 +1102,6 @@ This grant must be listed if allowedScopes lists offline_access. +
 which is a step in the process to be able to get a cluster credential for the user. +
 This grant must be listed if allowedScopes lists pinniped:request-audience. +
 | *`allowedScopes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-config-v1alpha1-scope[$$Scope$$] array__ | allowedScopes is a list of the allowed scopes param values that should be accepted during OIDC flows with this client. +
-
 
 Must only contain the following values: +
 - openid: The client is allowed to request ID tokens. ID tokens only include the required claims by default (iss, sub, aud, exp, iat). +
@@ -1532,20 +1514,17 @@ group membership is often used to bind authorization policies, it is important +
 to keep the groups observed in Kubernetes clusters in-sync with the identity +
 provider. +
 
-
 In some environments, frequent group membership queries may result in a +
 significant performance impact on the identity provider and/or the supervisor. +
 The best approach to handle performance impacts is to tweak the group query +
 to be more performant, for example by disabling nested group search or by +
 using a more targeted group search base. +
 
-
 If the group search query cannot be made performant and you are willing to +
 have group memberships remain static for approximately a day, then set +
 skipGroupRefresh to true.  This is an insecure configuration as authorization +
 policies that are bound to group membership will not notice if a user has +
 been removed from a particular group until their next login. +
-
 
 This is an experimental feature that may be removed or significantly altered +
 in the future.  Consumers of this configuration should carefully read all +
@@ -1797,9 +1776,7 @@ GitHubClaims allows customization of the username and groups claims.
 | Field | Description
 | *`username`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-idp-v1alpha1-githubusernameattribute[$$GitHubUsernameAttribute$$]__ | Username configures which property of the GitHub user record shall determine the username in Kubernetes. +
 
-
 Can be either "id", "login", or "login:id". Defaults to "login:id". +
-
 
 GitHub's user login attributes can only contain alphanumeric characters and non-repeating hyphens, +
 and may not start or end with hyphens. GitHub users are allowed to change their login name, +
@@ -1808,40 +1785,31 @@ then a second user might change their name from "baz" to "foo" in order to take 
 username of the first user. For this reason, it is not as safe to make authorization decisions +
 based only on the user's login attribute. +
 
-
 If desired, an admin could configure identity transformation expressions on the Pinniped Supervisor's +
 FederationDomain to further customize how these usernames are presented to Kubernetes. +
-
 
 Defaults to "login:id", which is the user login attribute, followed by a colon, followed by the unique and +
 unchanging integer ID number attribute. This blends human-readable login names with the unchanging ID value +
 from GitHub. Colons are not allowed in GitHub login attributes or ID numbers, so this is a reasonable +
 choice to concatenate the two values. +
 
-
 See the response schema for +
 [Get the authenticated user](https://docs.github.com/en/rest/users/users?apiVersion=2022-11-28#get-the-authenticated-user). +
 | *`groups`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-idp-v1alpha1-githubgroupnameattribute[$$GitHubGroupNameAttribute$$]__ | Groups configures which property of the GitHub team record shall determine the group names in Kubernetes. +
 
-
 Can be either "name" or "slug". Defaults to "slug". +
-
 
 GitHub team names can contain upper and lower case characters, whitespace, and punctuation (e.g. "Kube admins!"). +
 
-
 GitHub team slugs are lower case alphanumeric characters and may contain dashes and underscores (e.g. "kube-admins"). +
-
 
 Group names as presented to Kubernetes will always be prefixed by the GitHub organization name followed by a +
 forward slash (e.g. "my-org/my-team"). GitHub organization login names can only contain alphanumeric characters +
 or single hyphens, so the first forward slash `/` will be the separator between the organization login name and +
 the team name or slug. +
 
-
 If desired, an admin could configure identity transformation expressions on the Pinniped Supervisor's +
 FederationDomain to further customize how these group names are presented to Kubernetes. +
-
 
 See the response schema for +
 [List teams for the authenticated user](https://docs.github.com/en/rest/teams/teams?apiVersion=2022-11-28#list-teams-for-the-authenticated-user). +
@@ -1864,7 +1832,6 @@ for web-based login flows.
 | Field | Description
 | *`secretName`* __string__ | SecretName contains the name of a namespace-local Secret object that provides the clientID and +
 clientSecret for an GitHub App or GitHub OAuth2 client. +
-
 
 This secret must be of type "secrets.pinniped.dev/github-client" with keys "clientID" and "clientSecret". +
 |===
@@ -1889,7 +1856,6 @@ names to present to Kubernetes. See the response schema for
 
 GitHubIdentityProvider describes the configuration of an upstream GitHub identity provider.
 This upstream provider can be configured with either a GitHub App or a GitHub OAuth2 App.
-
 
 Right now, only web-based logins are supported, for both the pinniped-cli client and clients configured
 as OIDCClients.
@@ -1977,9 +1943,7 @@ GitHubIdentityProviderStatus is the status of an GitHub identity provider.
 | *`policy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-30-apis-supervisor-idp-v1alpha1-githuballowedauthorganizationspolicy[$$GitHubAllowedAuthOrganizationsPolicy$$]__ | Allowed values are "OnlyUsersFromAllowedOrganizations" or "AllGitHubUsers". +
 Defaults to "OnlyUsersFromAllowedOrganizations". +
 
-
 Must be set to "AllGitHubUsers" if the allowed field is empty. +
-
 
 This field only exists to ensure that Pinniped administrators are aware that an empty list of +
 allowedOrganizations means all GitHub users are allowed to log in. +
@@ -1988,11 +1952,9 @@ GitHub organizations may log in. In addition, the group membership presented to 
 teams within the listed GitHub organizations. Additional login rules or group filtering can optionally be +
 provided as policy expression on any Pinniped Supervisor FederationDomain that includes this IDP. +
 
-
 The configured GitHub App or GitHub OAuth App must be allowed to see membership in the listed organizations, +
 otherwise Pinniped will not be aware that the user belongs to the listed organization or any teams +
 within that organization. +
-
 
 If no organizations are listed, you must set organizations: AllGitHubUsers. +
 |===
@@ -2095,20 +2057,17 @@ group membership is often used to bind authorization policies, it is important +
 to keep the groups observed in Kubernetes clusters in-sync with the identity +
 provider. +
 
-
 In some environments, frequent group membership queries may result in a +
 significant performance impact on the identity provider and/or the supervisor. +
 The best approach to handle performance impacts is to tweak the group query +
 to be more performant, for example by disabling nested group search or by +
 using a more targeted group search base. +
 
-
 If the group search query cannot be made performant and you are willing to +
 have group memberships remain static for approximately a day, then set +
 skipGroupRefresh to true.  This is an insecure configuration as authorization +
 policies that are bound to group membership will not notice if a user has +
 been removed from a particular group until their next login. +
-
 
 This is an experimental feature that may be removed or significantly altered +
 in the future.  Consumers of this configuration should carefully read all +

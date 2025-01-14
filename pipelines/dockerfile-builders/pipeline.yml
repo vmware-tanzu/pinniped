@@ -41,12 +41,12 @@ meta:
     BUILD_ARG_GO_VERSION: '1.23.5'
     # Choose which version of sigs.k8s.io/controller-tools/cmd/controller-gen to install
     # in the codegen container images.
-    BUILD_ARG_CONTROLLER_GEN_VERSION: 0.16.5
+    BUILD_ARG_CONTROLLER_GEN_VERSION: 0.17.1
     # Choose which version of github.com/elastic/crd-ref-docs to install in the codegen
     # container images. We use a commit sha instead of a release semver because this project
     # does not create releases very often. They seem to only release 1-2 times per year, but
     # commit to main more often.
-    BUILD_ARG_CRD_REF_DOCS_COMMIT_SHA: 6d9cbb2
+    BUILD_ARG_CRD_REF_DOCS_COMMIT_SHA: fbcf29e
 
 resources:
 

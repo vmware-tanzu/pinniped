@@ -2,7 +2,7 @@ module go.pinniped.dev
 
 go 1.23.0
 
-toolchain go1.23.4
+toolchain go1.23.5
 
 // When using v0.31.4, need to use this version of structured-merge-diff.
 // See https://github.com/kubernetes/apimachinery/blob/v0.31.4/go.mod#L30

@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 ---
@@ -10,7 +10,7 @@ image_resource:
   type: registry-image
   source:
     repository: golang
-    tag: '1.23.4'
+    tag: '1.23.5'
 run:
   # Confirm that the correct git sha was baked into the executables and that they log the version as their
   # first line of output. Do this by directly running the server binary from the rootfs of the built image.

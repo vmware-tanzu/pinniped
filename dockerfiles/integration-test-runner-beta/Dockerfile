@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # For running the integration tests as a client to a k8s cluster
@@ -36,7 +36,7 @@ RUN google-chrome --version
 
 # Install Go. The download URL that can be used below for any version of Go can be found on https://go.dev/dl/
 ENV PATH /usr/local/go/bin:$PATH
-RUN curl -fsSL https://go.dev/dl/go1.23.4.linux-amd64.tar.gz -o /tmp/go.tar.gz && \
+RUN curl -fsSL https://go.dev/dl/go1.23.5.linux-amd64.tar.gz -o /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz && \
     go version

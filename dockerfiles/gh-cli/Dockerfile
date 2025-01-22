@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # For running the GitHub CLI.
@@ -11,5 +11,5 @@ RUN curl \
     https://github.com/cli/cli/releases/download/v2.40.0/gh_2.40.0_linux_amd64.tar.gz \
     && tar -C /tmp --strip-components=1 -xzvf /tmp/gh.tar.gz
 
-FROM golang:1.23.4
+FROM golang:1.23.5
 COPY --from=builder /tmp/bin/gh /usr/local/bin/gh

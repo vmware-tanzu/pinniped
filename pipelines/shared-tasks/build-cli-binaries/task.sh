@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -57,6 +57,9 @@ for target_os in "${target_os_list[@]}"; do
 done
 
 popd >/dev/null
+
+# Show the file sizes of the CLI binaries.
+ls -lh cli-binaries
 
 linux_cli="cli-binaries/pinniped-cli-linux-amd64"
 chmod 755 "$linux_cli"

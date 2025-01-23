@@ -50,7 +50,7 @@ for target_os in "${target_os_list[@]}"; do
     fi
 
     # Cross-compile the executable binary (CGO_ENABLED=0 means static linking)
-    CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_platform" go build -trimpath -ldflags "$ldflags" -o "$output_dir" ./...
+    CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_platform" go build -trimpath -ldflags "-s -w $ldflags" -o "$output_dir" ./...
 
     mv "${output_dir}/${name}" "../../../cli-binaries/${output}"
   done

@@ -613,18 +613,18 @@ func TestGetKubeconfig(t *testing.T) {
 					&conciergeconfigv1alpha1.CredentialIssuer{
 						ObjectMeta: metav1.ObjectMeta{Name: "test-credential-issuer"},
 						Status: conciergeconfigv1alpha1.CredentialIssuerStatus{
-							KubeConfigInfo: &conciergeconfigv1alpha1.CredentialIssuerKubeConfigInfo{
-								Server:                   "https://concierge-endpoint",
-								CertificateAuthorityData: "ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==",
-							},
 							Strategies: []conciergeconfigv1alpha1.CredentialIssuerStrategy{{
 								Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
 								Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
 								Reason:         conciergeconfigv1alpha1.FetchedKeyStrategyReason,
 								Message:        "Successfully fetched key",
 								LastUpdateTime: metav1.Now(),
-								// Simulate a previous version of CredentialIssuer that's missing this Frontend field.
-								Frontend: nil,
+								Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+									Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+									TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
+										Server: "https://concierge-endpoint.example.com",
+									},
+								},
 							}},
 						},
 					},

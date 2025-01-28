@@ -36,7 +36,6 @@ func TestCredentialIssuer(t *testing.T) {
 		require.Len(t, actualConfigList.Items, 1)
 
 		actualConfig := actualConfigList.Items[0]
-		actualStatusKubeConfigInfo := actualConfigList.Items[0].Status.KubeConfigInfo
 
 		for k, v := range env.ConciergeCustomLabels {
 			require.Equalf(t, v, actualConfig.Labels[k], "expected ci to have label `%s: %s`", k, v)
@@ -77,22 +76,11 @@ func TestCredentialIssuer(t *testing.T) {
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
 			}
 			require.Equal(t, &expectedTokenRequestAPIInfo, actualStatusStrategy.Frontend.TokenCredentialRequestAPIInfo)
-
-			// Verify the published kube config info.
-			require.Equal(
-				t,
-				&conciergeconfigv1alpha1.CredentialIssuerKubeConfigInfo{
-					Server:                   expectedTokenRequestAPIInfo.Server,
-					CertificateAuthorityData: expectedTokenRequestAPIInfo.CertificateAuthorityData,
-				},
-				actualStatusKubeConfigInfo,
-			)
 		} else {
 			require.Equal(t, conciergeconfigv1alpha1.ErrorStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Contains(t, actualStatusStrategy.Message, "could not find a healthy kube-controller-manager pod (0 candidates): "+
 				"note that this error is the expected behavior for some cluster types, including most cloud provider clusters (e.g. GKE, AKS, EKS)")
-			require.Nil(t, actualStatusKubeConfigInfo)
 		}
 	})
 }

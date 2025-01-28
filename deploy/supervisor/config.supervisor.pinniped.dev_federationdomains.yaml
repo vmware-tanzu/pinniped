@@ -289,6 +289,9 @@ spec:
                   https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information.
                 minLength: 1
                 type: string
+                x-kubernetes-validations:
+                - message: issuer must be an HTTPS URL
+                  rule: isURL(self) && url(self).getScheme() == 'https'
               tls:
                 description: TLS specifies a secret which will contain Transport Layer
                   Security (TLS) configuration for the FederationDomain.

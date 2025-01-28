@@ -452,7 +452,7 @@ func TestGetAPIResourceList(t *testing.T) { //nolint:gocyclo // each t.Run is pr
 		}
 
 		// manually update this value whenever you add additional fields to an API resource and then run the generator
-		totalExpectedAPIFields := 313
+		totalExpectedAPIFields := 310
 
 		// Because we are parsing text from `kubectl explain` and because the format of that text can change
 		// over time, make a rudimentary assertion that this test exercised the whole tree of all fields of all

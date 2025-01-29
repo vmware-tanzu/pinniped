@@ -6,9 +6,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
+	clientsecretv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1"
 	scheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
@@ -22,23 +22,26 @@ type OIDCClientSecretRequestsGetter interface {
 
 // OIDCClientSecretRequestInterface has methods to work with OIDCClientSecretRequest resources.
 type OIDCClientSecretRequestInterface interface {
-	Create(ctx context.Context, oIDCClientSecretRequest *v1alpha1.OIDCClientSecretRequest, opts v1.CreateOptions) (*v1alpha1.OIDCClientSecretRequest, error)
+	Create(ctx context.Context, oIDCClientSecretRequest *clientsecretv1alpha1.OIDCClientSecretRequest, opts v1.CreateOptions) (*clientsecretv1alpha1.OIDCClientSecretRequest, error)
 	OIDCClientSecretRequestExpansion
 }
 
 // oIDCClientSecretRequests implements OIDCClientSecretRequestInterface
 type oIDCClientSecretRequests struct {
-	*gentype.Client[*v1alpha1.OIDCClientSecretRequest]
+	*gentype.Client[*clientsecretv1alpha1.OIDCClientSecretRequest]
 }
 
 // newOIDCClientSecretRequests returns a OIDCClientSecretRequests
 func newOIDCClientSecretRequests(c *ClientsecretV1alpha1Client, namespace string) *oIDCClientSecretRequests {
 	return &oIDCClientSecretRequests{
-		gentype.NewClient[*v1alpha1.OIDCClientSecretRequest](
+		gentype.NewClient[*clientsecretv1alpha1.OIDCClientSecretRequest](
 			"oidcclientsecretrequests",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.OIDCClientSecretRequest { return &v1alpha1.OIDCClientSecretRequest{} }),
+			func() *clientsecretv1alpha1.OIDCClientSecretRequest {
+				return &clientsecretv1alpha1.OIDCClientSecretRequest{}
+			},
+		),
 	}
 }

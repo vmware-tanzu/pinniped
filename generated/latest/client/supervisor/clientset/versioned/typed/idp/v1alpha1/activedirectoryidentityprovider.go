@@ -6,9 +6,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
+	idpv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1"
 	scheme "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -24,35 +24,38 @@ type ActiveDirectoryIdentityProvidersGetter interface {
 
 // ActiveDirectoryIdentityProviderInterface has methods to work with ActiveDirectoryIdentityProvider resources.
 type ActiveDirectoryIdentityProviderInterface interface {
-	Create(ctx context.Context, activeDirectoryIdentityProvider *v1alpha1.ActiveDirectoryIdentityProvider, opts v1.CreateOptions) (*v1alpha1.ActiveDirectoryIdentityProvider, error)
-	Update(ctx context.Context, activeDirectoryIdentityProvider *v1alpha1.ActiveDirectoryIdentityProvider, opts v1.UpdateOptions) (*v1alpha1.ActiveDirectoryIdentityProvider, error)
+	Create(ctx context.Context, activeDirectoryIdentityProvider *idpv1alpha1.ActiveDirectoryIdentityProvider, opts v1.CreateOptions) (*idpv1alpha1.ActiveDirectoryIdentityProvider, error)
+	Update(ctx context.Context, activeDirectoryIdentityProvider *idpv1alpha1.ActiveDirectoryIdentityProvider, opts v1.UpdateOptions) (*idpv1alpha1.ActiveDirectoryIdentityProvider, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, activeDirectoryIdentityProvider *v1alpha1.ActiveDirectoryIdentityProvider, opts v1.UpdateOptions) (*v1alpha1.ActiveDirectoryIdentityProvider, error)
+	UpdateStatus(ctx context.Context, activeDirectoryIdentityProvider *idpv1alpha1.ActiveDirectoryIdentityProvider, opts v1.UpdateOptions) (*idpv1alpha1.ActiveDirectoryIdentityProvider, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ActiveDirectoryIdentityProvider, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ActiveDirectoryIdentityProviderList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*idpv1alpha1.ActiveDirectoryIdentityProvider, error)
+	List(ctx context.Context, opts v1.ListOptions) (*idpv1alpha1.ActiveDirectoryIdentityProviderList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ActiveDirectoryIdentityProvider, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *idpv1alpha1.ActiveDirectoryIdentityProvider, err error)
 	ActiveDirectoryIdentityProviderExpansion
 }
 
 // activeDirectoryIdentityProviders implements ActiveDirectoryIdentityProviderInterface
 type activeDirectoryIdentityProviders struct {
-	*gentype.ClientWithList[*v1alpha1.ActiveDirectoryIdentityProvider, *v1alpha1.ActiveDirectoryIdentityProviderList]
+	*gentype.ClientWithList[*idpv1alpha1.ActiveDirectoryIdentityProvider, *idpv1alpha1.ActiveDirectoryIdentityProviderList]
 }
 
 // newActiveDirectoryIdentityProviders returns a ActiveDirectoryIdentityProviders
 func newActiveDirectoryIdentityProviders(c *IDPV1alpha1Client, namespace string) *activeDirectoryIdentityProviders {
 	return &activeDirectoryIdentityProviders{
-		gentype.NewClientWithList[*v1alpha1.ActiveDirectoryIdentityProvider, *v1alpha1.ActiveDirectoryIdentityProviderList](
+		gentype.NewClientWithList[*idpv1alpha1.ActiveDirectoryIdentityProvider, *idpv1alpha1.ActiveDirectoryIdentityProviderList](
 			"activedirectoryidentityproviders",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.ActiveDirectoryIdentityProvider { return &v1alpha1.ActiveDirectoryIdentityProvider{} },
-			func() *v1alpha1.ActiveDirectoryIdentityProviderList {
-				return &v1alpha1.ActiveDirectoryIdentityProviderList{}
-			}),
+			func() *idpv1alpha1.ActiveDirectoryIdentityProvider {
+				return &idpv1alpha1.ActiveDirectoryIdentityProvider{}
+			},
+			func() *idpv1alpha1.ActiveDirectoryIdentityProviderList {
+				return &idpv1alpha1.ActiveDirectoryIdentityProviderList{}
+			},
+		),
 	}
 }

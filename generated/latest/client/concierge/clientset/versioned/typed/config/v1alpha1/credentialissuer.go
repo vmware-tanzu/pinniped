@@ -6,9 +6,9 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
 	scheme "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -24,33 +24,34 @@ type CredentialIssuersGetter interface {
 
 // CredentialIssuerInterface has methods to work with CredentialIssuer resources.
 type CredentialIssuerInterface interface {
-	Create(ctx context.Context, credentialIssuer *v1alpha1.CredentialIssuer, opts v1.CreateOptions) (*v1alpha1.CredentialIssuer, error)
-	Update(ctx context.Context, credentialIssuer *v1alpha1.CredentialIssuer, opts v1.UpdateOptions) (*v1alpha1.CredentialIssuer, error)
+	Create(ctx context.Context, credentialIssuer *configv1alpha1.CredentialIssuer, opts v1.CreateOptions) (*configv1alpha1.CredentialIssuer, error)
+	Update(ctx context.Context, credentialIssuer *configv1alpha1.CredentialIssuer, opts v1.UpdateOptions) (*configv1alpha1.CredentialIssuer, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, credentialIssuer *v1alpha1.CredentialIssuer, opts v1.UpdateOptions) (*v1alpha1.CredentialIssuer, error)
+	UpdateStatus(ctx context.Context, credentialIssuer *configv1alpha1.CredentialIssuer, opts v1.UpdateOptions) (*configv1alpha1.CredentialIssuer, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.CredentialIssuer, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.CredentialIssuerList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*configv1alpha1.CredentialIssuer, error)
+	List(ctx context.Context, opts v1.ListOptions) (*configv1alpha1.CredentialIssuerList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.CredentialIssuer, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *configv1alpha1.CredentialIssuer, err error)
 	CredentialIssuerExpansion
 }
 
 // credentialIssuers implements CredentialIssuerInterface
 type credentialIssuers struct {
-	*gentype.ClientWithList[*v1alpha1.CredentialIssuer, *v1alpha1.CredentialIssuerList]
+	*gentype.ClientWithList[*configv1alpha1.CredentialIssuer, *configv1alpha1.CredentialIssuerList]
 }
 
 // newCredentialIssuers returns a CredentialIssuers
 func newCredentialIssuers(c *ConfigV1alpha1Client) *credentialIssuers {
 	return &credentialIssuers{
-		gentype.NewClientWithList[*v1alpha1.CredentialIssuer, *v1alpha1.CredentialIssuerList](
+		gentype.NewClientWithList[*configv1alpha1.CredentialIssuer, *configv1alpha1.CredentialIssuerList](
 			"credentialissuers",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v1alpha1.CredentialIssuer { return &v1alpha1.CredentialIssuer{} },
-			func() *v1alpha1.CredentialIssuerList { return &v1alpha1.CredentialIssuerList{} }),
+			func() *configv1alpha1.CredentialIssuer { return &configv1alpha1.CredentialIssuer{} },
+			func() *configv1alpha1.CredentialIssuerList { return &configv1alpha1.CredentialIssuerList{} },
+		),
 	}
 }

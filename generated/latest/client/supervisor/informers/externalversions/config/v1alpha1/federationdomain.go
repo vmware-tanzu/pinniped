@@ -6,13 +6,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	configv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
+	supervisorconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1"
 	versioned "go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned"
 	internalinterfaces "go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions/internalinterfaces"
-	v1alpha1 "go.pinniped.dev/generated/latest/client/supervisor/listers/config/v1alpha1"
+	configv1alpha1 "go.pinniped.dev/generated/latest/client/supervisor/listers/config/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -23,7 +23,7 @@ import (
 // FederationDomains.
 type FederationDomainInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.FederationDomainLister
+	Lister() configv1alpha1.FederationDomainLister
 }
 
 type federationDomainInformer struct {
@@ -58,7 +58,7 @@ func NewFilteredFederationDomainInformer(client versioned.Interface, namespace s
 				return client.ConfigV1alpha1().FederationDomains(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&configv1alpha1.FederationDomain{},
+		&supervisorconfigv1alpha1.FederationDomain{},
 		resyncPeriod,
 		indexers,
 	)
@@ -69,9 +69,9 @@ func (f *federationDomainInformer) defaultInformer(client versioned.Interface, r
 }
 
 func (f *federationDomainInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&configv1alpha1.FederationDomain{}, f.defaultInformer)
+	return f.factory.InformerFor(&supervisorconfigv1alpha1.FederationDomain{}, f.defaultInformer)
 }
 
-func (f *federationDomainInformer) Lister() v1alpha1.FederationDomainLister {
-	return v1alpha1.NewFederationDomainLister(f.Informer().GetIndexer())
+func (f *federationDomainInformer) Lister() configv1alpha1.FederationDomainLister {
+	return configv1alpha1.NewFederationDomainLister(f.Informer().GetIndexer())
 }

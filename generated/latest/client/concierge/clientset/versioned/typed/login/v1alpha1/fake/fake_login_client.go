@@ -16,7 +16,7 @@ type FakeLoginV1alpha1 struct {
 }
 
 func (c *FakeLoginV1alpha1) TokenCredentialRequests() v1alpha1.TokenCredentialRequestInterface {
-	return &FakeTokenCredentialRequests{c}
+	return newFakeTokenCredentialRequests(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

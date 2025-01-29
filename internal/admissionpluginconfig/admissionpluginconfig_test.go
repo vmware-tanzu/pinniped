@@ -48,7 +48,7 @@ func TestValidateAdmissionPluginNames(t *testing.T) {
 				"foobar",
 				"ValidatingAdmissionWebhook",
 			},
-			wantErr: "admission plugin names not recognized: [foobar] (each must be one of [NamespaceLifecycle MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
+			wantErr: "admission plugin names not recognized: [foobar] (each must be one of [NamespaceLifecycle MutatingAdmissionPolicy MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
 		},
 		{
 			name: "multiple invalid values",
@@ -61,7 +61,7 @@ func TestValidateAdmissionPluginNames(t *testing.T) {
 				"ValidatingAdmissionWebhook",
 				"foobaz",
 			},
-			wantErr: "admission plugin names not recognized: [foobat foobar foobaz] (each must be one of [NamespaceLifecycle MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
+			wantErr: "admission plugin names not recognized: [foobat foobar foobaz] (each must be one of [NamespaceLifecycle MutatingAdmissionPolicy MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
 		},
 	}
 

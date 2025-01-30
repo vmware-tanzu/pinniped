@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -268,6 +268,7 @@ func formpostExpectSuccessState(t *testing.T, b *browsertest.Browser) {
 	require.Contains(t, successDivText, "Login succeeded")
 	require.Contains(t, successDivText, "You have successfully logged in. You may now close this tab.")
 	require.Equal(t, "Login succeeded", b.Title(t))
+	t.Log("login succeeded")
 	formpostExpectFavicon(t, b, "✅")
 }
 

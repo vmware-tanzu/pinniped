@@ -4,8 +4,9 @@ go 1.23.0
 
 toolchain go1.23.5
 
-// When using v0.31.4, need to use this version of structured-merge-diff.
-// See https://github.com/kubernetes/apimachinery/blob/v0.31.4/go.mod#L30
+// When using v0.31.5, need to use this version of structured-merge-diff.
+// See https://github.com/kubernetes/apimachinery/blob/v0.31.5/go.mod#L30
+// This replace must be in the go.mod, not overrides.conf, because it is an "indirect" dependency.
 replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.1
 
 require (
@@ -50,15 +51,15 @@ require (
 	golang.org/x/sync v0.10.0
 	golang.org/x/term v0.28.0
 	golang.org/x/text v0.21.0
-	k8s.io/api v0.31.4
-	k8s.io/apiextensions-apiserver v0.31.4
-	k8s.io/apimachinery v0.31.4
-	k8s.io/apiserver v0.31.4
-	k8s.io/client-go v0.31.4
-	k8s.io/component-base v0.31.4
+	k8s.io/api v0.31.5
+	k8s.io/apiextensions-apiserver v0.31.5
+	k8s.io/apimachinery v0.31.5
+	k8s.io/apiserver v0.31.5
+	k8s.io/client-go v0.31.5
+	k8s.io/component-base v0.31.5
 	k8s.io/gengo v0.0.0-20250130153323-76c5745d3511
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kube-aggregator v0.31.4
+	k8s.io/kube-aggregator v0.31.5
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/yaml v1.4.0

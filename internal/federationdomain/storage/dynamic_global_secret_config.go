@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package storage
@@ -60,4 +60,8 @@ func (d *DynamicGlobalSecretConfig) GetGlobalSecret(_ctx context.Context) ([]byt
 func (d *DynamicGlobalSecretConfig) GetRotatedGlobalSecrets(_ctx context.Context) ([][]byte, error) {
 	// We don't support having multiple global secrets yet, but when we do we will need to implement this.
 	return nil, nil
+}
+
+func (d *DynamicGlobalSecretConfig) GetDeviceAndUserCodeLifespan(_ctx context.Context) time.Duration {
+	return d.fositeConfig.DeviceAndUserCodeLifespan
 }

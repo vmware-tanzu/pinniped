@@ -1,4 +1,4 @@
-// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -11,8 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/clientcmd"
+	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	identityv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/identity/v1alpha1"
 	conciergeclientset "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
@@ -290,14 +292,15 @@ func TestWhoami(t *testing.T) {
 			wantStderr:    "Error: could not complete WhoAmIRequest (is the Pinniped WhoAmI API running and healthy?): whoamirequests.identity.concierge.pinniped.dev \"whatever\" not found\n",
 		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			getClientset := func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, error) {
+			getClientsetFunc := func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, kubernetes.Interface, aggregatorclient.Interface, error) {
 				if test.gettingClientsetErr != nil {
-					return nil, test.gettingClientsetErr
+					return nil, nil, nil, test.gettingClientsetErr
 				}
-				clientset := conciergefake.NewSimpleClientset()
-				clientset.PrependReactor("create", "whoamirequests", func(_ kubetesting.Action) (bool, runtime.Object, error) {
+				conciergeClient := conciergefake.NewSimpleClientset()
+				conciergeClient.PrependReactor("create", "whoamirequests", func(_ kubetesting.Action) (bool, runtime.Object, error) {
 					if test.callingAPIErr != nil {
 						return true, nil, test.callingAPIErr
 					}
@@ -316,13 +319,14 @@ func TestWhoami(t *testing.T) {
 						},
 					}, nil
 				})
-				return clientset, nil
+				return conciergeClient, nil, nil, nil
 			}
+
 			cmd := newWhoamiCommand(whoamiDeps{
 				getenv: func(key string) string {
 					return test.env[key]
 				},
-				getClientset: getClientset,
+				getClientsets: getClientsetFunc,
 			})
 
 			stdout, stderr := bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})

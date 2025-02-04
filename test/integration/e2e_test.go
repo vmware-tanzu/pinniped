@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -174,7 +174,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -276,7 +275,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			"--oidc-scopes", "offline_access,openid,pinniped:request-audience", // does not request username or groups
@@ -379,7 +377,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
 			"--oidc-skip-listen",
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -517,7 +514,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
 			"--oidc-skip-listen",
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -651,7 +647,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--oidc-skip-browser",
 			"--oidc-skip-listen",
 			"--upstream-identity-provider-flow", "cli_password", // create a kubeconfig configured to use the cli_password flow
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -731,7 +726,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--upstream-identity-provider-name", oidcIdentityProvider.Name,
 			"--upstream-identity-provider-type", "oidc",
 			"--upstream-identity-provider-flow", "cli_password",
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes
@@ -1118,7 +1112,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
@@ -1174,7 +1167,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--upstream-identity-provider-flow", "browser_authcode",
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
@@ -1230,7 +1222,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--upstream-identity-provider-flow", "cli_password", // put cli_password in the kubeconfig, so we can override it with the env var
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
@@ -1319,7 +1310,6 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 			"--concierge-authenticator-type", "jwt",
 			"--concierge-authenticator-name", authenticator.Name,
 			"--oidc-skip-browser",
-			"--oidc-ca-bundle", federationDomainCABundlePath,
 			"--oidc-session-cache", sessionCachePath,
 			"--credential-cache", credentialCachePath,
 			// use default for --oidc-scopes, which is to request all relevant scopes

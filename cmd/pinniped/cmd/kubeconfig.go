@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -20,10 +20,12 @@ import (
 	coreosoidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	clientauthenticationv1beta1 "k8s.io/client-go/pkg/apis/clientauthentication/v1beta1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Adds handlers for various dynamic auth plugins in client-go
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	conciergeconfigv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1"
@@ -38,7 +40,7 @@ import (
 type kubeconfigDeps struct {
 	getenv        func(key string) string
 	getPathToSelf func() (string, error)
-	getClientset  getConciergeClientsetFunc
+	getClientsets getClientsetsFunc
 	log           plog.MinLogger
 }
 
@@ -46,7 +48,7 @@ func kubeconfigRealDeps() kubeconfigDeps {
 	return kubeconfigDeps{
 		getenv:        os.Getenv,
 		getPathToSelf: os.Executable,
-		getClientset:  getRealConciergeClientset,
+		getClientsets: getRealClientsets,
 		log:           plog.New(),
 	}
 }
@@ -215,7 +217,7 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		return fmt.Errorf("could not load --kubeconfig/--kubeconfig-context: %w", err)
 	}
 	cluster := currentKubeConfig.Clusters[currentKubeconfigNames.ClusterName]
-	clientset, err := deps.getClientset(clientConfig, flags.concierge.apiGroupSuffix)
+	conciergeClient, kubeClient, aggregatorClient, err := deps.getClientsets(clientConfig, flags.concierge.apiGroupSuffix)
 	if err != nil {
 		return fmt.Errorf("could not configure Kubernetes client: %w", err)
 	}
@@ -228,13 +230,15 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	}
 
 	if !flags.concierge.disabled {
-		credentialIssuer, err := waitForCredentialIssuer(ctx, clientset, flags, deps)
+		// Look up the Concierge's CredentialIssuer, and optionally wait for it to have no pending strategies showing in its status.
+		credentialIssuer, err := waitForCredentialIssuer(ctx, conciergeClient, flags, deps)
 		if err != nil {
 			return err
 		}
 
+		// Decide which Concierge authenticator should be used in the resulting kubeconfig.
 		authenticator, err := lookupAuthenticator(
-			clientset,
+			conciergeClient,
 			flags.concierge.authenticatorType,
 			flags.concierge.authenticatorName,
 			deps.log,
@@ -242,10 +246,15 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 		if err != nil {
 			return err
 		}
+
+		// Discover from the CredentialIssuer how the resulting kubeconfig should be configured to talk to this Concierge.
 		if err := discoverConciergeParams(credentialIssuer, &flags, cluster, deps.log); err != nil {
 			return err
 		}
-		if err := discoverAuthenticatorParams(authenticator, &flags, deps.log); err != nil {
+
+		// Discover how the resulting kubeconfig should interact with the selected authenticator.
+		// For a JWTAuthenticator, this includes discovering how to talk to the OIDC issuer configured in its spec fields.
+		if err := discoverAuthenticatorParams(ctx, authenticator, &flags, kubeClient, aggregatorClient, deps.log); err != nil {
 			return err
 		}
 
@@ -255,6 +264,7 @@ func runGetKubeconfig(ctx context.Context, out io.Writer, deps kubeconfigDeps, f
 	}
 
 	if len(flags.oidc.issuer) > 0 {
+		// The OIDC provider may or may not be a Pinniped Supervisor. Find out.
 		err = pinnipedSupervisorDiscovery(ctx, &flags, deps.log)
 		if err != nil {
 			return err
@@ -488,7 +498,14 @@ func logStrategies(credentialIssuer *conciergeconfigv1alpha1.CredentialIssuer, l
 	}
 }
 
-func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconfigParams, log plog.MinLogger) error {
+func discoverAuthenticatorParams(
+	ctx context.Context,
+	authenticator metav1.Object,
+	flags *getKubeconfigParams,
+	kubeClient kubernetes.Interface,
+	aggregatorClient aggregatorclient.Interface,
+	log plog.MinLogger,
+) error {
 	switch auth := authenticator.(type) {
 	case *authenticationv1alpha1.WebhookAuthenticator:
 		// If the --concierge-authenticator-type/--concierge-authenticator-name flags were not set explicitly, set
@@ -520,17 +537,128 @@ func discoverAuthenticatorParams(authenticator metav1.Object, flags *getKubeconf
 		}
 
 		// If the --oidc-ca-bundle flags was not set explicitly, default it to the
-		// spec.tls.certificateAuthorityData field of the JWTAuthenticator.
-		if len(flags.oidc.caBundle) == 0 && auth.Spec.TLS != nil && auth.Spec.TLS.CertificateAuthorityData != "" {
-			decoded, err := base64.StdEncoding.DecodeString(auth.Spec.TLS.CertificateAuthorityData)
+		// spec.tls.certificateAuthorityData field of the JWTAuthenticator, if that field is set, or else
+		// try to discover it from the spec.tls.certificateAuthorityDataSource, if that field is set.
+		if len(flags.oidc.caBundle) == 0 && auth.Spec.TLS != nil {
+			err := discoverOIDCCABundle(ctx, auth, flags, kubeClient, aggregatorClient, log)
 			if err != nil {
-				return fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator %s has invalid spec.tls.certificateAuthorityData: %w", auth.Name, err)
+				return err
 			}
-			log.Info("discovered OIDC CA bundle", "roots", countCACerts(decoded))
-			flags.oidc.caBundle = decoded
 		}
 	}
 	return nil
+}
+
+func discoverOIDCCABundle(
+	ctx context.Context,
+	jwtAuthenticator *authenticationv1alpha1.JWTAuthenticator,
+	flags *getKubeconfigParams,
+	kubeClient kubernetes.Interface,
+	aggregatorClient aggregatorclient.Interface,
+	log plog.MinLogger,
+) error {
+	if jwtAuthenticator.Spec.TLS.CertificateAuthorityData != "" {
+		decodedCABundleData, err := base64.StdEncoding.DecodeString(jwtAuthenticator.Spec.TLS.CertificateAuthorityData)
+		if err != nil {
+			return fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator %s has invalid spec.tls.certificateAuthorityData: %w", jwtAuthenticator.Name, err)
+		}
+		log.Info("discovered OIDC CA bundle", "roots", countCACerts(decodedCABundleData))
+		flags.oidc.caBundle = decodedCABundleData
+	} else if jwtAuthenticator.Spec.TLS.CertificateAuthorityDataSource != nil {
+		caBundleData, err := discoverOIDCCABundleFromCertificateAuthorityDataSource(
+			ctx, jwtAuthenticator, flags.concierge.apiGroupSuffix, kubeClient, aggregatorClient, log)
+		if err != nil {
+			return err
+		}
+		flags.oidc.caBundle = caBundleData
+	}
+	return nil
+}
+
+func discoverOIDCCABundleFromCertificateAuthorityDataSource(
+	ctx context.Context,
+	jwtAuthenticator *authenticationv1alpha1.JWTAuthenticator,
+	apiGroupSuffix string,
+	kubeClient kubernetes.Interface,
+	aggregatorClient aggregatorclient.Interface,
+	log plog.MinLogger,
+) ([]byte, error) {
+	conciergeNamespace, err := discoverConciergeNamespace(ctx, apiGroupSuffix, aggregatorClient)
+	if err != nil {
+		return nil, fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but encountered error discovering namespace of Concierge for JWTAuthenticator %s: %w", jwtAuthenticator.Name, err)
+	}
+	log.Info("discovered Concierge namespace for API group suffix", "apiGroupSuffix", apiGroupSuffix)
+
+	var caBundleData []byte
+	var keyExisted bool
+	caSource := jwtAuthenticator.Spec.TLS.CertificateAuthorityDataSource
+
+	// Note that the Kind, Name, and Key fields must all be non-empty, and Kind must be Secret or ConfigMap, due to CRD validations.
+	switch caSource.Kind {
+	case authenticationv1alpha1.CertificateAuthorityDataSourceKindConfigMap:
+		caBundleConfigMap, err := kubeClient.CoreV1().ConfigMaps(conciergeNamespace).Get(ctx, caSource.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but encountered error getting %s %s/%s specified by JWTAuthenticator %s spec.tls.certificateAuthorityDataSource: %w",
+				caSource.Kind, conciergeNamespace, caSource.Name, jwtAuthenticator.Name, err)
+		}
+		var caBundleDataStr string
+		caBundleDataStr, keyExisted = caBundleConfigMap.Data[caSource.Key]
+		caBundleData = []byte(caBundleDataStr)
+	case authenticationv1alpha1.CertificateAuthorityDataSourceKindSecret:
+		caBundleSecret, err := kubeClient.CoreV1().Secrets(conciergeNamespace).Get(ctx, caSource.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but encountered error getting %s %s/%s specified by JWTAuthenticator %s spec.tls.certificateAuthorityDataSource: %w",
+				caSource.Kind, conciergeNamespace, caSource.Name, jwtAuthenticator.Name, err)
+		}
+		caBundleData, keyExisted = caBundleSecret.Data[caSource.Key]
+	default:
+		return nil, fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator %s spec.tls.certificateAuthorityDataSource.Kind value %q is not supported by this CLI version",
+			jwtAuthenticator.Name, caSource.Kind)
+	}
+
+	if !keyExisted {
+		return nil, fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but key %q specified by JWTAuthenticator %s spec.tls.certificateAuthorityDataSource.key does not exist in %s %s/%s",
+			caSource.Key, jwtAuthenticator.Name, caSource.Kind, conciergeNamespace, caSource.Name)
+	}
+
+	if len(caBundleData) == 0 {
+		return nil, fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but key %q specified by JWTAuthenticator %s spec.tls.certificateAuthorityDataSource.key exists but has empty value in %s %s/%s",
+			caSource.Key, jwtAuthenticator.Name, caSource.Kind, conciergeNamespace, caSource.Name)
+	}
+
+	numCACerts := countCACerts(caBundleData)
+	if numCACerts == 0 {
+		return nil, fmt.Errorf("tried to autodiscover --oidc-ca-bundle, but value at key %q specified by JWTAuthenticator %s spec.tls.certificateAuthorityDataSource.key does not contain any CA certificates in %s %s/%s",
+			caSource.Key, jwtAuthenticator.Name, caSource.Kind, conciergeNamespace, caSource.Name)
+	}
+
+	log.Info("discovered OIDC CA bundle from JWTAuthenticator spec.tls.certificateAuthorityDataSource", "roots", numCACerts)
+	return caBundleData, nil
+}
+
+func discoverConciergeNamespace(ctx context.Context, apiGroupSuffix string, aggregatorClient aggregatorclient.Interface) (string, error) {
+	// Let's look for the APIService for the API group of the Concierge's TokenCredentialRequest aggregated API.
+	apiGroup := "login.concierge." + apiGroupSuffix
+
+	// List all APIServices.
+	apiServiceList, err := aggregatorClient.ApiregistrationV1().APIServices().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("error listing APIServices: %w", err)
+	}
+
+	// Find one with the expected API group name.
+	for _, apiService := range apiServiceList.Items {
+		if apiService.Spec.Group == apiGroup {
+			if apiService.Spec.Service.Namespace != "" {
+				// We are assuming that all API versions (e.g. v1alpha1) of this API group are backed by service(s)
+				// in the same namespace, which is the namespace of the Concierge hosting this API suffix.
+				return apiService.Spec.Service.Namespace, nil
+			}
+		}
+	}
+
+	// Couldn't find any APIService for the expected API group name which contained a namespace reference in its spec.
+	return "", fmt.Errorf("could not find APIService with non-empty spec.service.namespace for API group %s", apiGroup)
 }
 
 func getConciergeFrontend(credentialIssuer *conciergeconfigv1alpha1.CredentialIssuer, mode conciergeModeFlag) (*conciergeconfigv1alpha1.CredentialIssuerFrontend, error) {

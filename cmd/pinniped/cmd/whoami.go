@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -25,14 +25,14 @@ import (
 )
 
 type whoamiDeps struct {
-	getenv       func(key string) string
-	getClientset getConciergeClientsetFunc
+	getenv        func(key string) string
+	getClientsets getClientsetsFunc
 }
 
 func whoamiRealDeps() whoamiDeps {
 	return whoamiDeps{
-		getenv:       os.Getenv,
-		getClientset: getRealConciergeClientset,
+		getenv:        os.Getenv,
+		getClientsets: getRealClientsets,
 	}
 }
 
@@ -82,7 +82,7 @@ func newWhoamiCommand(deps whoamiDeps) *cobra.Command {
 
 func runWhoami(output io.Writer, deps whoamiDeps, flags *whoamiFlags) error {
 	clientConfig := newClientConfig(flags.kubeconfigPath, flags.kubeconfigContextOverride)
-	clientset, err := deps.getClientset(clientConfig, flags.apiGroupSuffix)
+	conciergeClient, _, _, err := deps.getClientsets(clientConfig, flags.apiGroupSuffix)
 	if err != nil {
 		return fmt.Errorf("could not configure Kubernetes client: %w", err)
 	}
@@ -108,7 +108,7 @@ func runWhoami(output io.Writer, deps whoamiDeps, flags *whoamiFlags) error {
 		defer cancelFunc()
 	}
 
-	whoAmI, err := clientset.IdentityV1alpha1().WhoAmIRequests().Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
+	whoAmI, err := conciergeClient.IdentityV1alpha1().WhoAmIRequests().Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 	if err != nil {
 		hint := ""
 		if apierrors.IsNotFound(err) {

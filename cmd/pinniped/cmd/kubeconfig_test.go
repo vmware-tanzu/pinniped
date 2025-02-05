@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -15,10 +15,16 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 	kubetesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/clientcmd"
+	v1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	aggregatorclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	aggregatorfake "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/utils/ptr"
 
 	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
@@ -64,14 +70,69 @@ func TestGetKubeconfig(t *testing.T) {
 		}
 	}
 
-	jwtAuthenticator := func(issuerCABundle string, issuerURL string) runtime.Object {
+	caBundleInSecret := func(issuerCABundle, secretName, secretNamespace, secretDataKey string) runtime.Object {
+		return &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: secretNamespace,
+			},
+			Data: map[string][]byte{
+				secretDataKey: []byte(issuerCABundle),
+				"other":       []byte("unrelated"),
+			},
+		}
+	}
+
+	caBundleInConfigmap := func(issuerCABundle, cmName, cmNamespace, cmDataKey string) runtime.Object {
+		return &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cmName,
+				Namespace: cmNamespace,
+			},
+			Data: map[string]string{
+				cmDataKey: issuerCABundle,
+				"other":   "unrelated",
+			},
+		}
+	}
+
+	jwtAuthenticator := func(issuerCABundle, issuerURL string) *authenticationv1alpha1.JWTAuthenticator {
+		encodedCABundle := ""
+		if issuerCABundle != "" {
+			encodedCABundle = base64.StdEncoding.EncodeToString([]byte(issuerCABundle))
+		}
 		return &authenticationv1alpha1.JWTAuthenticator{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-authenticator"},
 			Spec: authenticationv1alpha1.JWTAuthenticatorSpec{
 				Issuer:   issuerURL,
 				Audience: "test-audience",
 				TLS: &authenticationv1alpha1.TLSSpec{
-					CertificateAuthorityData: base64.StdEncoding.EncodeToString([]byte(issuerCABundle)),
+					CertificateAuthorityData: encodedCABundle,
+				},
+			},
+		}
+	}
+
+	jwtAuthenticatorWithCABundleDataSource := func(sourceKind, sourceName, sourceKey, issuerURL string) runtime.Object {
+		authenticator := jwtAuthenticator("", issuerURL)
+		authenticator.Spec.TLS.CertificateAuthorityDataSource = &authenticationv1alpha1.CertificateAuthorityDataSourceSpec{
+			Kind: authenticationv1alpha1.CertificateAuthorityDataSourceKind(sourceKind),
+			Name: sourceName,
+			Key:  sourceKey,
+		}
+		return authenticator
+	}
+
+	apiService := func(group, version, serviceNamespace string) *v1.APIService {
+		return &v1.APIService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: version + "." + group,
+			},
+			Spec: v1.APIServiceSpec{
+				Group:   group,
+				Version: version,
+				Service: &v1.ServiceReference{
+					Namespace: serviceNamespace,
 				},
 			},
 		}
@@ -144,7 +205,11 @@ func TestGetKubeconfig(t *testing.T) {
 		getPathToSelfErr        error
 		getClientsetErr         error
 		conciergeObjects        func(string, string) []runtime.Object
+		kubeObjects             func(string) []runtime.Object
+		apiServiceObjects       []runtime.Object
 		conciergeReactions      []kubetesting.Reactor
+		kubeReactions           []kubetesting.Reactor
+		apiServiceReactions     []kubetesting.Reactor
 		oidcDiscoveryResponse   func(string) string
 		oidcDiscoveryStatusCode int
 		idpsDiscoveryResponse   string
@@ -654,6 +719,321 @@ func TestGetKubeconfig(t *testing.T) {
 			wantError: true,
 			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
 				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator test-authenticator has invalid spec.tls.certificateAuthorityData: illegal base64 data at input byte 7` + "\n")
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in Secret, but Secret not found",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("Secret", "my-ca-secret", "ca.crt", issuerURL),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.pinniped.dev", "v1alpha1", "test-concierge-namespace"),
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge namespace for API group suffix  {"apiGroupSuffix": "pinniped.dev"}`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but encountered error getting Secret test-concierge-namespace/my-ca-secret specified by JWTAuthenticator test-authenticator spec.tls.certificateAuthorityDataSource: secrets "my-ca-secret" not found` + "\n")
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in ConfigMap, but ConfigMap not found",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("ConfigMap", "my-ca-configmap", "ca.crt", issuerURL),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.pinniped.dev", "v1alpha1", "test-concierge-namespace"),
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge namespace for API group suffix  {"apiGroupSuffix": "pinniped.dev"}`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but encountered error getting ConfigMap test-concierge-namespace/my-ca-configmap specified by JWTAuthenticator test-authenticator spec.tls.certificateAuthorityDataSource: configmaps "my-ca-configmap" not found` + "\n")
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in Secret, but invalid TLS bundle found in Secret",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("Secret", "my-ca-secret", "ca.crt", issuerURL),
+				}
+			},
+			kubeObjects: func(issuerCABundle string) []runtime.Object {
+				return []runtime.Object{
+					caBundleInSecret("invalid CA bundle data", "my-ca-secret", "test-concierge-namespace", "ca.crt"),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.pinniped.dev", "v1alpha1", "test-concierge-namespace"),
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge namespace for API group suffix  {"apiGroupSuffix": "pinniped.dev"}`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but value at key "ca.crt" specified by JWTAuthenticator test-authenticator spec.tls.certificateAuthorityDataSource.key does not contain any CA certificates in Secret test-concierge-namespace/my-ca-secret` + "\n")
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in Secret, but specified key not found in Secret",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("Secret", "my-ca-secret", "ca.crt", issuerURL),
+				}
+			},
+			kubeObjects: func(issuerCABundle string) []runtime.Object {
+				return []runtime.Object{
+					caBundleInSecret(issuerCABundle, "my-ca-secret", "test-concierge-namespace", "wrong_key_name"),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.pinniped.dev", "v1alpha1", "test-concierge-namespace"),
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge namespace for API group suffix  {"apiGroupSuffix": "pinniped.dev"}`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but key "ca.crt" specified by JWTAuthenticator test-authenticator spec.tls.certificateAuthorityDataSource.key does not exist in Secret test-concierge-namespace/my-ca-secret` + "\n")
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in Secret, but specified key has empty value in Secret",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("Secret", "my-ca-secret", "ca.crt", issuerURL),
+				}
+			},
+			kubeObjects: func(issuerCABundle string) []runtime.Object {
+				return []runtime.Object{
+					caBundleInSecret("", "my-ca-secret", "test-concierge-namespace", "ca.crt"),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.pinniped.dev", "v1", "test-concierge-namespace"),
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge namespace for API group suffix  {"apiGroupSuffix": "pinniped.dev"}`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but key "ca.crt" specified by JWTAuthenticator test-authenticator spec.tls.certificateAuthorityDataSource.key exists but has empty value in Secret test-concierge-namespace/my-ca-secret` + "\n")
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle source, but source's Kind is not supported",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("Unsupported-Value", "my-ca-secret", "ca.crt", issuerURL),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.pinniped.dev", "v1alpha1", "test-concierge-namespace"),
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge namespace for API group suffix  {"apiGroupSuffix": "pinniped.dev"}`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but JWTAuthenticator test-authenticator spec.tls.certificateAuthorityDataSource.Kind value "Unsupported-Value" is not supported by this CLI version` + "\n")
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in Secret, but no related APIService found",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("Secret", "my-ca-secret", "ca.crt", issuerURL),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("unrelated.example.com", "v1alpha1", "test-concierge-namespace"),
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but encountered error discovering namespace of Concierge for JWTAuthenticator test-authenticator: could not find APIService with non-empty spec.service.namespace for API group login.concierge.pinniped.dev` + "\n")
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in Secret, but related APIService has empty namespace in spec",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("Secret", "my-ca-secret", "ca.crt", issuerURL),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.pinniped.dev", "v1alpha1", ""),
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but encountered error discovering namespace of Concierge for JWTAuthenticator test-authenticator: could not find APIService with non-empty spec.service.namespace for API group login.concierge.pinniped.dev` + "\n")
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in Secret, but error when listing APIServices",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("Secret", "my-ca-secret", "ca.crt", issuerURL),
+				}
+			},
+			apiServiceReactions: []kubetesting.Reactor{
+				&kubetesting.SimpleReactor{
+					Verb:     "*",
+					Resource: "apiservices",
+					Reaction: func(kubetesting.Action) (bool, runtime.Object, error) {
+						return true, nil, fmt.Errorf("some list error")
+					},
+				},
+			},
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+				}
+			},
+			wantError: true,
+			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
+				return testutil.WantExactErrorString(`Error: tried to autodiscover --oidc-ca-bundle, but encountered error discovering namespace of Concierge for JWTAuthenticator test-authenticator: error listing APIServices: some list error` + "\n")
 			},
 		},
 		{
@@ -1581,6 +1961,257 @@ func TestGetKubeconfig(t *testing.T) {
 						  - oidc
 						  - --enable-concierge
 						  - --concierge-api-group-suffix=pinniped.dev
+						  - --concierge-authenticator-name=test-authenticator
+						  - --concierge-authenticator-type=jwt
+						  - --concierge-endpoint=https://fake-server-url-value
+						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
+						  - --ca-bundle-data=%s
+						  - --request-audience=test-audience
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
+						    for more details
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in Secret",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("Secret", "my-ca-secret", "ca.crt", issuerURL),
+				}
+			},
+			kubeObjects: func(issuerCABundle string) []runtime.Object {
+				return []runtime.Object{
+					caBundleInSecret(issuerCABundle, "my-ca-secret", "test-concierge-namespace", "ca.crt"),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.pinniped.dev", "v1alpha1", "test-concierge-namespace"),
+				apiService("unrelated.pinniped.dev", "v1alpha1", "unrelated-namespace"),
+				apiService("login.concierge.pinniped.dev", "v1alpha2", "test-concierge-namespace"),
+			},
+			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge namespace for API group suffix  {"apiGroupSuffix": "pinniped.dev"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle from JWTAuthenticator spec.tls.certificateAuthorityDataSource  {"roots": 1}`,
+				}
+			},
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --enable-concierge
+						  - --concierge-api-group-suffix=pinniped.dev
+						  - --concierge-authenticator-name=test-authenticator
+						  - --concierge-authenticator-type=jwt
+						  - --concierge-endpoint=https://fake-server-url-value
+						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
+						  - --ca-bundle-data=%s
+						  - --request-audience=test-audience
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
+						    for more details
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in ConfigMap",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--skip-validation",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("ConfigMap", "my-ca-configmap", "ca.crt", issuerURL),
+				}
+			},
+			kubeObjects: func(issuerCABundle string) []runtime.Object {
+				return []runtime.Object{
+					caBundleInConfigmap(issuerCABundle, "my-ca-configmap", "test-concierge-namespace", "ca.crt"),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.pinniped.dev", "v1alpha1", "test-concierge-namespace"),
+				apiService("unrelated.pinniped.dev", "v1alpha1", "unrelated-namespace"),
+				apiService("login.concierge.pinniped.dev", "v1alpha2", "test-concierge-namespace"),
+			},
+			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge namespace for API group suffix  {"apiGroupSuffix": "pinniped.dev"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle from JWTAuthenticator spec.tls.certificateAuthorityDataSource  {"roots": 1}`,
+				}
+			},
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --enable-concierge
+						  - --concierge-api-group-suffix=pinniped.dev
+						  - --concierge-authenticator-name=test-authenticator
+						  - --concierge-authenticator-type=jwt
+						  - --concierge-endpoint=https://fake-server-url-value
+						  - --concierge-ca-bundle-data=ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						  - --issuer=%s
+						  - --client-id=pinniped-cli
+						  - --scopes=offline_access,openid,pinniped:request-audience,username,groups
+						  - --ca-bundle-data=%s
+						  - --request-audience=test-audience
+						  command: '.../path/to/pinniped'
+						  env: []
+						  installHint: The pinniped CLI does not appear to be installed.  See https://get.pinniped.dev/cli
+						    for more details
+						  provideClusterInfo: true
+					`,
+					issuerURL,
+					base64.StdEncoding.EncodeToString([]byte(issuerCABundle)))
+			},
+		},
+		{
+			name: "autodetect JWT authenticator with CA bundle in ConfigMap with a custom API group suffix",
+			args: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					"--kubeconfig", "./testdata/kubeconfig.yaml",
+					"--concierge-api-group-suffix=acme.com",
+					"--skip-validation",
+				}
+			},
+			conciergeObjects: func(issuerCABundle string, issuerURL string) []runtime.Object {
+				return []runtime.Object{
+					credentialIssuer(),
+					jwtAuthenticatorWithCABundleDataSource("ConfigMap", "my-ca-configmap", "ca.crt", issuerURL),
+				}
+			},
+			kubeObjects: func(issuerCABundle string) []runtime.Object {
+				return []runtime.Object{
+					caBundleInConfigmap(issuerCABundle, "my-ca-configmap", "test-concierge-namespace", "ca.crt"),
+				}
+			},
+			apiServiceObjects: []runtime.Object{
+				apiService("login.concierge.acme.com", "v1alpha1", "test-concierge-namespace"),
+				apiService("unrelated.pinniped.dev", "v1alpha1", "unrelated-namespace"),
+				apiService("login.concierge.pinniped.dev", "v1alpha2", "another-unrelated-namespace"),
+			},
+			oidcDiscoveryResponse: onlyIssuerOIDCDiscoveryResponse,
+			wantLogs: func(issuerCABundle string, issuerURL string) []string {
+				return []string{
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered CredentialIssuer  {"name": "test-credential-issuer"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge operating in TokenCredentialRequest API mode`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge endpoint  {"endpoint": "https://fake-server-url-value"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge certificate authority bundle  {"roots": 0}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered JWTAuthenticator  {"name": "test-authenticator"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC issuer  {"issuer": "` + issuerURL + `"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC audience  {"audience": "test-audience"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered Concierge namespace for API group suffix  {"apiGroupSuffix": "acme.com"}`,
+					`2099-08-08T13:57:36.123456Z  info  cmd/kubeconfig.go:<line>  discovered OIDC CA bundle from JWTAuthenticator spec.tls.certificateAuthorityDataSource  {"roots": 1}`,
+				}
+			},
+			wantAPIGroupSuffix: "acme.com",
+			wantStdout: func(issuerCABundle string, issuerURL string) string {
+				return here.Docf(`
+					apiVersion: v1
+					clusters:
+					- cluster:
+						certificate-authority-data: ZmFrZS1jZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YS12YWx1ZQ==
+						server: https://fake-server-url-value
+					  name: kind-cluster-pinniped
+					contexts:
+					- context:
+						cluster: kind-cluster-pinniped
+						user: kind-user-pinniped
+					  name: kind-context-pinniped
+					current-context: kind-context-pinniped
+					kind: Config
+					preferences: {}
+					users:
+					- name: kind-user-pinniped
+					  user:
+						exec:
+						  apiVersion: client.authentication.k8s.io/v1beta1
+						  args:
+						  - login
+						  - oidc
+						  - --enable-concierge
+						  - --concierge-api-group-suffix=acme.com
 						  - --concierge-authenticator-name=test-authenticator
 						  - --concierge-authenticator-type=jwt
 						  - --concierge-endpoint=https://fake-server-url-value
@@ -3211,6 +3842,7 @@ func TestGetKubeconfig(t *testing.T) {
 			},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var issuerEndpointPtr *string
@@ -3245,6 +3877,37 @@ func TestGetKubeconfig(t *testing.T) {
 			}), nil)
 			issuerEndpointPtr = ptr.To(testServer.URL)
 
+			getClientsetFunc := func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, kubernetes.Interface, aggregatorclient.Interface, error) {
+				if tt.wantAPIGroupSuffix == "" {
+					require.Equal(t, "pinniped.dev", apiGroupSuffix) // "pinniped.dev" = api group suffix default
+				} else {
+					require.Equal(t, tt.wantAPIGroupSuffix, apiGroupSuffix)
+				}
+				if tt.getClientsetErr != nil {
+					return nil, nil, nil, tt.getClientsetErr
+				}
+				fakeAggregatorClient := aggregatorfake.NewSimpleClientset(tt.apiServiceObjects...)
+				fakeKubeClient := fake.NewClientset()
+				if tt.kubeObjects != nil {
+					kubeObjects := tt.kubeObjects(string(testServerCA))
+					fakeKubeClient = fake.NewClientset(kubeObjects...)
+				}
+				fakeConciergeClient := conciergefake.NewSimpleClientset()
+				if tt.conciergeObjects != nil {
+					fakeConciergeClient = conciergefake.NewSimpleClientset(tt.conciergeObjects(string(testServerCA), testServer.URL)...)
+				}
+				if len(tt.conciergeReactions) > 0 {
+					fakeConciergeClient.ReactionChain = slices.Concat(tt.conciergeReactions, fakeConciergeClient.ReactionChain)
+				}
+				if len(tt.kubeReactions) > 0 {
+					fakeKubeClient.ReactionChain = slices.Concat(tt.kubeReactions, fakeKubeClient.ReactionChain)
+				}
+				if len(tt.apiServiceReactions) > 0 {
+					fakeAggregatorClient.ReactionChain = slices.Concat(tt.apiServiceReactions, fakeAggregatorClient.ReactionChain)
+				}
+				return fakeConciergeClient, fakeKubeClient, fakeAggregatorClient, nil
+			}
+
 			var log bytes.Buffer
 
 			cmd := kubeconfigCommand(kubeconfigDeps{
@@ -3257,25 +3920,8 @@ func TestGetKubeconfig(t *testing.T) {
 					}
 					return ".../path/to/pinniped", nil
 				},
-				getClientset: func(clientConfig clientcmd.ClientConfig, apiGroupSuffix string) (conciergeclientset.Interface, error) {
-					if tt.wantAPIGroupSuffix == "" {
-						require.Equal(t, "pinniped.dev", apiGroupSuffix) // "pinniped.dev" = api group suffix default
-					} else {
-						require.Equal(t, tt.wantAPIGroupSuffix, apiGroupSuffix)
-					}
-					if tt.getClientsetErr != nil {
-						return nil, tt.getClientsetErr
-					}
-					fake := conciergefake.NewSimpleClientset()
-					if tt.conciergeObjects != nil {
-						fake = conciergefake.NewSimpleClientset(tt.conciergeObjects(string(testServerCA), testServer.URL)...)
-					}
-					if len(tt.conciergeReactions) > 0 {
-						fake.ReactionChain = slices.Concat(tt.conciergeReactions, fake.ReactionChain)
-					}
-					return fake, nil
-				},
-				log: plog.TestConsoleLogger(t, &log),
+				getClientsets: getClientsetFunc,
+				log:           plog.TestConsoleLogger(t, &log),
 			})
 			require.NotNil(t, cmd)
 

@@ -39,7 +39,6 @@ import (
 	conciergefake "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake"
 	conciergeinformers "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions"
 	"go.pinniped.dev/internal/certauthority"
-	"go.pinniped.dev/internal/controller/apicerts"
 	"go.pinniped.dev/internal/controllerlib"
 	"go.pinniped.dev/internal/dynamiccert"
 	"go.pinniped.dev/internal/kubeclient"
@@ -94,6 +93,7 @@ func TestImpersonatorConfigControllerOptions(t *testing.T) {
 				nil,
 				nil,
 				caSignerName,
+				nil,
 				nil,
 				logger,
 				nil,
@@ -588,6 +588,9 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 				clocktesting.NewFakeClock(frozenNow),
 				impersonatorFunc,
 				mTLSClientCertCASecretName,
+				func(secret *corev1.Secret) ([]byte, []byte) {
+					return secret.Data["some-key-for-ca-certificate"], secret.Data["some-key-for-ca-private-key"]
+				},
 				mTLSClientCertProvider,
 				logger,
 				fakeExpiringSingletonTokenCacheGet,
@@ -675,8 +678,8 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 		var newSigningKeySecret = func(resourceName string, certPEM, keyPEM []byte) *corev1.Secret {
 			return newSecretWithData(resourceName, map[string][]byte{
-				apicerts.CACertificateSecretKey:           certPEM,
-				apicerts.CACertificatePrivateKeySecretKey: keyPEM,
+				"some-key-for-ca-certificate": certPEM,
+				"some-key-for-ca-private-key": keyPEM,
 			})
 		}
 
@@ -4095,7 +4098,7 @@ func TestImpersonatorConfigControllerSync(t *testing.T) {
 
 			when("the cert is invalid", func() {
 				it.Before(func() {
-					mTLSClientCertCASecret.Data[apicerts.CACertificateSecretKey] = []byte("not a valid PEM formatted cert")
+					mTLSClientCertCASecret.Data["some-key-for-ca-certificate"] = []byte("not a valid PEM formatted cert")
 					addSecretToTrackers(mTLSClientCertCASecret, kubeInformerClient)
 				})
 

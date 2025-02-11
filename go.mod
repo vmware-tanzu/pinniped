@@ -11,7 +11,7 @@ replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-dif
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20250208210249-fa305b1d5b8a
+	github.com/chromedp/cdproto v0.0.0-20250210231439-aea867ea8506
 	github.com/chromedp/chromedp v0.12.1
 	github.com/coreos/go-oidc/v3 v3.12.0
 	github.com/coreos/go-semver v0.3.1
@@ -46,7 +46,7 @@ require (
 	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.33.0
-	golang.org/x/net v0.34.0
+	golang.org/x/net v0.35.0
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sync v0.11.0
 	golang.org/x/term v0.29.0

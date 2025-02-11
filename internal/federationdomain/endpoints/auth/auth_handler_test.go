@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package auth
@@ -993,7 +993,45 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			},
 		},
 		{
-			name: "with multiple IDPs available, request does not choose which IDP to use",
+			name: "with one IDP available, request does not choose which IDP to use, will redirect to the IDP chooser",
+			idps: testidplister.NewUpstreamIDPListerBuilder().
+				WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),
+			generateCSRF:                           happyCSRFGenerator,
+			generatePKCE:                           happyPKCEGenerator,
+			generateNonce:                          happyNonceGenerator,
+			stateEncoder:                           happyStateEncoder,
+			cookieEncoder:                          happyCookieEncoder,
+			method:                                 http.MethodGet,
+			path:                                   happyGetRequestPath, // does not include pinniped_idp_name param
+			wantStatus:                             http.StatusSeeOther,
+			wantContentType:                        htmlContentType,
+			wantCSRFValueInCookieHeader:            "", // there should not be a CSRF cookie set on the response
+			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/choose_identity_provider", happyGetRequestQueryMap),
+			wantUpstreamStateParamInLocationHeader: false, // it should copy the params of the original request, not add a new state param
+			wantBodyStringWithLocationInHref:       true,
+			wantAuditLogs: func(_ stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{
+							"client_id":             "pinniped-cli",
+							"code_challenge":        "redacted",
+							"code_challenge_method": "S256",
+							"nonce":                 "redacted",
+							"redirect_uri":          "http://127.0.0.1/callback",
+							"response_type":         "code",
+							"scope":                 "openid profile email username groups",
+							"state":                 "redacted",
+						},
+					}),
+					testutil.WantAuditLog("HTTP Request Custom Headers Used", map[string]any{
+						"Pinniped-Username": false,
+						"Pinniped-Password": false,
+					}),
+				}
+			},
+		},
+		{
+			name: "with multiple IDPs available, request does not choose which IDP to use, will redirect to the IDP chooser",
 			idps: testidplister.NewUpstreamIDPListerBuilder().
 				WithOIDC(upstreamOIDCIdentityProviderBuilder().Build()).
 				WithLDAP(upstreamLDAPIdentityProviderBuilder().Build()),

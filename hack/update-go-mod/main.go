@@ -1,4 +1,4 @@
-// Copyright 2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package main
@@ -53,6 +53,11 @@ func main() {
 			mod := require.Mod.Path
 			overrideMod, hasOverride := overrides[mod]
 			if hasOverride {
+				if overrideMod == "NEVER_UPGRADE_DIRECTLY" {
+					// Do not manually update this direct dependency. Treat it like an indirect dep.
+					// Let "go mod tidy" update it to be the minimum version required by our other direct deps.
+					continue
+				}
 				mod = overrideMod
 			}
 			fmt.Printf("go get %s &&\n", mod)

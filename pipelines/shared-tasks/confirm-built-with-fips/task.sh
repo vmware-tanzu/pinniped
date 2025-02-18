@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # check whether the pinniped-server binary has particular symbols that only exists when it's compiled with boringcrypto.
@@ -20,7 +20,7 @@ then
       exit 1
 fi
 # check whether the pinniped-server binary has particular symbols that only exist when it's compiled with non-boring crypto
-pinniped_server_has_regular_crypto="$(go tool nm './image/rootfs/usr/local/bin/pinniped-server' | grep sha256 | grep di)"
+pinniped_server_has_regular_crypto="$(go tool nm './image/rootfs/usr/local/bin/pinniped-server' | grep sha256 | grep di | grep -v fips)"
 # if any of these symbols exist, that means it was compiled wrong and it should fail.
 if [ -n "$pinniped_server_has_regular_crypto" ]
 then

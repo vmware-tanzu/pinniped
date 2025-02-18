@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonator
@@ -650,7 +650,6 @@ func getTransportForUser(ctx context.Context, userInfo user.Info, delegate, dele
 }
 
 func canImpersonateFully(userInfo user.Info) bool {
-	//nolint:gosimple  // this structure is on purpose because we plan to expand this function
 	if len(userInfo.GetUID()) == 0 {
 		return true
 	}

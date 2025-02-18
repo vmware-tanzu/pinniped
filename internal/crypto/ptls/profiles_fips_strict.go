@@ -1,4 +1,4 @@
-// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // This file overrides profiles.go when Pinniped is built in FIPS-only mode.
@@ -37,11 +37,9 @@ var (
 	// insecureCipherSuiteIDs is a list of additional ciphers that should be allowed for both clients
 	// and servers when using TLS 1.2.
 	//
-	// FIPS allows the use of these specific ciphers that golang considers insecure.
-	insecureCipherSuiteIDs = []uint16{
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-	}
+	// Previous versions of FIPS allowed the use of some specific ciphers that golang considers insecure.
+	// Go 1.24 does not anymore, so now this list is empty.
+	insecureCipherSuiteIDs []uint16
 
 	// additionalSecureCipherSuiteIDsOnlyForLDAPClients are additional ciphers to use only for LDAP clients
 	// when using TLS 1.2. These can be used when the Pinniped Supervisor is making calls to an LDAP server
@@ -72,7 +70,7 @@ func init() {
 // and insecureCipherSuiteIDs values defined above.
 func Default(rootCAs *x509.CertPool) *tls.Config {
 	config := buildTLSConfig(rootCAs, allHardcodedAllowedCipherSuites(), getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo())
-	// Until goboring supports TLS 1.3, make the max version 1.2 by default. Allow it to be overridden by a build tag.
+	// Note: starting in Go 1.24, boringcrypto supports TLS 1.3, so we allow it here.
 	config.MaxVersion = DefaultProfileMaxTLSVersionForFIPS
 	return config
 }
@@ -86,15 +84,18 @@ func DefaultLDAP(rootCAs *x509.CertPool) *tls.Config {
 
 // Secure: see comment in profiles.go.
 // This chooses different cipher suites and/or TLS versions compared to non-FIPS mode.
-// Until goboring supports TLS 1.3, make the Secure profile the same as the Default profile in FIPS mode.
-// Until then, this is not any different from the Default profile in FIPS mode.
+// Note: starting in Go 1.24, boringcrypto supports TLS 1.3, so we allow it here.
+// However, until it is safe to assume that a FIPS-compiled k8s server supports TLS 1.3, continue to
+// make the Secure profile the same as the Default profile in FIPS mode, to allow both TLS 1.2 and 1.3.
 func Secure(rootCAs *x509.CertPool) *tls.Config {
 	return Default(rootCAs)
 }
 
 // SecureServing: see comment in profiles.go.
 // This chooses different cipher suites and/or TLS versions compared to non-FIPS mode.
-// Until goboring supports TLS 1.3, make SecureServing use the same as the defaultServing profile in FIPS mode.
+// Note: starting in Go 1.24, boringcrypto supports TLS 1.3, so we allow it here.
+// However, until it is safe to assume that a FIPS-compiled k8s server supports TLS 1.3, continue to
+// make SecureServing use the same as the defaultServing profile in FIPS mode, to allow both TLS 1.2 and 1.3.
 func SecureServing(opts *options.SecureServingOptionsWithLoopback) {
 	defaultServing(opts)
 }

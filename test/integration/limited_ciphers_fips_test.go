@@ -21,7 +21,6 @@ func TestLimitedCiphersFIPS_Disruptive(t *testing.T) {
 			"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
 			"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 			"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
-			"TLS_RSA_WITH_AES_256_GCM_SHA384", // this is an insecure cipher but allowed for FIPS
 		},
 		// Expected server configuration for the Supervisor's OIDC endpoints.
 		&tls.Config{
@@ -41,7 +40,6 @@ func TestLimitedCiphersFIPS_Disruptive(t *testing.T) {
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 			},
 		},
 	)

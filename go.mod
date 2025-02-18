@@ -2,7 +2,7 @@ module go.pinniped.dev
 
 go 1.23.0
 
-toolchain go1.23.6
+toolchain go1.24.0
 
 // When using v0.31.5, need to use this version of structured-merge-diff.
 // See https://github.com/kubernetes/apimachinery/blob/v0.31.5/go.mod#L30
@@ -39,7 +39,7 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/sclevine/spec v1.4.0
-	github.com/spf13/cobra v1.8.1
+	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	github.com/tdewolff/minify/v2 v2.21.3
@@ -78,7 +78,7 @@ require (
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/coreos/go-oidc v2.2.1+incompatible // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/cristalhq/jwt/v4 v4.0.2 // indirect
 	github.com/dgraph-io/ristretto v1.0.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

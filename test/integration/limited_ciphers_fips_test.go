@@ -1,4 +1,4 @@
-// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2024-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 //go:build fips_strict
@@ -26,7 +26,7 @@ func TestLimitedCiphersFIPS_Disruptive(t *testing.T) {
 		// Expected server configuration for the Supervisor's OIDC endpoints.
 		&tls.Config{
 			MinVersion: tls.VersionTLS12, // Supervisor OIDC always allows TLS 1.2 clients to connect
-			MaxVersion: tls.VersionTLS12, // boringcrypto does not use TLS 1.3 yet
+			MaxVersion: tls.VersionTLS13,
 			CipherSuites: []uint16{
 				// Supervisor OIDC endpoints configured with EC certs use only EC ciphers.
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -35,8 +35,8 @@ func TestLimitedCiphersFIPS_Disruptive(t *testing.T) {
 		},
 		// Expected server configuration for the Supervisor and Concierge aggregated API endpoints.
 		&tls.Config{
-			MinVersion: tls.VersionTLS12, // boringcrypto does not use TLS 1.3 yet
-			MaxVersion: tls.VersionTLS12, // boringcrypto does not use TLS 1.3 yet
+			MinVersion: tls.VersionTLS12, // always allow TLS 1.2 in fips mode
+			MaxVersion: tls.VersionTLS13,
 			CipherSuites: []uint16{
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,

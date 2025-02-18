@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 //go:build fips_strict
@@ -77,7 +77,7 @@ func TestDefault_Parallel(t *testing.T) {
 	actual := ptls.Default(aCertPool)
 	expected := &tls.Config{
 		MinVersion:   tls.VersionTLS12,
-		MaxVersion:   tls.VersionTLS12, // goboring does not currently support TLS 1.3, so prevent its use
+		MaxVersion:   tls.VersionTLS13,
 		CipherSuites: expectedFIPSCipherSuites,
 		NextProtos:   []string{"h2", "http/1.1"},
 		RootCAs:      aCertPool,
@@ -94,7 +94,7 @@ func TestDefaultLDAP_Parallel(t *testing.T) {
 	actual := ptls.DefaultLDAP(aCertPool)
 	expected := &tls.Config{
 		MinVersion:   tls.VersionTLS12,
-		MaxVersion:   tls.VersionTLS12, // goboring does not currently support TLS 1.3, so prevent its use
+		MaxVersion:   tls.VersionTLS13,
 		CipherSuites: expectedFIPSCipherSuites,
 		NextProtos:   []string{"h2", "http/1.1"},
 		RootCAs:      aCertPool,
@@ -110,10 +110,8 @@ func TestSecure_Parallel(t *testing.T) {
 
 	actual := ptls.Secure(aCertPool)
 	expected := &tls.Config{
-		// goboring does not currently support TLS 1.3, so where we would normally require it by making it the
-		// min version for the secure profile, we cannot do that in FIPS mode
-		MinVersion:   tls.VersionTLS12,
-		MaxVersion:   tls.VersionTLS12, // goboring does not currently support TLS 1.3, so prevent its use
+		MinVersion:   tls.VersionTLS12, // allow TLS 1.2 in FIPS mode
+		MaxVersion:   tls.VersionTLS13,
 		CipherSuites: expectedFIPSCipherSuites,
 		NextProtos:   []string{"h2", "http/1.1"},
 		RootCAs:      aCertPool,
@@ -135,10 +133,8 @@ func TestSecureServing_Parallel(t *testing.T) {
 
 	require.Equal(t, options.SecureServingOptionsWithLoopback{
 		SecureServingOptions: &options.SecureServingOptions{
-			CipherSuites: expectedFIPSCipherSuiteNames,
-			// goboring does not currently support TLS 1.3, so where we would normally require it by making it the
-			// min version for secure serving for aggregated API servers, we cannot do that in FIPS mode
-			MinTLSVersion: "VersionTLS12",
+			CipherSuites:  expectedFIPSCipherSuiteNames,
+			MinTLSVersion: "VersionTLS12", // allow TLS 1.2 in FIPS mode
 		},
 	}, *opts)
 }

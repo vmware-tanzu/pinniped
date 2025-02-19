@@ -60,8 +60,7 @@ func init() {
 	// this init runs before we have parsed our config to determine our log level
 	// thus we must use a log statement that will always print instead of conditionally print
 	plog.Always("this server was compiled to use boring crypto in FIPS-only mode",
-		"go version", runtime.Version(),
-		"DefaultProfileMaxTLSVersionForFIPS", tls.VersionName(DefaultProfileMaxTLSVersionForFIPS))
+		"go version", runtime.Version())
 }
 
 // Default: see comment in profiles.go.
@@ -71,7 +70,7 @@ func init() {
 func Default(rootCAs *x509.CertPool) *tls.Config {
 	config := buildTLSConfig(rootCAs, allHardcodedAllowedCipherSuites(), getUserConfiguredAllowedCipherSuitesForTLSOneDotTwo())
 	// Note: starting in Go 1.24, boringcrypto supports TLS 1.3, so we allow it here.
-	config.MaxVersion = DefaultProfileMaxTLSVersionForFIPS
+	config.MaxVersion = tls.VersionTLS13
 	return config
 }
 

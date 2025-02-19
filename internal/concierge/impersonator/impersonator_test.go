@@ -1,12 +1,15 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonator
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"math/rand"
 	"net"
@@ -37,10 +40,10 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	utilversion "k8s.io/apiserver/pkg/util/version"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd/api"
+	utilversion "k8s.io/component-base/version"
 	"k8s.io/utils/ptr"
 
 	loginv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/login/v1alpha1"
@@ -56,6 +59,7 @@ import (
 	"go.pinniped.dev/internal/tokenclient"
 )
 
+//nolint:gocyclo // this is a large test function
 func TestImpersonator(t *testing.T) {
 	const (
 		priorityLevelConfigurationsVersion = "v1beta3"
@@ -70,18 +74,36 @@ func TestImpersonator(t *testing.T) {
 	err = caContent.SetCertKeyContent(ca.Bundle(), caKey)
 	require.NoError(t, err)
 
-	pem, err := ca.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
+	serverCertPEM, err := ca.IssueServerCertPEM(nil, []net.IP{net.ParseIP("127.0.0.1")}, time.Hour)
 	require.NoError(t, err)
 	certKeyContent := dynamiccert.NewServingCert("cert-key")
-	err = certKeyContent.SetCertKeyContent(pem.CertPEM, pem.KeyPEM)
+	err = certKeyContent.SetCertKeyContent(serverCertPEM.CertPEM, serverCertPEM.KeyPEM)
 	require.NoError(t, err)
 
 	unrelatedCA, err := certauthority.New("ca", time.Hour)
 	require.NoError(t, err)
 
+	defaultInfoForTestUsername := func(credentialID string) *user.DefaultInfo {
+		return &user.DefaultInfo{
+			Name:   "test-username",
+			UID:    "",
+			Groups: []string{"test-group1", "test-group2", "system:authenticated"},
+			Extra:  map[string][]string{"authentication.kubernetes.io/credential-id": {credentialID}},
+		}
+	}
+
+	defaultInfoForTestAdmin := func(credentialID string) *user.DefaultInfo {
+		return &user.DefaultInfo{
+			Name:   "test-admin",
+			UID:    "",
+			Groups: []string{"test-group2", "system:masters", "system:authenticated"},
+			Extra:  map[string][]string{"authentication.kubernetes.io/credential-id": {credentialID}},
+		}
+	}
+
 	tests := []struct {
 		name                            string
-		clientCert                      *clientCert
+		clientCert                      clientCert
 		clientImpersonateUser           rest.ImpersonationConfig
 		clientMutateHeaders             func(http.Header)
 		clientNextProtos                []string
@@ -89,28 +111,33 @@ func TestImpersonator(t *testing.T) {
 		kubeAPIServerHealthz            http.Handler
 		anonymousAuthDisabled           bool
 		noServiceAcctTokenInCache       bool // when true, no available service account token for the impersonator to use
-		wantKubeAPIServerRequestHeaders http.Header
+		wantKubeAPIServerRequestHeaders func(credentialID string) http.Header
 		wantError                       string
 		wantConstructionError           string
-		wantAuthorizerAttributes        []authorizer.AttributesRecord
+		wantAuthorizerAttributes        func(credentialID string) []authorizer.AttributesRecord
 	}{
 		{
 			name:       "happy path",
 			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":  {"test-username"},
-				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
-				"Authorization":     {"Bearer some-service-account-token"},
-				"User-Agent":        {"test-agent"},
-				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding":   {"gzip"},
-				"X-Forwarded-For":   {"127.0.0.1"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":  {"test-username"},
+					"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
+					"Authorization":     {"Bearer some-service-account-token"},
+					"User-Agent":        {"test-agent"},
+					"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding":   {"gzip"},
+					"X-Forwarded-For":   {"127.0.0.1"},
+					"Impersonate-Extra-Authentication.kubernetes.io%2fcredential-Id": {credentialID},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -120,20 +147,25 @@ func TestImpersonator(t *testing.T) {
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte("no healthz for you"))
 			}),
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":  {"test-username"},
-				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
-				"Authorization":     {"Bearer some-service-account-token"},
-				"User-Agent":        {"test-agent"},
-				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding":   {"gzip"},
-				"X-Forwarded-For":   {"127.0.0.1"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":  {"test-username"},
+					"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
+					"Authorization":     {"Bearer some-service-account-token"},
+					"User-Agent":        {"test-agent"},
+					"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding":   {"gzip"},
+					"X-Forwarded-For":   {"127.0.0.1"},
+					"Impersonate-Extra-Authentication.kubernetes.io%2fcredential-Id": {credentialID},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -144,20 +176,25 @@ func TestImpersonator(t *testing.T) {
 				_, _ = w.Write([]byte("no healthz for you"))
 			}),
 			anonymousAuthDisabled: true,
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":  {"test-username"},
-				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
-				"Authorization":     {"Bearer some-service-account-token"},
-				"User-Agent":        {"test-agent"},
-				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding":   {"gzip"},
-				"X-Forwarded-For":   {"127.0.0.1"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":  {"test-username"},
+					"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
+					"Authorization":     {"Bearer some-service-account-token"},
+					"User-Agent":        {"test-agent"},
+					"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding":   {"gzip"},
+					"X-Forwarded-For":   {"127.0.0.1"},
+					"Impersonate-Extra-Authentication.kubernetes.io%2fcredential-Id": {credentialID},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -172,22 +209,32 @@ func TestImpersonator(t *testing.T) {
 				}
 			},
 			clientNextProtos: []string{"http/1.1"}, // we need to use http1 as http2 does not support upgrades, see http2checkConnHeaders
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":  {"test-username2"},
-				"Impersonate-Group": {"test-group3", "test-group4", "system:authenticated"},
-				"Authorization":     {"Bearer some-service-account-token"},
-				"User-Agent":        {"test-agent"},
-				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding":   {"gzip"},
-				"X-Forwarded-For":   {"127.0.0.1"},
-				"Connection":        {"Upgrade"},
-				"Upgrade":           {"spdy/3.1"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":  {"test-username2"},
+					"Impersonate-Group": {"test-group3", "test-group4", "system:authenticated"},
+					"Authorization":     {"Bearer some-service-account-token"},
+					"User-Agent":        {"test-agent"},
+					"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding":   {"gzip"},
+					"X-Forwarded-For":   {"127.0.0.1"},
+					"Connection":        {"Upgrade"},
+					"Upgrade":           {"spdy/3.1"},
+					"Impersonate-Extra-Authentication.kubernetes.io%2fcredential-Id": {credentialID},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username2", UID: "", Groups: []string{"test-group3", "test-group4", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: &user.DefaultInfo{
+							Name:   "test-username2",
+							UID:    "",
+							Groups: []string{"test-group3", "test-group4", "system:authenticated"},
+							Extra:  map[string][]string{"authentication.kubernetes.io/credential-id": {credentialID}},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -196,20 +243,30 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header.Add("X-Forwarded-For", "example.com")
 			},
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":  {"test-username2"},
-				"Impersonate-Group": {"test-group3", "test-group4", "system:authenticated"},
-				"Authorization":     {"Bearer some-service-account-token"},
-				"User-Agent":        {"test-agent"},
-				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding":   {"gzip"},
-				"X-Forwarded-For":   {"127.0.0.1"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":  {"test-username2"},
+					"Impersonate-Group": {"test-group3", "test-group4", "system:authenticated"},
+					"Authorization":     {"Bearer some-service-account-token"},
+					"User-Agent":        {"test-agent"},
+					"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding":   {"gzip"},
+					"X-Forwarded-For":   {"127.0.0.1"},
+					"Impersonate-Extra-Authentication.kubernetes.io%2fcredential-Id": {credentialID},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username2", UID: "", Groups: []string{"test-group3", "test-group4", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: &user.DefaultInfo{
+							Name:   "test-username2",
+							UID:    "",
+							Groups: []string{"test-group3", "test-group4", "system:authenticated"},
+							Extra:  map[string][]string{"authentication.kubernetes.io/credential-id": {credentialID}},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -218,20 +275,30 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["x-FORWARDED-for"] = append(header["x-FORWARDED-for"], "example.com")
 			},
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":  {"test-username2"},
-				"Impersonate-Group": {"test-group3", "test-group4", "system:authenticated"},
-				"Authorization":     {"Bearer some-service-account-token"},
-				"User-Agent":        {"test-agent"},
-				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding":   {"gzip"},
-				"X-Forwarded-For":   {"127.0.0.1"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":  {"test-username2"},
+					"Impersonate-Group": {"test-group3", "test-group4", "system:authenticated"},
+					"Authorization":     {"Bearer some-service-account-token"},
+					"User-Agent":        {"test-agent"},
+					"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding":   {"gzip"},
+					"X-Forwarded-For":   {"127.0.0.1"},
+					"Impersonate-Extra-Authentication.kubernetes.io%2fcredential-Id": {credentialID},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username2", UID: "", Groups: []string{"test-group3", "test-group4", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: &user.DefaultInfo{
+							Name:   "test-username2",
+							UID:    "",
+							Groups: []string{"test-group3", "test-group4", "system:authenticated"},
+							Extra:  map[string][]string{"authentication.kubernetes.io/credential-id": {credentialID}},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -239,64 +306,85 @@ func TestImpersonator(t *testing.T) {
 			kubeAPIServerStatusCode: http.StatusNotFound,
 			clientCert:              newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			wantError:               `the server could not find the requested resource (get namespaces)`,
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":  {"test-username"},
-				"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
-				"Authorization":     {"Bearer some-service-account-token"},
-				"User-Agent":        {"test-agent"},
-				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding":   {"gzip"},
-				"X-Forwarded-For":   {"127.0.0.1"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":  {"test-username"},
+					"Impersonate-Group": {"test-group1", "test-group2", "system:authenticated"},
+					"Authorization":     {"Bearer some-service-account-token"},
+					"User-Agent":        {"test-agent"},
+					"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding":   {"gzip"},
+					"X-Forwarded-For":   {"127.0.0.1"},
+					"Impersonate-Extra-Authentication.kubernetes.io%2fcredential-Id": {credentialID},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
 			name:       "when there is no client cert on request, it is an anonymous request",
-			clientCert: &clientCert{},
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":  {"system:anonymous"},
-				"Impersonate-Group": {"system:unauthenticated"},
-				"Authorization":     {"Bearer some-service-account-token"},
-				"User-Agent":        {"test-agent"},
-				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding":   {"gzip"},
-				"X-Forwarded-For":   {"127.0.0.1"},
+			clientCert: clientCert{},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":  {"system:anonymous"},
+					"Impersonate-Group": {"system:unauthenticated"},
+					"Authorization":     {"Bearer some-service-account-token"},
+					"User-Agent":        {"test-agent"},
+					"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding":   {"gzip"},
+					"X-Forwarded-For":   {"127.0.0.1"},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(_credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: &user.DefaultInfo{
+							Name:   "system:anonymous",
+							UID:    "",
+							Groups: []string{"system:unauthenticated"},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
 			name:       "when there is no client cert on request but it has basic auth, it is still an anonymous request",
-			clientCert: &clientCert{},
+			clientCert: clientCert{},
 			clientMutateHeaders: func(header http.Header) {
 				header.Set("Test", "val")
 				req := &http.Request{Header: header}
 				req.SetBasicAuth("foo", "bar")
 			},
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":  {"system:anonymous"},
-				"Impersonate-Group": {"system:unauthenticated"},
-				"Authorization":     {"Bearer some-service-account-token"},
-				"User-Agent":        {"test-agent"},
-				"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding":   {"gzip"},
-				"X-Forwarded-For":   {"127.0.0.1"},
-				"Test":              {"val"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":  {"system:anonymous"},
+					"Impersonate-Group": {"system:unauthenticated"},
+					"Authorization":     {"Bearer some-service-account-token"},
+					"User-Agent":        {"test-agent"},
+					"Accept":            {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding":   {"gzip"},
+					"X-Forwarded-For":   {"127.0.0.1"},
+					"Test":              {"val"},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(_credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: &user.DefaultInfo{
+							Name:   "system:anonymous",
+							UID:    "",
+							Groups: []string{"system:unauthenticated"},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -313,11 +401,13 @@ func TestImpersonator(t *testing.T) {
 			wantError: `users "some-other-username" is forbidden: User "test-username" ` +
 				`cannot impersonate resource "users" in API group "" at the cluster scope: ` +
 				`decision made by impersonation-proxy.concierge.pinniped.dev`,
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+					},
+				}
 			},
 		},
 		{
@@ -344,114 +434,121 @@ func TestImpersonator(t *testing.T) {
 					"alpha.kubernetes.io/identity/user/domain/name": {"a-domain-name"},
 				},
 			},
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":                                                                {"fire"},
-				"Impersonate-Group":                                                               {"elements", "system:authenticated"},
-				"Impersonate-Extra-Colors":                                                        {"red", "orange", "blue"},
-				"Impersonate-Extra-Iam.gke.io%2fuser-Assertion":                                   {"good", "stuff"},
-				"Impersonate-Extra-User-Assertion.cloud.google.com":                               {"smaller", "things"},
-				"Impersonate-Extra-Scopes.authorization.openshift.io":                             {"user:info", "user:full", "user:check-access"},
-				"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2froles":                        {"a-role1", "a-role2"},
-				"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fproject%2fid":                 {"a-project-id"},
-				"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fproject%2fname":               {"a-project-name"},
-				"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fuser%2fdomain%2fid":           {"a-domain-id"},
-				"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fuser%2fdomain%2fname":         {"a-domain-name"},
-				"Impersonate-Extra-Original-User-Info.impersonation-Proxy.concierge.pinniped.dev": {`{"username":"test-admin","groups":["test-group2","system:masters","system:authenticated"]}`},
-				"Authorization":   {"Bearer some-service-account-token"},
-				"User-Agent":      {"test-agent"},
-				"Accept":          {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding": {"gzip"},
-				"X-Forwarded-For": {"127.0.0.1"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":                                                                {"fire"},
+					"Impersonate-Group":                                                               {"elements", "system:authenticated"},
+					"Impersonate-Extra-Colors":                                                        {"red", "orange", "blue"},
+					"Impersonate-Extra-Iam.gke.io%2fuser-Assertion":                                   {"good", "stuff"},
+					"Impersonate-Extra-User-Assertion.cloud.google.com":                               {"smaller", "things"},
+					"Impersonate-Extra-Scopes.authorization.openshift.io":                             {"user:info", "user:full", "user:check-access"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2froles":                        {"a-role1", "a-role2"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fproject%2fid":                 {"a-project-id"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fproject%2fname":               {"a-project-name"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fuser%2fdomain%2fid":           {"a-domain-id"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fuser%2fdomain%2fname":         {"a-domain-name"},
+					"Impersonate-Extra-Original-User-Info.impersonation-Proxy.concierge.pinniped.dev": {`{"username":"test-admin","groups":["test-group2","system:masters","system:authenticated"],"extra":{"authentication.kubernetes.io/credential-id":["` + credentialID + `"]}}`},
+					"Authorization":   {"Bearer some-service-account-token"},
+					"User-Agent":      {"test-agent"},
+					"Accept":          {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding": {"gzip"},
+					"X-Forwarded-For": {"127.0.0.1"},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "fire", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "elements", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "good", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "stuff", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role1", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role2", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "smaller", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "things", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "colors", Name: "red", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "colors", Name: "orange", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "colors", Name: "blue", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:info", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:full", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:check-access", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/project/name", Name: "a-project-name", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/user/domain/id", Name: "a-domain-id", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/user/domain/name", Name: "a-domain-name", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/project/id", Name: "a-project-id", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "fire", UID: "", Groups: []string{"elements", "system:authenticated"},
-						Extra: map[string][]string{
-							"alpha.kubernetes.io/identity/project/id":       {"a-project-id"},
-							"alpha.kubernetes.io/identity/project/name":     {"a-project-name"},
-							"alpha.kubernetes.io/identity/roles":            {"a-role1", "a-role2"},
-							"alpha.kubernetes.io/identity/user/domain/id":   {"a-domain-id"},
-							"alpha.kubernetes.io/identity/user/domain/name": {"a-domain-name"},
-							"colors":                            {"red", "orange", "blue"},
-							"iam.gke.io/user-assertion":         {"good", "stuff"},
-							"scopes.authorization.openshift.io": {"user:info", "user:full", "user:check-access"},
-							"user-assertion.cloud.google.com":   {"smaller", "things"},
-						},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "fire", ResourceRequest: true, Path: "",
 					},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "elements", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "good", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "stuff", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role1", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role2", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "smaller", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "things", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "colors", Name: "red", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "colors", Name: "orange", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "colors", Name: "blue", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:info", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:full", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:check-access", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/project/name", Name: "a-project-name", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/user/domain/id", Name: "a-domain-id", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/user/domain/name", Name: "a-domain-name", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/project/id", Name: "a-project-id", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "fire",
+							UID:    "",
+							Groups: []string{"elements", "system:authenticated"},
+							Extra: map[string][]string{
+								"alpha.kubernetes.io/identity/project/id":       {"a-project-id"},
+								"alpha.kubernetes.io/identity/project/name":     {"a-project-name"},
+								"alpha.kubernetes.io/identity/roles":            {"a-role1", "a-role2"},
+								"alpha.kubernetes.io/identity/user/domain/id":   {"a-domain-id"},
+								"alpha.kubernetes.io/identity/user/domain/name": {"a-domain-name"},
+								"colors":                            {"red", "orange", "blue"},
+								"iam.gke.io/user-assertion":         {"good", "stuff"},
+								"scopes.authorization.openshift.io": {"user:info", "user:full", "user:check-access"},
+								"user-assertion.cloud.google.com":   {"smaller", "things"},
+							},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -462,19 +559,26 @@ func TestImpersonator(t *testing.T) {
 				header["Impersonate-Uid"] = []string{"root"}
 			},
 			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "root", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "some-other-username", UID: "root", Groups: []string{"system:authenticated"}, Extra: map[string][]string{}},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "root", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "some-other-username",
+							UID:    "root",
+							Groups: []string{"system:authenticated"},
+							Extra:  map[string][]string{},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -485,19 +589,26 @@ func TestImpersonator(t *testing.T) {
 				header["imPerSoNaTE-uid"] = []string{"magic"}
 			},
 			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "magic", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "some-other-username", UID: "magic", Groups: []string{"system:authenticated"}, Extra: map[string][]string{}},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "magic", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "some-other-username",
+							UID:    "magic",
+							Groups: []string{"system:authenticated"},
+							Extra:  map[string][]string{},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -512,32 +623,37 @@ func TestImpersonator(t *testing.T) {
 				},
 			},
 			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "other-user-to-impersonate", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "something.impersonation-proxy.concierge.pinniped.dev", Name: "bad data", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "key", Name: "good", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "other-user-to-impersonate", UID: "", Groups: []string{"other-peeps", "system:authenticated"},
-						Extra: map[string][]string{
-							"key": {"good"},
-							"something.impersonation-proxy.concierge.pinniped.dev": {"bad data"},
-						},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "other-user-to-impersonate", ResourceRequest: true, Path: "",
 					},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "something.impersonation-proxy.concierge.pinniped.dev", Name: "bad data", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "key", Name: "good", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "other-user-to-impersonate",
+							UID:    "",
+							Groups: []string{"other-peeps", "system:authenticated"},
+							Extra: map[string][]string{
+								"key": {"good"},
+								"something.impersonation-proxy.concierge.pinniped.dev": {"bad data"},
+							},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -551,23 +667,32 @@ func TestImpersonator(t *testing.T) {
 				},
 			},
 			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "party~~time", Name: "danger", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "panda", UID: "", Groups: []string{"other-peeps", "system:authenticated"}, Extra: map[string][]string{"party~~time": {"danger"}}},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "party~~time", Name: "danger", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "panda",
+							UID:    "",
+							Groups: []string{"other-peeps", "system:authenticated"},
+							Extra: map[string][]string{
+								"party~~time": {"danger"},
+							},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -580,34 +705,43 @@ func TestImpersonator(t *testing.T) {
 					"ROAR": {"tiger"}, // by the time our code sees this key, it is lowercased to "roar"
 				},
 			},
-			wantKubeAPIServerRequestHeaders: http.Header{
-				"Impersonate-User":       {"panda"},
-				"Impersonate-Group":      {"other-peeps", "system:authenticated"},
-				"Impersonate-Extra-Roar": {"tiger"},
-				"Impersonate-Extra-Original-User-Info.impersonation-Proxy.concierge.pinniped.dev": {`{"username":"test-admin","groups":["test-group2","system:masters","system:authenticated"]}`},
-				"Authorization":   {"Bearer some-service-account-token"},
-				"User-Agent":      {"test-agent"},
-				"Accept":          {"application/vnd.kubernetes.protobuf,application/json"},
-				"Accept-Encoding": {"gzip"},
-				"X-Forwarded-For": {"127.0.0.1"},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":       {"panda"},
+					"Impersonate-Group":      {"other-peeps", "system:authenticated"},
+					"Impersonate-Extra-Roar": {"tiger"},
+					"Impersonate-Extra-Original-User-Info.impersonation-Proxy.concierge.pinniped.dev": {`{"username":"test-admin","groups":["test-group2","system:masters","system:authenticated"],"extra":{"authentication.kubernetes.io/credential-id":["` + credentialID + `"]}}`},
+					"Authorization":   {"Bearer some-service-account-token"},
+					"User-Agent":      {"test-agent"},
+					"Accept":          {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding": {"gzip"},
+					"X-Forwarded-For": {"127.0.0.1"},
+				}
 			},
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "test-admin", UID: "", Groups: []string{"test-group2", "system:masters", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "roar", Name: "tiger", ResourceRequest: true, Path: "",
-				},
-				{
-					User: &user.DefaultInfo{Name: "panda", UID: "", Groups: []string{"other-peeps", "system:authenticated"}, Extra: map[string][]string{"roar": {"tiger"}}},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "roar", Name: "tiger", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "panda",
+							UID:    "",
+							Groups: []string{"other-peeps", "system:authenticated"},
+							Extra:  map[string][]string{"roar": {"tiger"}},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 		{
@@ -628,11 +762,13 @@ func TestImpersonator(t *testing.T) {
 			wantError: `users "PANDA" is forbidden: User "test-username" ` +
 				`cannot impersonate resource "users" in API group "" at the cluster scope: ` +
 				`decision made by impersonation-proxy.concierge.pinniped.dev`,
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
-					Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "PANDA", ResourceRequest: true, Path: "",
-				},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "PANDA", ResourceRequest: true, Path: "",
+					},
+				}
 			},
 		},
 		{
@@ -641,17 +777,21 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["imPerSonaTE-uid"] = []string{"007"}
 			},
-			wantError:                `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  007  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{},
+			wantError: `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  007  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes: func(_credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{}
+			},
 		},
 		{
-			name:       "future UID header", // no longer future as it exists in Kube v1.22
+			name:       "UID header starting in Kube v1.22",
 			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			clientMutateHeaders: func(header http.Header) {
 				header["Impersonate-Uid"] = []string{"008"}
 			},
-			wantError:                `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  008  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{},
+			wantError: `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  008  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes: func(_credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{}
+			},
 		},
 		{
 			name:                            "when there is no service account token cached for the impersonator to use to call the KAS",
@@ -659,11 +799,432 @@ func TestImpersonator(t *testing.T) {
 			noServiceAcctTokenInCache:       true,
 			wantKubeAPIServerRequestHeaders: nil, // no request should have been made to the KAS on behalf of the user
 			wantError:                       `an error on the server ("") has prevented the request from succeeding (get namespaces)`,
-			wantAuthorizerAttributes: []authorizer.AttributesRecord{
-				{
-					User: &user.DefaultInfo{Name: "test-username", UID: "", Groups: []string{"test-group1", "test-group2", "system:authenticated"}, Extra: nil},
-					Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
+			},
+		},
+		{
+			name:                     "failed client cert authentication",
+			clientCert:               newClientCert(t, unrelatedCA, "test-username", []string{"test-group1"}),
+			wantError:                "Unauthorized",
+			wantAuthorizerAttributes: nil,
+		},
+		{
+			name:                  "nested impersonation by regular users calls delegating authorizer",
+			clientCert:            newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			clientImpersonateUser: rest.ImpersonationConfig{UserName: "some-other-username"},
+			// this fails because the delegating authorizer in this test only allows system:masters and fails everything else
+			wantError: `users "some-other-username" is forbidden: User "test-username" ` +
+				`cannot impersonate resource "users" in API group "" at the cluster scope: ` +
+				`decision made by impersonation-proxy.concierge.pinniped.dev`,
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+					},
+				}
+			},
+		},
+		{
+			name:       "nested impersonation by admin users calls delegating authorizer",
+			clientCert: newClientCert(t, ca, "test-admin", []string{"system:masters", "test-group2"}),
+			clientImpersonateUser: rest.ImpersonationConfig{
+				UserName: "fire",
+				Groups:   []string{"elements"},
+				Extra: map[string][]string{
+					"colors": {"red", "orange", "blue"},
+
+					// gke
+					"iam.gke.io/user-assertion":       {"good", "stuff"},
+					"user-assertion.cloud.google.com": {"smaller", "things"},
+
+					// openshift
+					"scopes.authorization.openshift.io": {"user:info", "user:full", "user:check-access"},
+
+					// openstack
+					"alpha.kubernetes.io/identity/roles":            {"a-role1", "a-role2"},
+					"alpha.kubernetes.io/identity/project/id":       {"a-project-id"},
+					"alpha.kubernetes.io/identity/project/name":     {"a-project-name"},
+					"alpha.kubernetes.io/identity/user/domain/id":   {"a-domain-id"},
+					"alpha.kubernetes.io/identity/user/domain/name": {"a-domain-name"},
 				},
+			},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":                                                                {"fire"},
+					"Impersonate-Group":                                                               {"elements", "system:authenticated"},
+					"Impersonate-Extra-Colors":                                                        {"red", "orange", "blue"},
+					"Impersonate-Extra-Iam.gke.io%2fuser-Assertion":                                   {"good", "stuff"},
+					"Impersonate-Extra-User-Assertion.cloud.google.com":                               {"smaller", "things"},
+					"Impersonate-Extra-Scopes.authorization.openshift.io":                             {"user:info", "user:full", "user:check-access"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2froles":                        {"a-role1", "a-role2"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fproject%2fid":                 {"a-project-id"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fproject%2fname":               {"a-project-name"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fuser%2fdomain%2fid":           {"a-domain-id"},
+					"Impersonate-Extra-Alpha.kubernetes.io%2fidentity%2fuser%2fdomain%2fname":         {"a-domain-name"},
+					"Impersonate-Extra-Original-User-Info.impersonation-Proxy.concierge.pinniped.dev": {`{"username":"test-admin","groups":["test-group2","system:masters","system:authenticated"],"extra":{"authentication.kubernetes.io/credential-id":["` + credentialID + `"]}}`},
+					"Authorization":   {"Bearer some-service-account-token"},
+					"User-Agent":      {"test-agent"},
+					"Accept":          {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding": {"gzip"},
+					"X-Forwarded-For": {"127.0.0.1"},
+				}
+			},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "fire", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "elements", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "good", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "stuff", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role1", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role2", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "smaller", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "things", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "colors", Name: "red", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "colors", Name: "orange", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "colors", Name: "blue", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:info", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:full", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:check-access", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/project/name", Name: "a-project-name", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/user/domain/id", Name: "a-domain-id", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/user/domain/name", Name: "a-domain-name", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/project/id", Name: "a-project-id", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "fire",
+							UID:    "",
+							Groups: []string{"elements", "system:authenticated"},
+							Extra: map[string][]string{
+								"alpha.kubernetes.io/identity/project/id":       {"a-project-id"},
+								"alpha.kubernetes.io/identity/project/name":     {"a-project-name"},
+								"alpha.kubernetes.io/identity/roles":            {"a-role1", "a-role2"},
+								"alpha.kubernetes.io/identity/user/domain/id":   {"a-domain-id"},
+								"alpha.kubernetes.io/identity/user/domain/name": {"a-domain-name"},
+								"colors":                            {"red", "orange", "blue"},
+								"iam.gke.io/user-assertion":         {"good", "stuff"},
+								"scopes.authorization.openshift.io": {"user:info", "user:full", "user:check-access"},
+								"user-assertion.cloud.google.com":   {"smaller", "things"},
+							},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
+			},
+		},
+		{
+			name:                  "nested impersonation by admin users cannot impersonate UID",
+			clientCert:            newClientCert(t, ca, "test-admin", []string{"system:masters", "test-group2"}),
+			clientImpersonateUser: rest.ImpersonationConfig{UserName: "some-other-username"},
+			clientMutateHeaders: func(header http.Header) {
+				header["Impersonate-Uid"] = []string{"root"}
+			},
+			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "root", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "some-other-username",
+							UID:    "root",
+							Groups: []string{"system:authenticated"},
+							Extra:  map[string][]string{},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
+			},
+		},
+		{
+			name:                  "nested impersonation by admin users cannot impersonate UID header canonicalization",
+			clientCert:            newClientCert(t, ca, "test-admin", []string{"system:masters", "test-group2"}),
+			clientImpersonateUser: rest.ImpersonationConfig{UserName: "some-other-username"},
+			clientMutateHeaders: func(header http.Header) {
+				header["imPerSoNaTE-uid"] = []string{"magic"}
+			},
+			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "magic", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "some-other-username",
+							UID:    "magic",
+							Groups: []string{"system:authenticated"},
+							Extra:  map[string][]string{},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
+			},
+		},
+		{
+			name:       "nested impersonation by admin users cannot use reserved key",
+			clientCert: newClientCert(t, ca, "test-admin", []string{"system:masters", "test-group2"}),
+			clientImpersonateUser: rest.ImpersonationConfig{
+				UserName: "other-user-to-impersonate",
+				Groups:   []string{"other-peeps"},
+				Extra: map[string][]string{
+					"key": {"good"},
+					"something.impersonation-proxy.concierge.pinniped.dev": {"bad data"},
+				},
+			},
+			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "other-user-to-impersonate", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "something.impersonation-proxy.concierge.pinniped.dev", Name: "bad data", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "key", Name: "good", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "other-user-to-impersonate",
+							UID:    "",
+							Groups: []string{"other-peeps", "system:authenticated"},
+							Extra: map[string][]string{
+								"key": {"good"},
+								"something.impersonation-proxy.concierge.pinniped.dev": {"bad data"},
+							},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
+			},
+		},
+		{
+			name:       "nested impersonation by admin users cannot use invalid key",
+			clientCert: newClientCert(t, ca, "test-admin", []string{"system:masters", "test-group2"}),
+			clientImpersonateUser: rest.ImpersonationConfig{
+				UserName: "panda",
+				Groups:   []string{"other-peeps"},
+				Extra: map[string][]string{
+					"party~~time": {"danger"},
+				},
+			},
+			wantError: "Internal error occurred: unimplemented functionality - unable to act as current user",
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "party~~time", Name: "danger", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "panda",
+							UID:    "",
+							Groups: []string{"other-peeps", "system:authenticated"},
+							Extra:  map[string][]string{"party~~time": {"danger"}},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
+			},
+		},
+		{
+			name:       "nested impersonation by admin users can use uppercase key because impersonation is lossy",
+			clientCert: newClientCert(t, ca, "test-admin", []string{"system:masters", "test-group2"}),
+			clientImpersonateUser: rest.ImpersonationConfig{
+				UserName: "panda",
+				Groups:   []string{"other-peeps"},
+				Extra: map[string][]string{
+					"ROAR": {"tiger"}, // by the time our code sees this key, it is lowercased to "roar"
+				},
+			},
+			wantKubeAPIServerRequestHeaders: func(credentialID string) http.Header {
+				return http.Header{
+					"Impersonate-User":       {"panda"},
+					"Impersonate-Group":      {"other-peeps", "system:authenticated"},
+					"Impersonate-Extra-Roar": {"tiger"},
+					"Impersonate-Extra-Original-User-Info.impersonation-Proxy.concierge.pinniped.dev": {`{"username":"test-admin","groups":["test-group2","system:masters","system:authenticated"],"extra":{"authentication.kubernetes.io/credential-id":["` + credentialID + `"]}}`},
+					"Authorization":   {"Bearer some-service-account-token"},
+					"User-Agent":      {"test-agent"},
+					"Accept":          {"application/vnd.kubernetes.protobuf,application/json"},
+					"Accept-Encoding": {"gzip"},
+					"X-Forwarded-For": {"127.0.0.1"},
+				}
+			},
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "roar", Name: "tiger", ResourceRequest: true, Path: "",
+					},
+					{
+						User: &user.DefaultInfo{
+							Name:   "panda",
+							UID:    "",
+							Groups: []string{"other-peeps", "system:authenticated"},
+							Extra:  map[string][]string{"roar": {"tiger"}},
+						},
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
+			},
+		},
+		{
+			name: "unexpected healthz response",
+			kubeAPIServerHealthz: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte("broken"))
+			}),
+			wantConstructionError:    `could not detect if anonymous authentication is enabled: an error on the server ("broken") has prevented the request from succeeding`,
+			wantAuthorizerAttributes: nil,
+		},
+		{
+			name:       "header canonicalization user header",
+			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			clientMutateHeaders: func(header http.Header) {
+				header["imPerSonaTE-USer"] = []string{"PANDA"}
+			},
+			wantError: `users "PANDA" is forbidden: User "test-username" ` +
+				`cannot impersonate resource "users" in API group "" at the cluster scope: ` +
+				`decision made by impersonation-proxy.concierge.pinniped.dev`,
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "PANDA", ResourceRequest: true, Path: "",
+					},
+				}
+			},
+		},
+		{
+			name:       "header canonicalization future UID header", // no longer future as it exists in Kube v1.22
+			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			clientMutateHeaders: func(header http.Header) {
+				header["imPerSonaTE-uid"] = []string{"007"}
+			},
+			wantError: `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  007  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{}
+			},
+		},
+		{
+			name:       "future UID header", // no longer future as it exists in Kube v1.22
+			clientCert: newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			clientMutateHeaders: func(header http.Header) {
+				header["Impersonate-Uid"] = []string{"008"}
+			},
+			wantError: `an error on the server ("Internal Server Error: \"/api/v1/namespaces\": requested [{UID  008  authentication.k8s.io/v1  }] without impersonating a user") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{}
+			},
+		},
+		{
+			name:                            "when there is no service account token cached for the impersonator to use to call the KAS",
+			clientCert:                      newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
+			noServiceAcctTokenInCache:       true,
+			wantKubeAPIServerRequestHeaders: nil, // no request should have been made to the KAS on behalf of the user
+			wantError:                       `an error on the server ("") has prevented the request from succeeding (get namespaces)`,
+			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
+				return []authorizer.AttributesRecord{
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+				}
 			},
 		},
 	}
@@ -677,12 +1238,11 @@ func TestImpersonator(t *testing.T) {
 			// we need to create this listener ourselves because the API server
 			// code treats (port == 0 && listener == nil) to mean "do nothing"
 			listener, port, err := genericoptions.CreateListener("", "127.0.0.1:0", net.ListenConfig{})
-			require.NoError(t, err)
-
-			// After failing to start and after shutdown, the impersonator port should be available again.
+			// If it can't start or has shut down, the impersonator port should be available again.
 			t.Cleanup(func() {
 				requireCanBindToPort(t, port)
 			})
+			require.NoError(t, err)
 
 			if tt.kubeAPIServerStatusCode == 0 {
 				tt.kubeAPIServerStatusCode = http.StatusOK
@@ -830,11 +1390,6 @@ func TestImpersonator(t *testing.T) {
 			}
 
 			recorder := &attributeRecorder{}
-			defer func() {
-				require.ElementsMatch(t, tt.wantAuthorizerAttributes, recorder.attributes)
-				require.Len(t, recorder.attributes, len(tt.wantAuthorizerAttributes))
-			}()
-
 			// Allow standard REST verbs to be authorized so that tests pass without invasive changes
 			recConfig := func(config *genericapiserver.RecommendedConfig) {
 				// TODO: is it ok to use a placeholder version for a test?
@@ -938,43 +1493,41 @@ func TestImpersonator(t *testing.T) {
 			}
 
 			// If we expect to see some headers, then the fake KAS should have been called.
-			require.Equal(t, len(tt.wantKubeAPIServerRequestHeaders) != 0, testKubeAPIServerWasCalled)
+			require.Equal(t, tt.wantKubeAPIServerRequestHeaders != nil, testKubeAPIServerWasCalled)
+
+			var certCredentialID string
+			if len(tt.clientCert.certPEM) > 0 {
+				block, _ := pem.Decode(tt.clientCert.certPEM)
+				require.NotEmpty(t, block)
+
+				bytesToHexOfSHA256 := func(b []byte) string {
+					shasum := sha256.Sum256(b)
+					return hex.EncodeToString(shasum[:])
+				}
+
+				certCredentialID = fmt.Sprintf("X509SHA256=%s", bytesToHexOfSHA256(block.Bytes))
+			}
+
 			// If the impersonator proxied the request to the fake Kube API server, we should see the headers
-			// of the original request mutated by the impersonator.  Otherwise the headers should be nil.
-			require.Equal(t, tt.wantKubeAPIServerRequestHeaders, testKubeAPIServerSawHeaders)
+			// of the original request mutated by the impersonator.
+			// Otherwise, the headers should be nil.
+			if tt.wantKubeAPIServerRequestHeaders != nil {
+				require.Equal(t, tt.wantKubeAPIServerRequestHeaders(certCredentialID), testKubeAPIServerSawHeaders)
+			} else {
+				require.Empty(t, testKubeAPIServerSawHeaders)
+			}
+
+			var wantAuthorizerAttributes []authorizer.AttributesRecord
+			if tt.wantAuthorizerAttributes != nil {
+				// Don't worry if certCredentialID is empty, the test case will know when it is required.
+				wantAuthorizerAttributes = tt.wantAuthorizerAttributes(certCredentialID)
+			}
+			require.ElementsMatch(t, wantAuthorizerAttributes, recorder.attributes)
 
 			// The rest of the test doesn't make sense for when there is no service account token available in the cache.
 			// In this case, the impersonator cannot make any calls to the Kube API server on behalf of any user.
 			if tt.noServiceAcctTokenInCache {
 				return
-			}
-
-			// these authorization checks are caused by the anonymous auth checks below
-			tt.wantAuthorizerAttributes = append(tt.wantAuthorizerAttributes,
-				authorizer.AttributesRecord{
-					User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
-					Verb: "create", Namespace: "", APIGroup: "login.concierge.pinniped.dev", APIVersion: "v1alpha1", Resource: "tokencredentialrequests", Subresource: "", Name: "", ResourceRequest: true, Path: "/apis/login.concierge.pinniped.dev/v1alpha1/tokencredentialrequests",
-				},
-				authorizer.AttributesRecord{
-					User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
-					Verb: "create", Namespace: "", APIGroup: "login.concierge.walrus.tld", APIVersion: "v1alpha1", Resource: "tokencredentialrequests", Subresource: "", Name: "", ResourceRequest: true, Path: "/apis/login.concierge.walrus.tld/v1alpha1/tokencredentialrequests",
-				},
-			)
-			if !tt.anonymousAuthDisabled {
-				tt.wantAuthorizerAttributes = append(tt.wantAuthorizerAttributes,
-					authorizer.AttributesRecord{
-						User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
-						Verb: "get", Namespace: "", APIGroup: "", APIVersion: "", Resource: "", Subresource: "", Name: "", ResourceRequest: false, Path: "/probe",
-					},
-					authorizer.AttributesRecord{
-						User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
-						Verb: "list", Namespace: "", APIGroup: "not-concierge.walrus.tld", APIVersion: "v1", Resource: "tokencredentialrequests", Subresource: "", Name: "", ResourceRequest: true, Path: "/apis/not-concierge.walrus.tld/v1/tokencredentialrequests",
-					},
-					authorizer.AttributesRecord{
-						User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
-						Verb: "list", Namespace: "", APIGroup: "not-concierge.walrus.tld", APIVersion: "v1", Resource: "ducks", Subresource: "", Name: "", ResourceRequest: true, Path: "/apis/not-concierge.walrus.tld/v1/ducks",
-					},
-				)
 			}
 
 			// anonymous TCR should always work
@@ -1051,6 +1604,35 @@ func TestImpersonator(t *testing.T) {
 			_, errBadCert := tcrBadCert.PinnipedConcierge.LoginV1alpha1().TokenCredentialRequests().Create(ctx, &loginv1alpha1.TokenCredentialRequest{}, metav1.CreateOptions{})
 			require.True(t, apierrors.IsUnauthorized(errBadCert), errBadCert)
 			require.EqualError(t, errBadCert, "Unauthorized")
+
+			// these authorization checks are caused by the anonymous auth checks above
+			wantAuthorizerAttributes = append(wantAuthorizerAttributes,
+				authorizer.AttributesRecord{
+					User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
+					Verb: "create", Namespace: "", APIGroup: "login.concierge.pinniped.dev", APIVersion: "v1alpha1", Resource: "tokencredentialrequests", Subresource: "", Name: "", ResourceRequest: true, Path: "/apis/login.concierge.pinniped.dev/v1alpha1/tokencredentialrequests",
+				},
+				authorizer.AttributesRecord{
+					User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
+					Verb: "create", Namespace: "", APIGroup: "login.concierge.walrus.tld", APIVersion: "v1alpha1", Resource: "tokencredentialrequests", Subresource: "", Name: "", ResourceRequest: true, Path: "/apis/login.concierge.walrus.tld/v1alpha1/tokencredentialrequests",
+				},
+			)
+			if !tt.anonymousAuthDisabled {
+				wantAuthorizerAttributes = append(wantAuthorizerAttributes,
+					authorizer.AttributesRecord{
+						User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
+						Verb: "get", Namespace: "", APIGroup: "", APIVersion: "", Resource: "", Subresource: "", Name: "", ResourceRequest: false, Path: "/probe",
+					},
+					authorizer.AttributesRecord{
+						User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
+						Verb: "list", Namespace: "", APIGroup: "not-concierge.walrus.tld", APIVersion: "v1", Resource: "tokencredentialrequests", Subresource: "", Name: "", ResourceRequest: true, Path: "/apis/not-concierge.walrus.tld/v1/tokencredentialrequests",
+					},
+					authorizer.AttributesRecord{
+						User: &user.DefaultInfo{Name: "system:anonymous", UID: "", Groups: []string{"system:unauthenticated"}, Extra: nil},
+						Verb: "list", Namespace: "", APIGroup: "not-concierge.walrus.tld", APIVersion: "v1", Resource: "ducks", Subresource: "", Name: "", ResourceRequest: true, Path: "/apis/not-concierge.walrus.tld/v1/ducks",
+					},
+				)
+			}
+			require.ElementsMatch(t, wantAuthorizerAttributes, recorder.attributes)
 		})
 	}
 }
@@ -1995,13 +2577,13 @@ type clientCert struct {
 	certPEM, keyPEM []byte
 }
 
-func newClientCert(t *testing.T, ca *certauthority.CA, username string, groups []string) *clientCert {
+func newClientCert(t *testing.T, ca *certauthority.CA, username string, groups []string) clientCert {
 	t.Helper()
-	pem, err := ca.IssueClientCertPEM(username, groups, time.Hour)
+	clientCertPEM, err := ca.IssueClientCertPEM(username, groups, time.Hour)
 	require.NoError(t, err)
-	return &clientCert{
-		certPEM: pem.CertPEM,
-		keyPEM:  pem.KeyPEM,
+	return clientCert{
+		certPEM: clientCertPEM.CertPEM,
+		keyPEM:  clientCertPEM.KeyPEM,
 	}
 }
 

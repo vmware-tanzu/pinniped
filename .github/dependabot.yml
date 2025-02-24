@@ -72,12 +72,6 @@ updates:
       interval: "daily"
     target-branch: ci
   - package-ecosystem: "docker"
-    directory: "/dockerfiles/go-lint-runner/"
-    open-pull-requests-limit: 100
-    schedule:
-      interval: "daily"
-    target-branch: ci
-  - package-ecosystem: "docker"
     directory: "/dockerfiles/integration-test-runner/"
     open-pull-requests-limit: 100
     schedule:

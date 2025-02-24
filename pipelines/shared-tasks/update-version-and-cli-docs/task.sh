@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -26,7 +26,7 @@ if ! echo "$kube_version" | grep -Eq '^[0-9]+\.[0-9]+$'; then
 fi
 
 echo "Installing yq..."
-curl --retry-connrefused --retry 5 -fLo /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.40.4/yq_linux_amd64
+curl --retry-connrefused --retry 5 -fLo /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64
 chmod +x /usr/local/bin/yq
 
 # cd to the output repo.

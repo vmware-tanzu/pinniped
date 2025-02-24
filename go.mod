@@ -11,8 +11,8 @@ replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-dif
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20250120090109-d38428e4d9c8
-	github.com/chromedp/chromedp v0.12.1
+	github.com/chromedp/cdproto v0.0.0-20250222051814-50c6cb17f10a
+	github.com/chromedp/chromedp v0.13.0
 	github.com/coreos/go-oidc/v3 v3.12.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/creack/pty v1.1.24
@@ -26,7 +26,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/cel-go v0.23.2
-	github.com/google/go-cmp v0.6.0
+	github.com/google/go-cmp v0.7.0
 	github.com/google/go-github/v68 v68.0.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.6.0
@@ -45,7 +45,7 @@ require (
 	github.com/tdewolff/minify/v2 v2.21.3
 	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.34.0
 	golang.org/x/net v0.35.0
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sync v0.11.0
@@ -86,6 +86,7 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.7 // indirect
+	github.com/go-json-experiment/json v0.0.0-20250211171154-1ae217ad3535 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect

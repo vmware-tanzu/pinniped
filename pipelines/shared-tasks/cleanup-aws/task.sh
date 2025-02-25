@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -89,7 +89,7 @@ fi
 # fail.
 set +o pipefail
 
-# continually send "tua-test" to stdin to serve as a confirmation for aws-nuke.
+# continually send "tua-test1" to stdin to serve as a confirmation for aws-nuke.
 # this is done in a loop since aws-nuke uses a new buffered reader to consume
 # stdin each time it wants to accept input from the user.
-(while true; do echo tua-test; sleep 1; done) | ${cmd}
+(while true; do echo tua-test1; sleep 1; done) | ${cmd}

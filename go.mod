@@ -19,7 +19,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/go-jose/go-jose/v3 v3.0.3
-	github.com/go-jose/go-jose/v4 v4.0.4
+	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/go-ldap/ldap/v3 v3.4.10
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/stdr v1.2.2
@@ -45,9 +45,9 @@ require (
 	github.com/tdewolff/minify/v2 v2.21.3
 	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.34.0
+	golang.org/x/crypto v0.35.0
 	golang.org/x/net v0.35.0
-	golang.org/x/oauth2 v0.26.0
+	golang.org/x/oauth2 v0.27.0
 	golang.org/x/sync v0.11.0
 	golang.org/x/term v0.29.0
 	golang.org/x/text v0.22.0

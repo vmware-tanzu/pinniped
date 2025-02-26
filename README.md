@@ -163,6 +163,26 @@ This requires the following:
 
 The CI jobs will create and delete AKS clusters in a Resource Group called `pinniped-ci` within the provided Subscription.
 
+## Configure AWS for CI to test on EKS
+
+There are several CI jobs which test that Pinniped works when installed on Amazon's EKS.
+For these jobs to run, they need to be able to create and delete ephemeral EKS clusters.
+There are also some jobs to cleanup any orphaned resources (e.g. IP addresses) in the AWS account.
+These jobs requires the following:
+
+1. An active AWS account, which will only be used for this purpose.
+2. Two IAM users in that account, each with a role that can be assumed.
+   These IAM users which should only be used for Pinniped CI and no other purpose.
+   They should only have permissions to perform AWS actions in the relevant AWS account, and no other account.
+3. The first user and role should have permission to create and delete EKS clusters using `eksctl`.
+   The permissions required can be found in the [eksctl docs](https://eksctl.io/usage/minimum-iam-policies).
+   The user also needs permission to run `aws logs put-retention-policy`, `aws ec2 describe-nat-gateways`,
+   and `aws ec2 delete-nat-gateway`.
+4. The second user and role should have broad permissions to get and delete everything in the account.
+   It will be used to run `aws-nuke` to list and/or clean resources from the AWS account.
+   To use `aws-nuke`, the user also needs to have an AWS account alias
+   (see the [cleanup-aws task](pipelines/shared-tasks/cleanup-aws/task.sh) for details).
+
 ## Setting Up Active Directory Test Environment
 
 To test the `ActiveDirectoryIdentityProvider` functionality, we have a long-running Active Directory Domain Controller

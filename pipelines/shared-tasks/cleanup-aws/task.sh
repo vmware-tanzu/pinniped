@@ -92,4 +92,7 @@ set +o pipefail
 # continually send "tua-test1" to stdin to serve as a confirmation for aws-nuke.
 # this is done in a loop since aws-nuke uses a new buffered reader to consume
 # stdin each time it wants to accept input from the user.
+# Note that the AWS account being used to run this tool must have an AWS account
+# alias with this "tua-test1" name. See https://stackoverflow.com/a/54322848.
+# If you assign the account a different alias, then you need to change it here too.
 (while true; do echo tua-test1; sleep 1; done) | ${cmd}

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -32,6 +32,8 @@ echo "$CLUSTER_NAME" > name
 # The kubeconfig file becomes the value of the lock in the pool.
 echo "Creating $CLUSTER_NAME in $AWS_DEFAULT_REGION..."
 
+# Note that the AWS account being used to run this command needs to have certain permissions.
+# See https://eksctl.io/usage/minimum-iam-policies/ for permissions.
 # See https://eksctl.io/usage/schema/ for documentation of this yaml.
 cat <<EOF | eksctl create cluster -f - --kubeconfig "$ADMIN_KUBECONFIG" --profile service-account
 apiVersion: eksctl.io/v1alpha5

@@ -1,4 +1,4 @@
-// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package pversion
@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
-	utilversion "k8s.io/apiserver/pkg/util/version"
+	utilversion "k8s.io/component-base/version"
 )
 
 func TestGet(t *testing.T) {

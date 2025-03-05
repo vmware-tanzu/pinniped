@@ -1,4 +1,4 @@
-// Copyright 2020 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -14,7 +14,12 @@ import (
 )
 
 // UpdateAPIService updates the APIService's CA bundle.
-func UpdateAPIService(ctx context.Context, aggregatorClient aggregatorclient.Interface, apiServiceName, serviceNamespace string, aggregatedAPIServerCA []byte) error {
+func UpdateAPIService(
+	ctx context.Context,
+	aggregatorClient aggregatorclient.Interface,
+	apiServiceName, serviceNamespace string,
+	aggregatedAPIServerCA []byte,
+) error {
 	apiServices := aggregatorClient.ApiregistrationV1().APIServices()
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {

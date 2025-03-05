@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package browsertest provides integration test helpers for our browser-based tests.
@@ -391,11 +391,18 @@ func LoginToUpstreamOIDC(t *testing.T, b *Browser, upstream testlib.TestOIDCUpst
 
 	// Fill in the username and password and click "submit".
 	t.Logf("logging into %s", cfg.Name)
+
 	b.SendKeysToFirstMatch(t, cfg.UsernameSelector, upstream.Username)
+
+	// The Okta login page has a lot of Javascript on it. Give it a second to catch up after typing the
+	// username. Hoping that this might help with the test flake that started in Chrome v134 where the
+	// username and password fields are not filled in correctly.
+	time.Sleep(1 * time.Second)
+
 	b.SendKeysToFirstMatch(t, cfg.PasswordSelector, upstream.Password)
 
 	// The Okta login page has a lot of Javascript on it. Give it a second to catch up after typing the
-	// username and password. Hoping that this might help with the test flake where the Okta login page
+	// password. Hoping that this might help with the test flake where the Okta login page
 	// never continues to the next page after trying to click the login button below.
 	time.Sleep(1 * time.Second)
 

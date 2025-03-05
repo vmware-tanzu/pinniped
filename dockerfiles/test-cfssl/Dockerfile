@@ -1,4 +1,4 @@
-# Copyright 2021-2023 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # The cfssl/cfssl container image on dockerhub is built poorly.
@@ -11,7 +11,7 @@ FROM cfssl/cfssl:v1.6.5 as cfssl
 
 # We just need any basic unix with bash, but we can pick the same
 # base image that they use, just in case they did any dynamic linking.
-FROM golang:1.24
+FROM golang:1.24.1
 
 # Thier Docerfile https://github.com/cloudflare/cfssl/blob/master/Dockerfile
 # calls their Makefile https://github.com/cloudflare/cfssl/blob/master/Makefile

@@ -13,4 +13,5 @@ set_pipeline "$pipeline" "$script_dir/pipeline.yml"
 ensure_time_resource_has_at_least_one_version "$pipeline" weekdays
 
 # Make the pipeline visible to non-authenticated users in the web UI.
-$FLY_CLI --target "$CONCOURSE_TARGET" expose-pipeline --pipeline "$pipeline"
+# TODO: make this public again
+#$FLY_CLI --target "$CONCOURSE_TARGET" expose-pipeline --pipeline "$pipeline"

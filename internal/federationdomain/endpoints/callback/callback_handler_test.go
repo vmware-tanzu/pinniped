@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package callback
@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -194,7 +195,7 @@ func TestCallbackEndpoint(t *testing.T) {
 
 	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyDownstreamCSRF)
 	require.NoError(t, err)
-	happyCSRFCookie := "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue
+	happyCSRFCookie := "__Host-pinniped-csrf-v2=" + encodedIncomingCookieCSRFValue
 
 	happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs := &oidctestutil.ExchangeAuthcodeAndValidateTokenArgs{
 		Authcode:             happyUpstreamAuthcode,
@@ -229,6 +230,8 @@ func TestCallbackEndpoint(t *testing.T) {
 		kubeResources func(t *testing.T, supervisorClient *supervisorfake.Clientset, kubeClient *fake.Clientset)
 		method        string
 		path          string
+		body          string
+		headers       map[string]string
 		csrfCookie    string
 
 		wantStatus                        int
@@ -263,6 +266,78 @@ func TestCallbackEndpoint(t *testing.T) {
 					).Encode(),
 				).Build(t, happyStateCodec),
 			).String(),
+			csrfCookie:                        happyCSRFCookie,
+			wantStatus:                        http.StatusOK,
+			wantContentType:                   "text/html;charset=UTF-8",
+			wantBodyFormResponseRegexp:        `<code id="manual-auth-code">(.+)</code>`,
+			wantDownstreamIDTokenSubject:      oidcUpstreamIssuer + "?idpName=" + happyOIDCUpstreamIDPName + "&sub=" + oidcUpstreamSubjectQueryEscaped,
+			wantDownstreamIDTokenUsername:     oidcUpstreamUsername,
+			wantDownstreamIDTokenGroups:       oidcUpstreamGroupMembership,
+			wantDownstreamRequestedScopes:     happyDownstreamScopesRequested,
+			wantDownstreamGrantedScopes:       happyDownstreamScopesGranted,
+			wantDownstreamNonce:               downstreamNonce,
+			wantDownstreamClientID:            downstreamPinnipedClientID,
+			wantDownstreamPKCEChallenge:       downstreamPKCEChallenge,
+			wantDownstreamPKCEChallengeMethod: downstreamPKCEChallengeMethod,
+			wantDownstreamCustomSessionData:   happyDownstreamCustomSessionDataForOIDCUpstream,
+			wantOIDCAuthcodeExchangeCall: &expectedOIDCAuthcodeExchange{
+				performedByUpstreamName: happyOIDCUpstreamIDPName,
+				args:                    happyOIDCUpstreamExchangeAuthcodeAndValidateTokenArgs,
+			},
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"code": "redacted", "state": "redacted"},
+					}),
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+					testutil.WantAuditLog("Using Upstream IDP", map[string]any{
+						"displayName":  "upstream-oidc-idp-name",
+						"resourceName": "upstream-oidc-idp-name",
+						"resourceUID":  "upstream-oidc-resource-uid",
+						"type":         "oidc",
+					}),
+					testutil.WantAuditLog("Identity From Upstream IDP", map[string]any{
+						"upstreamIDPDisplayName":  "upstream-oidc-idp-name",
+						"upstreamIDPType":         "oidc",
+						"upstreamIDPResourceName": "upstream-oidc-idp-name",
+						"upstreamIDPResourceUID":  "upstream-oidc-resource-uid",
+						"personalInfo": map[string]any{
+							"upstreamUsername": "test-pinniped-username",
+							"upstreamGroups":   []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+						},
+					}),
+					testutil.WantAuditLog("Session Started", map[string]any{
+						"sessionID": sessionID,
+						"warnings":  []any{}, // json: []
+						"personalInfo": map[string]any{
+							"username":         "test-pinniped-username",
+							"groups":           []any{"test-pinniped-group-0", "test-pinniped-group-1"},
+							"subject":          "https://my-upstream-issuer.com?idpName=upstream-oidc-idp-name&sub=abc123-some+guid",
+							"additionalClaims": map[string]any{}, // json: {}
+						},
+					}),
+				}
+			},
+		},
+		{
+			name:   "OIDC: POST (like when upstream is using response_mode=form_post) with good state and cookie and successful upstream token exchange with response_mode=form_post returns 200 with HTML+JS form",
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
+			method: http.MethodPost,
+			body: url.Values{
+				"code": []string{happyUpstreamAuthcode},
+				"state": []string{
+					happyOIDCUpstreamStateParam().WithAuthorizeRequestParams(
+						shallowCopyAndModifyQuery(
+							happyDownstreamRequestParamsQuery,
+							map[string]string{"response_mode": "form_post"},
+						).Encode(),
+					).Build(t, happyStateCodec).String(),
+				},
+			}.Encode(),
+			path:                              (&requestPath{}).String(),
+			headers:                           map[string]string{"Content-Type": "application/x-www-form-urlencoded; charset=utf-8"},
 			csrfCookie:                        happyCSRFCookie,
 			wantStatus:                        http.StatusOK,
 			wantContentType:                   "text/html;charset=UTF-8",
@@ -1131,7 +1206,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
 			wantContentType: htmlContentType,
-			wantBody:        "Method Not Allowed: PUT (try GET)\n",
+			wantBody:        "Method Not Allowed: PUT (try GET or POST)\n",
 			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
@@ -1141,22 +1216,13 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name:            "POST method is invalid",
-			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
-			method:          http.MethodPost,
-			path:            newRequestPath().String(),
-			wantStatus:      http.StatusMethodNotAllowed,
-			wantContentType: htmlContentType,
-			wantBody:        "Method Not Allowed: POST (try GET)\n",
-		},
-		{
 			name:            "PATCH method is invalid",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:          http.MethodPatch,
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
 			wantContentType: htmlContentType,
-			wantBody:        "Method Not Allowed: PATCH (try GET)\n",
+			wantBody:        "Method Not Allowed: PATCH (try GET or POST)\n",
 		},
 		{
 			name:            "DELETE method is invalid",
@@ -1165,7 +1231,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			path:            newRequestPath().String(),
 			wantStatus:      http.StatusMethodNotAllowed,
 			wantContentType: htmlContentType,
-			wantBody:        "Method Not Allowed: DELETE (try GET)\n",
+			wantBody:        "Method Not Allowed: DELETE (try GET or POST)\n",
 		},
 		{
 			name:            "params cannot be parsed",
@@ -1268,6 +1334,42 @@ func TestCallbackEndpoint(t *testing.T) {
 			},
 		},
 		{
+			name:   "code param was not included on request and there is no error param when the request was a POST with body",
+			idps:   testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
+			method: http.MethodPost,
+			body: url.Values{
+				"state": []string{
+					happyOIDCUpstreamStateParam().WithAuthorizeRequestParams(
+						shallowCopyAndModifyQuery(
+							happyDownstreamRequestParamsQuery,
+							map[string]string{"response_mode": "form_post"},
+						).Encode(),
+					).Build(t, happyStateCodec).String(),
+				},
+			}.Encode(),
+			path:            (&requestPath{}).String(),
+			headers:         map[string]string{"Content-Type": "application/x-www-form-urlencoded"},
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody: here.Doc(`Bad Request: code param not found
+
+				Something went wrong with your authentication attempt at your external identity provider.
+
+				Pinniped AuditID: fake-audit-id
+			`),
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"state": "redacted"},
+					}),
+					testutil.WantAuditLog("AuthorizeID From Parameters", map[string]any{
+						"authorizeID": encodedStateParam.AuthorizeID(),
+					}),
+				}
+			},
+		},
+		{
 			name:            "state param was not included on request",
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:          http.MethodGet,
@@ -1280,6 +1382,77 @@ func TestCallbackEndpoint(t *testing.T) {
 				return []testutil.WantedAuditLog{
 					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
 						"params": map[string]any{"code": "redacted"},
+					}),
+				}
+			},
+		},
+		{
+			name:            "state param was not included on request when the request was a POST with body",
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
+			method:          http.MethodPost,
+			body:            url.Values{"code": []string{happyUpstreamAuthcode}}.Encode(),
+			path:            (&requestPath{}).String(),
+			headers:         map[string]string{"Content-Type": "application/x-www-form-urlencoded"},
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: state param not found\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{"code": "redacted"},
+					}),
+				}
+			},
+		},
+		{
+			name:            "wrong Content-Type header included on request when the request was a POST with body",
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
+			method:          http.MethodPost,
+			body:            "code=" + happyUpstreamAuthcode,
+			path:            (&requestPath{}).String(),
+			headers:         map[string]string{"Content-Type": "application/text"},
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnsupportedMediaType,
+			wantContentType: htmlContentType,
+			wantBody:        "Unsupported Media Type: application/text (try application/x-www-form-urlencoded)\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{},
+					}),
+				}
+			},
+		},
+		{
+			name:            "unparseable Content-Type header included on request when the request was a POST with body",
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
+			method:          http.MethodPost,
+			body:            "code=" + happyUpstreamAuthcode,
+			path:            (&requestPath{}).String(),
+			headers:         map[string]string{"Content-Type": "bogus ;========="}, // this is unparseable garbage
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: htmlContentType,
+			wantBody:        "Bad Request: error parsing request params\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{} // couldn't parse params for auditing of params
+			},
+		},
+		{
+			name:            "no Content-Type header included on request when the request was a POST with body",
+			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
+			method:          http.MethodPost,
+			body:            "code=" + happyUpstreamAuthcode,
+			path:            (&requestPath{}).String(),
+			csrfCookie:      happyCSRFCookie,
+			wantStatus:      http.StatusUnsupportedMediaType,
+			wantContentType: htmlContentType,
+			wantBody:        "Unsupported Media Type: no Content-Type header (try Content-Type: application/x-www-form-urlencoded)\n",
+			wantAuditLogs: func(encodedStateParam stateparam.Encoded, sessionID string) []testutil.WantedAuditLog {
+				return []testutil.WantedAuditLog{
+					testutil.WantAuditLog("HTTP Request Parameters", map[string]any{
+						"params": map[string]any{},
 					}),
 				}
 			},
@@ -1624,7 +1797,7 @@ func TestCallbackEndpoint(t *testing.T) {
 			idps:            testidplister.NewUpstreamIDPListerBuilder().WithOIDC(happyOIDCUpstream().Build()),
 			method:          http.MethodGet,
 			path:            newRequestPath().WithState(happyOIDCState).String(),
-			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
+			csrfCookie:      "__Host-pinniped-csrf-v2=this-value-was-not-signed-by-pinniped",
 			wantStatus:      http.StatusForbidden,
 			wantContentType: htmlContentType,
 			wantBody:        "Forbidden: error reading CSRF cookie\n",
@@ -2024,9 +2197,18 @@ func TestCallbackEndpoint(t *testing.T) {
 			)
 
 			reqContext := context.WithValue(context.Background(), struct{ name string }{name: "test"}, "request-context")
-			req := httptest.NewRequest(test.method, test.path, nil).WithContext(reqContext)
+			var bodyReader io.Reader
+			if test.body != "" {
+				bodyReader = strings.NewReader(test.body)
+			}
+			req := httptest.NewRequest(test.method, test.path, bodyReader).WithContext(reqContext)
 			if test.csrfCookie != "" {
 				req.Header.Set("Cookie", test.csrfCookie)
+			}
+			if test.headers != nil {
+				for k, v := range test.headers {
+					req.Header.Set(k, v)
+				}
 			}
 			req, _ = auditid.NewRequestWithAuditID(req, func() string { return "fake-audit-id" })
 			rsp := httptest.NewRecorder()
@@ -2116,7 +2298,12 @@ func TestCallbackEndpoint(t *testing.T) {
 			}
 
 			if test.wantAuditLogs != nil {
-				wantAuditLogs := test.wantAuditLogs(testutil.GetStateParam(t, test.path), sessionID)
+				encodedStateParam := testutil.GetStateParamFromRequestURL(t, test.path)
+				if test.body != "" {
+					// Assume that the state param was sent in a form post body.
+					encodedStateParam = testutil.GetStateParamFromRequestBody(t, test.body)
+				}
+				wantAuditLogs := test.wantAuditLogs(encodedStateParam, sessionID)
 				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-audit-id")
 				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 			}

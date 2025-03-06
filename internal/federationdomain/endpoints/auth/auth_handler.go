@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package auth provides a handler for the OIDC authorization endpoint.
@@ -510,12 +510,32 @@ func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     oidc.CSRFCookieName,
-		Value:    encodedCSRFValue,
+		// Because of the other settings below, this value can only be known by the end user's browser, not by other sites.
+		Value: encodedCSRFValue,
+		// Name starting with "__Host-" makes the cookie domain-locked (subdomains cannot set this cookie).
+		Name: oidc.CSRFCookieName,
+		// This cookie can't be accessed by JavaScript.
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   true,
-		Path:     "/",
+		// Okay for requests from other sites to cause the user's browser to send this cookie back to this site,
+		// for allowing response_mode=form_post, in which an upstream IDP needs to host a web form which POSTs back
+		// to the Supervisor's callback endpoint. Note that this allows a malicious 3rd party site to cause the user's
+		// browser to include this cookie on a request to the Supervisor. However, there is no way for 3rd party sites
+		// to create the corresponding state param to include on a callback request to the Supervisor to cause that
+		// callback request be allowed by the Supervisor's callback endpoint. That state param must include this cookie's
+		// value. A 3rd party site cannot receive this cookie (and therefore cannot know its value), and even if it somehow
+		// did learn its value, it could not sign the state param (cannot know the signing key for state params, which never
+		// leaves the Supervisor server). So although a 3rd party site could cause the user's cookie to be sent, that
+		// request will never be considered acceptable by the Supervisor.
+		// Note that SameSite=None was created in a 2019 draft standard, so it requires modern browsers to work.
+		// See https://datatracker.ietf.org/doc/html/draft-west-cookie-incrementalism-00.
+		SameSite: http.SameSiteNoneMode,
+		// This cookie may only be sent via HTTPS (required for domain-locked cookies).
+		Secure: true,
+		// Sending this cookie to any path of this server is acceptable (required for domain-locked cookies).
+		Path: "/",
+		// Note that we do not set "Domain", so this cookie should not be sent to any subdomains (required for domain-locked cookies).
+		// Also note that we do not set "Expires" or "MaxAge", so the client may keep the cookie as long as it likes,
+		// which prevents the cookie from expiring during login flows.
 	})
 
 	return nil

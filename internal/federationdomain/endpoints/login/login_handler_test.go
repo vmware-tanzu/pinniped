@@ -1,4 +1,4 @@
-// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package login
@@ -109,7 +109,7 @@ func TestLoginEndpoint(t *testing.T) {
 
 	encodedIncomingCookieCSRFValue, err := happyCookieCodec.Encode("csrf", happyDownstreamCSRF)
 	require.NoError(t, err)
-	happyCSRFCookie := "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue
+	happyCSRFCookie := "__Host-pinniped-csrf-v2=" + encodedIncomingCookieCSRFValue
 
 	tests := []struct {
 		name           string
@@ -261,7 +261,7 @@ func TestLoginEndpoint(t *testing.T) {
 			name:            "the CSRF cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason on GET request",
 			method:          http.MethodGet,
 			path:            happyPathWithState,
-			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
+			csrfCookie:      "__Host-pinniped-csrf-v2=this-value-was-not-signed-by-pinniped",
 			wantStatus:      http.StatusForbidden,
 			wantContentType: htmlContentType,
 			wantBody:        "Forbidden: error reading CSRF cookie\n",
@@ -270,7 +270,7 @@ func TestLoginEndpoint(t *testing.T) {
 			name:            "the CSRF cookie was not signed correctly, has expired, or otherwise cannot be decoded for any reason on POST request",
 			method:          http.MethodPost,
 			path:            happyPathWithState,
-			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
+			csrfCookie:      "__Host-pinniped-csrf-v2=this-value-was-not-signed-by-pinniped",
 			wantStatus:      http.StatusForbidden,
 			wantContentType: htmlContentType,
 			wantBody:        "Forbidden: error reading CSRF cookie\n",
@@ -519,7 +519,7 @@ func TestLoginEndpoint(t *testing.T) {
 			require.Equal(t, test.wantBody, rsp.Body.String())
 
 			if test.wantAuditLogs != nil {
-				wantAuditLogs := test.wantAuditLogs(testutil.GetStateParam(t, test.path))
+				wantAuditLogs := test.wantAuditLogs(testutil.GetStateParamFromRequestURL(t, test.path))
 				testutil.WantAuditIDOnEveryAuditLog(wantAuditLogs, "fake-audit-id")
 				testutil.CompareAuditLogs(t, wantAuditLogs, actualAuditLog.String())
 			}

@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -358,6 +358,27 @@ func TestSupervisorLogin_Browser(t *testing.T) {
 				pinnipedSessionData := pinnipedSession.Custom
 				pinnipedSessionData.OIDC.UpstreamIssuer = "wrong-issuer"
 			},
+			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
+			// the ID token Username should include the upstream user ID after the upstream issuer name
+			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },
+		},
+		{
+			name:      "oidc with upstream response_mode=form_post",
+			maybeSkip: skipNever,
+			createIDP: func(t *testing.T) string {
+				providerSpec := basicOIDCIdentityProviderSpec()
+				providerSpec.AuthorizationConfig.AdditionalAuthorizeParameters = []idpv1alpha1.Parameter{{
+					// Note that at the time of writing this comment, Dex completely ignores this param
+					// and just treats it as the default response_mode by returning a redirect.
+					// However, when the external OIDC provider is Okta, this should actually test
+					// using this capability. Okta will cause the user's browser to POST the authcode
+					// to the Supervisor's callback endpoint.
+					Name:  "response_mode",
+					Value: "form_post",
+				}}
+				return testlib.CreateTestOIDCIdentityProvider(t, providerSpec, idpv1alpha1.PhaseReady).Name
+			},
+			requestAuthorization:                requestAuthorizationUsingBrowserAuthcodeFlowOIDC,
 			wantDownstreamIDTokenSubjectToMatch: expectedIDTokenSubjectRegexForUpstreamOIDC,
 			// the ID token Username should include the upstream user ID after the upstream issuer name
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+" },

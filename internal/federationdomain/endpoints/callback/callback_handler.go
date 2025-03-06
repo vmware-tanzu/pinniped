@@ -1,10 +1,11 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package callback provides a handler for the OIDC callback endpoint.
 package callback
 
 import (
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -136,8 +137,36 @@ func authcode(r *http.Request) string {
 }
 
 func validateRequest(r *http.Request, stateDecoder, cookieDecoder oidc.Decoder, auditLogger plog.AuditLogger) (*oidc.UpstreamStateParamData, error) {
-	if r.Method != http.MethodGet {
-		return nil, httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET)", r.Method)
+	// An upstream OIDC provider will typically return a redirect with the authcode,
+	// which the user's browser will follow and therefore perform a GET to this endpoint.
+	// See https://openid.net/specs/openid-connect-core-1_0.html#AuthResponse.
+	//
+	// If the upstream provider supports using response_mode=form_post,
+	// and if the admin configured OIDCIdentityProvider.spec.authorizationConfig.additionalAuthorizeParameters
+	// to include response_mode=form_post, then the user's browser will POST the authcode to this endpoint.
+	// See https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html.
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		return nil, httperr.Newf(http.StatusMethodNotAllowed, "%s (try GET or POST)", r.Method)
+	}
+
+	if r.Method == http.MethodPost {
+		// https://openid.net/specs/oauth-v2-form-post-response-mode-1_0.html says
+		// "the result parameters being encoded in the body using the application/x-www-form-urlencoded format",
+		// so only accept that format. Since "multipart/form-data" is intended for binary data, there's no need to
+		// support it here.
+		contentType := r.Header.Get("Content-Type")
+		if contentType == "" {
+			return nil, httperr.New(http.StatusUnsupportedMediaType, "no Content-Type header (try Content-Type: application/x-www-form-urlencoded)")
+		}
+		parsedContentType, _, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			// Note that it should not be possible to reach this line since	AuditRequestParams() is already
+			// parsing the form and handling unparseable form types before we get here. This is just defensive coding.
+			return nil, httperr.Newf(http.StatusUnsupportedMediaType, "cannot parse Content-Type: %s (try Content-Type: application/x-www-form-urlencoded)", contentType)
+		}
+		if parsedContentType != "application/x-www-form-urlencoded" {
+			return nil, httperr.Newf(http.StatusUnsupportedMediaType, "%s (try application/x-www-form-urlencoded)", contentType)
+		}
 	}
 
 	encodedState, decodedState, err := oidc.ReadStateParamAndValidateCSRFCookie(r, cookieDecoder, stateDecoder)

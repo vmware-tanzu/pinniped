@@ -3,7 +3,7 @@ module go.pinniped.dev/generated/1.31/client
 
 go 1.22.0
 
-toolchain go1.24.0
+toolchain go1.24.1
 
 replace go.pinniped.dev/generated/1.31/apis => ../apis
 

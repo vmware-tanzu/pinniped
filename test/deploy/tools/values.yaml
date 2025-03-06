@@ -1,4 +1,4 @@
-#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@data/values
@@ -16,6 +16,8 @@ ports:
   #! our Kind configuration which maps 127.0.0.1:12346 to port 31235 on the Kind worker node.
   local: 12346
 
+#! deploy_proxy deploys the proxy server when true.
+deploy_proxy: true
 
 #! dex_issuer_hostname can be used to provide Dex with a DNS record or IP address for its hostname,
 #! which is used to construct an issuer uri and create a certificate to serve TLS.

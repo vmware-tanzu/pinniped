@@ -612,7 +612,7 @@ if [[ "${DEPLOY_TEST_TOOLS:-no}" == "yes" ]]; then
     tools_optional_ytt_values=()
     if [[ "${USE_LOAD_BALANCERS_FOR_DEX_AND_SUPERVISOR:-no}" == "yes" ]]; then
       tools_optional_ytt_values+=("--data-value=dex_issuer_hostname=${dex_loadbalancer_public_ip_or_hostname}")
-      tools_optional_ytt_values+=("--data-value=deploy_proxy=false")
+      tools_optional_ytt_values+=("--data-value-yaml=deploy_proxy=false")
     fi
 
     echo "Deploying Tools to the cluster..."

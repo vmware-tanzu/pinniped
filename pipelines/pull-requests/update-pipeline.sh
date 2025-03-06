@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -12,5 +12,4 @@ source "$script_dir/../../hack/fly-helpers.sh"
 set_pipeline "$pipeline" "$script_dir/pipeline.yml"
 
 # Make the pipeline visible to non-authenticated users in the web UI.
-# TODO: make this public again
-#$FLY_CLI --target "$CONCOURSE_TARGET" expose-pipeline --pipeline "$pipeline"
+$FLY_CLI --target "$CONCOURSE_TARGET" expose-pipeline --pipeline "$pipeline"

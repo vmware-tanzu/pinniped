@@ -619,6 +619,10 @@ jobs:
                 # Removing the "until" date on the next line to ignore this CVE forever.
                 CVE-2020-8561
 
+                # CVE-2025-27144 is in github.com/go-jose/go-jose. We are already using the versions which contain
+                # the fix v3.0.4 and v4.0.5, but for some reason nancy is complaining about it, so ignore it.
+                CVE-2025-27144 until=2025-04-01
+
                 EOF
 
                 nancy sleuth --exclude-vulnerability-file=exclusions.txt < pinniped-modules/modules.json

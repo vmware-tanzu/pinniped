@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -609,18 +609,19 @@ if [[ "${DEPLOY_TEST_TOOLS:-no}" == "yes" ]]; then
       ]"
     fi
 
-    dex_optional_ytt_values=()
+    tools_optional_ytt_values=()
     if [[ "${USE_LOAD_BALANCERS_FOR_DEX_AND_SUPERVISOR:-no}" == "yes" ]]; then
-      dex_optional_ytt_values+=("--data-value=dex_issuer_hostname=${dex_loadbalancer_public_ip_or_hostname}")
+      tools_optional_ytt_values+=("--data-value=dex_issuer_hostname=${dex_loadbalancer_public_ip_or_hostname}")
+      tools_optional_ytt_values+=("--data-value=deploy_proxy=false")
     fi
 
     echo "Deploying Tools to the cluster..."
-    echo "Using ytt optional flags:" "${dex_optional_ytt_values[@]}"
+    echo "Using ytt optional flags:" "${tools_optional_ytt_values[@]}"
     ytt --file . \
       --data-value-yaml "supervisor_redirect_uris=${supervisor_redirect_uris}" \
       --data-value "pinny_ldap_password=$ldap_test_password" \
       --data-value "pinny_bcrypt_passwd_hash=$(htpasswd -nbBC 10 x "$dex_test_password" | sed -e "s/^x://")" \
-      ${dex_optional_ytt_values[@]+"${dex_optional_ytt_values[@]}"} \
+      ${tools_optional_ytt_values[@]+"${tools_optional_ytt_values[@]}"} \
       >"$manifest"
 
     echo

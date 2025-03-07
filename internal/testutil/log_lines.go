@@ -1,4 +1,4 @@
-// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -44,7 +44,7 @@ func WantAuditIDOnEveryAuditLog(wantedAuditLogs []WantedAuditLog, wantAuditID st
 	}
 }
 
-func GetStateParam(t *testing.T, fullURL string) stateparam.Encoded {
+func GetStateParamFromRequestURL(t *testing.T, fullURL string) stateparam.Encoded {
 	if fullURL == "" {
 		var empty stateparam.Encoded
 		return empty
@@ -53,6 +53,12 @@ func GetStateParam(t *testing.T, fullURL string) stateparam.Encoded {
 	path, err := url.Parse(fullURL)
 	require.NoError(t, err)
 	return stateparam.Encoded(path.Query().Get("state"))
+}
+
+func GetStateParamFromRequestBody(t *testing.T, body string) stateparam.Encoded {
+	values, err := url.ParseQuery(body)
+	require.NoError(t, err)
+	return stateparam.Encoded(values.Get("state"))
 }
 
 func CompareAuditLogs(t *testing.T, wantAuditLogs []WantedAuditLog, actualAuditLogsOneLiner string) {

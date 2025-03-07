@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package auth
@@ -1551,7 +1551,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
 			path:                                   happyGetRequestPathForOIDCUpstream,
-			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
+			csrfCookie:                             "__Host-pinniped-csrf-v2=" + encodedIncomingCookieCSRFValue + " ",
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantLocationHeader:                     expectedRedirectLocationForUpstreamOIDC(expectedUpstreamStateParam(nil, incomingCookieCSRFValue, oidcUpstreamName, "oidc"), nil),
@@ -1568,7 +1568,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
 			path:                                   happyGetRequestPathForLDAPUpstream,
-			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
+			csrfCookie:                             "__Host-pinniped-csrf-v2=" + encodedIncomingCookieCSRFValue + " ",
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(nil, incomingCookieCSRFValue, ldapUpstreamName, "ldap")}),
@@ -1585,7 +1585,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			cookieEncoder:                          happyCookieEncoder,
 			method:                                 http.MethodGet,
 			path:                                   happyGetRequestPathForADUpstream,
-			csrfCookie:                             "__Host-pinniped-csrf=" + encodedIncomingCookieCSRFValue + " ",
+			csrfCookie:                             "__Host-pinniped-csrf-v2=" + encodedIncomingCookieCSRFValue + " ",
 			wantStatus:                             http.StatusSeeOther,
 			wantContentType:                        htmlContentType,
 			wantLocationHeader:                     urlWithQuery(downstreamIssuer+"/login", map[string]string{"state": expectedUpstreamStateParam(nil, incomingCookieCSRFValue, activeDirectoryUpstreamName, "activedirectory")}),
@@ -1931,7 +1931,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 			cookieEncoder:   happyCookieEncoder,
 			method:          http.MethodGet,
 			path:            happyGetRequestPathForOIDCUpstream,
-			csrfCookie:      "__Host-pinniped-csrf=this-value-was-not-signed-by-pinniped",
+			csrfCookie:      "__Host-pinniped-csrf-v2=this-value-was-not-signed-by-pinniped",
 			wantStatus:      http.StatusSeeOther,
 			wantContentType: htmlContentType,
 			// Generated a new CSRF cookie and set it in the response.
@@ -4217,7 +4217,7 @@ func TestAuthorizationEndpoint(t *testing.T) { //nolint:gocyclo
 		if test.wantCSRFValueInCookieHeader != "" {
 			require.Len(t, rsp.Header().Values("Set-Cookie"), 1)
 			actualCookie := rsp.Header().Get("Set-Cookie")
-			regex := regexp.MustCompile("__Host-pinniped-csrf=([^;]+); Path=/; HttpOnly; Secure; SameSite=Lax")
+			regex := regexp.MustCompile("__Host-pinniped-csrf-v2=([^;]+); Path=/; HttpOnly; Secure; SameSite=None")
 			submatches := regex.FindStringSubmatch(actualCookie)
 			require.Len(t, submatches, 2)
 			captured := submatches[1]

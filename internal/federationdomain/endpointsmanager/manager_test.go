@@ -187,7 +187,7 @@ func TestManager(t *testing.T) {
 			cookies := recorder.Result().Cookies()
 			r.Len(cookies, 1)
 			csrfCookie := cookies[0]
-			r.Equal("__Host-pinniped-csrf", csrfCookie.Name)
+			r.Equal("__Host-pinniped-csrf-v2", csrfCookie.Name)
 			r.NotEmpty(csrfCookie.Value)
 
 			// Return the important parts of the response so we can use them in our next request to the callback endpoint
@@ -201,7 +201,7 @@ func TestManager(t *testing.T) {
 
 			getRequest := newGetRequest(requestIssuer + oidc.CallbackEndpointPath + requestURLSuffix)
 			getRequest.AddCookie(&http.Cookie{
-				Name:  "__Host-pinniped-csrf",
+				Name:  "__Host-pinniped-csrf-v2",
 				Value: csrfCookieValue,
 			})
 			subject.HandlerChain().ServeHTTP(recorder, getRequest)

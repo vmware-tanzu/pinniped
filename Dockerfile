@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG BUILD_IMAGE=golang:1.24.1@sha256:fa145a3c13f145356057e00ed6f66fbd9bf017798c9d7b2b8e956651fe4f52da
-ARG BASE_IMAGE=gcr.io/distroless/static:nonroot@sha256:6ec5aa99dc335666e79dc64e4a6c8b89c33a543a1967f20d360922a80dd21f02
+ARG BASE_IMAGE=gcr.io/distroless/static:nonroot@sha256:b35229a3a6398fe8f86138c74c611e386f128c20378354fc5442811700d5600d
 
 # Prepare to cross-compile by always running the build stage in the build platform, not the target platform.
 FROM --platform=$BUILDPLATFORM $BUILD_IMAGE AS build-env

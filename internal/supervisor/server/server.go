@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package server defines the entrypoint for the Pinniped Supervisor server.
@@ -530,6 +530,7 @@ func runSupervisor(ctx context.Context, podInfo *downward.PodInfo, cfg *supervis
 		client.PinnipedSupervisor.ConfigV1alpha1().OIDCClients(serverInstallationNamespace),
 		serverInstallationNamespace,
 		auditLogger,
+		cfg.AggregatedAPIServerDisableAdmissionPlugins,
 	)
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
@@ -641,6 +642,7 @@ func getAggregatedAPIServerConfig(
 	oidcClients v1alpha1.OIDCClientInterface,
 	serverInstallationNamespace string,
 	auditLogger plog.AuditLogger,
+	disableAdmissionPlugins []string,
 ) (*apiserver.Config, error) {
 	codecs := serializer.NewCodecFactory(scheme)
 
@@ -657,7 +659,7 @@ func getAggregatedAPIServerConfig(
 	// This port is configurable. It should be safe to cast because the config reader already validated it.
 	recommendedOptions.SecureServing.BindPort = int(aggregatedAPIServerPort)
 
-	err := admissionpluginconfig.ConfigureAdmissionPlugins(recommendedOptions)
+	err := admissionpluginconfig.ConfigureAdmissionPlugins(recommendedOptions, disableAdmissionPlugins)
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure admission plugins on recommended options: %w", err)
 	}

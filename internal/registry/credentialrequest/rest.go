@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package credentialrequest provides REST functionality for the CredentialRequest resource.
@@ -224,10 +224,6 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 	}
 
 	// let dynamic admission webhooks have a chance to validate (but not mutate) as well
-	//  TODO Since we are an aggregated API, we should investigate to see if the kube API server is already invoking admission hooks for us.
-	//   Even if it is, its okay to call it again here. However, if the kube API server is already calling the webhooks and passing
-	//   the token, then there is probably no reason for us to avoid passing the token when we call the webhooks here, since
-	//   they already got the token.
 	if createValidation != nil {
 		requestForValidation := obj.DeepCopyObject()
 		requestForValidation.(*loginapi.TokenCredentialRequest).Spec.Token = ""

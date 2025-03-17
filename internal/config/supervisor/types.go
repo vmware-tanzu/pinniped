@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisor
@@ -14,14 +14,15 @@ const (
 
 // Config contains knobs to set up an instance of the Pinniped Supervisor.
 type Config struct {
-	APIGroupSuffix          *string           `json:"apiGroupSuffix,omitempty"`
-	Labels                  map[string]string `json:"labels"`
-	NamesConfig             NamesConfigSpec   `json:"names"`
-	Log                     plog.LogSpec      `json:"log"`
-	Endpoints               *Endpoints        `json:"endpoints"`
-	AggregatedAPIServerPort *int64            `json:"aggregatedAPIServerPort"`
-	TLS                     TLSSpec           `json:"tls"`
-	Audit                   AuditSpec         `json:"audit"`
+	APIGroupSuffix                             *string           `json:"apiGroupSuffix,omitempty"`
+	Labels                                     map[string]string `json:"labels"`
+	NamesConfig                                NamesConfigSpec   `json:"names"`
+	Log                                        plog.LogSpec      `json:"log"`
+	Endpoints                                  *Endpoints        `json:"endpoints"`
+	AggregatedAPIServerPort                    *int64            `json:"aggregatedAPIServerPort"`
+	AggregatedAPIServerDisableAdmissionPlugins []string          `json:"aggregatedAPIServerDisableAdmissionPlugins"`
+	TLS                                        TLSSpec           `json:"tls"`
+	Audit                                      AuditSpec         `json:"audit"`
 }
 
 type AuditInternalPaths string

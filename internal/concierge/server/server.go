@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package server is the command line entry point for pinniped-concierge.
@@ -214,6 +214,7 @@ func (a *App) runServer(ctx context.Context) error {
 		identityGV,
 		auditLogger,
 		tokenClient,
+		cfg.AggregatedAPIServerDisableAdmissionPlugins,
 	)
 	if err != nil {
 		return fmt.Errorf("could not configure aggregated API server: %w", err)
@@ -243,6 +244,7 @@ func getAggregatedAPIServerConfig(
 	loginConciergeGroupVersion, identityConciergeGroupVersion schema.GroupVersion,
 	auditLogger plog.AuditLogger,
 	tokenClient *tokenclient.TokenClient,
+	disableAdmissionPlugins []string,
 ) (*apiserver.Config, error) {
 	codecs := serializer.NewCodecFactory(scheme)
 
@@ -259,7 +261,7 @@ func getAggregatedAPIServerConfig(
 	// This port is configurable. It should be safe to cast because the config reader already validated it.
 	recommendedOptions.SecureServing.BindPort = int(aggregatedAPIServerPort)
 
-	err := admissionpluginconfig.ConfigureAdmissionPlugins(recommendedOptions)
+	err := admissionpluginconfig.ConfigureAdmissionPlugins(recommendedOptions, disableAdmissionPlugins)
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure admission plugins on recommended options: %w", err)
 	}

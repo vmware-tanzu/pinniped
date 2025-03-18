@@ -47,4 +47,4 @@ Please follow the procedure described in [SECURITY.md](SECURITY.md).
 
 Pinniped is open source and licensed under Apache License Version 2.0. See [LICENSE](LICENSE).
 
-Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.

@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package concierge
@@ -36,6 +36,11 @@ func TestFromPath(t *testing.T) {
 					renewBeforeSeconds: 2400
 				apiGroupSuffix: some.suffix.com
 				aggregatedAPIServerPort: 12345
+				aggregatedAPIServerDisableAdmissionPlugins:
+				  - NamespaceLifecycle
+				  - MutatingAdmissionWebhook
+				  - ValidatingAdmissionPolicy
+				  - ValidatingAdmissionWebhook
 				impersonationProxyServerPort: 4242
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
@@ -80,8 +85,14 @@ func TestFromPath(t *testing.T) {
 						RenewBeforeSeconds: ptr.To[int64](2400),
 					},
 				},
-				APIGroupSuffix:               ptr.To("some.suffix.com"),
-				AggregatedAPIServerPort:      ptr.To[int64](12345),
+				APIGroupSuffix:          ptr.To("some.suffix.com"),
+				AggregatedAPIServerPort: ptr.To[int64](12345),
+				AggregatedAPIServerDisableAdmissionPlugins: []string{
+					"NamespaceLifecycle",
+					"MutatingAdmissionWebhook",
+					"ValidatingAdmissionPolicy",
+					"ValidatingAdmissionWebhook",
+				},
 				ImpersonationProxyServerPort: ptr.To[int64](4242),
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
@@ -134,6 +145,11 @@ func TestFromPath(t *testing.T) {
 					renewBeforeSeconds: 2400
 				apiGroupSuffix: some.suffix.com
 				aggregatedAPIServerPort: 12345
+				aggregatedAPIServerDisableAdmissionPlugins:
+				  - NamespaceLifecycle
+				  - MutatingAdmissionWebhook
+				  - ValidatingAdmissionPolicy
+				  - ValidatingAdmissionWebhook
 				impersonationProxyServerPort: 4242
 				names:
 				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
@@ -173,8 +189,14 @@ func TestFromPath(t *testing.T) {
 						RenewBeforeSeconds: ptr.To[int64](2400),
 					},
 				},
-				APIGroupSuffix:               ptr.To("some.suffix.com"),
-				AggregatedAPIServerPort:      ptr.To[int64](12345),
+				APIGroupSuffix:          ptr.To("some.suffix.com"),
+				AggregatedAPIServerPort: ptr.To[int64](12345),
+				AggregatedAPIServerDisableAdmissionPlugins: []string{
+					"NamespaceLifecycle",
+					"MutatingAdmissionWebhook",
+					"ValidatingAdmissionPolicy",
+					"ValidatingAdmissionWebhook",
+				},
 				ImpersonationProxyServerPort: ptr.To[int64](4242),
 				NamesConfig: NamesConfigSpec{
 					ServingCertificateSecret:          "pinniped-concierge-api-tls-serving-certificate",
@@ -298,6 +320,9 @@ func TestFromPath(t *testing.T) {
 					Image:      ptr.To("debian:latest"),
 				},
 				Audit: AuditSpec{LogUsernamesAndGroups: ""},
+				AggregatedAPIServerDisableAdmissionPlugins: nil,
+				TLS: TLSSpec{},
+				Log: plog.LogSpec{},
 			},
 		},
 		{
@@ -614,6 +639,22 @@ func TestFromPath(t *testing.T) {
 				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
 			wantError: "validate apiGroupSuffix: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')",
+		},
+		{
+			name: "Invalid aggregatedAPIServerDisableAdmissionPlugins",
+			yaml: here.Doc(`
+				---
+				aggregatedAPIServerDisableAdmissionPlugins: [foobar, ValidatingAdmissionWebhook, foobaz]
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+			`),
+			wantError: "validate aggregatedAPIServerDisableAdmissionPlugins: admission plugin names not recognized: [foobar foobaz] (each must be one of [NamespaceLifecycle MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
 		},
 		{
 			name: "returns setAllowedCiphers errors",

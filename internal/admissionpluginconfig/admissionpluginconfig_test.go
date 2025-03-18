@@ -1,11 +1,10 @@
-// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2024-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package admissionpluginconfig
 
 import (
 	"errors"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -15,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/discovery"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
@@ -23,17 +21,66 @@ import (
 	kubetesting "k8s.io/client-go/testing"
 )
 
+func TestValidateAdmissionPluginNames(t *testing.T) {
+	tests := []struct {
+		name        string
+		pluginNames []string
+		wantErr     string
+	}{
+		{
+			name:        "empty",
+			pluginNames: []string{},
+		},
+		{
+			name: "all current valid values (this list may change in future versions of Kubernetes packages)",
+			pluginNames: []string{
+				"NamespaceLifecycle",
+				"MutatingAdmissionWebhook",
+				"ValidatingAdmissionPolicy",
+				"ValidatingAdmissionWebhook",
+			},
+		},
+		{
+			name: "one invalid value",
+			pluginNames: []string{
+				"NamespaceLifecycle",
+				"MutatingAdmissionWebhook",
+				"ValidatingAdmissionPolicy",
+				"foobar",
+				"ValidatingAdmissionWebhook",
+			},
+			wantErr: "admission plugin names not recognized: [foobar] (each must be one of [NamespaceLifecycle MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
+		},
+		{
+			name: "multiple invalid values",
+			pluginNames: []string{
+				"NamespaceLifecycle",
+				"MutatingAdmissionWebhook",
+				"foobat",
+				"ValidatingAdmissionPolicy",
+				"foobar",
+				"ValidatingAdmissionWebhook",
+				"foobaz",
+			},
+			wantErr: "admission plugin names not recognized: [foobat foobar foobaz] (each must be one of [NamespaceLifecycle MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidateAdmissionPluginNames(tt.pluginNames)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestConfigureAdmissionPlugins(t *testing.T) {
-	defaultPlugins := admission.NewPlugins()
-	defaultPlugins.Register("fake-plugin1", func(config io.Reader) (admission.Interface, error) { return nil, nil })
-	defaultPlugins.Register("fake-plugin2", func(config io.Reader) (admission.Interface, error) { return nil, nil })
-
-	defaultPluginsRegistered := []string{"fake-plugin1", "fake-plugin2"}
-	defaultRecommendedPluginOrder := []string{"fake-plugin2", "fake-plugin1"}
-
-	customOldStylePluginsRegistered := []string{"MutatingAdmissionWebhook", "NamespaceLifecycle", "ValidatingAdmissionWebhook"}
-	customOldStyleRecommendedPluginOrder := []string{"NamespaceLifecycle", "MutatingAdmissionWebhook", "ValidatingAdmissionWebhook"}
-
 	coreResources := &metav1.APIResourceList{
 		GroupVersion: corev1.SchemeGroupVersion.String(),
 		APIResources: []metav1.APIResource{
@@ -73,49 +120,75 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                       string
-		availableAPIResources      []*metav1.APIResourceList
-		discoveryErr               error
-		wantErr                    string
-		wantRegisteredPlugins      []string
-		wantRecommendedPluginOrder []string
+		name                  string
+		disabledPlugins       []string
+		availableAPIResources []*metav1.APIResourceList
+		discoveryErr          error
+		wantErr               string
+		wantDisabledPlugins   []string
 	}{
 		{
-			name: "when there is a ValidatingAdmissionPolicy resource, then we do not change the plugin configuration",
+			name: "when there is a ValidatingAdmissionPolicy resource and nil disabled list, then we do not change the plugin configuration",
 			availableAPIResources: []*metav1.APIResourceList{
 				coreResources,
 				newStyleAdmissionResourcesWithValidatingAdmissionPolicies,
 				appsResources,
 			},
-			wantRegisteredPlugins:      defaultPluginsRegistered,
-			wantRecommendedPluginOrder: defaultRecommendedPluginOrder,
+			disabledPlugins:     nil,
+			wantDisabledPlugins: nil,
 		},
 		{
-			name: "when there is no ValidatingAdmissionPolicy resource, as there would not be in an old Kubernetes cluster, then we change the plugin configuration to be more like it was for old versions of Kubernetes",
+			name: "when there is a ValidatingAdmissionPolicy resource and empty disabled list, then we do not change the plugin configuration",
+			availableAPIResources: []*metav1.APIResourceList{
+				coreResources,
+				newStyleAdmissionResourcesWithValidatingAdmissionPolicies,
+				appsResources,
+			},
+			disabledPlugins:     []string{},
+			wantDisabledPlugins: nil,
+		},
+		{
+			name: "when there is no ValidatingAdmissionPolicy resource, as there would not be in an old Kubernetes cluster, then we disable that admission plugin",
 			availableAPIResources: []*metav1.APIResourceList{
 				coreResources,
 				oldStyleAdmissionResourcesWithoutValidatingAdmissionPolicies,
 				appsResources,
 			},
-			wantRegisteredPlugins:      customOldStylePluginsRegistered,
-			wantRecommendedPluginOrder: customOldStyleRecommendedPluginOrder,
+			disabledPlugins:     nil,
+			wantDisabledPlugins: []string{"ValidatingAdmissionPolicy"},
 		},
 		{
-			name: "when there is only an older version of ValidatingAdmissionPolicy resource, as there would be in an old Kubernetes cluster with the feature flag enabled, then we change the plugin configuration to be more like it was for old versions of Kubernetes (because the admission code wants to watch v1)",
+			name: "when there is only an older version of ValidatingAdmissionPolicy resource, as there would be in an old Kubernetes cluster with the feature flag enabled, then we disable that plugin (because the admission code wants to watch v1)",
 			availableAPIResources: []*metav1.APIResourceList{
 				coreResources,
 				newStyleAdmissionResourcesWithValidatingAdmissionPoliciesAtOlderAPIVersion,
 				appsResources,
 			},
-			wantRegisteredPlugins:      customOldStylePluginsRegistered,
-			wantRecommendedPluginOrder: customOldStyleRecommendedPluginOrder,
+			disabledPlugins:     []string{},
+			wantDisabledPlugins: []string{"ValidatingAdmissionPolicy"},
 		},
 		{
-			name:                       "when there is a total error returned by discovery",
-			discoveryErr:               errors.New("total error from API discovery client"),
-			wantErr:                    "failed looking up availability of ValidatingAdmissionPolicy resource: failed to perform k8s API discovery: total error from API discovery client",
-			wantRegisteredPlugins:      defaultPluginsRegistered,
-			wantRecommendedPluginOrder: defaultRecommendedPluginOrder,
+			name:                  "when there is no ValidatingAdmissionPolicy resource, and the ValidatingAdmissionPolicy plugin was explicitly disabled, then do not perform discovery, and just disable it",
+			availableAPIResources: []*metav1.APIResourceList{},
+			discoveryErr:          errors.New("total error from API discovery client"),
+			disabledPlugins:       []string{"MutatingAdmissionWebhook", "ValidatingAdmissionPolicy"},
+			wantDisabledPlugins:   []string{"MutatingAdmissionWebhook", "ValidatingAdmissionPolicy"},
+		},
+		{
+			name: "when there is no ValidatingAdmissionPolicy resource, and the ValidatingAdmissionPolicy plugin was not explicitly disabled, still disable it",
+			availableAPIResources: []*metav1.APIResourceList{
+				coreResources,
+				oldStyleAdmissionResourcesWithoutValidatingAdmissionPolicies,
+				appsResources,
+			},
+			disabledPlugins:     []string{"MutatingAdmissionWebhook", "NamespaceLifecycle"},
+			wantDisabledPlugins: []string{"MutatingAdmissionWebhook", "NamespaceLifecycle", "ValidatingAdmissionPolicy"},
+		},
+		{
+			name:                "when there is a total error returned by discovery",
+			discoveryErr:        errors.New("total error from API discovery client"),
+			wantErr:             "failed looking up availability of ValidatingAdmissionPolicy resource: failed to perform k8s API discovery: total error from API discovery client",
+			wantDisabledPlugins: nil,
 		},
 		{
 			name: "when there is a partial error returned by discovery which does include the group of interest, then we cannot ignore the error, because we could not discover anything about that group",
@@ -128,9 +201,8 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 				schema.GroupVersion{Group: "someGroup", Version: "v1"}:                    errors.New("fake error for someGroup"),
 				schema.GroupVersion{Group: "admissionregistration.k8s.io", Version: "v1"}: errors.New("fake error for admissionregistration"),
 			}},
-			wantErr:                    "failed looking up availability of ValidatingAdmissionPolicy resource: unable to retrieve the complete list of server APIs: admissionregistration.k8s.io/v1: fake error for admissionregistration, someGroup/v1: fake error for someGroup",
-			wantRegisteredPlugins:      defaultPluginsRegistered,
-			wantRecommendedPluginOrder: defaultRecommendedPluginOrder,
+			wantErr:             "failed looking up availability of ValidatingAdmissionPolicy resource: unable to retrieve the complete list of server APIs: admissionregistration.k8s.io/v1: fake error for admissionregistration, someGroup/v1: fake error for someGroup",
+			wantDisabledPlugins: nil,
 		},
 		{
 			name: "when there is a partial error returned by discovery on an new-style cluster which does not include the group of interest, then we can ignore the error and use the default plugins",
@@ -143,8 +215,7 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 				schema.GroupVersion{Group: "someGroup", Version: "v1"}:      errors.New("fake error for someGroup"),
 				schema.GroupVersion{Group: "someOtherGroup", Version: "v1"}: errors.New("fake error for someOtherGroup"),
 			}},
-			wantRegisteredPlugins:      defaultPluginsRegistered,
-			wantRecommendedPluginOrder: defaultRecommendedPluginOrder,
+			wantDisabledPlugins: nil,
 		},
 		{
 			name: "when there is a partial error returned by discovery on an old-style cluster which does not include the group of interest, then we can ignore the error and customize the plugins",
@@ -157,8 +228,7 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 				schema.GroupVersion{Group: "someGroup", Version: "v1"}:      errors.New("fake error for someGroup"),
 				schema.GroupVersion{Group: "someOtherGroup", Version: "v1"}: errors.New("fake error for someOtherGroup"),
 			}},
-			wantRegisteredPlugins:      customOldStylePluginsRegistered,
-			wantRecommendedPluginOrder: customOldStyleRecommendedPluginOrder,
+			wantDisabledPlugins: []string{"ValidatingAdmissionPolicy"},
 		},
 	}
 
@@ -185,18 +255,13 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 			}
 
 			opts := &options.RecommendedOptions{
-				Admission: &options.AdmissionOptions{
-					Plugins:                defaultPlugins,
-					RecommendedPluginOrder: defaultRecommendedPluginOrder,
-				},
+				Admission: options.NewAdmissionOptions(),
 			}
 			// Sanity checks on opts before we use it.
-			require.Equal(t, defaultPlugins, opts.Admission.Plugins)
-			require.Equal(t, defaultPluginsRegistered, opts.Admission.Plugins.Registered())
-			require.Equal(t, defaultRecommendedPluginOrder, opts.Admission.RecommendedPluginOrder)
+			require.Empty(t, opts.Admission.DisablePlugins)
 
 			// Call the function under test.
-			err := configureAdmissionPlugins(discoveryClient, opts)
+			err := configureAdmissionPlugins(discoveryClient, opts, tt.disabledPlugins)
 
 			if tt.wantErr == "" {
 				require.NoError(t, err)
@@ -205,8 +270,7 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 			}
 
 			// Check the expected side effects of the function under test, if any.
-			require.Equal(t, tt.wantRegisteredPlugins, opts.Admission.Plugins.Registered())
-			require.Equal(t, tt.wantRecommendedPluginOrder, opts.Admission.RecommendedPluginOrder)
+			require.Equal(t, tt.wantDisabledPlugins, opts.Admission.DisablePlugins)
 		})
 	}
 }

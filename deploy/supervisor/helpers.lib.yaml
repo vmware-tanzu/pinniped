@@ -1,4 +1,4 @@
-#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -61,7 +61,8 @@ _: #@ template.replace(data.values.custom_labels)
 #@     "audit": {
 #@       "logUsernamesAndGroups": data.values.audit.log_usernames_and_groups,
 #@       "logInternalPaths": data.values.audit.log_internal_paths
-#@     }
+#@     },
+#@     "aggregatedAPIServerDisableAdmissionPlugins": []
 #@   }
 #@   if data.values.log_level:
 #@     config["log"] = {}

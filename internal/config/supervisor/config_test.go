@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisor
@@ -46,6 +46,11 @@ func TestFromPath(t *testing.T) {
 				  level: info
 				  format: json
 				aggregatedAPIServerPort: 12345
+				aggregatedAPIServerDisableAdmissionPlugins:
+				  - NamespaceLifecycle
+				  - MutatingAdmissionWebhook
+				  - ValidatingAdmissionPolicy
+				  - ValidatingAdmissionWebhook
 				tls:
 				  onedottwo:
 				    allowedCiphers:
@@ -80,6 +85,12 @@ func TestFromPath(t *testing.T) {
 					Format: plog.FormatJSON,
 				},
 				AggregatedAPIServerPort: ptr.To[int64](12345),
+				AggregatedAPIServerDisableAdmissionPlugins: []string{
+					"NamespaceLifecycle",
+					"MutatingAdmissionWebhook",
+					"ValidatingAdmissionPolicy",
+					"ValidatingAdmissionWebhook",
+				},
 				TLS: TLSSpec{
 					OneDotTwo: TLSProtocolSpec{
 						AllowedCiphers: []string{
@@ -134,6 +145,9 @@ func TestFromPath(t *testing.T) {
 					LogInternalPaths:      "",
 					LogUsernamesAndGroups: "",
 				},
+				AggregatedAPIServerDisableAdmissionPlugins: nil,
+				TLS: TLSSpec{},
+				Log: plog.LogSpec{},
 			},
 		},
 		{
@@ -345,6 +359,16 @@ func TestFromPath(t *testing.T) {
 			`),
 			allowedCiphersError: fmt.Errorf("some error from setAllowedCiphers"),
 			wantError:           "validate tls: some error from setAllowedCiphers",
+		},
+		{
+			name: "invalid aggregatedAPIServerDisableAdmissionPlugins",
+			yaml: here.Doc(`
+				---
+				names:
+				  defaultTLSCertificateSecret: my-secret-name
+				aggregatedAPIServerDisableAdmissionPlugins: [foobar, ValidatingAdmissionWebhook, foobaz]
+			`),
+			wantError: "validate aggregatedAPIServerDisableAdmissionPlugins: admission plugin names not recognized: [foobar foobaz] (each must be one of [NamespaceLifecycle MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
 		},
 	}
 	for _, test := range tests {

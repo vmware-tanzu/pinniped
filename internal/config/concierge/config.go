@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package concierge contains functionality to load/store Config's from/to
@@ -14,6 +14,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
+	"go.pinniped.dev/internal/admissionpluginconfig"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crypto/ptls"
 	"go.pinniped.dev/internal/groupsuffix"
@@ -66,6 +67,10 @@ func FromPath(ctx context.Context, path string, setAllowedCiphers ptls.SetAllowe
 
 	if err := validateAPIGroupSuffix(*config.APIGroupSuffix); err != nil {
 		return nil, fmt.Errorf("validate apiGroupSuffix: %w", err)
+	}
+
+	if err := admissionpluginconfig.ValidateAdmissionPluginNames(config.AggregatedAPIServerDisableAdmissionPlugins); err != nil {
+		return nil, fmt.Errorf("validate aggregatedAPIServerDisableAdmissionPlugins: %w", err)
 	}
 
 	if err := validateServerPort(config.AggregatedAPIServerPort); err != nil {

@@ -1,23 +1,37 @@
-// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2024-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package admissionpluginconfig
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/pkg/errors"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	"k8s.io/apiserver/pkg/admission"
-	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
-	"k8s.io/apiserver/pkg/admission/plugin/webhook/mutating"
-	"k8s.io/apiserver/pkg/admission/plugin/webhook/validating"
+	validatingadmissionpolicy "k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/discovery"
 
 	"go.pinniped.dev/internal/kubeclient"
 	"go.pinniped.dev/internal/plog"
 )
+
+// ValidateAdmissionPluginNames returns an error if any of the given pluginNames is unrecognized.
+func ValidateAdmissionPluginNames(pluginNames []string) error {
+	var pluginsNotFound []string
+	admissionOptions := options.NewAdmissionOptions()
+	for _, pluginName := range pluginNames {
+		if !slices.Contains(admissionOptions.RecommendedPluginOrder, pluginName) {
+			pluginsNotFound = append(pluginsNotFound, pluginName)
+		}
+	}
+	if len(pluginsNotFound) > 0 {
+		return fmt.Errorf("admission plugin names not recognized: %s (each must be one of %s)",
+			pluginsNotFound, admissionOptions.RecommendedPluginOrder)
+	}
+	return nil
+}
 
 // ConfigureAdmissionPlugins may choose to reconfigure the admission plugins present on the given
 // RecommendedOptions by mutating it.
@@ -27,34 +41,46 @@ import (
 // then the new admission ValidatingAdmissionPolicy plugin prevents all our aggregated APIs from working, seemingly
 // because it fails to sync informers created for watching the related resources. As a workaround, ask the k8s API
 // server if it has the ValidatingAdmissionPolicy resource, and configure our admission plugins accordingly.
-func ConfigureAdmissionPlugins(recommendedOptions *options.RecommendedOptions) error {
+//
+// Any plugin name passed via the disableAdmissionPlugins parameter will also be disabled.
+// The values in this parameter should be validated by the caller using ValidateAdmissionPluginNames before
+// being passed into this function.
+func ConfigureAdmissionPlugins(recommendedOptions *options.RecommendedOptions, disableAdmissionPlugins []string) error {
 	k8sClient, err := kubeclient.New()
 	if err != nil {
 		return fmt.Errorf("failed to create kube client: %w", err)
 	}
-	return configureAdmissionPlugins(k8sClient.Kubernetes.Discovery(), recommendedOptions)
+	return configureAdmissionPlugins(k8sClient.Kubernetes.Discovery(), recommendedOptions, disableAdmissionPlugins)
 }
 
 // configureAdmissionPlugins is the same as ConfigureAdmissionPlugins but allows client injection for unit testing.
-func configureAdmissionPlugins(discoveryClient discovery.ServerResourcesInterface, recommendedOptions *options.RecommendedOptions) error {
-	// Check if the API server has such a resource.
-	hasValidatingAdmissionPolicyResource, err := k8sAPIServerHasValidatingAdmissionPolicyResource(discoveryClient)
-	if err != nil {
-		return fmt.Errorf("failed looking up availability of ValidatingAdmissionPolicy resource: %w", err)
+func configureAdmissionPlugins(
+	discoveryClient discovery.ServerResourcesInterface,
+	recommendedOptions *options.RecommendedOptions,
+	disableAdmissionPlugins []string,
+) error {
+	if !slices.Contains(disableAdmissionPlugins, validatingadmissionpolicy.PluginName) {
+		// The admin did not explicitly disable the ValidatingAdmissionPolicy plugin, but we may still need disable it if
+		// the Kubernetes cluster on which we are running is too old. Check if the API server has such a resource.
+		hasValidatingAdmissionPolicyResource, err := k8sAPIServerHasValidatingAdmissionPolicyResource(discoveryClient)
+		if err != nil {
+			return fmt.Errorf("failed looking up availability of ValidatingAdmissionPolicy resource: %w", err)
+		}
+
+		if !hasValidatingAdmissionPolicyResource {
+			// Customize the admission plugins to avoid using the new ValidatingAdmissionPolicy plugin.
+			plog.Warning("could not find ValidatingAdmissionPolicy resource on this Kubernetes cluster " +
+				"(which is normal for clusters older than Kubernetes 1.30); " +
+				"disabling ValidatingAdmissionPolicy admission plugins for all Pinniped aggregated API resource types")
+
+			disableAdmissionPlugins = append(disableAdmissionPlugins, validatingadmissionpolicy.PluginName)
+		}
 	}
 
-	if hasValidatingAdmissionPolicyResource {
-		// Accept the default admission plugin configuration without any further modification.
-		return nil
+	// Mutate the recommendedOptions to potentially disable some admission plugins.
+	if len(disableAdmissionPlugins) > 0 {
+		recommendedOptions.Admission.DisablePlugins = disableAdmissionPlugins
 	}
-
-	// Customize the admission plugins to avoid using the new ValidatingAdmissionPolicy plugin.
-	plog.Warning("could not find ValidatingAdmissionPolicy resource on this Kubernetes cluster " +
-		"(which is normal for clusters older than Kubernetes 1.30); " +
-		"disabling ValidatingAdmissionPolicy admission plugins for all Pinniped aggregated API resource types")
-
-	mutateOptionsToUseOldStyleAdmissionPlugins(recommendedOptions)
-
 	return nil
 }
 
@@ -99,27 +125,4 @@ func k8sAPIServerHasValidatingAdmissionPolicyResource(discoveryClient discovery.
 
 	// Didn't findValidatingAdmissionPolicy on this cluster.
 	return false, nil
-}
-
-func mutateOptionsToUseOldStyleAdmissionPlugins(recommendedOptions *options.RecommendedOptions) {
-	plugins := admission.NewPlugins()
-
-	// These lines are copied from server.RegisterAllAdmissionPlugins in k8s.io/apiserver@v0.30.0/pkg/server/plugins.go.
-	lifecycle.Register(plugins)
-	validating.Register(plugins)
-	mutating.Register(plugins)
-	// Note that we are not adding this one:
-	// validatingadmissionpolicy.Register(newAdmissionPlugins)
-
-	// This list is copied from the implementation of NewAdmissionOptions() in k8s.io/apiserver@v0.30.0/pkg/server/options/admission.go
-	recommendedOptions.Admission.RecommendedPluginOrder = []string{
-		lifecycle.PluginName,
-		mutating.PluginName,
-		// Again, note that we are not adding this one:
-		// validatingadmissionpolicy.PluginName,
-		validating.PluginName,
-	}
-
-	// Overwrite the registered plugins with our new, smaller list.
-	recommendedOptions.Admission.Plugins = plugins
 }

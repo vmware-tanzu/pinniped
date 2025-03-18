@@ -236,16 +236,30 @@ func validateRequest(ctx context.Context, obj runtime.Object, createValidation r
 }
 
 func validateUserInfo(userInfo user.Info) error {
-	switch {
-	case len(userInfo.GetName()) == 0:
+	if len(userInfo.GetName()) == 0 {
 		return errors.New("empty username is not allowed")
-	case len(userInfo.GetUID()) != 0:
-		return errors.New("UIDs are not supported") // certs cannot assert UID
-	case len(userInfo.GetExtra()) != 0:
-		return errors.New("extras are not supported") // certs cannot assert extra
-	default:
+	}
+
+	// certs cannot assert UID
+	if len(userInfo.GetUID()) != 0 {
+		return errors.New("UIDs are not supported")
+	}
+
+	// certs cannot assert extras, but starting in K8s 1.32 the authenticator will always provide this information
+	if len(userInfo.GetExtra()) == 0 { // it's ok for this to be empty...
 		return nil
 	}
+
+	// ... but if it's not empty, should have only exactly this one key.
+	if len(userInfo.GetExtra()) > 1 {
+		return errors.New("extra may have only one key 'authentication.kubernetes.io/credential-id'")
+	}
+
+	_, ok := userInfo.GetExtra()["authentication.kubernetes.io/credential-id"]
+	if !ok {
+		return errors.New("extra may have only one key 'authentication.kubernetes.io/credential-id'")
+	}
+	return nil
 }
 
 func authenticationFailedResponse() *loginapi.TokenCredentialRequest {

@@ -6,13 +6,13 @@
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	authenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
+	conciergeauthenticationv1alpha1 "go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1"
 	versioned "go.pinniped.dev/generated/latest/client/concierge/clientset/versioned"
 	internalinterfaces "go.pinniped.dev/generated/latest/client/concierge/informers/externalversions/internalinterfaces"
-	v1alpha1 "go.pinniped.dev/generated/latest/client/concierge/listers/authentication/v1alpha1"
+	authenticationv1alpha1 "go.pinniped.dev/generated/latest/client/concierge/listers/authentication/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -23,7 +23,7 @@ import (
 // JWTAuthenticators.
 type JWTAuthenticatorInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.JWTAuthenticatorLister
+	Lister() authenticationv1alpha1.JWTAuthenticatorLister
 }
 
 type jWTAuthenticatorInformer struct {
@@ -57,7 +57,7 @@ func NewFilteredJWTAuthenticatorInformer(client versioned.Interface, resyncPerio
 				return client.AuthenticationV1alpha1().JWTAuthenticators().Watch(context.TODO(), options)
 			},
 		},
-		&authenticationv1alpha1.JWTAuthenticator{},
+		&conciergeauthenticationv1alpha1.JWTAuthenticator{},
 		resyncPeriod,
 		indexers,
 	)
@@ -68,9 +68,9 @@ func (f *jWTAuthenticatorInformer) defaultInformer(client versioned.Interface, r
 }
 
 func (f *jWTAuthenticatorInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&authenticationv1alpha1.JWTAuthenticator{}, f.defaultInformer)
+	return f.factory.InformerFor(&conciergeauthenticationv1alpha1.JWTAuthenticator{}, f.defaultInformer)
 }
 
-func (f *jWTAuthenticatorInformer) Lister() v1alpha1.JWTAuthenticatorLister {
-	return v1alpha1.NewJWTAuthenticatorLister(f.Informer().GetIndexer())
+func (f *jWTAuthenticatorInformer) Lister() authenticationv1alpha1.JWTAuthenticatorLister {
+	return authenticationv1alpha1.NewJWTAuthenticatorLister(f.Informer().GetIndexer())
 }

@@ -368,7 +368,7 @@ func TestFromPath(t *testing.T) {
 				  defaultTLSCertificateSecret: my-secret-name
 				aggregatedAPIServerDisableAdmissionPlugins: [foobar, ValidatingAdmissionWebhook, foobaz]
 			`),
-			wantError: "validate aggregatedAPIServerDisableAdmissionPlugins: admission plugin names not recognized: [foobar foobaz] (each must be one of [NamespaceLifecycle MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
+			wantError: "validate aggregatedAPIServerDisableAdmissionPlugins: admission plugin names not recognized: [foobar foobaz] (each must be one of [NamespaceLifecycle MutatingAdmissionPolicy MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
 		},
 	}
 	for _, test := range tests {

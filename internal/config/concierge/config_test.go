@@ -654,7 +654,7 @@ func TestFromPath(t *testing.T) {
 				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
 				  impersonationSignerSecret: impersonationSignerSecret-value
 			`),
-			wantError: "validate aggregatedAPIServerDisableAdmissionPlugins: admission plugin names not recognized: [foobar foobaz] (each must be one of [NamespaceLifecycle MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
+			wantError: "validate aggregatedAPIServerDisableAdmissionPlugins: admission plugin names not recognized: [foobar foobaz] (each must be one of [NamespaceLifecycle MutatingAdmissionPolicy MutatingAdmissionWebhook ValidatingAdmissionPolicy ValidatingAdmissionWebhook])",
 		},
 		{
 			name: "returns setAllowedCiphers errors",

@@ -2927,7 +2927,7 @@ jobs:
             file: pinniped-ci/pipelines/shared-tasks/deploy-aks-cluster/task.yml
             image: aks-deployer-image
             params:
-              KUBE_VERSION: "1.28" # See https://learn.microsoft.com/en-us/azure/aks/supported-kubernetes-versions
+              KUBE_VERSION: "1.29" # See https://learn.microsoft.com/en-us/azure/aks/supported-kubernetes-versions
               <<: *azure_account_params
           - task: pre-warm-cluster
             timeout: 10m
@@ -2995,7 +2995,7 @@ jobs:
             file: pinniped-ci/pipelines/shared-tasks/deploy-aks-cluster/task.yml
             image: aks-deployer-image
             params:
-              KUBE_VERSION: "1.31" # See https://learn.microsoft.com/en-us/azure/aks/supported-kubernetes-versions
+              KUBE_VERSION: "1.32" # See https://learn.microsoft.com/en-us/azure/aks/supported-kubernetes-versions
               <<: *azure_account_params
           - task: pre-warm-cluster
             timeout: 10m

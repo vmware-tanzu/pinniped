@@ -2791,7 +2791,7 @@ jobs:
             file: pinniped-ci/pipelines/shared-tasks/deploy-eks-cluster/task.yml
             image: eks-deployer-image
             params:
-              KUBE_VERSION: "1.25" # See https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
+              KUBE_VERSION: "1.29" # See https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
               <<: *aws_account_params
           - task: pre-warm-cluster
             timeout: 10m
@@ -2838,7 +2838,6 @@ jobs:
                 <<: *aws_account_params
 
   - name: integration-test-eks-latest
-    old_name: integration-test-eks-newest
     public: true # all logs are publicly visible
     serial: true
     plan:
@@ -2860,7 +2859,7 @@ jobs:
             file: pinniped-ci/pipelines/shared-tasks/deploy-eks-cluster/task.yml
             image: eks-deployer-image
             params:
-              KUBE_VERSION: "1.31" # See https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
+              KUBE_VERSION: "1.32" # See https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
               <<: *aws_account_params
           - task: pre-warm-cluster
             timeout: 10m

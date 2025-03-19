@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2022-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # this dockerfile is used to produce a binary of Pinniped that uses

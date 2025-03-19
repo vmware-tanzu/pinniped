@@ -83,22 +83,25 @@ const (
 )
 
 // ImpersonationProxyTLSSpec contains information about how the Concierge impersonation proxy should
-// serve TLS.
+// serve TLS and what CA bundle to advertise for TLS verification.
 //
 // If CertificateAuthorityData is not provided, the Concierge impersonation proxy will check the secret
-// for a field called "ca.crt", which will be used as the CertificateAuthorityData.
+// for a field called "ca.crt", which will be used as the CA bundle to advertise for TLS verification.
 //
 // If neither CertificateAuthorityData nor ca.crt is provided, no CA bundle will be advertised for
 // the impersonation proxy endpoint.
 type ImpersonationProxyTLSSpec struct {
 	// X.509 Certificate Authority (base64-encoded PEM bundle).
-	// Used to advertise the CA bundle for the impersonation proxy endpoint.
+	// Used to advertise the CA bundle for TLS verification.
 	//
 	// +optional
 	CertificateAuthorityData string `json:"certificateAuthorityData,omitempty"`
 
 	// SecretName is the name of a Secret in the same namespace, of type `kubernetes.io/tls`, which contains
 	// the TLS serving certificate for the Concierge impersonation proxy endpoint.
+	//
+	// If CertificateAuthorityData is not provided, the Concierge impersonation proxy will check this secret for
+	// a field called "ca.crt", which will be used as the CA bundle to advertise for TLS verification.
 	//
 	// +kubebuilder:validation:MinLength=1
 	SecretName string `json:"secretName,omitempty"`

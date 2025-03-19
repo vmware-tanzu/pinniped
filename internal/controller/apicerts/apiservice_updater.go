@@ -18,6 +18,7 @@ import (
 type apiServiceUpdaterController struct {
 	namespace               string
 	certsSecretResourceName string
+	certificateRetriever    RetrieveFromSecretFunc
 	aggregatorClient        aggregatorclient.Interface
 	secretInformer          corev1informers.SecretInformer
 	apiServiceName          string
@@ -26,6 +27,7 @@ type apiServiceUpdaterController struct {
 func NewAPIServiceUpdaterController(
 	namespace string,
 	certsSecretResourceName string,
+	certificateRetriever RetrieveFromSecretFunc,
 	apiServiceName string,
 	aggregatorClient aggregatorclient.Interface,
 	secretInformer corev1informers.SecretInformer,
@@ -37,6 +39,7 @@ func NewAPIServiceUpdaterController(
 			Syncer: &apiServiceUpdaterController{
 				namespace:               namespace,
 				certsSecretResourceName: certsSecretResourceName,
+				certificateRetriever:    certificateRetriever,
 				aggregatorClient:        aggregatorClient,
 				secretInformer:          secretInformer,
 				apiServiceName:          apiServiceName,
@@ -63,8 +66,16 @@ func (c *apiServiceUpdaterController) Sync(ctx controllerlib.Context) error {
 		return nil
 	}
 
+	caCertPEM, _ := c.certificateRetriever(certSecret)
+
 	// Update the APIService to give it the new CA bundle.
-	if err := UpdateAPIService(ctx.Context, c.aggregatorClient, c.apiServiceName, c.namespace, certSecret.Data[CACertificateSecretKey]); err != nil {
+	if err := UpdateAPIService(
+		ctx.Context,
+		c.aggregatorClient,
+		c.apiServiceName,
+		c.namespace,
+		caCertPEM,
+	); err != nil {
 		return fmt.Errorf("could not update the API service: %w", err)
 	}
 

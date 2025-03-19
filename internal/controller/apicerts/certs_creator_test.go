@@ -39,7 +39,7 @@ func TestManagerControllerOptions(t *testing.T) {
 			observableWithInformerOption = testutil.NewObservableWithInformerOption()
 			observableWithInitialEventOption = testutil.NewObservableWithInitialEventOption()
 			secretsInformer := k8sinformers.NewSharedInformerFactory(nil, 0).Core().V1().Secrets()
-			_ = NewCertsManagerController(
+			_ = NewCertsCreatorController(
 				installedInNamespace,
 				certsSecretResourceName,
 				make(map[string]string),
@@ -134,7 +134,7 @@ func TestManagerControllerSync(t *testing.T) {
 		// nested Before's can keep adding things to the informer caches.
 		var startInformersAndController = func(serviceName string) {
 			// Set this at the last second to allow for injection of server override.
-			subject = NewCertsManagerController(
+			subject = NewCertsCreatorController(
 				installedInNamespace,
 				certsSecretResourceName,
 				map[string]string{
@@ -208,15 +208,15 @@ func TestManagerControllerSync(t *testing.T) {
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
 				}, actualSecret.Labels)
-				actualCACert := actualSecret.StringData["caCertificate"]
-				actualCAPrivateKey := actualSecret.StringData["caCertificatePrivateKey"]
-				actualPrivateKey := actualSecret.StringData["tlsPrivateKey"]
-				actualCertChain := actualSecret.StringData["tlsCertificateChain"]
+				actualCACert := string(actualSecret.Data["caCertificate"])
+				actualCAPrivateKey := string(actualSecret.Data["caCertificatePrivateKey"])
+				actualPrivateKey := string(actualSecret.Data["tlsPrivateKey"])
+				actualCertChain := string(actualSecret.Data["tlsCertificateChain"])
 				r.NotEmpty(actualCACert)
 				r.NotEmpty(actualCAPrivateKey)
 				r.NotEmpty(actualPrivateKey)
 				r.NotEmpty(actualCertChain)
-				r.Len(actualSecret.StringData, 4)
+				r.Len(actualSecret.Data, 4)
 
 				validCACert := testutil.ValidateServerCertificate(t, actualCACert, actualCACert)
 				validCACert.RequireMatchesPrivateKey(actualCAPrivateKey)
@@ -247,11 +247,11 @@ func TestManagerControllerSync(t *testing.T) {
 					"myLabelKey1": "myLabelValue1",
 					"myLabelKey2": "myLabelValue2",
 				}, actualSecret.Labels)
-				actualCACert := actualSecret.StringData["caCertificate"]
-				actualCAPrivateKey := actualSecret.StringData["caCertificatePrivateKey"]
+				actualCACert := string(actualSecret.Data["caCertificate"])
+				actualCAPrivateKey := string(actualSecret.Data["caCertificatePrivateKey"])
 				r.NotEmpty(actualCACert)
 				r.NotEmpty(actualCAPrivateKey)
-				r.Len(actualSecret.StringData, 2)
+				r.Len(actualSecret.Data, 2)
 
 				validCACert := testutil.ValidateServerCertificate(t, actualCACert, actualCACert)
 				validCACert.RequireMatchesPrivateKey(actualCAPrivateKey)

@@ -4,15 +4,15 @@ go 1.23.0
 
 toolchain go1.24.1
 
-// When using v0.31.6, need to use this version of structured-merge-diff.
-// See https://github.com/kubernetes/apimachinery/blob/v0.31.6/go.mod#L30
+// When using v0.31.7, need to use this version of structured-merge-diff.
+// See https://github.com/kubernetes/apimachinery/blob/v0.31.7/go.mod#L30
 // This replace must be in the go.mod, not overrides.conf, because it is an "indirect" dependency.
 replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.1
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20250222051814-50c6cb17f10a
-	github.com/chromedp/chromedp v0.13.1
+	github.com/chromedp/cdproto v0.0.0-20250319231242-a755498943c8
+	github.com/chromedp/chromedp v0.13.3
 	github.com/coreos/go-oidc/v3 v3.13.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/creack/pty v1.1.24
@@ -27,7 +27,7 @@ require (
 	github.com/gofrs/flock v0.12.1
 	github.com/google/cel-go v0.24.1
 	github.com/google/go-cmp v0.7.0
-	github.com/google/go-github/v69 v69.2.0
+	github.com/google/go-github/v70 v70.0.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.2
@@ -42,7 +42,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
-	github.com/tdewolff/minify/v2 v2.22.2
+	github.com/tdewolff/minify/v2 v2.22.3
 	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.36.0
@@ -51,17 +51,17 @@ require (
 	golang.org/x/sync v0.12.0
 	golang.org/x/term v0.30.0
 	golang.org/x/text v0.23.0
-	k8s.io/api v0.31.6
-	k8s.io/apiextensions-apiserver v0.31.6
-	k8s.io/apimachinery v0.31.6
-	k8s.io/apiserver v0.31.6
-	k8s.io/client-go v0.31.6
-	k8s.io/component-base v0.31.6
+	k8s.io/api v0.31.7
+	k8s.io/apiextensions-apiserver v0.31.7
+	k8s.io/apimachinery v0.31.7
+	k8s.io/apiserver v0.31.7
+	k8s.io/client-go v0.31.7
+	k8s.io/component-base v0.31.7
 	k8s.io/gengo v0.0.0-20250207200755-1244d31929d7
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kube-aggregator v0.31.6
-	k8s.io/kube-openapi v0.0.0-20250318181150-9d41124bde80
-	k8s.io/utils v0.0.0-20241210054802-24370beab758
+	k8s.io/kube-aggregator v0.31.7
+	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
+	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -181,6 +181,5 @@ require (
 	k8s.io/kms v0.32.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
-	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )

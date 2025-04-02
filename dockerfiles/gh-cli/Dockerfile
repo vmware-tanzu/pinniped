@@ -11,5 +11,5 @@ RUN curl \
     https://github.com/cli/cli/releases/download/v2.40.0/gh_2.40.0_linux_amd64.tar.gz \
     && tar -C /tmp --strip-components=1 -xzvf /tmp/gh.tar.gz
 
-FROM golang:1.24.1
+FROM golang:1.24.2
 COPY --from=builder /tmp/bin/gh /usr/local/bin/gh

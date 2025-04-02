@@ -2859,7 +2859,7 @@ jobs:
             file: pinniped-ci/pipelines/shared-tasks/deploy-eks-cluster/task.yml
             image: eks-deployer-image
             params:
-              KUBE_VERSION: "1.32" # See https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
+              KUBE_VERSION: "1.31" # See https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
               <<: *aws_account_params
           - task: pre-warm-cluster
             timeout: 10m

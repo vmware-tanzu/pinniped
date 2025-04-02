@@ -621,7 +621,9 @@ jobs:
 
                 # CVE-2025-27144 is in github.com/go-jose/go-jose. We are already using the versions which contain
                 # the fix v3.0.4 and v4.0.5, but for some reason nancy is complaining about it, so ignore it.
-                CVE-2025-27144 until=2025-04-01
+                # See https://github.com/go-jose/go-jose/security/advisories/GHSA-c6gw-w398-hv78 which says that
+                # 3.0.4 and 4.0.5 contain the fix.
+                CVE-2025-27144
 
                 EOF
 

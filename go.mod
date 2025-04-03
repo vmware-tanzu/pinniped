@@ -2,7 +2,7 @@ module go.pinniped.dev
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.24.2
 
 // When using v0.31.7, need to use this version of structured-merge-diff.
 // See https://github.com/kubernetes/apimachinery/blob/v0.31.7/go.mod#L30
@@ -11,8 +11,8 @@ replace sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-dif
 
 require (
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/chromedp/cdproto v0.0.0-20250319231242-a755498943c8
-	github.com/chromedp/chromedp v0.13.3
+	github.com/chromedp/cdproto v0.0.0-20250403032234-65de8f5d025b
+	github.com/chromedp/chromedp v0.13.6
 	github.com/coreos/go-oidc/v3 v3.13.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/creack/pty v1.1.24

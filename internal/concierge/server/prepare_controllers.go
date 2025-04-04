@@ -1,9 +1,7 @@
 // Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package controllermanager provides an entrypoint into running all of the controllers that run as
-// a part of Pinniped.
-package controllermanager
+package server
 
 import (
 	"fmt"
@@ -148,7 +146,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 
 		// API certs controllers are responsible for managing the TLS certificates used to serve Pinniped's API.
 		WithController(
-			apicerts.NewCertsManagerController(
+			apicerts.NewCertsCreatorController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ServingCertificateSecret,
 				c.Labels,
@@ -166,6 +164,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 			apicerts.NewAPIServiceUpdaterController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ServingCertificateSecret,
+				apicerts.RetrieveCAFromSecret,
 				loginConciergeGroupData.APIServiceName(),
 				client.Aggregation,
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
@@ -177,6 +176,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 			apicerts.NewAPIServiceUpdaterController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ServingCertificateSecret,
+				apicerts.RetrieveCAFromSecret,
 				identityConciergeGroupData.APIServiceName(),
 				client.Aggregation,
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
@@ -188,6 +188,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 			apicerts.NewCertsObserverController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ServingCertificateSecret,
+				apicerts.RetrieveCertificateFromSecret,
 				c.DynamicServingCertProvider,
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
@@ -202,7 +203,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				c.ServingCertRenewBefore,
-				apicerts.TLSCertificateChainSecretKey,
+				apicerts.RetrieveCertificateFromSecret,
 				plog.New(),
 			),
 			singletonWorker,
@@ -295,6 +296,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				clock.RealClock{},
 				impersonator.New,
 				c.NamesConfig.ImpersonationSignerSecret,
+				apicerts.RetrieveCAFromSecret,
 				c.ImpersonationSigningCertProvider,
 				plog.New(),
 				c.ImpersonationProxyTokenCache,
@@ -302,7 +304,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 			singletonWorker,
 		).
 		WithController(
-			apicerts.NewCertsManagerController(
+			apicerts.NewCertsCreatorController(
 				c.ServerInstallationInfo.Namespace,
 				c.NamesConfig.ImpersonationSignerSecret,
 				c.Labels,
@@ -324,7 +326,7 @@ func PrepareControllers(c *Config) (controllerinit.RunnerBuilder, error) { //nol
 				informers.installationNamespaceK8s.Core().V1().Secrets(),
 				controllerlib.WithInformer,
 				365*24*time.Hour-time.Hour, // 1 year minus 1 hour hard coded value (i.e. wait until the last moment to break the signer)
-				apicerts.CACertificateSecretKey,
+				apicerts.RetrieveCAFromSecret,
 				plog.New(),
 			),
 			singletonWorker,

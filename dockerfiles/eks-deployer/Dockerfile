@@ -14,6 +14,10 @@ COPY --from=yq /usr/bin/yq /usr/local/bin/yq
 RUN bash -c "set -eo pipefail; curl -fsL https://carvel.dev/install.sh | bash" && \
     ytt version && kapp version && kbld version && kwt version && imgpkg version && vendir version
 
+# Install latest kubectl.
+RUN curl -sfL "https://dl.k8s.io/release/$(curl -sfL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    -o /bin/kubectl && chmod u+x /bin/kubectl
+
 # Install aws-iam-authenticator.
 # This gets installed automatically via eksctl, but currently it downloads v0.5.2,
 # which will give us a v1alpha1 execcredential rather than a v1beta1 which we want.

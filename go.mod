@@ -1,6 +1,6 @@
 module go.pinniped.dev
 
-go 1.23.0
+go 1.24
 
 toolchain go1.24.2
 
@@ -19,7 +19,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/felixge/httpsnoop v1.0.4
 	github.com/go-jose/go-jose/v3 v3.0.4
-	github.com/go-jose/go-jose/v4 v4.0.5
+	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/go-ldap/ldap/v3 v3.4.10
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/stdr v1.2.2
@@ -42,11 +42,11 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
-	github.com/tdewolff/minify/v2 v2.23.0
-	go.uber.org/mock v0.5.0
+	github.com/tdewolff/minify/v2 v2.23.1
+	go.uber.org/mock v0.5.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.37.0
-	golang.org/x/net v0.38.0
+	golang.org/x/net v0.39.0
 	golang.org/x/oauth2 v0.29.0
 	golang.org/x/sync v0.13.0
 	golang.org/x/term v0.31.0
@@ -140,7 +140,7 @@ require (
 	github.com/spf13/viper v1.16.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
-	github.com/tdewolff/parse/v2 v2.7.22 // indirect
+	github.com/tdewolff/parse/v2 v2.7.23 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.16 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.16 // indirect

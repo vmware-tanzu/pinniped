@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -135,7 +135,8 @@ func TestFormat(t *testing.T) {
 	%s/config_test.go:%d
 testing.tRunner
 	%s/src/testing/testing.go:%d`,
-				wd, getLineNumberOfCaller()-19, runtime.GOROOT(), getLineNumberOfCaller(2),
+				//nolint:staticcheck // runtime.GOROOT() is deprecated but good enough for this unit test.
+				wd, getLineNumberOfCaller()-20, runtime.GOROOT(), getLineNumberOfCaller(2),
 			),
 		),
 	), scanner.Text())

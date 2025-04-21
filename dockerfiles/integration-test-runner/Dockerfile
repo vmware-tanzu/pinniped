@@ -10,7 +10,7 @@ FROM mikefarah/yq:4.45.1 AS yq
 # Use FROM gcloud-sdk instead of FROM golang because its
 # a lot easier to install Go than to install gcloud in the
 # subsequent commands below.
-FROM google/cloud-sdk:517.0.0-slim
+FROM google/cloud-sdk:518.0.0-slim
 
 # Install apache2-utils (for htpasswd to bcrypt passwords for the
 # local-user-authenticator) and jq.

@@ -105,8 +105,8 @@ meta:
   # so always check the tags using the above link.
   kube_version_v1-21-x: &kube_version_v1-21-x
     KUBE_VERSION: v1.21.14
-  kube_version_v1-32-x: &kube_version_v1-32-x
-    KUBE_VERSION: v1.32.0
+  kube_version_v1-33-x: &kube_version_v1-33-x
+    KUBE_VERSION: v1.33.0
   kube_version_k8s-main: &kube_version_k8s-main
     KUBE_VERSION: "k8s-main"
     KIND_NODE_IMAGE: "ghcr.io/pinniped-ci-bot/kind-node-image:latest"
@@ -115,7 +115,7 @@ meta:
   oldest_kind_kube_version: &oldest_kind_kube_version
     <<: *kube_version_v1-21-x
   latest_kind_kube_version: &latest_kind_kube_version
-    <<: *kube_version_v1-32-x
+    <<: *kube_version_v1-33-x
 
   okta_integration_env_vars: &okta_integration_env_vars
     OKTA_CLI_CALLBACK: ((okta-cli-callback))

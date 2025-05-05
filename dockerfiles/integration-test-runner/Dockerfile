@@ -3,7 +3,7 @@
 
 # For running the integration tests as a client to a k8s cluster
 
-FROM mikefarah/yq:4.45.1 AS yq
+FROM mikefarah/yq:4.45.2 AS yq
 
 # We need gcloud for running integration tests against GKE
 # because the kubeconfig uses gcloud as an `auth-provider`.

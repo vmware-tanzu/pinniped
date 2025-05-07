@@ -67,6 +67,7 @@ type impersonatorConfigController struct {
 	tlsSecretName                    string
 	caSecretName                     string
 	impersonationSignerSecretName    string
+	impersonationSignerCertRetriever apicerts.RetrieveFromSecretFunc
 
 	k8sClient         kubernetes.Interface
 	pinnipedAPIClient conciergeclientset.Interface
@@ -107,6 +108,7 @@ func NewImpersonatorConfigController(
 	clock clock.Clock,
 	impersonatorFunc impersonator.FactoryFunc,
 	impersonationSignerSecretName string,
+	impersonationSignerCertRetriever apicerts.RetrieveFromSecretFunc,
 	impersonationSigningCertProvider dynamiccert.Provider,
 	log plog.Logger,
 	impersonationProxyTokenCache tokenclient.ExpiringSingletonTokenCacheGet,
@@ -125,6 +127,7 @@ func NewImpersonatorConfigController(
 				tlsSecretName:                     tlsSecretName,
 				caSecretName:                      caSecretName,
 				impersonationSignerSecretName:     impersonationSignerSecretName,
+				impersonationSignerCertRetriever:  impersonationSignerCertRetriever,
 				k8sClient:                         k8sClient,
 				pinnipedAPIClient:                 pinnipedAPIClient,
 				credIssuerInformer:                credentialIssuerInformer,
@@ -1116,8 +1119,7 @@ func (c *impersonatorConfigController) loadSignerCA() error {
 		return fmt.Errorf("could not load the impersonator's credential signing secret: %w", err)
 	}
 
-	certPEM := signingCertSecret.Data[apicerts.CACertificateSecretKey]
-	keyPEM := signingCertSecret.Data[apicerts.CACertificatePrivateKeySecretKey]
+	certPEM, keyPEM := c.impersonationSignerCertRetriever(signingCertSecret)
 
 	if err := c.impersonationSigningCertProvider.SetCertKeyContent(certPEM, keyPEM); err != nil {
 		return fmt.Errorf("could not set the impersonator's credential signing secret: %w", err)

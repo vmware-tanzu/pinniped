@@ -293,7 +293,7 @@ func startControllers(
 	controllerManager := controllerlib.
 		NewManager().
 		WithController(
-			apicerts.NewCertsManagerController(
+			apicerts.NewCertsCreatorController(
 				namespace,
 				certsSecretResourceName,
 				map[string]string{
@@ -313,6 +313,7 @@ func startControllers(
 			apicerts.NewCertsObserverController(
 				namespace,
 				certsSecretResourceName,
+				apicerts.RetrieveCertificateFromSecret,
 				dynamicCertProvider,
 				kubeInformers.Core().V1().Secrets(),
 				controllerlib.WithInformer,

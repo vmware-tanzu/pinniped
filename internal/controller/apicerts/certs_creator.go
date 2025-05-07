@@ -19,14 +19,20 @@ import (
 	"go.pinniped.dev/internal/plog"
 )
 
+// The following key names are unexported, to prevent a leaky abstraction.
+// Even the string literals should only be used in a very limited set of places:
+// - The unit tests for this file
+// - The unit tests for retrieve_from_secret.go
+// - Integration tests
+// Comment must end in a period, so here's a period: .
 const (
-	CACertificateSecretKey           = "caCertificate"
-	CACertificatePrivateKeySecretKey = "caCertificatePrivateKey"
+	caCertificateSecretKey           = "caCertificate"
+	caCertificatePrivateKeySecretKey = "caCertificatePrivateKey"
+	tlsCertificateChainSecretKey     = "tlsCertificateChain"
 	tlsPrivateKeySecretKey           = "tlsPrivateKey"
-	TLSCertificateChainSecretKey     = "tlsCertificateChain"
 )
 
-type certsManagerController struct {
+type certsCreatorController struct {
 	namespace               string
 	certsSecretResourceName string
 	certsSecretLabels       map[string]string
@@ -41,7 +47,7 @@ type certsManagerController struct {
 	serviceNameForGeneratedCertCommonName string
 }
 
-func NewCertsManagerController(
+func NewCertsCreatorController(
 	namespace string,
 	certsSecretResourceName string,
 	certsSecretLabels map[string]string,
@@ -55,8 +61,8 @@ func NewCertsManagerController(
 ) controllerlib.Controller {
 	return controllerlib.New(
 		controllerlib.Config{
-			Name: "certs-manager-controller",
-			Syncer: &certsManagerController{
+			Name: "certs-creator-controller",
+			Syncer: &certsCreatorController{
 				namespace:                             namespace,
 				certsSecretResourceName:               certsSecretResourceName,
 				certsSecretLabels:                     certsSecretLabels,
@@ -80,7 +86,7 @@ func NewCertsManagerController(
 	)
 }
 
-func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
+func (c *certsCreatorController) Sync(ctx controllerlib.Context) error {
 	// Try to get the secret from the informer cache.
 	_, err := c.secretInformer.Lister().Secrets(c.namespace).Get(c.certsSecretResourceName)
 	notFound := apierrors.IsNotFound(err)
@@ -110,9 +116,9 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 			Namespace: c.namespace,
 			Labels:    c.certsSecretLabels,
 		},
-		StringData: map[string]string{
-			CACertificateSecretKey:           string(ca.Bundle()),
-			CACertificatePrivateKeySecretKey: string(caPrivateKeyPEM),
+		Data: map[string][]byte{
+			caCertificateSecretKey:           ca.Bundle(),
+			caCertificatePrivateKeySecretKey: caPrivateKeyPEM,
 		},
 	}
 
@@ -131,8 +137,8 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 			return fmt.Errorf("could not PEM encode serving certificate: %w", err)
 		}
 
-		secret.StringData[tlsPrivateKeySecretKey] = string(tlsPrivateKeyPEM)
-		secret.StringData[TLSCertificateChainSecretKey] = string(tlsCertChainPEM)
+		secret.Data[tlsPrivateKeySecretKey] = tlsPrivateKeyPEM
+		secret.Data[tlsCertificateChainSecretKey] = tlsCertChainPEM
 	}
 
 	_, err = c.k8sClient.CoreV1().Secrets(c.namespace).Create(ctx.Context, &secret, metav1.CreateOptions{})
@@ -140,6 +146,6 @@ func (c *certsManagerController) Sync(ctx controllerlib.Context) error {
 		return fmt.Errorf("could not create secret: %w", err)
 	}
 
-	plog.Info("certsManagerController Sync successfully created secret")
+	plog.Info("certsCreatorController Sync successfully created secret")
 	return nil
 }

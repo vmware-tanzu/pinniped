@@ -1,4 +1,4 @@
-// Copyright 2020-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package apicerts
@@ -42,6 +42,9 @@ func TestAPIServiceUpdaterControllerOptions(t *testing.T) {
 			_ = NewAPIServiceUpdaterController(
 				installedInNamespace,
 				certsSecretResourceName,
+				func(secret *corev1.Secret) ([]byte, []byte) {
+					return secret.Data["some-key-for-ca-certificate"], []byte("this value does not matter")
+				},
 				loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName,
 				nil,
 				secretsInformer,
@@ -122,6 +125,9 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 			subject = NewAPIServiceUpdaterController(
 				installedInNamespace,
 				certsSecretResourceName,
+				func(secret *corev1.Secret) ([]byte, []byte) {
+					return secret.Data["some-key-for-ca-certificate"], []byte("this value does not matter")
+				},
 				loginv1alpha1.SchemeGroupVersion.Version+"."+loginv1alpha1.GroupName,
 				aggregatorAPIClient,
 				kubeInformers.Core().V1().Secrets(),
@@ -185,9 +191,9 @@ func TestAPIServiceUpdaterControllerSync(t *testing.T) {
 						Namespace: installedInNamespace,
 					},
 					Data: map[string][]byte{
-						"caCertificate":       []byte("fake CA cert"),
-						"tlsPrivateKey":       []byte("fake private key"),
-						"tlsCertificateChain": []byte("fake cert chain"),
+						"some-key-for-ca-certificate": []byte("fake CA cert"),
+						"serving-cert-key-EXTRA":      []byte("fake cert chain"),
+						"private-key-EXTRA":           []byte("fake private key"),
 					},
 				}
 				err := kubeInformerClient.Tracker().Add(apiServingCertSecret)

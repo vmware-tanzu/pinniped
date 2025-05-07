@@ -18,6 +18,7 @@ import (
 type certsObserverController struct {
 	namespace               string
 	certsSecretResourceName string
+	certificateRetriever    RetrieveFromSecretFunc
 	dynamicCertProvider     dynamiccert.Private
 	secretInformer          corev1informers.SecretInformer
 }
@@ -25,6 +26,7 @@ type certsObserverController struct {
 func NewCertsObserverController(
 	namespace string,
 	certsSecretResourceName string,
+	certificateRetriever RetrieveFromSecretFunc,
 	dynamicCertProvider dynamiccert.Private,
 	secretInformer corev1informers.SecretInformer,
 	withInformer pinnipedcontroller.WithInformerOptionFunc,
@@ -35,6 +37,7 @@ func NewCertsObserverController(
 			Syncer: &certsObserverController{
 				namespace:               namespace,
 				certsSecretResourceName: certsSecretResourceName,
+				certificateRetriever:    certificateRetriever,
 				dynamicCertProvider:     dynamicCertProvider,
 				secretInformer:          secretInformer,
 			},
@@ -62,7 +65,7 @@ func (c *certsObserverController) Sync(_ controllerlib.Context) error {
 	}
 
 	// Mutate the in-memory cert provider to update with the latest cert values.
-	if err := c.dynamicCertProvider.SetCertKeyContent(certSecret.Data[TLSCertificateChainSecretKey], certSecret.Data[tlsPrivateKeySecretKey]); err != nil {
+	if err := c.dynamicCertProvider.SetCertKeyContent(c.certificateRetriever(certSecret)); err != nil {
 		return fmt.Errorf("failed to set serving cert/key content from secret %s/%s: %w", c.namespace, c.certsSecretResourceName, err)
 	}
 

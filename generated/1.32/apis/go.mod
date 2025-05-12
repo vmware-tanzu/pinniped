@@ -3,7 +3,7 @@ module go.pinniped.dev/generated/1.32/apis
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.24.3
 
 require (
 	k8s.io/api v0.32.1

@@ -10,6 +10,6 @@ image_resource:
   type: registry-image
   source:
     repository: golang
-    tag: '1.24.2'
+    tag: '1.24.3'
 run:
   path: pinniped-ci/pipelines/shared-tasks/confirm-built-with-fips/task.sh

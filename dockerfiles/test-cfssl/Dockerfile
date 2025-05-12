@@ -11,7 +11,7 @@ FROM cfssl/cfssl:v1.6.5 as cfssl
 
 # We just need any basic unix with bash, but we can pick the same
 # base image that they use, just in case they did any dynamic linking.
-FROM golang:1.24.2
+FROM golang:1.24.3
 
 # Thier Docerfile https://github.com/cloudflare/cfssl/blob/master/Dockerfile
 # calls their Makefile https://github.com/cloudflare/cfssl/blob/master/Makefile

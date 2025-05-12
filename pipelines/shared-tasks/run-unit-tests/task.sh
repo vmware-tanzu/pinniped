@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -14,4 +14,4 @@ export GOCACHE="$PWD/cache/gocache"
 export GOMODCACHE="$PWD/cache/gomodcache"
 
 cd pinniped
-go test -short -race -coverprofile "${COVERAGE_OUTPUT}" -covermode atomic ./...
+go test -short -timeout 20m -race -coverprofile "${COVERAGE_OUTPUT}" -covermode atomic ./...

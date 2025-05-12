@@ -8,7 +8,7 @@
 # test binaries built by this dockerfile are run in a container built by dockerfiles/integration-test-runner/Dockerfile
 # which uses google/cloud-sdk as the base image. Mismatching debian versions causes the pinniped-integration-test
 # built below to error upon execution complaining that the expected version of GLIBC is not found.
-FROM golang:1.24.2-bullseye as build-env
+FROM golang:1.24.3-bullseye as build-env
 WORKDIR /work
 COPY . .
 ARG GOPROXY

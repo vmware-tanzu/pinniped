@@ -135,8 +135,7 @@ func TestFormat(t *testing.T) {
 	%s/config_test.go:%d
 testing.tRunner
 	%s/src/testing/testing.go:%d`,
-				//nolint:staticcheck // runtime.GOROOT() is deprecated but good enough for this unit test.
-				wd, getLineNumberOfCaller()-20, runtime.GOROOT(), getLineNumberOfCaller(2),
+				wd, getLineNumberOfCaller()-19, runtime.GOROOT(), getLineNumberOfCaller(2), //nolint:staticcheck // calling a deprecated function is good enough for this unit test
 			),
 		),
 	), scanner.Text())

@@ -1,4 +1,4 @@
-// Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2023-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package chooseidp
@@ -30,6 +30,7 @@ func NewHandler(authURL string, upstreamIDPs federationdomainproviders.Federatio
 		// This is just a sanity check that it appears to be an authorize request.
 		// Actual enforcement of parameters will happen at the authorization endpoint.
 		query := r.URL.Query()
+		//nolint:staticcheck // De Morgan's doesn't make this more readable
 		if !(query.Has("client_id") && query.Has("redirect_uri") && query.Has("scope") && query.Has("response_type")) {
 			return httperr.New(http.StatusBadRequest, "missing required query params (must include client_id, redirect_uri, scope, and response_type)")
 		}

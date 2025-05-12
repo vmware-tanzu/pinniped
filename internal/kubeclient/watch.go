@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -68,12 +68,12 @@ func handleWatchResponseNewGVK(
 		}()
 		defer newBodyWriter.Close()
 
-		frameReader := serializerInfo.StreamSerializer.Framer.NewFrameReader(resp.Body)
+		frameReader := serializerInfo.StreamSerializer.NewFrameReader(resp.Body)
 		watchEventDecoder := streaming.NewDecoder(frameReader, serializerInfo.StreamSerializer.Serializer)
 		sourceDecoder = restclientwatch.NewDecoder(watchEventDecoder, &passthroughDecoder{})
 		defer sourceDecoder.Close()
 
-		frameWriter := serializerInfo.StreamSerializer.Framer.NewFrameWriter(newBodyWriter)
+		frameWriter := serializerInfo.StreamSerializer.NewFrameWriter(newBodyWriter)
 		watchEventEncoder := streaming.NewEncoder(frameWriter, serializerInfo.StreamSerializer.Serializer)
 
 		for {

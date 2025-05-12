@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -73,7 +73,7 @@ func TestCredentialIssuer(t *testing.T) {
 			require.Equal(t, conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType, actualStatusStrategy.Frontend.Type)
 			expectedTokenRequestAPIInfo := conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
 				Server:                   config.Host,
-				CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.TLSClientConfig.CAData),
+				CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.CAData),
 			}
 			require.Equal(t, &expectedTokenRequestAPIInfo, actualStatusStrategy.Frontend.TokenCredentialRequestAPIInfo)
 		} else {

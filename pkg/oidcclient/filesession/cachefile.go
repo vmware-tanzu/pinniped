@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package filesession implements the file format for session caches.
@@ -72,7 +72,7 @@ func readSessionCache(path string) (*sessionCache, error) {
 	}
 
 	// Validate that we're reading a version of the config we understand how to parse.
-	if !(cache.TypeMeta.APIVersion == apiVersion && cache.TypeMeta.Kind == apiKind) {
+	if !(cache.TypeMeta.APIVersion == apiVersion && cache.TypeMeta.Kind == apiKind) { //nolint:staticcheck // De Morgan's doesn't make this more readable
 		return nil, fmt.Errorf("%w: %#v", errUnsupportedVersion, cache.TypeMeta)
 	}
 	return &cache, nil

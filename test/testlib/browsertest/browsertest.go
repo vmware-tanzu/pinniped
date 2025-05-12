@@ -115,7 +115,7 @@ func OpenBrowser(t *testing.T) *Browser {
 			args := make([]string, len(ev.Args))
 			for i, arg := range ev.Args {
 				// Could also pay attention to arg.Type here, but choosing to keep it simple for now.
-				args[i] = fmt.Sprintf("%s", arg.Value) //nolint:gosimple // this is an acceptable way to get a string
+				args[i] = arg.Value.String()
 			}
 			b.lock.Lock()
 			defer b.lock.Unlock()

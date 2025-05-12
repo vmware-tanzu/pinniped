@@ -18,7 +18,6 @@ import (
 	"k8s.io/client-go/discovery"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
-	kubetesting "k8s.io/client-go/testing"
 )
 
 func TestValidateAdmissionPluginNames(t *testing.T) {
@@ -237,7 +236,7 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 			t.Parallel()
 
 			kubeClient := kubernetesfake.NewSimpleClientset()
-			kubeClient.Fake.Resources = tt.availableAPIResources
+			kubeClient.Resources = tt.availableAPIResources
 
 			// Unfortunately, kubernetesfake.NewSimpleClientset() does not support using reactors to
 			// cause discovery to return errors. Instead, we will make our own fake implementation of the
@@ -248,7 +247,7 @@ func TestConfigureAdmissionPlugins(t *testing.T) {
 				kubeClient.PrependReactor(
 					"get",
 					"resource",
-					func(a kubetesting.Action) (bool, runtime.Object, error) {
+					func(a k8stesting.Action) (bool, runtime.Object, error) {
 						return true, nil, tt.discoveryErr
 					},
 				)

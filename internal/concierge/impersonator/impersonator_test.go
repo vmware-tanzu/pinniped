@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonator
@@ -1042,8 +1042,8 @@ func TestImpersonator(t *testing.T) {
 
 			badCertConfig := kubeclient.SecureAnonymousClientConfig(clientKubeconfig)
 			badCert := newClientCert(t, unrelatedCA, "bad-user", []string{"bad-group"})
-			badCertConfig.TLSClientConfig.CertData = badCert.certPEM
-			badCertConfig.TLSClientConfig.KeyData = badCert.keyPEM
+			badCertConfig.CertData = badCert.certPEM
+			badCertConfig.KeyData = badCert.keyPEM
 
 			tcrBadCert, err := kubeclient.New(kubeclient.WithConfig(badCertConfig))
 			require.NoError(t, err)

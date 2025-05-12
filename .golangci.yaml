@@ -1,24 +1,14 @@
 # https://golangci-lint.run/usage/configuration/
-run:
-  timeout: 1m
 
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
-    # default linters
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - typecheck
-    - unused
-
-    # additional linters for this project (we should disable these if they get annoying).
     - asciicheck
     - bodyclose
-    # - depguard
+    - copyloopvar
     - dogsled
+    - errcheck
     - exhaustive
     - funlen
     - gochecknoglobals
@@ -27,136 +17,149 @@ linters:
     - gocyclo
     - godot
     - goheader
-    - goimports
-    - revive
     - goprintffuncname
     - gosec
+    - govet
+    - importas
+    - ineffassign
+    - intrange
+    - makezero
     - misspell
     - nakedret
     - nestif
     - noctx
     - nolintlint
     - prealloc
+    - revive
     - rowserrcheck
-    - sqlclosecheck
-    - unconvert
-    - whitespace
-    - copyloopvar
-    - intrange
-    # - fatcontext Starting in go@1.23.1 and golangci-lint@1.61.0 this gave a lot of false positives
-    # - canonicalheader Can't do this one since it alerts on valid headers such as X-XSS-Protection
     - spancheck
-    - importas
-    - makezero
-    - prealloc
-    - gofmt
-
-issues:
-  exclude-dirs:
-    - generated
-  exclude-rules:
-    # exclude tests from some rules for things that are useful in a testing context.
-    - path: _test\.go
-      linters:
-        - funlen
-        - gochecknoglobals
-        - revive
-    - path: internal/testutil/
-      linters:
-      - revive
-
-linters-settings:
-  funlen:
-    lines: 150
-    statements: 50
-  goheader:
-    values:
-      regexp:
-        # YYYY or YYYY-YYYY
-        YEARS: \d\d\d\d(-\d\d\d\d)?
-    template: |-
-      Copyright {{YEARS}} the Pinniped contributors. All Rights Reserved.
-      SPDX-License-Identifier: Apache-2.0
-  goimports:
-    local-prefixes: go.pinniped.dev
-  revive:
-    max-open-files: 2048
+    - sqlclosecheck
+    - staticcheck
+    - unconvert
+    - unused
+    - whitespace
+  settings:
+    funlen:
+      lines: 150
+      statements: 50
+    goheader:
+      values:
+        regexp:
+          # YYYY or YYYY-YYYY
+          YEARS: \d\d\d\d(-\d\d\d\d)?
+      template: |-
+        Copyright {{YEARS}} the Pinniped contributors. All Rights Reserved.
+        SPDX-License-Identifier: Apache-2.0
+    importas:
+      alias:
+        - pkg: k8s.io/apimachinery/pkg/util/errors
+          alias: utilerrors
+        - pkg: k8s.io/apimachinery/pkg/api/errors
+          alias: apierrors
+        - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
+          alias: metav1
+        - pkg: k8s.io/api/core/v1
+          alias: corev1
+        - pkg: github.com/coreos/go-oidc/v3/oidc
+          alias: coreosoidc
+        - pkg: github.com/ory/fosite/handler/oauth2
+          alias: fositeoauth2
+        - pkg: github.com/ory/fosite/token/jwt
+          alias: fositejwt
+        - pkg: github.com/go-jose/go-jose/v4/jwt
+          alias: josejwt
+        - pkg: github.com/go-jose/go-jose/v3
+          alias: oldjosev3
+        - pkg: go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1
+          alias: authenticationv1alpha1
+        - pkg: go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1
+          alias: clientsecretv1alpha1
+        - pkg: go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1
+          alias: supervisorconfigv1alpha1
+        - pkg: go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1
+          alias: conciergeconfigv1alpha1
+        - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned
+          alias: conciergeclientset
+        - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme
+          alias: conciergeclientsetscheme
+        - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake
+          alias: conciergefake
+        - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned
+          alias: supervisorclientset
+        - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme
+          alias: supervisorclientsetscheme
+        - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake
+          alias: supervisorfake
+        - pkg: go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1
+          alias: idpv1alpha1
+        - pkg: go.pinniped.dev/generated/latest/client/concierge/informers/externalversions
+          alias: conciergeinformers
+        - pkg: go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions
+          alias: supervisorinformers
+        - pkg: go.pinniped.dev/internal/concierge/scheme
+          alias: conciergescheme
+      no-unaliased: true # All packages explicitly listed above must be aliased
+      no-extra-aliases: false # Allow other aliases than the ones explicitly listed above
+    revive:
+      max-open-files: 2048
+      rules:
+        # Allow unused params that start with underscore. It can be nice to keep unused param names when implementing
+        # an interface sometimes, to help readers understand why it is unused in that particular implementation.
+        - name: unused-parameter
+          arguments:
+            - allowRegex: ^_
+    spancheck:
+      # https://golangci-lint.run/usage/linters/#spancheck
+      checks:
+        - end
+        - record-error
+        - set-status
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: unused-parameter
-        arguments:
-          # Allow unused params that start with underscore. It can be nice to keep unused param names when implementing
-          # an interface sometimes, to help readers understand why it is unused in that particular implementation.
-          - allowRegex: "^_"
-  spancheck:
-    # https://golangci-lint.run/usage/linters/#spancheck
-    checks:
-    - end
-    - record-error
-    - set-status
-  importas:
-    no-unaliased: true # All packages explicitly listed below must be aliased
-    no-extra-aliases: false # Allow other aliases than the ones explicitly listed below
-    alias:
-    # k8s.io/apimachinery
-    - pkg: k8s.io/apimachinery/pkg/util/errors
-      alias: utilerrors
-    - pkg: k8s.io/apimachinery/pkg/api/errors
-      alias: apierrors
-    - pkg: k8s.io/apimachinery/pkg/apis/meta/v1
-      alias: metav1
-    # k8s.io
-    - pkg: k8s.io/api/core/v1
-      alias: corev1
-    # OAuth2/OIDC/Fosite/JOSE
-    - pkg: github.com/coreos/go-oidc/v3/oidc
-      alias: coreosoidc
-    - pkg: github.com/ory/fosite/handler/oauth2
-      alias: fositeoauth2
-    - pkg: github.com/ory/fosite/token/jwt
-      alias: fositejwt
-    - pkg: github.com/go-jose/go-jose/v4/jwt
-      alias: josejwt
-    - pkg: github.com/go-jose/go-jose/v3
-      alias: oldjosev3
-    # Generated Pinniped
-    - pkg: go.pinniped.dev/generated/latest/apis/concierge/authentication/v1alpha1
-      alias: authenticationv1alpha1
-    - pkg: go.pinniped.dev/generated/latest/apis/supervisor/clientsecret/v1alpha1
-      alias: clientsecretv1alpha1
-    - pkg: go.pinniped.dev/generated/latest/apis/supervisor/config/v1alpha1
-      alias: supervisorconfigv1alpha1
-    - pkg: go.pinniped.dev/generated/latest/apis/concierge/config/v1alpha1
-      alias: conciergeconfigv1alpha1
-    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned
-      alias: conciergeclientset
-    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/scheme
-      alias: conciergeclientsetscheme
-    - pkg: go.pinniped.dev/generated/latest/client/concierge/clientset/versioned/fake
-      alias: conciergefake
-    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned
-      alias: supervisorclientset
-    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/scheme
-      alias: supervisorclientsetscheme
-    - pkg: go.pinniped.dev/generated/latest/client/supervisor/clientset/versioned/fake
-      alias: supervisorfake
-    - pkg: go.pinniped.dev/generated/latest/apis/supervisor/idp/v1alpha1
-      alias: idpv1alpha1
-    - pkg: go.pinniped.dev/generated/latest/client/concierge/informers/externalversions
-      alias: conciergeinformers
-    - pkg: go.pinniped.dev/generated/latest/client/supervisor/informers/externalversions
-      alias: supervisorinformers
-    # Pinniped internal
-    - pkg: go.pinniped.dev/internal/concierge/scheme
-      alias: conciergescheme
-  gofmt:
-    # Simplify code: gofmt with `-s` option.
-    # Default: true
-    simplify: false
-    # Apply the rewrite rules to the source before reformatting.
-    # https://pkg.go.dev/cmd/gofmt
-    # Default: []
-    rewrite-rules:
-    - pattern: 'interface{}'
-      replacement: 'any'
-    - pattern: 'a[b:len(a)]'
-      replacement: 'a[b:]'
+      # exclude tests from some rules for things that are useful in a testing context.
+      - linters:
+          - funlen
+          - gochecknoglobals
+          - revive
+        path: _test\.go
+      - linters:
+          - revive
+        path: internal/testutil/
+    paths:
+      - generated
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      # Simplify code: gofmt with `-s` option.
+      # Default: true
+      simplify: false
+      # Apply the rewrite rules to the source before reformatting.
+      # https://pkg.go.dev/cmd/gofmt
+      # Default: []
+      rewrite-rules:
+        - pattern: interface{}
+          replacement: any
+        - pattern: a[b:len(a)]
+          replacement: a[b:]
+    goimports:
+      local-prefixes:
+        - go.pinniped.dev
+  exclusions:
+    generated: lax
+    paths:
+      - generated
+      - third_party$
+      - builtin$
+      - examples$

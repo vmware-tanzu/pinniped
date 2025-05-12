@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -1587,6 +1587,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 
 	t.Run("adding an annotation reconciles the LoadBalancer service", func(t *testing.T) {
+		//nolint:staticcheck // De Morgan's doesn't make this more readable
 		if !(impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers) {
 			t.Skip("only running when the cluster is meant to be using LoadBalancer services")
 		}
@@ -2124,9 +2125,9 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testli
 
 			config := newImpersonationProxyConfigWithCredentials(t, credentials, impersonationProxyURL, impersonationProxyCACertPEM, nil)
 			config = rest.CopyConfig(config)
-			config.Proxy = kubeconfigProxyFunc(t, env.Proxy)                           // always use the proxy since we are talking directly to a pod IP
-			config.Host = "https://" + pod.Status.PodIP + ":8444"                      // hardcode the internal port - it should not change
-			config.TLSClientConfig.ServerName = impersonationProxyParsedURL.Hostname() // make SNI hostname TLS verification work even when using IP
+			config.Proxy = kubeconfigProxyFunc(t, env.Proxy)           // always use the proxy since we are talking directly to a pod IP
+			config.Host = "https://" + pod.Status.PodIP + ":8444"      // hardcode the internal port - it should not change
+			config.ServerName = impersonationProxyParsedURL.Hostname() // make SNI hostname TLS verification work even when using IP
 
 			whoAmI, err := testlib.NewKubeclient(t, config).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})

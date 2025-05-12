@@ -39,7 +39,6 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/filterlatency"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
-	"k8s.io/apiserver/pkg/endpoints/request"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
@@ -509,7 +508,7 @@ func newImpersonationReverseProxyFunc(restConfig *rest.Config) (func(*genericapi
 				return
 			}
 
-			userInfo, ok := request.UserFrom(r.Context())
+			userInfo, ok := genericapirequest.UserFrom(r.Context())
 			if !ok {
 				plog.Warning("aggregated API server logic did not set user info but it is always supposed to do so",
 					"url", r.URL.String(),

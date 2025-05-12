@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
@@ -227,7 +227,7 @@ func getRestartCounts(ctx context.Context, t *testing.T, kubeClient kubernetes.I
 		// Ignore pods that are already terminating at the start of the test. The app may have been redeployed
 		// just before the tests were invoked, so it would be normal for some pods to still be terminating
 		// in that situation. Note that terminating pods in this situation do not count as a "restart" anyway.
-		if pod.ObjectMeta.DeletionTimestamp != nil {
+		if pod.DeletionTimestamp != nil {
 			continue
 		}
 

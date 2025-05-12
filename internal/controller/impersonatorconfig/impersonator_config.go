@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package impersonatorconfig
@@ -662,7 +662,7 @@ func (c *impersonatorConfigController) createOrUpdateService(ctx context.Context
 
 	// The Service already exists, so update only the specific fields that are meaningfully part of our desired state.
 	updatedService := existingService.DeepCopy()
-	updatedService.ObjectMeta.Labels = desiredService.ObjectMeta.Labels
+	updatedService.Labels = desiredService.Labels
 	updatedService.Spec.LoadBalancerIP = desiredService.Spec.LoadBalancerIP
 	updatedService.Spec.Type = desiredService.Spec.Type
 	updatedService.Spec.Selector = desiredService.Spec.Selector

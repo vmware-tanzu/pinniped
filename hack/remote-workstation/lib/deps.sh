@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -exuo pipefail
@@ -21,8 +21,6 @@ brew install gcc
 brew install go
 # On linux go really wants gcc5 to also be installed for some reason.
 brew install gcc@5
-# Get the Go linter.
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.1
 
 # Install and configure zsh and plugins.
 brew install zsh zsh-history-substring-search
@@ -88,6 +86,7 @@ ssh-keyscan -H github.com >> $HOME/.ssh/known_hosts
 git clone git@github.com:vmware-tanzu/pinniped.git
 pushd pinniped
 pre-commit install
+./hack/install-linter.sh
 popd
 popd
 

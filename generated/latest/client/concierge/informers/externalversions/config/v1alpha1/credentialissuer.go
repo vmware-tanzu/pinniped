@@ -48,13 +48,25 @@ func NewFilteredCredentialIssuerInformer(client versioned.Interface, resyncPerio
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigV1alpha1().CredentialIssuers().List(context.TODO(), options)
+				return client.ConfigV1alpha1().CredentialIssuers().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigV1alpha1().CredentialIssuers().Watch(context.TODO(), options)
+				return client.ConfigV1alpha1().CredentialIssuers().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ConfigV1alpha1().CredentialIssuers().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ConfigV1alpha1().CredentialIssuers().Watch(ctx, options)
 			},
 		},
 		&conciergeconfigv1alpha1.CredentialIssuer{},

@@ -48,13 +48,25 @@ func NewFilteredWebhookAuthenticatorInformer(client versioned.Interface, resyncP
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AuthenticationV1alpha1().WebhookAuthenticators().List(context.TODO(), options)
+				return client.AuthenticationV1alpha1().WebhookAuthenticators().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AuthenticationV1alpha1().WebhookAuthenticators().Watch(context.TODO(), options)
+				return client.AuthenticationV1alpha1().WebhookAuthenticators().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.AuthenticationV1alpha1().WebhookAuthenticators().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.AuthenticationV1alpha1().WebhookAuthenticators().Watch(ctx, options)
 			},
 		},
 		&conciergeauthenticationv1alpha1.WebhookAuthenticator{},

@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
-	utilversion "k8s.io/component-base/version"
+	utilversion "k8s.io/component-base/compatibility"
 )
 
 func TestGet(t *testing.T) {
@@ -136,7 +136,7 @@ func TestGet(t *testing.T) {
 
 func TestThatPVersionIsCompatibleWithEffectiveVersion(t *testing.T) {
 	version := Get().String()
-	effectiveVersion := utilversion.NewEffectiveVersion(version)
+	effectiveVersion := utilversion.NewEffectiveVersionFromString(version, "", "")
 	require.NotNil(t, effectiveVersion)
 	require.Equal(t, version, "v"+effectiveVersion.BinaryVersion().String())
 }

@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package endpointaddr implements parsing and validation of "<host>[:<port>]" strings for Pinniped APIs.
@@ -64,7 +64,7 @@ func Parse(endpoint string, defaultPort uint16) (HostPort, error) {
 
 	// Check if the host part is a IPv4 or IPv6 address or a valid hostname according to RFC 1123.
 	switch {
-	case len(validation.IsValidIP(field.NewPath("UNKNOWN_PATH"), host)) == 0:
+	case len(validation.IsValidIPForLegacyField(field.NewPath("UNKNOWN_PATH"), host, false, nil)) == 0:
 	// The host name should be case-insensitive.
 	case len(validation.IsDNS1123Subdomain(strings.ToLower(host))) == 0:
 	default:

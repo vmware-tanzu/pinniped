@@ -442,7 +442,7 @@ func TestController(t *testing.T) {
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 				}
 			},
 			wantNamesOfWebhookAuthenticatorsInCache: []string{},
@@ -468,7 +468,7 @@ func TestController(t *testing.T) {
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 				}
 			},
 			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
@@ -568,7 +568,7 @@ func TestController(t *testing.T) {
 				updateAnotherInvalidStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateAnotherInvalidStatusAction,
 					updateInvalidStatusAction,
 					updateValidStatusAction,
@@ -610,7 +610,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -647,7 +647,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -694,7 +694,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -750,7 +750,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -789,7 +789,7 @@ func TestController(t *testing.T) {
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 				}
 			},
 			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
@@ -842,7 +842,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -905,7 +905,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -959,7 +959,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1020,7 +1020,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1097,7 +1097,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1143,7 +1143,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1194,7 +1194,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1248,7 +1248,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1295,7 +1295,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1337,7 +1337,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1380,7 +1380,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1439,7 +1439,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1506,7 +1506,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1554,7 +1554,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1601,7 +1601,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1653,7 +1653,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1695,7 +1695,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1732,7 +1732,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1765,7 +1765,7 @@ func TestController(t *testing.T) {
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 				}
 			},
 			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
@@ -1815,7 +1815,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1867,7 +1867,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1900,7 +1900,7 @@ func TestController(t *testing.T) {
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 				}
 			},
 			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
@@ -1944,7 +1944,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -1996,7 +1996,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -2024,7 +2024,7 @@ func TestController(t *testing.T) {
 			wantActions: func() []coretesting.Action {
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 				}
 			},
 			wantNamesOfWebhookAuthenticatorsInCache: []string{"test-name"},
@@ -2066,7 +2066,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},
@@ -2106,7 +2106,7 @@ func TestController(t *testing.T) {
 				updateStatusAction.Subresource = "status"
 				return []coretesting.Action{
 					coretesting.NewListAction(webhookAuthenticatorGVR, webhookAuthenticatorGVK, "", metav1.ListOptions{}),
-					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{}),
+					coretesting.NewWatchAction(webhookAuthenticatorGVR, "", metav1.ListOptions{Watch: true}),
 					updateStatusAction,
 				}
 			},

@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package githubupstreamwatcher
@@ -2560,7 +2560,7 @@ func TestController(t *testing.T) {
 			// This needs to happen after the expected condition LastTransitionTime has been updated.
 			wantActions := make([]coretesting.Action, 3+len(tt.wantResultingUpstreams))
 			wantActions[0] = coretesting.NewListAction(githubIDPGVR, githubIDPKind, "", metav1.ListOptions{})
-			wantActions[1] = coretesting.NewWatchAction(githubIDPGVR, "", metav1.ListOptions{})
+			wantActions[1] = coretesting.NewWatchAction(githubIDPGVR, "", metav1.ListOptions{Watch: true})
 			for i, want := range tt.wantResultingUpstreams {
 				wantActions[2+i] = coretesting.NewUpdateSubresourceAction(githubIDPGVR, "status", want.Namespace, ptr.To(want))
 			}

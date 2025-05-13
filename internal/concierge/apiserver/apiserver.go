@@ -14,7 +14,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
-	utilversion "k8s.io/component-base/version"
+	utilversion "k8s.io/component-base/compatibility"
 
 	"go.pinniped.dev/internal/clientcertissuer"
 	"go.pinniped.dev/internal/controllerinit"
@@ -59,7 +59,7 @@ type CompletedConfig struct {
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
 func (c *Config) Complete() CompletedConfig {
 	// Be sure to set this before calling c.GenericConfig.Complete()
-	c.GenericConfig.EffectiveVersion = utilversion.NewEffectiveVersion(pversion.Get().String())
+	c.GenericConfig.EffectiveVersion = utilversion.NewEffectiveVersionFromString(pversion.Get().String(), "", "")
 
 	completedCfg := completedConfig{
 		c.GenericConfig.Complete(),

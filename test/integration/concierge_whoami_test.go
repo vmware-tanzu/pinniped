@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -292,7 +292,8 @@ func TestWhoAmI_CSR_Parallel(t *testing.T) {
 	}, nil, nil)
 	require.NoError(t, err)
 
-	csrName, csrUID, err := csr.RequestCertificate(
+	csrName, csrUID, err := csr.RequestCertificateWithContext(
+		ctx,
 		kubeClient,
 		csrPEM,
 		"",

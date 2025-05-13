@@ -47,7 +47,7 @@ import (
 	auditfake "k8s.io/apiserver/plugin/pkg/audit/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
-	utilversion "k8s.io/component-base/version"
+	utilversion "k8s.io/component-base/compatibility"
 
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/crypto/ptls"
@@ -324,7 +324,7 @@ func newInternal(
 			recConfig(serverConfig)
 		}
 
-		serverConfig.EffectiveVersion = utilversion.NewEffectiveVersion(pversion.Get().String())
+		serverConfig.EffectiveVersion = utilversion.NewEffectiveVersionFromString(pversion.Get().String(), "", "")
 		completedConfig := serverConfig.Complete()
 		impersonationProxyServer, err := completedConfig.New("impersonation-proxy", genericapiserver.NewEmptyDelegate())
 		if err != nil {

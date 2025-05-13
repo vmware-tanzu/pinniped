@@ -48,13 +48,25 @@ func NewFilteredJWTAuthenticatorInformer(client versioned.Interface, resyncPerio
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AuthenticationV1alpha1().JWTAuthenticators().List(context.TODO(), options)
+				return client.AuthenticationV1alpha1().JWTAuthenticators().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AuthenticationV1alpha1().JWTAuthenticators().Watch(context.TODO(), options)
+				return client.AuthenticationV1alpha1().JWTAuthenticators().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.AuthenticationV1alpha1().JWTAuthenticators().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.AuthenticationV1alpha1().JWTAuthenticators().Watch(ctx, options)
 			},
 		},
 		&conciergeauthenticationv1alpha1.JWTAuthenticator{},

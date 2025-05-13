@@ -3,7 +3,7 @@
 # They must be listed newest to oldest.
 #
 # New releases are listed at https://kubernetes.io/releases/.
-# Older releases are listed at https://kubernetes.io/releases/patch-releases/.
+# Older releases are listed at https://kubernetes.io/releases/patch-releases/#non-active-branch-history.
 #
 # Rule of thumb: Once a minor version has been out of support for a year
 # (see https://endoflife.date/kubernetes), then remove it from this file
@@ -12,9 +12,10 @@
 # Whenever a new version is added to this file, or when a version number
 # is edited in this file, please run hack/update.sh.
 #
-1.32.1
-1.31.6
-1.30.10
+1.33.0
+1.32.4
+1.31.8
+1.30.12
 1.29.14
 1.28.15
 1.27.16

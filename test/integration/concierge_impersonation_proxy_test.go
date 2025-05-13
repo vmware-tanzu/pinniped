@@ -1049,7 +1049,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			}, nil, nil)
 			require.NoError(t, err)
 
-			csrName, _, err := csr.RequestCertificate(
+			csrName, _, err := csr.RequestCertificateWithContext(
+				ctx,
 				impersonationProxySAClient.Kubernetes,
 				csrPEM,
 				"",
@@ -2635,7 +2636,8 @@ func getUIDAndExtraViaCSR(ctx context.Context, t *testing.T, uid string, client 
 	}, nil, nil)
 	require.NoError(t, err)
 
-	csrName, _, err := csr.RequestCertificate(
+	csrName, _, err := csr.RequestCertificateWithContext(
+		ctx,
 		client,
 		csrPEM,
 		"",

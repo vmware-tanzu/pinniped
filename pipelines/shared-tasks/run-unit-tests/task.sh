@@ -14,4 +14,9 @@ export GOCACHE="$PWD/cache/gocache"
 export GOMODCACHE="$PWD/cache/gomodcache"
 
 cd pinniped
-go test -short -timeout 15m -race -coverprofile "${COVERAGE_OUTPUT}" -covermode atomic ./...
+
+# Temporarily avoid using the race detector for the impersonator package due to https://github.com/kubernetes/kubernetes/issues/128548
+# Note that this will exclude the impersonator package from the code coverage for now as a side effect.
+# TODO: change this back to using the race detector everywhere
+go test -short -timeout 15m -race -coverprofile "${COVERAGE_OUTPUT}" -covermode atomic $(go list ./... | grep -v internal/concierge/impersonator)
+go test -short ./internal/concierge/impersonator

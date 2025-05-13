@@ -311,7 +311,7 @@ func shouldShowIDPChooser(
 }
 
 func requireStaticClientForUsernameAndPasswordHeaders(authorizeRequester fosite.AuthorizeRequester) error {
-	if !(authorizeRequester.GetClient().GetID() == oidcapi.ClientIDPinnipedCLI) {
+	if !(authorizeRequester.GetClient().GetID() == oidcapi.ClientIDPinnipedCLI) { //nolint:staticcheck // De Morgan's doesn't make this more readable
 		return fosite.ErrAccessDenied.WithHint("This client is not allowed to submit username or password headers to this endpoint.")
 	}
 	return nil

@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package localuserauthenticator provides a authentication webhook program.
@@ -151,7 +151,7 @@ func (w *webhook) ServeHTTP(rsp http.ResponseWriter, req *http.Request) {
 	}
 
 	plog.Debug("successful authentication")
-	respondWithAuthenticated(rsp, secret.ObjectMeta.Name, groups)
+	respondWithAuthenticated(rsp, secret.Name, groups)
 }
 
 func getUsernameAndPasswordFromRequest(rsp http.ResponseWriter, req *http.Request) (string, string, error) {

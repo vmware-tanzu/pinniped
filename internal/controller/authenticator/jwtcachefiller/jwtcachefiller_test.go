@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package jwtcachefiller
@@ -35,7 +35,6 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	k8sinformers "k8s.io/client-go/informers"
-	kubeinformers "k8s.io/client-go/informers"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 	clocktesting "k8s.io/utils/clock/testing"
@@ -2410,7 +2409,7 @@ func TestController(t *testing.T) {
 				tt.configClient(pinnipedAPIClient)
 			}
 			pinnipedInformers := conciergeinformers.NewSharedInformerFactory(pinnipedAPIClient, 0)
-			kubeInformers := kubeinformers.NewSharedInformerFactory(kubernetesfake.NewSimpleClientset(tt.secretsAndConfigMaps...), 0)
+			kubeInformers := k8sinformers.NewSharedInformerFactory(kubernetesfake.NewSimpleClientset(tt.secretsAndConfigMaps...), 0)
 			cache := authncache.New()
 
 			logger, log := plog.TestLogger(t)

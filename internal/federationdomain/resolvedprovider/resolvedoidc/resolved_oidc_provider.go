@@ -1,4 +1,4 @@
-// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2024-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package resolvedoidc
@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"go.pinniped.dev/generated/latest/apis/supervisor/idpdiscovery/v1alpha1"
-	"go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	oidcapi "go.pinniped.dev/generated/latest/apis/supervisor/oidc"
 	"go.pinniped.dev/internal/constable"
 	"go.pinniped.dev/internal/federationdomain/downstreamsubject"
@@ -34,7 +33,7 @@ import (
 
 const (
 	// The name of the email claim from https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
-	emailClaimName = oidc.ScopeEmail
+	emailClaimName = oidcapi.ScopeEmail
 
 	// The name of the email_verified claim from https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
 	emailVerifiedClaimName = "email_verified"
@@ -234,6 +233,7 @@ func (p *FederationDomainResolvedOIDCIdentityProvider) UpstreamRefresh(
 	accessTokenStored := sessionData.UpstreamAccessToken != ""
 	refreshTokenStored := sessionData.UpstreamRefreshToken != ""
 
+	//nolint:staticcheck // De Morgan's doesn't make this more readable
 	exactlyOneTokenStored := (accessTokenStored || refreshTokenStored) && !(accessTokenStored && refreshTokenStored)
 	if !exactlyOneTokenStored {
 		return nil, errorsx.WithStack(resolvedprovider.ErrMissingUpstreamSessionInternalError())
@@ -373,11 +373,11 @@ func makeDownstreamOIDCSessionData(
 	oidcUpstream upstreamprovider.UpstreamOIDCIdentityProviderI,
 	token *oidctypes.Token,
 ) (*psession.OIDCSessionData, []string, error) {
-	upstreamSubject, err := extractStringClaimValue(oidc.IDTokenClaimSubject, oidcUpstream.GetResourceName(), token.IDToken.Claims)
+	upstreamSubject, err := extractStringClaimValue(oidcapi.IDTokenClaimSubject, oidcUpstream.GetResourceName(), token.IDToken.Claims)
 	if err != nil {
 		return nil, nil, err
 	}
-	upstreamIssuer, err := extractStringClaimValue(oidc.IDTokenClaimIssuer, oidcUpstream.GetResourceName(), token.IDToken.Claims)
+	upstreamIssuer, err := extractStringClaimValue(oidcapi.IDTokenClaimIssuer, oidcUpstream.GetResourceName(), token.IDToken.Claims)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -472,11 +472,11 @@ func getDownstreamSubjectAndUpstreamUsernameFromUpstreamIDToken(
 ) (string, string, error) {
 	// The spec says the "sub" claim is only unique per issuer,
 	// so we will prepend the issuer string to make it globally unique.
-	upstreamIssuer, err := extractStringClaimValue(oidc.IDTokenClaimIssuer, upstreamIDPConfig.GetResourceName(), idTokenClaims)
+	upstreamIssuer, err := extractStringClaimValue(oidcapi.IDTokenClaimIssuer, upstreamIDPConfig.GetResourceName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
-	upstreamSubject, err := extractStringClaimValue(oidc.IDTokenClaimSubject, upstreamIDPConfig.GetResourceName(), idTokenClaims)
+	upstreamSubject, err := extractStringClaimValue(oidcapi.IDTokenClaimSubject, upstreamIDPConfig.GetResourceName(), idTokenClaims)
 	if err != nil {
 		return "", "", err
 	}
@@ -554,7 +554,7 @@ func extractStringClaimValue(claimName string, upstreamIDPName string, idTokenCl
 
 func mappedUsernameFromUpstreamOIDCSubject(upstreamIssuerAsString string, upstreamSubject string) string {
 	return fmt.Sprintf("%s?%s=%s", upstreamIssuerAsString,
-		oidc.IDTokenClaimSubject, url.QueryEscape(upstreamSubject),
+		oidcapi.IDTokenClaimSubject, url.QueryEscape(upstreamSubject),
 	)
 }
 

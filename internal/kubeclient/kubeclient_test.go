@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -827,7 +827,7 @@ func wantCloseReqWrapper(t *testing.T) transport.WrapperFunc {
 				wc := &wantCloser{_rc: req.Body}
 				t.Cleanup(func() {
 					require.Eventuallyf(t, func() bool {
-						return 1 == len(wc.calls())
+						return len(wc.calls()) == 1
 					}, 5*time.Second, 100*time.Millisecond,
 						"did not close req body expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.calls())
 				})
@@ -843,7 +843,7 @@ func wantCloseReqWrapper(t *testing.T) transport.WrapperFunc {
 					wc := &wantCloser{_rc: originalBodyCopy}
 					t.Cleanup(func() {
 						require.Eventuallyf(t, func() bool {
-							return 1 == len(wc.calls())
+							return len(wc.calls()) == 1
 						}, 5*time.Second, 100*time.Millisecond,
 							"did not close req body copy expected number of times at %s for req %#v; actual calls = %s", caller, req, wc.calls())
 					})
@@ -872,7 +872,7 @@ func wantCloseRespWrapper(t *testing.T) transport.WrapperFunc {
 			t.Cleanup(func() {
 				require.Eventuallyf(t, func() bool {
 					return wc.couldRead() == false &&
-						1 == len(wc.calls())
+						len(wc.calls()) == 1
 				}, 5*time.Second, 10*time.Millisecond,
 					`did not close resp body expected number of times at %s for req %#v; actual calls = %s
 did not consume all response body bytes before closing %s, couldRead=%v`, caller, req, wc.calls(), caller, wc.couldRead())

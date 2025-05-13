@@ -1,4 +1,4 @@
-// Copyright 2022-2023 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -48,7 +48,7 @@ func TestBcryptHashedPassword2TestHelpers(t *testing.T) {
 	requireCost(t, oidcclientvalidator.DefaultMinBcryptCost, HashedPassword2AtSupervisorMinCost)
 }
 
-func generateHash(t *testing.T, password string, cost int) string { //nolint:unused,deadcode // used in comments above
+func generateHash(t *testing.T, password string, cost int) string { //nolint:unused // used in comments above
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
 	require.NoError(t, err)
 	return string(hash)

@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisorstorage
@@ -118,7 +118,7 @@ func (c *garbageCollectorController) Sync(ctx controllerlib.Context) error {
 
 	// Sort secrets by name so that audit log tests are deterministic
 	slices.SortStableFunc(listOfSecrets, func(a, b *corev1.Secret) int {
-		return strings.Compare(a.ObjectMeta.Name, b.ObjectMeta.Name)
+		return strings.Compare(a.Name, b.Name)
 	})
 
 	for i := range listOfSecrets {

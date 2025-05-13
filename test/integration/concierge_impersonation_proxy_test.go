@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -9,9 +9,11 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -167,6 +169,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	}
 
 	refreshCredential := func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential {
+		t.Helper()
+
 		// Use an anonymous client which goes through the impersonation proxy to make the request because that's
 		// what would normally happen when a user is using a kubeconfig where the server is the impersonation proxy,
 		// so it more closely simulates the normal use case, and also because we want this to work on AKS clusters
@@ -297,7 +301,8 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// so we don't have to keep repeating them.
 	// This client performs TLS checks, so it also provides test coverage that the impersonation proxy server is generating TLS certs correctly.
 	impersonationProxyKubeClient := func(t *testing.T) kubernetes.Interface {
-		return newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM, nil, refreshCredential).Kubernetes
+		client, _ := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM, nil, refreshCredential)
+		return client.Kubernetes
 	}
 
 	t.Run("positive tests", func(t *testing.T) {
@@ -567,7 +572,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			parallelIfNotEKS(t)
 			// Make a client which will send requests through the impersonation proxy and will also add
 			// impersonate headers to the request.
-			nestedImpersonationClient := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM,
+			nestedImpersonationClient, _ := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM,
 				&rest.ImpersonationConfig{UserName: "other-user-to-impersonate"}, refreshCredential)
 
 			// Check that we can get some resource through the impersonation proxy without any impersonation headers on the request.
@@ -587,7 +592,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				env.TestUser.ExpectedUsername))
 
 			// impersonate the GC service account instead which can read anything (the binding to edit allows this)
-			nestedImpersonationClientAsSA := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM,
+			nestedImpersonationClientAsSA, credentialsAsSA := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM,
 				&rest.ImpersonationConfig{UserName: "system:serviceaccount:kube-system:generic-garbage-collector"}, refreshCredential)
 
 			_, err = nestedImpersonationClientAsSA.Kubernetes.CoreV1().Secrets(env.ConciergeNamespace).Get(ctx, impersonationProxyTLSSecretName(env), metav1.GetOptions{})
@@ -599,6 +604,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			expectedOriginalUserInfo := authenticationv1.UserInfo{
 				Username: env.TestUser.ExpectedUsername,
 				Groups:   expectedGroups,
+				Extra: map[string]authenticationv1.ExtraValue{
+					"authentication.kubernetes.io/credential-id": certToCredentialID(t, credentialsAsSA.ClientCertificateData),
+				},
 			}
 			expectedOriginalUserInfoJSON, err := json.Marshal(expectedOriginalUserInfo)
 			require.NoError(t, err)
@@ -618,14 +626,15 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				whoAmI,
 			)
 
-			_, err = newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM,
+			impersonationProxyClient, _ := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM,
 				&rest.ImpersonationConfig{
 					UserName: "system:serviceaccount:kube-system:generic-garbage-collector",
 					Extra: map[string][]string{
 						"some-fancy-key": {"with a dangerous value"},
 					},
 				},
-				refreshCredential).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
+				refreshCredential)
+			_, err = impersonationProxyClient.PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 			// this user should not be able to impersonate extra
 			require.True(t, apierrors.IsForbidden(err), err)
@@ -662,7 +671,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 
 			expectedExtra := make(map[string]authenticationv1.ExtraValue, len(extra))
 			for k, v := range extra {
-				expectedExtra[k] = authenticationv1.ExtraValue(v)
+				expectedExtra[k] = v
 			}
 			expectedOriginalUserInfo := authenticationv1.UserInfo{
 				Username: whoAmIAdmin.Status.KubernetesUserInfo.User.Username,
@@ -873,9 +882,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		t.Run("WhoAmIRequests and different kinds of authentication through the impersonation proxy", func(t *testing.T) {
 			parallelIfNotEKS(t)
 			// Test using the TokenCredentialRequest for authentication.
-			impersonationProxyPinnipedConciergeClient := newImpersonationProxyClient(t,
+			impersonationProxyClient, credentials := newImpersonationProxyClient(t,
 				impersonationProxyURL, impersonationProxyCACertPEM, nil, refreshCredential,
-			).PinnipedConcierge
+			)
+			impersonationProxyPinnipedConciergeClient := impersonationProxyClient.PinnipedConcierge
 			whoAmI, err := impersonationProxyPinnipedConciergeClient.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
 			require.NoError(t, err, testlib.Sdump(err))
@@ -886,7 +896,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 				expectedWhoAmIRequestResponse(
 					env.TestUser.ExpectedUsername,
 					expectedGroups,
-					nil,
+					map[string]identityv1alpha1.ExtraValue{
+						"authentication.kubernetes.io/credential-id": certToCredentialID(t, credentials.ClientCertificateData),
+					},
 				),
 				whoAmI,
 			)
@@ -1587,6 +1599,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 
 	t.Run("adding an annotation reconciles the LoadBalancer service", func(t *testing.T) {
+		//nolint:staticcheck // De Morgan's doesn't make this more readable
 		if !(impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers) {
 			t.Skip("only running when the cluster is meant to be using LoadBalancer services")
 		}
@@ -1986,6 +1999,18 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 }
 
+func certToCredentialID(t *testing.T, cert string) []string {
+	block, _ := pem.Decode([]byte(cert))
+	require.NotEmpty(t, block)
+
+	bytesToHexOfSHA256 := func(b []byte) string {
+		shasum := sha256.Sum256(b)
+		return hex.EncodeToString(shasum[:])
+	}
+
+	return []string{fmt.Sprintf("X509SHA256=%s", bytesToHexOfSHA256(block.Bytes))}
+}
+
 func ensureDNSResolves(t *testing.T, urlString string) {
 	t.Helper()
 
@@ -2073,7 +2098,11 @@ func createServiceAccountToken(ctx context.Context, t *testing.T, adminClient ku
 	return serviceAccount.Name, string(secret.Data[corev1.ServiceAccountTokenKey]), serviceAccount.UID
 }
 
-func expectedWhoAmIRequestResponse(username string, groups []string, extra map[string]identityv1alpha1.ExtraValue) *identityv1alpha1.WhoAmIRequest {
+func expectedWhoAmIRequestResponse(
+	username string,
+	groups []string,
+	extra map[string]identityv1alpha1.ExtraValue,
+) *identityv1alpha1.WhoAmIRequest {
 	return &identityv1alpha1.WhoAmIRequest{
 		Status: identityv1alpha1.WhoAmIRequestStatus{
 			KubernetesUserInfo: identityv1alpha1.KubernetesUserInfo{
@@ -2088,9 +2117,14 @@ func expectedWhoAmIRequestResponse(username string, groups []string, extra map[s
 	}
 }
 
-func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testlib.TestEnv,
-	adminClient kubernetes.Interface, adminConciergeClient conciergeclientset.Interface,
-	refreshCredential func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential) (string, []byte) {
+func performImpersonatorDiscovery(
+	ctx context.Context,
+	t *testing.T,
+	env *testlib.TestEnv,
+	adminClient kubernetes.Interface,
+	adminConciergeClient conciergeclientset.Interface,
+	refreshCredential func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential,
+) (string, []byte) {
 	t.Helper()
 
 	impersonationProxyURL, impersonationProxyCACertPEM := performImpersonatorDiscoveryURL(ctx, t, env, adminConciergeClient)
@@ -2124,9 +2158,9 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testli
 
 			config := newImpersonationProxyConfigWithCredentials(t, credentials, impersonationProxyURL, impersonationProxyCACertPEM, nil)
 			config = rest.CopyConfig(config)
-			config.Proxy = kubeconfigProxyFunc(t, env.Proxy)                           // always use the proxy since we are talking directly to a pod IP
-			config.Host = "https://" + pod.Status.PodIP + ":8444"                      // hardcode the internal port - it should not change
-			config.TLSClientConfig.ServerName = impersonationProxyParsedURL.Hostname() // make SNI hostname TLS verification work even when using IP
+			config.Proxy = kubeconfigProxyFunc(t, env.Proxy)           // always use the proxy since we are talking directly to a pod IP
+			config.Host = "https://" + pod.Status.PodIP + ":8444"      // hardcode the internal port - it should not change
+			config.ServerName = impersonationProxyParsedURL.Hostname() // make SNI hostname TLS verification work even when using IP
 
 			whoAmI, err := testlib.NewKubeclient(t, config).PinnipedConcierge.IdentityV1alpha1().WhoAmIRequests().
 				Create(ctx, &identityv1alpha1.WhoAmIRequest{}, metav1.CreateOptions{})
@@ -2135,7 +2169,9 @@ func performImpersonatorDiscovery(ctx context.Context, t *testing.T, env *testli
 				expectedWhoAmIRequestResponse(
 					env.TestUser.ExpectedUsername,
 					expectedGroups,
-					nil,
+					map[string]identityv1alpha1.ExtraValue{
+						"authentication.kubernetes.io/credential-id": certToCredentialID(t, credentials.ClientCertificateData),
+					},
 				),
 				whoAmI,
 			)
@@ -2510,12 +2546,12 @@ func newImpersonationProxyClient(
 	impersonationProxyCACertPEM []byte,
 	nestedImpersonationConfig *rest.ImpersonationConfig,
 	refreshCredentialFunc func(t *testing.T, impersonationProxyURL string, impersonationProxyCACertPEM []byte) *loginv1alpha1.ClusterCredential,
-) *kubeclient.Client {
+) (*kubeclient.Client, *loginv1alpha1.ClusterCredential) {
 	t.Helper()
 
 	refreshedCredentials := refreshCredentialFunc(t, impersonationProxyURL, impersonationProxyCACertPEM).DeepCopy()
 	refreshedCredentials.Token = "not a valid token" // demonstrates that client certs take precedence over tokens by setting both on the requests
-	return newImpersonationProxyClientWithCredentials(t, refreshedCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nestedImpersonationConfig)
+	return newImpersonationProxyClientWithCredentials(t, refreshedCredentials, impersonationProxyURL, impersonationProxyCACertPEM, nestedImpersonationConfig), refreshedCredentials
 }
 
 // getCredForConfig is mostly just a hacky workaround for impersonationProxyRestConfig needing creds directly.

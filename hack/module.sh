@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -14,7 +14,7 @@ function usage() {
 }
 
 function main() {
-  pushd "${ROOT}" > /dev/null
+  pushd "${ROOT}" >/dev/null
 
   # start the cache mutation detector by default so that cache mutators will be found
   local kube_cache_mutation_detector="${KUBE_CACHE_MUTATION_DETECTOR:-true}"
@@ -46,9 +46,14 @@ function main() {
       ./hack/module.sh lint
     ;;
   'unittest' | 'unittests' | 'units' | 'unit')
+    # Temporarily avoid using the race detector for the impersonator package due to https://github.com/kubernetes/kubernetes/issues/128548
     KUBE_CACHE_MUTATION_DETECTOR=${kube_cache_mutation_detector} \
-    KUBE_PANIC_WATCH_DECODE_ERROR=${kube_panic_watch_decode_error} \
-    go test -short -race ./...
+      KUBE_PANIC_WATCH_DECODE_ERROR=${kube_panic_watch_decode_error} \
+      go test -short -race $(go list ./... | grep -v internal/concierge/impersonator)
+    # TODO: change this back to using the race detector everywhere
+    KUBE_CACHE_MUTATION_DETECTOR=${kube_cache_mutation_detector} \
+      KUBE_PANIC_WATCH_DECODE_ERROR=${kube_panic_watch_decode_error} \
+      go test -short ./internal/concierge/impersonator
     ;;
   'generate')
     go generate ./internal/mocks/...
@@ -61,7 +66,7 @@ function main() {
   echo "=> "
   echo "   \"module.sh $1\" Finished successfully."
 
-  popd > /dev/null
+  popd >/dev/null
 }
 
 main "$@"

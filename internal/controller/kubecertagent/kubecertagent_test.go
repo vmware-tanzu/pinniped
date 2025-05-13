@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
@@ -176,7 +176,7 @@ func TestAgentController(t *testing.T) {
 	}
 	healthyAgentDeploymentWithOldStyleSelector := healthyAgentDeployment.DeepCopy()
 	healthyAgentDeploymentWithOldStyleSelector.Spec.Selector = metav1.SetAsLabelSelector(oldStyleLabels)
-	healthyAgentDeploymentWithOldStyleSelector.Spec.Template.ObjectMeta.Labels = oldStyleLabels
+	healthyAgentDeploymentWithOldStyleSelector.Spec.Template.Labels = oldStyleLabels
 	healthyAgentDeploymentWithOldStyleSelector.UID = "fake-uid-abc123"                        // needs UID to test delete options
 	healthyAgentDeploymentWithOldStyleSelector.ResourceVersion = "fake-resource-version-1234" // needs ResourceVersion to test delete options
 

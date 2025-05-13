@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package credentialrequest
@@ -359,11 +359,118 @@ func TestCreate(t *testing.T) {
 						"name":     "fake-authenticator-name",
 					},
 					"reason":              "unsupported value in userInfo returned by authenticator",
-					"err":                 "extras are not supported",
+					"err":                 "extra may have only one key 'authentication.kubernetes.io/credential-id'",
 					"userInfoExtrasCount": float64(1),
 					"personalInfo": map[string]any{
 						"userInfoName": "test-user",
 						"userInfoUID":  "",
+					},
+				}),
+			}
+		})
+
+		it("CreateSucceedsWithAnUnauthenticatedStatusWhenWebhookReturnsAUserWithTooManyExtra", func() {
+			req := validCredentialRequest()
+
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
+				Return(&user.DefaultInfo{
+					Name:   "test-user",
+					Groups: []string{"test-group-1", "test-group-2"},
+					Extra: map[string][]string{
+						"test-key": {"test-val-1", "test-val-2"},
+						"authentication.kubernetes.io/credential-id": {"some-value"},
+					},
+				}, nil)
+
+			storage := NewREST(requestAuthenticator, nil, schema.GroupResource{}, auditLogger)
+
+			response, err := callCreate(storage, req)
+
+			requireSuccessfulResponseWithAuthenticationFailureMessage(t, err, response)
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
+				}),
+				testutil.WantAuditLog("TokenCredentialRequest Unsupported UserInfo", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"reason":              "unsupported value in userInfo returned by authenticator",
+					"err":                 "extra may have only one key 'authentication.kubernetes.io/credential-id'",
+					"userInfoExtrasCount": float64(2),
+					"personalInfo": map[string]any{
+						"userInfoName": "test-user",
+						"userInfoUID":  "",
+					},
+				}),
+			}
+		})
+
+		it("CreateSucceedsWhenWebhookReturnsAUserWithValidExtra", func() {
+			req := validCredentialRequest()
+
+			requestAuthenticator := mockcredentialrequest.NewMockTokenCredentialRequestAuthenticator(ctrl)
+			requestAuthenticator.EXPECT().AuthenticateTokenCredentialRequest(gomock.Any(), req).
+				Return(&user.DefaultInfo{
+					Name:   "test-user",
+					Groups: []string{"test-group-1", "test-group-2"},
+					Extra:  map[string][]string{"authentication.kubernetes.io/credential-id": {"test-val-1", "test-val-2"}},
+				}, nil)
+
+			clientCertIssuer := mockissuer.NewMockClientCertIssuer(ctrl)
+			clientCertIssuer.EXPECT().IssueClientCertPEM(
+				"test-user",
+				[]string{"test-group-1", "test-group-2"},
+				5*time.Minute,
+			).Return(&cert.PEM{
+				CertPEM:   []byte("test-cert"),
+				KeyPEM:    []byte("test-key"),
+				NotBefore: fakeNow.Add(-5 * time.Minute),
+				NotAfter:  fakeNow.Add(5 * time.Minute),
+			}, nil)
+
+			storage := NewREST(requestAuthenticator, clientCertIssuer, schema.GroupResource{}, auditLogger)
+
+			response, err := callCreate(storage, req)
+
+			r.NoError(err)
+			r.IsType(&loginapi.TokenCredentialRequest{}, response)
+
+			r.Equal(response, &loginapi.TokenCredentialRequest{
+				Status: loginapi.TokenCredentialRequestStatus{
+					Credential: &loginapi.ClusterCredential{
+						ExpirationTimestamp:   metav1.NewTime(fakeNow.Add(5 * time.Minute).UTC()),
+						ClientCertificateData: "test-cert",
+						ClientKeyData:         "test-key",
+					},
+				},
+			})
+
+			wantAuditLog = []testutil.WantedAuditLog{
+				testutil.WantAuditLog("TokenCredentialRequest Token Received", map[string]any{
+					"auditID": "fake-audit-id",
+					"tokenID": tokenToHash(req.Spec.Token),
+				}),
+				testutil.WantAuditLog("TokenCredentialRequest Authenticated User", map[string]any{
+					"auditID": "fake-audit-id",
+					"authenticator": map[string]any{
+						"apiGroup": "fake-api-group.com",
+						"kind":     "FakeAuthenticatorKind",
+						"name":     "fake-authenticator-name",
+					},
+					"issuedClientCert": map[string]any{
+						"notBefore": "2024-09-12T04:20:56Z", // this is fakeNow - 5 minutes in UTC
+						"notAfter":  "2024-09-12T04:30:56Z", // this is fakeNow + 5 minutes in UTC
+					},
+					"personalInfo": map[string]any{
+						"username": "test-user",
+						"groups":   []any{"test-group-1", "test-group-2"},
 					},
 				}),
 			}

@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package execcredcache
@@ -67,7 +67,7 @@ func readCache(path string) (*credCache, error) {
 	}
 
 	// Validate that we're reading a version of the config we understand how to parse.
-	if !(cache.TypeMeta.APIVersion == apiVersion && cache.TypeMeta.Kind == apiKind) {
+	if !(cache.TypeMeta.APIVersion == apiVersion && cache.TypeMeta.Kind == apiKind) { //nolint:staticcheck // De Morgan's doesn't make this more readable
 		return nil, fmt.Errorf("%w: %#v", errUnsupportedVersion, cache.TypeMeta)
 	}
 	return &cache, nil

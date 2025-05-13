@@ -416,10 +416,7 @@ func waitForCredentialIssuer(ctx context.Context, clientset conciergeclientset.I
 		deadline, _ := ctx.Deadline()
 		attempts := 1
 
-		for {
-			if !hasPendingStrategy(credentialIssuer) {
-				break
-			}
+		for hasPendingStrategy(credentialIssuer) {
 			logStrategies(credentialIssuer, deps.log)
 			deps.log.Info("waiting for CredentialIssuer pending strategies to finish",
 				"attempts", attempts,

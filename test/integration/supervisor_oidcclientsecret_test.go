@@ -1,4 +1,4 @@
-// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -937,11 +937,11 @@ func TestCreateOIDCClientSecretRequest_Parallel(t *testing.T) {
 				} else {
 					require.NoError(t, err)
 
-					require.Equal(t, ttt.secretRequest.ObjectMeta.Name, clientSecretRequestResponse.ObjectMeta.Name,
+					require.Equal(t, ttt.secretRequest.Name, clientSecretRequestResponse.Name,
 						"name in response should match name in sent request")
-					require.Equal(t, ttt.secretRequest.ObjectMeta.Namespace, clientSecretRequestResponse.ObjectMeta.Namespace,
+					require.Equal(t, ttt.secretRequest.Namespace, clientSecretRequestResponse.Namespace,
 						"namespace in response should match namespace in sent request")
-					testutil.RequireTimeInDelta(t, clientSecretRequestResponse.ObjectMeta.CreationTimestamp.Time, time.Now(), 1*time.Minute)
+					testutil.RequireTimeInDelta(t, clientSecretRequestResponse.CreationTimestamp.Time, time.Now(), 1*time.Minute)
 
 					require.Equalf(t, ttt.secretRequest.TypeMeta, clientSecretRequestResponse.TypeMeta,
 						"type meta of response should match the sent request")

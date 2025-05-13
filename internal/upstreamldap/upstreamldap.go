@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package upstreamldap implements an abstraction of upstream LDAP IDP interactions.
@@ -291,11 +291,11 @@ func (p *Provider) dial(ctx context.Context) (Conn, error) {
 	// Choose how and where to dial based on TLS vs. StartTLS config option.
 	var dialFunc LDAPDialerFunc
 	var addr endpointaddr.HostPort
-	switch {
-	case p.c.ConnectionProtocol == TLS:
+	switch p.c.ConnectionProtocol {
+	case TLS:
 		dialFunc = p.dialTLS
 		addr = tlsAddr
-	case p.c.ConnectionProtocol == StartTLS:
+	case StartTLS:
 		dialFunc = p.dialStartTLS
 		addr = startTLSAddr
 	default:

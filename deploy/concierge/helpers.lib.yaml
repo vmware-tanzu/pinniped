@@ -1,4 +1,4 @@
-#! Copyright 2020-2021 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
@@ -44,4 +44,63 @@ _: #@ template.replace(data.values.custom_labels)
 #@     fail("log_level '" + log_level + "' is invalid")
 #@   end
 #@   return log_level
+#@ end
+
+#@ def getPinnipedConfigMapData():
+#@   config = {
+#@     "discovery": {
+#@       "url": data.values.discovery_url or None,
+#@     },
+#@     "api": {
+#@       "servingCertificate": {
+#@         "durationSeconds": data.values.api_serving_certificate_duration_seconds,
+#@         "renewBeforeSeconds": data.values.api_serving_certificate_renew_before_seconds,
+#@       },
+#@     },
+#@     "apiGroupSuffix": data.values.api_group_suffix,
+#@     "names": {
+#@       "servingCertificateSecret": defaultResourceNameWithSuffix("api-tls-serving-certificate"),
+#@       "credentialIssuer": defaultResourceNameWithSuffix("config"),
+#@       "apiService": defaultResourceNameWithSuffix("api"),
+#@       "impersonationLoadBalancerService": defaultResourceNameWithSuffix("impersonation-proxy-load-balancer"),
+#@       "impersonationClusterIPService": defaultResourceNameWithSuffix("impersonation-proxy-cluster-ip"),
+#@       "impersonationTLSCertificateSecret": defaultResourceNameWithSuffix("impersonation-proxy-tls-serving-certificate"),
+#@       "impersonationCACertificateSecret": defaultResourceNameWithSuffix("impersonation-proxy-ca-certificate"),
+#@       "impersonationSignerSecret": defaultResourceNameWithSuffix("impersonation-proxy-signer-ca-certificate"),
+#@       "agentServiceAccount": defaultResourceNameWithSuffix("kube-cert-agent"),
+#@       "impersonationProxyServiceAccount": defaultResourceNameWithSuffix("impersonation-proxy"),
+#@       "impersonationProxyLegacySecret": defaultResourceNameWithSuffix("impersonation-proxy"),
+#@     },
+#@     "labels": labels(),
+#@     "kubeCertAgent": {
+#@       "namePrefix": defaultResourceNameWithSuffix("kube-cert-agent-"),
+#@       "priorityClassName": "",
+#@     },
+#@     "tls": {
+#@       "onedottwo": {
+#@         "allowedCiphers": data.values.allowed_ciphers_for_tls_onedottwo
+#@       }
+#@     },
+#@     "audit": {
+#@       "logUsernamesAndGroups": data.values.audit.log_usernames_and_groups,
+#@     },
+#@     "aggregatedAPIServerDisableAdmissionPlugins": []
+#@   }
+#@   if data.values.kube_cert_agent_image:
+#@     config["kubeCertAgent"]["image"] = data.values.kube_cert_agent_image
+#@   else:
+#@     if data.values.image_digest:
+#@       config["kubeCertAgent"]["image"] = data.values.image_repo + "@" + data.values.image_digest
+#@     else:
+#@       config["kubeCertAgent"]["image"] = data.values.image_repo + ":" + data.values.image_tag
+#@     end
+#@   end
+#@   if data.values.image_pull_dockerconfigjson:
+#@     config["kubeCertAgent"]["imagePullSecrets"] = ["image-pull-secret"]
+#@   end
+#@   if data.values.log_level:
+#@     config["log"] = {}
+#@     config["log"]["level"] = getAndValidateLogLevel()
+#@   end
+#@   return config
 #@ end

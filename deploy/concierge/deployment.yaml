@@ -2,8 +2,17 @@
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ load("@ytt:data", "data")
-#@ load("@ytt:json", "json")
-#@ load("helpers.lib.yaml", "defaultLabel", "labels", "deploymentPodLabel", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "getAndValidateLogLevel", "pinnipedDevAPIGroupWithPrefix")
+#@ load("@ytt:yaml", "yaml")
+#@ load("helpers.lib.yaml",
+#@   "defaultLabel",
+#@   "labels",
+#@   "deploymentPodLabel",
+#@   "namespace",
+#@   "defaultResourceName",
+#@   "defaultResourceNameWithSuffix",
+#@   "pinnipedDevAPIGroupWithPrefix",
+#@   "getPinnipedConfigMapData",
+#@ )
 #@ load("@ytt:template", "template")
 
 #@ if not data.values.into_namespace:
@@ -57,55 +66,10 @@ metadata:
   labels: #@ labels()
 data:
   #! If names.apiService is changed in this ConfigMap, must also change name of the ClusterIP Service resource below.
+  #! aggregatedAPIServerPort may be set here, although other YAML references to the default port (10250) may also need to be updated.
+  #! impersonationProxyServerPort may be set here, although other YAML references to the default port (8444) may also need to be updated.
   #@yaml/text-templated-strings
-  pinniped.yaml: |
-    discovery:
-      url: (@= data.values.discovery_url or "null" @)
-    api:
-      servingCertificate:
-        durationSeconds: (@= str(data.values.api_serving_certificate_duration_seconds) @)
-        renewBeforeSeconds: (@= str(data.values.api_serving_certificate_renew_before_seconds) @)
-    apiGroupSuffix: (@= data.values.api_group_suffix @)
-    # aggregatedAPIServerPort may be set here, although other YAML references to the default port (10250) may also need to be updated
-    # impersonationProxyServerPort may be set here, although other YAML references to the default port (8444) may also need to be updated
-    aggregatedAPIServerDisableAdmissionPlugins: []
-    names:
-      servingCertificateSecret: (@= defaultResourceNameWithSuffix("api-tls-serving-certificate") @)
-      credentialIssuer: (@= defaultResourceNameWithSuffix("config") @)
-      apiService: (@= defaultResourceNameWithSuffix("api") @)
-      impersonationLoadBalancerService: (@= defaultResourceNameWithSuffix("impersonation-proxy-load-balancer") @)
-      impersonationClusterIPService: (@= defaultResourceNameWithSuffix("impersonation-proxy-cluster-ip") @)
-      impersonationTLSCertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-tls-serving-certificate") @)
-      impersonationCACertificateSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-ca-certificate") @)
-      impersonationSignerSecret: (@= defaultResourceNameWithSuffix("impersonation-proxy-signer-ca-certificate") @)
-      agentServiceAccount: (@= defaultResourceNameWithSuffix("kube-cert-agent") @)
-      impersonationProxyServiceAccount: (@= defaultResourceNameWithSuffix("impersonation-proxy") @)
-      impersonationProxyLegacySecret: (@= defaultResourceNameWithSuffix("impersonation-proxy") @)
-    labels: (@= json.encode(labels()).rstrip() @)
-    kubeCertAgent:
-      namePrefix: (@= defaultResourceNameWithSuffix("kube-cert-agent-") @)
-      (@ if data.values.kube_cert_agent_image: @)
-      image: (@= data.values.kube_cert_agent_image @)
-      (@ else: @)
-      (@ if data.values.image_digest: @)
-      image: (@= data.values.image_repo + "@" + data.values.image_digest @)
-      (@ else: @)
-      image: (@= data.values.image_repo + ":" + data.values.image_tag @)
-      (@ end @)
-      (@ end @)
-      (@ if data.values.image_pull_dockerconfigjson: @)
-      imagePullSecrets:
-        - image-pull-secret
-      (@ end @)
-    (@ if data.values.log_level: @)
-    log:
-      level: (@= getAndValidateLogLevel() @)
-    (@ end @)
-    tls:
-      onedottwo:
-        allowedCiphers: (@= str(data.values.allowed_ciphers_for_tls_onedottwo) @)
-    audit:
-      logUsernamesAndGroups: (@= data.values.audit.log_usernames_and_groups @)
+  pinniped.yaml: #@ yaml.encode(getPinnipedConfigMapData())
 ---
 #@ if data.values.image_pull_dockerconfigjson and data.values.image_pull_dockerconfigjson != "":
 apiVersion: v1

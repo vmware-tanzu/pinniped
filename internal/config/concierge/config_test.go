@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -17,6 +18,9 @@ import (
 )
 
 func TestFromPath(t *testing.T) {
+	stringOfLength253 := strings.Repeat("a", 253)
+	stringOfLength254 := strings.Repeat("a", 254)
+
 	tests := []struct {
 		name                string
 		yaml                string
@@ -26,7 +30,7 @@ func TestFromPath(t *testing.T) {
 	}{
 		{
 			name: "Fully filled out",
-			yaml: here.Doc(`
+			yaml: here.Docf(`
 				---
 				discovery:
 				  url: https://some.discovery/url
@@ -64,6 +68,7 @@ func TestFromPath(t *testing.T) {
 				  namePrefix: kube-cert-agent-name-prefix-
 				  image: kube-cert-agent-image
 				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
+				  priorityClassName: %s
 				log:
 				  level: debug
 				tls:
@@ -74,7 +79,7 @@ func TestFromPath(t *testing.T) {
 					- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
 				audit:
 				  logUsernamesAndGroups: enabled
-			`),
+			`, stringOfLength253),
 			wantConfig: &Config{
 				DiscoveryInfo: DiscoveryInfoSpec{
 					URL: ptr.To("https://some.discovery/url"),
@@ -112,9 +117,10 @@ func TestFromPath(t *testing.T) {
 					"myLabelKey2": "myLabelValue2",
 				},
 				KubeCertAgentConfig: KubeCertAgentSpec{
-					NamePrefix:       ptr.To("kube-cert-agent-name-prefix-"),
-					Image:            ptr.To("kube-cert-agent-image"),
-					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
+					NamePrefix:        ptr.To("kube-cert-agent-name-prefix-"),
+					Image:             ptr.To("kube-cert-agent-image"),
+					ImagePullSecrets:  []string{"kube-cert-agent-image-pull-secret"},
+					PriorityClassName: stringOfLength253,
 				},
 				Log: plog.LogSpec{
 					Level: plog.LevelDebug,
@@ -173,6 +179,7 @@ func TestFromPath(t *testing.T) {
 				  namePrefix: kube-cert-agent-name-prefix-
 				  image: kube-cert-agent-image
 				  imagePullSecrets: [kube-cert-agent-image-pull-secret]
+				  priorityClassName: kube-cert-agent-priority-class-name
 				log:
 				  level: all
 				  format: json
@@ -216,9 +223,10 @@ func TestFromPath(t *testing.T) {
 					"myLabelKey2": "myLabelValue2",
 				},
 				KubeCertAgentConfig: KubeCertAgentSpec{
-					NamePrefix:       ptr.To("kube-cert-agent-name-prefix-"),
-					Image:            ptr.To("kube-cert-agent-image"),
-					ImagePullSecrets: []string{"kube-cert-agent-image-pull-secret"},
+					NamePrefix:        ptr.To("kube-cert-agent-name-prefix-"),
+					Image:             ptr.To("kube-cert-agent-image"),
+					ImagePullSecrets:  []string{"kube-cert-agent-image-pull-secret"},
+					PriorityClassName: "kube-cert-agent-priority-class-name",
 				},
 				Log: plog.LogSpec{
 					Level:  plog.LevelAll,
@@ -702,6 +710,50 @@ func TestFromPath(t *testing.T) {
 				  logUsernamesAndGroups: this-value-is-not-allowed
 			`),
 			wantError: "validate audit: invalid logUsernamesAndGroups format, valid choices are 'enabled', 'disabled', or empty string (equivalent to 'disabled')",
+		},
+		{
+			name: "invalid kubeCertAgent.priorityClassName length",
+			yaml: here.Docf(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationClusterIPService: impersonationClusterIPService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  agentServiceAccount: agentServiceAccount-value
+				  impersonationProxyServiceAccount: impersonationProxyServiceAccount-value
+				  impersonationProxyLegacySecret: impersonationProxyLegacySecret-value
+				kubeCertAgent:
+				  priorityClassName: %s
+			`, stringOfLength254),
+			wantError: "validate kubeCertAgent: invalid priorityClassName: must be no more than 253 characters",
+		},
+		{
+			name: "invalid kubeCertAgent.priorityClassName format",
+			yaml: here.Doc(`
+				---
+				names:
+				  servingCertificateSecret: pinniped-concierge-api-tls-serving-certificate
+				  credentialIssuer: pinniped-config
+				  apiService: pinniped-api
+				  impersonationLoadBalancerService: impersonationLoadBalancerService-value
+				  impersonationClusterIPService: impersonationClusterIPService-value
+				  impersonationTLSCertificateSecret: impersonationTLSCertificateSecret-value
+				  impersonationCACertificateSecret: impersonationCACertificateSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  impersonationSignerSecret: impersonationSignerSecret-value
+				  agentServiceAccount: agentServiceAccount-value
+				  impersonationProxyServiceAccount: impersonationProxyServiceAccount-value
+				  impersonationProxyLegacySecret: impersonationProxyLegacySecret-value
+				kubeCertAgent:
+				  priorityClassName: thisIsNotAValidPriorityClassName
+			`),
+			wantError: `validate kubeCertAgent: invalid priorityClassName: a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')`,
 		},
 	}
 	for _, test := range tests {

@@ -108,4 +108,7 @@ type KubeCertAgentSpec struct {
 	// ImagePullSecrets is a list of names of Kubernetes Secret objects that will be used as
 	// ImagePullSecrets on the kube-cert-agent pods.
 	ImagePullSecrets []string
+
+	// PriorityClassName optionally sets the PriorityClassName for the agent's pod.
+	PriorityClassName string `json:"priorityClassName"`
 }

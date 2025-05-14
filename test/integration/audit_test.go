@@ -62,7 +62,7 @@ func TestAuditLogsDuringLogin_Disruptive(t *testing.T) {
 	testStartTime := metav1.Now()
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancelFunc()
+	t.Cleanup(cancelFunc)
 
 	kubeClient := testlib.NewKubernetesClientset(t)
 	kubeClientForK8sResourcesOnly := kubeClientWithoutPinnipedAPISuffix(t)
@@ -377,7 +377,7 @@ func TestAuditLogsDuringLogin_Disruptive(t *testing.T) {
 
 func TestAuditLogsEmittedForDiscoveryEndpoints_Parallel(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancelFunc()
+	t.Cleanup(cancelFunc)
 
 	env, kubeClientForK8sResourcesOnly, fakeIssuerForDisplayPurposes, ca, dnsOverrides := auditSetup(t, ctx)
 
@@ -427,7 +427,7 @@ func TestAuditLogsEmittedForDiscoveryEndpoints_Parallel(t *testing.T) {
 // /oauth2/authorize, /callback, /login, and /oauth2/token.
 func TestAuditLogsEmittedForEndpointsEvenWhenTheCallsAreInvalid_Parallel(t *testing.T) {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancelFunc()
+	t.Cleanup(cancelFunc)
 
 	env, kubeClientForK8sResourcesOnly, fakeIssuerForDisplayPurposes, ca, dnsOverrides := auditSetup(t, ctx)
 

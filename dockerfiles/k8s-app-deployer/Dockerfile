@@ -3,7 +3,7 @@
 
 # For deploying apps onto Kubernetes clusters (including GKE)
 
-FROM google/cloud-sdk:521.0.0-slim
+FROM google/cloud-sdk:522.0.0-slim
 
 # Install apache2-utils (for htpasswd to bcrypt passwords for the
 # local-user-authenticator) and jq.

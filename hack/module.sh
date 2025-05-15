@@ -9,7 +9,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 function usage() {
   echo "Error: <task> must be specified"
-  echo "       module.sh <task> [tidy, lint, test, unittest]"
+  echo "       module.sh <task> [tidy, lint, unit, unittest]"
   exit 1
 }
 
@@ -49,10 +49,12 @@ function main() {
     # Temporarily avoid using the race detector for the impersonator package due to https://github.com/kubernetes/kubernetes/issues/128548
     KUBE_CACHE_MUTATION_DETECTOR=${kube_cache_mutation_detector} \
       KUBE_PANIC_WATCH_DECODE_ERROR=${kube_panic_watch_decode_error} \
+      CGO_ENABLED=0 \
       go test -short -race $(go list ./... | grep -v internal/concierge/impersonator)
     # TODO: change this back to using the race detector everywhere
     KUBE_CACHE_MUTATION_DETECTOR=${kube_cache_mutation_detector} \
       KUBE_PANIC_WATCH_DECODE_ERROR=${kube_panic_watch_decode_error} \
+      CGO_ENABLED=0 \
       go test -short ./internal/concierge/impersonator
     ;;
   'generate')

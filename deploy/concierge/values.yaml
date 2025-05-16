@@ -1,4 +1,4 @@
-#! Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+#! Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 #! SPDX-License-Identifier: Apache-2.0
 
 #@ def validate_strings_map(obj):
@@ -68,14 +68,23 @@ image_digest: ""
 image_tag: latest
 
 #@schema/title "Kube Cert Agent image"
-#@ kube_cert_agent_image = "Optionally specify a different image for the 'kube-cert-agent' pod which is scheduled \
+#@ kube_cert_agent_image_desc = "Optionally specify a different image for the 'kube-cert-agent' pod which is scheduled \
 #@ on the control plane. This image needs only to include `sleep` and `cat` binaries. \
 #@ By default, the same image specified for image_repo/image_digest/image_tag will be re-used."
-#@schema/desc kube_cert_agent_image
+#@schema/desc kube_cert_agent_image_desc
 #@schema/examples ("Image including tag or digest", "ghcr.io/vmware-tanzu/pinniped/pinniped-server:latest")
 #@schema/nullable
 #@schema/validation min_len=1
 kube_cert_agent_image: ""
+
+#@schema/title "Kube Cert Agent Priority Class Name"
+#@ kube_cert_agent_priority_class_name_desc = "Optionally specify a PriorityClassName for the 'kube-cert-agent' pod. \
+#@ See https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/ for more details. \
+#@ By default, this is the empty string."
+#@schema/desc kube_cert_agent_priority_class_name_desc
+#@schema/examples ("name of a PriorityClass object", "high-priority")
+#@schema/validation min_len=0
+kube_cert_agent_priority_class_name: ""
 
 #@schema/title "Image pull dockerconfigjson"
 #@ image_pull_dockerconfigjson_desc = "A base64 encoded secret to be used when pulling the `image_repo` container image. \

@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package kubecertagent provides controllers that ensure a pod (the kube-cert-agent), is
@@ -101,6 +101,9 @@ type AgentConfig struct {
 	// DiscoveryURLOverride is the Kubernetes server endpoint to report in the CredentialIssuer, overriding any
 	// value discovered in the kube-public/cluster-info ConfigMap.
 	DiscoveryURLOverride *string
+
+	// PriorityClassName optionally sets the PriorityClassName for the agent's pod.
+	PriorityClassName string
 }
 
 // Only select using the unique label which will not match the pods of any other Deployment.
@@ -429,12 +432,14 @@ func (c *agentController) createOrUpdateDeployment(ctx context.Context, newestCo
 	updatedDeployment.ObjectMeta = mergeLabelsAndAnnotations(updatedDeployment.ObjectMeta, expectedDeployment.ObjectMeta)
 	desireSelectorUpdate := !apiequality.Semantic.DeepEqual(updatedDeployment.Spec.Selector, existingDeployment.Spec.Selector)
 	desireTemplateLabelsUpdate := !apiequality.Semantic.DeepEqual(updatedDeployment.Spec.Template.Labels, existingDeployment.Spec.Template.Labels)
+	// The user might want to set PriorityClassName back to the default value of empty string. DeepDerivative() won't detect this case below.
+	desirePriorityClassNameUpdate := updatedDeployment.Spec.Template.Spec.PriorityClassName != existingDeployment.Spec.Template.Spec.PriorityClassName
 
 	// If the existing Deployment already matches our desired spec, we're done.
 	if apiequality.Semantic.DeepDerivative(updatedDeployment, existingDeployment) {
 		// DeepDerivative allows the map fields of updatedDeployment to be a subset of existingDeployment,
 		// but we want to check that certain of those map fields are exactly equal before deciding to skip the update.
-		if !desireSelectorUpdate && !desireTemplateLabelsUpdate {
+		if !desireSelectorUpdate && !desireTemplateLabelsUpdate && !desirePriorityClassNameUpdate {
 			return nil // already equal enough, so skip update
 		}
 	}
@@ -661,7 +666,8 @@ func (c *agentController) newAgentDeployment(controllerManagerPod *corev1.Pod) *
 						RunAsUser:  ptr.To[int64](0),
 						RunAsGroup: ptr.To[int64](0),
 					},
-					HostNetwork: controllerManagerPod.Spec.HostNetwork,
+					HostNetwork:       controllerManagerPod.Spec.HostNetwork,
+					PriorityClassName: c.cfg.PriorityClassName,
 				},
 			},
 

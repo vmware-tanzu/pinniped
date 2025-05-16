@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -519,7 +519,7 @@ func TestCRDAdditionalPrinterColumns_Parallel(t *testing.T) {
 	env := testlib.IntegrationEnv(t)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Minute)
-	defer cancelFunc()
+	t.Cleanup(cancelFunc)
 
 	// AdditionalPrinterColumns are not returned by the Kube discovery endpoints,
 	// so "discover" them in the CRD definitions instead.

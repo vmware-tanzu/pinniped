@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
@@ -83,6 +84,10 @@ func FromPath(ctx context.Context, path string, setAllowedCiphers ptls.SetAllowe
 
 	if err := validateNames(&config.NamesConfig); err != nil {
 		return nil, fmt.Errorf("validate names: %w", err)
+	}
+
+	if err := validateKubeCertAgent(&config.KubeCertAgentConfig); err != nil {
+		return nil, fmt.Errorf("validate kubeCertAgent: %w", err)
 	}
 
 	if err := plog.ValidateAndSetLogLevelAndFormatGlobally(ctx, config.Log); err != nil {
@@ -182,6 +187,22 @@ func validateNames(names *NamesConfigSpec) error {
 	}
 	if len(missingNames) > 0 {
 		return constable.Error("missing required names: " + strings.Join(missingNames, ", "))
+	}
+	return nil
+}
+
+func validateKubeCertAgent(agentConfig *KubeCertAgentSpec) error {
+	if len(agentConfig.PriorityClassName) == 0 {
+		// Optional, so empty is valid.
+		return nil
+	}
+
+	// See https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#priorityclass
+	// for PriorityClassName rules.
+	errStrings := validation.IsDNS1123Subdomain(agentConfig.PriorityClassName)
+	if len(errStrings) > 0 {
+		// Always good enough to return the first error. IsDNS1123Subdomain only has two errors that it can return.
+		return fmt.Errorf("invalid priorityClassName: %s", errStrings[0])
 	}
 	return nil
 }

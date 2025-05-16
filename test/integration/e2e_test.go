@@ -64,7 +64,7 @@ func TestE2EFullIntegration_Browser(t *testing.T) {
 	}
 
 	topSetupCtx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancelFunc()
+	t.Cleanup(cancelFunc)
 	supervisorClient := testlib.NewSupervisorClientset(t)
 	kubeClient := testlib.NewKubernetesClientset(t)
 	temporarilyRemoveAllFederationDomainsAndDefaultTLSCertSecret(

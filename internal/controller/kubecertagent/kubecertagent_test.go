@@ -229,6 +229,7 @@ func TestAgentController(t *testing.T) {
 	tests := []struct {
 		name                             string
 		discoveryURLOverride             *string
+		agentPriorityClassName           string
 		pinnipedObjects                  []runtime.Object
 		kubeObjects                      []runtime.Object
 		addKubeReactions                 func(*kubefake.Clientset)
@@ -387,6 +388,59 @@ func TestAgentController(t *testing.T) {
 				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
 			},
 			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.ErrorStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.CouldNotFetchKeyStrategyReason,
+				Message:        "could not find a healthy agent pod (1 candidate)",
+				LastUpdateTime: metav1.NewTime(now),
+			},
+		},
+		{
+			name:                   "created new deployment with overridden priorityClassName, no agent pods running yet",
+			agentPriorityClassName: "some-custom-priority-class-name-for-agent",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-3",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-1 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				healthyKubeControllerManagerPod,
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace:         "kube-system",
+						Name:              "kube-controller-manager-2",
+						Labels:            map[string]string{"component": "kube-controller-manager"},
+						CreationTimestamp: metav1.NewTime(now.Add(-2 * time.Hour)),
+					},
+					Spec:   corev1.PodSpec{NodeName: schedulableControllerManagerNode.Name},
+					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+				},
+				pendingAgentPod,
+				schedulableControllerManagerNode,
+			},
+			wantDistinctErrors: []string{
+				"could not find a healthy agent pod (1 candidate)",
+			},
+			alsoAllowUndesiredDistinctErrors: []string{
+				// due to the high amount of nondeterminism in this test, this error will sometimes also happen, but is not required to happen
+				`could not ensure agent deployment: deployments.apps "pinniped-concierge-kube-cert-agent" already exists`,
+			},
+			wantDistinctLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"creating new deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+			},
+			wantAgentDeployment: modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+				deployment.Spec.Template.Spec.PriorityClassName = "some-custom-priority-class-name-for-agent"
+			}),
 			wantDeploymentActionVerbs: []string{"list", "watch", "create"},
 			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
 				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
@@ -1386,6 +1440,82 @@ func TestAgentController(t *testing.T) {
 			},
 		},
 		{
+			name: "deployment exists, configmap is valid, exec succeeds, overridden priorityClassName is updated into the deployment",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				healthyAgentDeployment,
+				healthyAgentPod,
+				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
+			},
+			agentPriorityClassName: "some-custom-priority-class-name-for-agent",
+			mocks:                  mockExecSucceeds,
+			wantDistinctErrors:     []string{""},
+			wantAgentDeployment: modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+				deployment.Spec.Template.Spec.PriorityClassName = "some-custom-priority-class-name-for-agent"
+			}),
+			wantDeploymentActionVerbs: []string{"list", "watch", "update"},
+			wantDistinctLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"updating existing deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).loadSigningKey","message":"successfully loaded signing key from agent pod into cache"}`,
+			},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.FetchedKeyStrategyReason,
+				Message:        "key was fetched successfully",
+				LastUpdateTime: metav1.NewTime(now),
+				Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+					Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+					TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
+						Server:                   "https://test-kubernetes-endpoint.example.com",
+						CertificateAuthorityData: "dGVzdC1rdWJlcm5ldGVzLWNh",
+					},
+				},
+			},
+		},
+		{
+			name: "deployment exists with a non-empty priorityClassName, configmap is valid, exec succeeds, priorityClassName config is empty string so priorityClassName is set back to empty",
+			pinnipedObjects: []runtime.Object{
+				initialCredentialIssuer,
+			},
+			kubeObjects: []runtime.Object{
+				healthyKubeControllerManagerPod,
+				modifiedHealthyHealthyAgentDeployment(func(deployment *appsv1.Deployment) {
+					deployment.Spec.Template.Spec.PriorityClassName = "some-custom-priority-class-name-for-agent"
+				}),
+				healthyAgentPod,
+				validClusterInfoConfigMap,
+				schedulableControllerManagerNode,
+			},
+			agentPriorityClassName:    "",
+			mocks:                     mockExecSucceeds,
+			wantDistinctErrors:        []string{""},
+			wantAgentDeployment:       healthyAgentDeployment,
+			wantDeploymentActionVerbs: []string{"list", "watch", "update"},
+			wantDistinctLogs: []string{
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).createOrUpdateDeployment","message":"updating existing deployment","deployment":{"name":"pinniped-concierge-kube-cert-agent","namespace":"concierge"},"templatePod":{"name":"kube-controller-manager-1","namespace":"kube-system"}}`,
+				`{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","logger":"kube-cert-agent-controller","caller":"kubecertagent/kubecertagent.go:<line>$kubecertagent.(*agentController).loadSigningKey","message":"successfully loaded signing key from agent pod into cache"}`,
+			},
+			wantStrategy: &conciergeconfigv1alpha1.CredentialIssuerStrategy{
+				Type:           conciergeconfigv1alpha1.KubeClusterSigningCertificateStrategyType,
+				Status:         conciergeconfigv1alpha1.SuccessStrategyStatus,
+				Reason:         conciergeconfigv1alpha1.FetchedKeyStrategyReason,
+				Message:        "key was fetched successfully",
+				LastUpdateTime: metav1.NewTime(now),
+				Frontend: &conciergeconfigv1alpha1.CredentialIssuerFrontend{
+					Type: conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType,
+					TokenCredentialRequestAPIInfo: &conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
+						Server:                   "https://test-kubernetes-endpoint.example.com",
+						CertificateAuthorityData: "dGVzdC1rdWJlcm5ldGVzLWNh",
+					},
+				},
+			},
+		},
+		{
 			name: "error while listing nodes",
 			pinnipedObjects: []runtime.Object{
 				initialCredentialIssuer,
@@ -1492,6 +1622,7 @@ func TestAgentController(t *testing.T) {
 						"app": "anything",
 					},
 					DiscoveryURLOverride: tt.discoveryURLOverride,
+					PriorityClassName:    tt.agentPriorityClassName,
 				},
 				&kubeclient.Client{Kubernetes: kubeClientset, PinnipedConcierge: conciergeClientset},
 				kubeInformers.Core().V1().Pods(),

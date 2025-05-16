@@ -3,7 +3,16 @@
 
 #@ load("@ytt:data", "data")
 #@ load("@ytt:json", "json")
-#@ load("helpers.lib.yaml", "defaultLabel", "labels", "deploymentPodLabel", "namespace", "defaultResourceName", "defaultResourceNameWithSuffix", "getAndValidateLogLevel", "pinnipedDevAPIGroupWithPrefix")
+#@ load("helpers.lib.yaml",
+#@   "defaultLabel",
+#@   "labels",
+#@   "deploymentPodLabel",
+#@   "namespace",
+#@   "defaultResourceName",
+#@   "defaultResourceNameWithSuffix",
+#@   "getAndValidateLogLevel",
+#@   "pinnipedDevAPIGroupWithPrefix",
+#@ )
 #@ load("@ytt:template", "template")
 
 #@ if not data.values.into_namespace:
@@ -84,6 +93,7 @@ data:
     labels: (@= json.encode(labels()).rstrip() @)
     kubeCertAgent:
       namePrefix: (@= defaultResourceNameWithSuffix("kube-cert-agent-") @)
+      priorityClassName: (@= data.values.kube_cert_agent_priority_class_name @)
       (@ if data.values.kube_cert_agent_image: @)
       image: (@= data.values.kube_cert_agent_image @)
       (@ else: @)
@@ -95,12 +105,12 @@ data:
       (@ end @)
       (@ if data.values.image_pull_dockerconfigjson: @)
       imagePullSecrets:
-        - image-pull-secret
+      - image-pull-secret
       (@ end @)
     (@ if data.values.log_level: @)
     log:
       level: (@= getAndValidateLogLevel() @)
-    (@ end @)
+      (@ end @)
     tls:
       onedottwo:
         allowedCiphers: (@= str(data.values.allowed_ciphers_for_tls_onedottwo) @)

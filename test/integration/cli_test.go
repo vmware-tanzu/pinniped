@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package integration
 
@@ -42,7 +42,7 @@ func TestCLIGetKubeconfigStaticToken_Parallel(t *testing.T) {
 
 	// Create a test webhook configuration to use with the CLI.
 	ctx, cancelFunc := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancelFunc()
+	t.Cleanup(cancelFunc)
 
 	authenticator := testlib.CreateTestWebhookAuthenticator(ctx, t, &testlib.IntegrationEnv(t).TestWebhook, authenticationv1alpha1.WebhookAuthenticatorPhaseReady)
 

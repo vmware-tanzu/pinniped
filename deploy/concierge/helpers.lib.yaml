@@ -46,15 +46,22 @@ _: #@ template.replace(data.values.custom_labels)
 #@   return log_level
 #@ end
 
+#@ def getDiscoveryURL():
+#@   if data.values.discovery_url == "" or data.values.discovery_url == "null":
+#@     return None
+#@   end
+#@   return data.values.discovery_url
+#@ end
+
 #@ def getPinnipedConfigMapData():
 #@   config = {
 #@     "discovery": {
-#@       "url": data.values.discovery_url or None,
+#@       "url": getDiscoveryURL(),
 #@     },
 #@     "api": {
 #@       "servingCertificate": {
-#@         "durationSeconds": data.values.api_serving_certificate_duration_seconds,
-#@         "renewBeforeSeconds": data.values.api_serving_certificate_renew_before_seconds,
+#@         "durationSeconds": int(data.values.api_serving_certificate_duration_seconds),
+#@         "renewBeforeSeconds": int(data.values.api_serving_certificate_renew_before_seconds),
 #@       },
 #@     },
 #@     "apiGroupSuffix": data.values.api_group_suffix,

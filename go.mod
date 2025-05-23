@@ -37,7 +37,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
-	github.com/tdewolff/minify/v2 v2.23.5
+	github.com/tdewolff/minify/v2 v2.23.8
 	go.uber.org/mock v0.5.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.38.0
@@ -52,7 +52,7 @@ require (
 	k8s.io/apiserver v0.33.1
 	k8s.io/client-go v0.33.1
 	k8s.io/component-base v0.33.1
-	k8s.io/gengo v0.0.0-20250513215321-e3bc6f1e78b4
+	k8s.io/gengo v0.0.0-20250521225637-5d81b218513b
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.33.1
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
@@ -134,7 +134,7 @@ require (
 	github.com/spf13/viper v1.16.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
-	github.com/tdewolff/parse/v2 v2.8.0 // indirect
+	github.com/tdewolff/parse/v2 v2.8.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.21 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.21 // indirect

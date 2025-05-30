@@ -10,7 +10,7 @@ As of right now, only the latest version of Pinniped is supported.
 
 Security is of the highest importance and all security vulnerabilities or suspected security vulnerabilities should be reported to Pinniped privately, to minimize attacks against current users of Pinniped before they are fixed. Vulnerabilities will be investigated and patched on the next patch (or minor) release as soon as possible. This information could be kept entirely internal to the project.
 
-If you know of a publicly disclosed security vulnerability for Pinniped, please **IMMEDIATELY** contact the VMware Security Team (security@vmware.com). The use of encrypted email is encouraged. The public PGP key can be found at https://kb.vmware.com/kb/1055.
+If you know of a publicly disclosed security vulnerability for Pinniped, please **IMMEDIATELY** contact the VMware Security Team (vmware.psirt@broadcom.com). The use of encrypted email is encouraged. The public PGP key can be found at https://kb.vmware.com/kb/1055.
 
 **IMPORTANT: Do not file public issues on GitHub for security vulnerabilities**
 
@@ -54,7 +54,7 @@ The Security Team will also publish any mitigating steps users can take until th
 
 ## Mailing lists
 
-*   Use security@vmware.com to report security concerns to the VMware Security Team, who uses the list to privately discuss security issues and fixes prior to disclosure. The use of encrypted email is encouraged. The public PGP key can be found at https://kb.vmware.com/kb/1055.
+*   Use vmware.psirt@broadcom.com to report security concerns to the VMware Security Team, who uses the list to privately discuss security issues and fixes prior to disclosure. The use of encrypted email is encouraged. The public PGP key can be found at https://kb.vmware.com/kb/1055.
 *   Join the [Pinniped Distributors](https://groups.google.com/g/project-pinniped-distributors) mailing list for early private information and vulnerability disclosure. Early disclosure may include mitigating steps and additional information on security patch releases. See below for information on how Pinniped distributors or vendors can apply to join this list.
 
 ## Early Disclosure to Pinniped Distributors List
@@ -81,7 +81,7 @@ The information that members receive on the Pinniped Distributors mailing list m
 
 Before you share any information from the list with members of your team who are required to fix the issue, these team members must agree to the same terms, and only be provided with information on a need-to-know basis.
 
-In the unfortunate event that you share information beyond what is permitted by this policy, you must urgently inform the VMware Security Team (security@vmware.com) of exactly what information was leaked and to whom. If you continue to leak information and break the policy outlined here, you will be permanently removed from the list.
+In the unfortunate event that you share information beyond what is permitted by this policy, you must urgently inform the VMware Security Team (vmware.psirt@broadcom.com) of exactly what information was leaked and to whom. If you continue to leak information and break the policy outlined here, you will be permanently removed from the list.
 
 ## Requesting to Join
 

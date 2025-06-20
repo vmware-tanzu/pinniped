@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Helps decide the name of the Deployment along with other resources and labels. Will be suffixed with "-web".
@@ -27,8 +27,12 @@ web:
   service:
     api:
       type: LoadBalancer
+      annotations:
+        networking.gke.io/load-balancer-type: "Internal"
     workerGateway:
       type: LoadBalancer
+      annotations:
+        networking.gke.io/load-balancer-type: "Internal"
   # The first node in the generic-1 nodepool (using e2-highcpu-8 VM) has lots of GKE and Kubernetes pods running on it.
   # According to the "allocatable" section of the "kubectl get node -o yaml" output, the first node has
   # 7910m cpu and 6179084 Ki memory (which is about 5.893 Gi).
@@ -67,7 +71,10 @@ concourse:
           # Because it was created in the org, it should have permissions to read team memberships during a login.
           # The client ID and client secret are stored in the bootstrap secret in the Secrets Manager
           # (see infra/README.md for more info about the bootstrap secret).
-          team: vmware-tanzu:pinniped-owners
+          # TODO: this needs to change to be the team in the vmware org. Also need to change the clientID and clientSecret in the concourse-install-bootstrap GCP secret for one in the vmware org.
+#          team: vmware-tanzu:pinniped-owners
+          # Temporarily just list which specific users are admins instead.
+          user: cfryanr,joshuatcasey
       github:
         enabled: true
     bindPort: 80
@@ -94,9 +101,6 @@ concourse:
       enabled: true
     kubernetes:
       keepNamespaces: true
-    letsEncrypt:
-      enabled: true
-      acmeURL: "https://acme-v02.api.letsencrypt.org/directory"
     tls:
       enabled: true
       bindPort: 443

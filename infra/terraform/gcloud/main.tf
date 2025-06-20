@@ -1,22 +1,25 @@
-# Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2023-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# The static IP and related DNS entry.
+# Create the static IP.
 module "address" {
   source = "./address"
 
-  dns-zone  = var.dns-zone
-  subdomain = var.subdomain
+  sharedVPCProject    = var.sharedVPCProject
+  concourseSubnetName = var.concourseSubnetName
 }
 
-# Instantiates the GKE Kubernetes cluster.
+# Create the GKE Kubernetes cluster.
 module "cluster" {
   source = "./cluster"
 
   name    = "pinniped-concourse"
   project = var.project
-  region  = var.region
   zone    = var.zone
+
+  sharedVPCProject = var.sharedVPCProject
+  networkName      = var.networkName
+  subnetName       = var.concourseSubnetName
 
   node-pools = {
 
@@ -30,10 +33,10 @@ module "cluster" {
       max          = 2
       min          = 1
       preemptible  = false
-      version      = "1.30.4-gke.1348000"
+      version      = "1.32.2-gke.1297002"
     },
 
-    "workers-2" = {
+    "workers-1" = {
       auto-upgrade = true
       disk-size    = "100"
       disk-type    = "pd-ssd"
@@ -43,7 +46,7 @@ module "cluster" {
       max          = 5
       min          = 1
       preemptible  = false
-      version      = "1.30.4-gke.1348000"
+      version      = "1.32.2-gke.1297002"
     },
   }
 }
@@ -52,10 +55,14 @@ module "cluster" {
 module "database" {
   source = "./database"
 
-  name            = "pinniped-concourse"
+  name   = "pinniped-concourse"
+  region = var.region
+  zone   = var.zone
+
+  sharedVPCProject = var.sharedVPCProject
+  networkName      = var.networkName
+
   cpus            = "4"
   memory_mb       = "7680"
-  region          = var.region
-  zone            = var.zone
   max_connections = "300"
 }

@@ -1,11 +1,11 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 #
 # Some global fly config.
 #
 export FLY_CLI=/usr/local/bin/fly
-export CONCOURSE_URL=https://ci.pinniped.dev
+export CONCOURSE_URL=https://ci.pinniped.broadcom.net
 export CONCOURSE_TEAM=main
 export CONCOURSE_TARGET=pinniped
 export ROOT_DIR

@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Helps decide the name of the Deployment along with other resources and labels. Will be suffixed with "-worker".
@@ -13,7 +13,7 @@ postgresql:
 worker:
   # In an effort to save money, default to 1 worker.
   replicas: 1
-  nodeSelector: { cloud.google.com/gke-nodepool: workers-2 } # the name of the nodepool from terraform
+  nodeSelector: { cloud.google.com/gke-nodepool: workers-1 } # the name of the nodepool from terraform
   hardAntiAffinity: true
   minAvailable: 0
   terminationGracePeriodSeconds: 3600
@@ -28,7 +28,7 @@ worker:
     # searches using the more commonly used names for those units, e.g. searching "29061248 KiB to GiB".
     #
     # Limit to using all available CPUs and most of the available memory in our e2-standard-8 VM nodes.
-    # According to the "Allocatable" section of the "kubectl describe nodes -l cloud.google.com/gke-nodepool=workers-2" output,
+    # According to the "Allocatable" section of the "kubectl describe nodes -l cloud.google.com/gke-nodepool=workers-1" output,
     # each node has 29061248 Ki, which is equal to 27.7149658203 Gi of memory allocatable,
     # and each node has 7910m cpu allocatable.
     #

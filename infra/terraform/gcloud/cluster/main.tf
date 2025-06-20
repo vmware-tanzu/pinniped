@@ -1,32 +1,32 @@
-# Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2023-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-module "vpc" {
-  source = "./vpc"
-
-  name   = var.name
-  region = var.region
-
-  vms-cidr      = "10.10.0.0/16"
-  pods-cidr     = "10.11.0.0/16"
-  services-cidr = "10.12.0.0/16"
+# "data" reads a pre-existing resource without trying to manage its state.
+data "google_compute_network" "existing_network" {
+  project = var.sharedVPCProject
+  name    = var.networkName
 }
 
-resource "google_service_account" "default" {
-  account_id   = "${var.name}-sa"
-  display_name = "GKE Node SA for ${var.name}"
+# This subnet is shared with us from another GCP project.
+data "google_compute_subnetwork" "existing_subnet" {
+  project = var.sharedVPCProject
+  name    = var.subnetName
+}
+
+data "google_service_account" "default" {
+  account_id = "terraform"
 }
 
 # See https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/container_cluster
 resource "google_container_cluster" "main" {
   # Allow "terraform destroy" for this cluster.
-  deletion_protection = false
+  # deletion_protection = false
 
   name     = var.name
   location = var.zone
 
-  network    = module.vpc.name
-  subnetwork = module.vpc.subnet-name
+  network    = data.google_compute_network.existing_network.id
+  subnetwork = data.google_compute_subnetwork.existing_subnet.id
 
   # We can't create a cluster with no node pool defined, but we want to only use
   # separately managed node pools. This allows node pools to be added and removed without recreating the cluster.
@@ -34,11 +34,24 @@ resource "google_container_cluster" "main" {
   remove_default_node_pool = true
   initial_node_count       = 1
 
-  min_master_version = "1.30.4-gke.1348000"
+  min_master_version = "1.32.2-gke.1297002"
 
+  # Settings for a private cluster.
+  # See internal doc https://bsg-confluence.broadcom.net/pages/viewpage.action?pageId=689720737
+  networking_mode = "VPC_NATIVE"
+  private_cluster_config {
+    enable_private_endpoint = true
+    enable_private_nodes    = true
+  }
+  master_authorized_networks_config {
+    cidr_blocks {
+      cidr_block   = "10.0.0.0/8"
+      display_name = "corp internal networks"
+    }
+  }
   ip_allocation_policy {
-    cluster_secondary_range_name  = module.vpc.pods-range-name
-    services_secondary_range_name = module.vpc.services-range-name
+    cluster_secondary_range_name  = "pods"
+    services_secondary_range_name = "services"
   }
 
   addons_config {
@@ -84,6 +97,8 @@ resource "google_container_node_pool" "main" {
   cluster  = google_container_cluster.main.name
   name     = each.key
 
+  max_pods_per_node = 64
+
   autoscaling {
     min_node_count = each.value.min
     max_node_count = each.value.max
@@ -110,11 +125,13 @@ resource "google_container_node_pool" "main" {
       disable-legacy-endpoints = "true"
     }
 
-    # Google recommends custom service accounts that have cloud-platform scope and permissions granted via IAM Roles.
-    service_account = google_service_account.default.email
-    oauth_scopes    = [
+    service_account = data.google_service_account.default.email
+    oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform"
     ]
+
+    # Tag to attach appropriate firewall rules.
+    tags = ["gke-broadcom"]
   }
 
   timeouts {

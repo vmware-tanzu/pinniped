@@ -1,17 +1,17 @@
-# Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2023-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 terraform {
   required_providers {
-    google      = "~> 5"
-    google-beta = "~> 5"
+    google      = "~> 6"
+    google-beta = "~> 6"
   }
 
   backend "gcs" {
     # By not providing credentials, you will use your current identity from the gcloud CLI.
     # credentials = "gcp.json"
-    bucket = "tanzu-user-authentication-terraform-state"
-    prefix = "pinniped-concourse-jan2024"
+    bucket = "pinniped-ci-terraform-state"
+    prefix = "pinniped-concourse"
   }
 }
 

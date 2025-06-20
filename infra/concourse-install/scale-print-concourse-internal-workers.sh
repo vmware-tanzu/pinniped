@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -14,13 +14,19 @@ if [[ -z "${PINNIPED_GCP_PROJECT:-}" ]]; then
   exit 1
 fi
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Define some env vars
+source "$script_dir/../../hack/fly-helpers.sh"
+# Setup and login if needed
+"$script_dir/../../hack/setup-fly.sh"
+
 CLUSTER="pinniped-concourse"
 PROJECT="$PINNIPED_GCP_PROJECT"
-ZONE="us-central1-c"
+ZONE="us-west1-c"
 STATEFULSET="concourse-worker"
 NAMESPACE="concourse-worker"
-NODEPOOL="workers-2"
-TARGET="pinniped"
+NODEPOOL="workers-1"
 
 if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
   gcloud auth activate-service-account \
@@ -79,10 +85,7 @@ kubectl get nodes \
 
 echo
 echo "Current fly workers..."
-if ! fly --target "$TARGET" status >/dev/null; then
-  fly --target "$TARGET" login
-fi
-fly --target "$TARGET" workers
+$FLY_CLI --target "$CONCOURSE_TARGET" workers
 
 echo ""
 echo "Note: If the number of pods, nodes, and fly workers are not all the same,"

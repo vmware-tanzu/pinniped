@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -66,7 +66,7 @@ CLUSTER_NAME=$(yq eval '.cluster-name.value' "$TERRAFORM_OUTPUT_FILE")
 PROJECT=$(yq eval '.project.value' "$TERRAFORM_OUTPUT_FILE")
 ZONE=$(yq eval '.zone.value' "$TERRAFORM_OUTPUT_FILE")
 WEB_IP_ADDRESS=$(yq eval '.web-ip.value' "$TERRAFORM_OUTPUT_FILE")
-WEB_HOSTNAME=$(yq eval '.web-hostname.value' "$TERRAFORM_OUTPUT_FILE")
+WEB_HOSTNAME="ci.pinniped.broadcom.net"
 DB_IP_ADDRESS=$(yq eval '.database-ip.value' "$TERRAFORM_OUTPUT_FILE")
 DB_USERNAME=$(yq eval '.database-username.value' "$TERRAFORM_OUTPUT_FILE")
 DB_PASSWORD=$(yq eval '.database-password.value' "$TERRAFORM_OUTPUT_FILE")
@@ -83,8 +83,17 @@ chmod 0600 "$KUBECONFIG"
 BOOTSTRAP_SECRETS_FILE="$DEPLOY_TEMP_DIR/concourse-install-bootstrap.yaml"
 gcloud secrets versions access latest --secret="concourse-install-bootstrap" --project "$PROJECT" >"$BOOTSTRAP_SECRETS_FILE"
 
+# Download the TLS cert for ci.pinniped.broadcom.net which was manually added as a secret.
+TLS_SECRETS_FILE="$DEPLOY_TEMP_DIR/tls-cert.yaml"
+gcloud secrets versions access latest --secret="ci-pinniped-broadcom-net-tls-cert" --project "$PROJECT" >"$TLS_SECRETS_FILE"
+TLS_CERT="$(yq eval '."cert.pem"' "$TLS_SECRETS_FILE")"
+TLS_KEY="$(yq eval '."key.pem"' "$TLS_SECRETS_FILE")"
+
 # Dump out the cluster info for diagnostic purposes.
 kubectl cluster-info
+
+# Configure ip-masq-agent to allow the pods to reach the private IP of the Cloud SQL server.
+kubectl apply -f "$script_dir/web/ip-masq-agent-configmap.yaml"
 
 # Some of the configuration options used below were inspired by how HushHouse runs on GKE.
 # See https://github.com/concourse/hush-house/blob/master/deployments/with-creds/hush-house/values.yaml
@@ -111,6 +120,8 @@ helm upgrade "$HELM_RELEASE_NAME" concourse/concourse \
   --set secrets.postgresCaCert="$DB_CA_CERT" \
   --set secrets.postgresClientCert="$DB_CLIENT_CERT" \
   --set secrets.postgresClientKey="$DB_CLIENT_KEY" \
+  --set secrets.webTlsCert="$TLS_CERT" \
+  --set secrets.webTlsKey="$TLS_KEY" \
   --post-renderer "$script_dir/web/ytt-helm-postrender-web.sh"
 
 # By default, it will not be possible for the autoscaler to scale down to one node.

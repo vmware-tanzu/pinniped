@@ -1,0 +1,12 @@
+# see internal doc https://bsg-confluence.broadcom.net/pages/viewpage.action?pageId=689720737
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ip-masq-agent
+  namespace: kube-system
+data:
+  # 240.0.0.0/4 is needed to allow the pod to reach the Cloud SQL server's private IP.
+  config: |
+    nonMasqueradeCIDRs:
+     - 240.0.0.0/4
+    resyncInterval: 60s

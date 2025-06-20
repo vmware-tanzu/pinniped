@@ -1,12 +1,20 @@
-# Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2023-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
+
+output "project" {
+  value = var.project
+}
+
+output "region" {
+  value = var.region
+}
+
+output "zone" {
+  value = var.zone
+}
 
 output "web-ip" {
   value = module.address.ip
-}
-
-output "web-hostname" {
-  value = module.address.hostname
 }
 
 output "database-ip" {
@@ -35,18 +43,6 @@ output "database-cert" {
 output "database-private-key" {
   sensitive = true
   value     = module.database.private-key
-}
-
-output "project" {
-  value = var.project
-}
-
-output "region" {
-  value = var.region
-}
-
-output "zone" {
-  value = var.zone
 }
 
 output "cluster-name" {

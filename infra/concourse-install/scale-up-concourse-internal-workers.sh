@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -16,10 +16,10 @@ fi
 
 CLUSTER="pinniped-concourse"
 PROJECT="$PINNIPED_GCP_PROJECT"
-ZONE="us-central1-c"
+ZONE="us-west1-c"
 STATEFULSET="concourse-worker"
 NAMESPACE="concourse-worker"
-NODEPOOL="workers-2"
+NODEPOOL="workers-1"
 
 if [[ -z "$(gcloud config list account --format "value(core.account)")" ]]; then
   gcloud auth activate-service-account \

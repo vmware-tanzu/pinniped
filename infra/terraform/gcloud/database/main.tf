@@ -1,4 +1,4 @@
-# Copyright 2023-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2023-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # A piece of randomization that gets consumed by the
@@ -10,7 +10,29 @@ resource "random_id" "instance-name" {
   byte_length = 4
 }
 
+# "data" reads a pre-existing resource without trying to manage its state.
+data "google_compute_network" "private_network" {
+  provider = google-beta
+
+  project = var.sharedVPCProject
+  name    = var.networkName
+}
+
+# This API needs to be enabled in our project before creating our Cloud SQL instance,
+# or else we get error "googleapi: Error 400: Invalid request: Incorrect Service Networking config
+# for instance: xxx:xxx:SERVICE_NETWORKING_NOT_ENABLED., invalid".
+# See https://stackoverflow.com/a/66537918.
+resource "google_project_service" "project" {
+  service            = "servicenetworking.googleapis.com"
+  disable_on_destroy = false
+}
+
 resource "google_sql_database_instance" "main" {
+  provider = google-beta
+
+  # Allow "terraform destroy" for this db.
+  # deletion_protection = false
+
   name             = "${var.name}-${random_id.instance-name.hex}"
   region           = var.region
   database_version = "POSTGRES_15"
@@ -20,6 +42,7 @@ resource "google_sql_database_instance" "main" {
     disk_autoresize   = true
     disk_type         = "PD_SSD"
     tier              = "db-custom-${var.cpus}-${var.memory_mb}"
+    edition           = "ENTERPRISE" # cheaper than ENTERPRISE_PLUS
 
     database_flags {
       name  = "log_min_duration_statement"
@@ -32,13 +55,14 @@ resource "google_sql_database_instance" "main" {
     }
 
     ip_configuration {
-      ipv4_enabled = "true"
-      require_ssl  = "true"
+      # Disable assignment of a public IP address
+      ipv4_enabled = false
 
-      authorized_networks {
-        name  = "all"
-        value = "0.0.0.0/0"
-      }
+      ssl_mode = "ENCRYPTED_ONLY"
+
+      private_network = data.google_compute_network.private_network.self_link
+
+      enable_private_path_for_google_cloud_services = true
     }
 
     backup_configuration {
@@ -68,8 +92,8 @@ resource "random_string" "password" {
 resource "google_sql_user" "user" {
   name = "atc"
 
-  instance = google_sql_database_instance.main.name
-  password = random_string.password.result
+  instance    = google_sql_database_instance.main.name
+  password_wo = random_string.password.result
 }
 
 resource "google_sql_ssl_cert" "cert" {

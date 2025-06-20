@@ -25,11 +25,13 @@ script must be used to auto-generate some values and store them in a new secret 
 This script only needs to be run once.
 
 1. Create a github oauth client as described in https://concourse-ci.org/github-auth.html.
-   The callback URI should be set to `https://ci.pinniped.dev/sky/issuer/callback`.
+   The callback URI should be set to `https://ci.pinniped.broadcom.net/sky/issuer/callback`.
    Take note of the client ID and client secret for use in the next step.
 2. Run `GITHUB_CLIENT_ID=<your_client_id> GITHUB_CLIENT_SECRET=<your_client_secret> ./bootstrap-secrets.sh`.
    This will create a secret in the GCP Secrets Manager which includes the GitHub client info
    along with some auto-generated secrets.
+3. If you need to change the GitHub client's ID or secret later, edit the secret in GCP Secrets Manager,
+   and then redeploy the web deployment.
 
 ## Web Deployment
 
@@ -56,5 +58,5 @@ To upgrade each deployment to a new version of Concourse:
    back to its default number of replicas.
    1. [infra/concourse-install/deploy-concourse-web.sh](./concourse-install/deploy-concourse-web.sh)
    2. [infra/concourse-install/deploy-concourse-web.sh](./concourse-install/deploy-concourse-internal-workers.sh)
-3. Commit and push those script changes. 
+3. Commit and push those script changes.
 4. Trigger the CI jobs to scale the internal workers back to the desired number as needed.

@@ -31,7 +31,7 @@ The release checklist is committed to this repo as an [issue template](https://g
 ## Pipelines
 
 Pinniped uses [Concourse](https://concourse-ci.org) for CI/CD.
-Our Concourse can be found at [ci.pinniped.dev](https://ci.pinniped.dev).
+We are currently running our Concourse on a network that can only be reached from inside the corporate network at [ci.pinniped.broadcom.net](https://ci.pinniped.broadcom.net).
 
 The following pipelines are implemented in this branch. Not all pipelines are necessarily publicly visible, although our goal is to make them all visible.
 

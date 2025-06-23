@@ -199,8 +199,7 @@ resources:
   - name: pinniped-pr
     type: pull-request
     icon: source-pull
-    check_every: 10m
-    webhook_token: ((github-webhook-token))
+    check_every: 1m
     source:
       repository: vmware-tanzu/pinniped
       access_token: ((ci-bot-access-token-with-repo-status-permission))

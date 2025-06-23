@@ -297,8 +297,7 @@ resources:
   - name: pinniped
     type: git
     icon: github
-    check_every: 10m
-    webhook_token: ((github-webhook-token))
+    check_every: 1m
     source:
       uri: git@github.com:vmware-tanzu/pinniped.git
       branch: main
@@ -2493,13 +2492,13 @@ jobs:
           <<: *jumpcloud_integration_env_vars
           <<: *active_directory_integration_env_vars
           <<: *github_integration_env_vars
-      - task: install-and-configure-cert-manager
-        file: pinniped-ci/pipelines/shared-tasks/install-and-configure-cert-manager/task.yml
-        image: k8s-app-deployer-image
-        timeout: 15m
-        params:
-          PINNIPED_GCP_PROJECT: ((gcp-project-name))
-          CERT_MANAGER_DNS_ADMIN_JSON_KEY: ((cert-manager-dns-admin-json-key))
+#      - task: install-and-configure-cert-manager
+#        file: pinniped-ci/pipelines/shared-tasks/install-and-configure-cert-manager/task.yml
+#        image: k8s-app-deployer-image
+#        timeout: 15m
+#        params:
+#          PINNIPED_GCP_PROJECT: ((gcp-project-name))
+#          CERT_MANAGER_DNS_ADMIN_JSON_KEY: ((cert-manager-dns-admin-json-key))
       - task: run-integration-tests
         timeout: 75m
         file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml

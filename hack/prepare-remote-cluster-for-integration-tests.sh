@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Assuming that you have somehow got your hands on a remote GKE or kind cluster,
@@ -240,7 +240,7 @@ gke | aks | eks)
   log_note "KUBECONFIG='$KUBECONFIG' TEST_ENV_PATH='/tmp/integration-test-env' SOURCE_PATH='$pinniped_repo' $ROOT/pipelines/shared-tasks/run-integration-tests/task.sh"
   ;;
 kind)
-  log_note "KUBECONFIG='$KUBECONFIG' TEST_ENV_PATH='/tmp/integration-test-env' SOURCE_PATH='$pinniped_repo' START_GCLOUD_PROXY=yes GCP_PROJECT=$PINNIPED_GCP_PROJECT GCP_ZONE=us-central1-b $ROOT/pipelines/shared-tasks/run-integration-tests/task.sh"
+  log_note "KUBECONFIG='$KUBECONFIG' TEST_ENV_PATH='/tmp/integration-test-env' SOURCE_PATH='$pinniped_repo' START_GCLOUD_PROXY=yes GCP_PROJECT=$PINNIPED_GCP_PROJECT GCP_ZONE=us-west1-b $ROOT/pipelines/shared-tasks/run-integration-tests/task.sh"
   ;;
 *)
   log_error "Huh? Should never get here."

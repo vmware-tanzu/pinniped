@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # This is the script that runs at startup to launch Kind on GCE.
@@ -16,7 +16,7 @@ function cleanup() {
 }
 trap "cleanup" EXIT SIGINT
 
-PUBLIC_IP="$(curl --retry-all-errors --retry 5 http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H "Metadata-Flavor: Google")"
+INTERNAL_IP="$(curl --retry-all-errors --retry 5 http://metadata/computeMetadata/v1/instance/network-interfaces/0/ip -H "Metadata-Flavor: Google")"
 KIND_VERSION="$(curl --retry-all-errors --retry 5 http://metadata.google.internal/computeMetadata/v1/instance/attributes/kind_version -H "Metadata-Flavor: Google")"
 K8S_VERSION="$(curl --retry-all-errors --retry 5 http://metadata.google.internal/computeMetadata/v1/instance/attributes/k8s_version -H "Metadata-Flavor: Google")"
 KIND_NODE_IMAGE="$(curl --retry-all-errors --retry 5 http://metadata.google.internal/computeMetadata/v1/instance/attributes/kind_node_image -H "Metadata-Flavor: Google")"
@@ -92,7 +92,7 @@ kubeadmConfigPatches:
   apiVersion: ${KUBE_ADM_VERSION}
   kind: ClusterConfiguration
   # ControlPlaneEndpoint sets a stable IP address or DNS name for the control plane.
-  controlPlaneEndpoint: "${PUBLIC_IP}:6443"
+  controlPlaneEndpoint: "${INTERNAL_IP}:6443"
   # mount the kind extraMounts into the API server static pod so we can use the audit config
   apiServer:
     extraVolumes:
@@ -177,8 +177,8 @@ fi
 
 /var/lib/google/kind create cluster --wait 5m --kubeconfig /tmp/kubeconfig.yaml --image "$image" --config /tmp/kind.yaml |& tee /tmp/kind-cluster-create.log
 
-# Change the kubeconfig to make the server address match the public IP configured as controlPlaneEndpoint above.
-sed -i "s/0\\.0\\.0\\.0/${PUBLIC_IP}/" /tmp/kubeconfig.yaml
+# Change the kubeconfig to make the server address match the IP configured as controlPlaneEndpoint above.
+sed -i "s/0\\.0\\.0\\.0/${INTERNAL_IP}/" /tmp/kubeconfig.yaml
 
 # The above YAML config file specifies one node, and Kind should never put the "control-plane"
 # taint on the node for single-node clusters. Due to the issue described in

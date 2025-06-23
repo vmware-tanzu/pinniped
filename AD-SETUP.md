@@ -18,8 +18,8 @@ gcloud auth login
 
 # Set some variables.
 project="REDACTED" # Change this to be the actual project name before running these commands.
-region="us-central1"
-zone="us-central1-b"
+region="us-west1"
+zone="us-west1-c"
 vpc_name="ad"
 
 # Create VPC.

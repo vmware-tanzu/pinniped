@@ -125,12 +125,12 @@ See [infra/README.md](./infra/README.md) for details about how Concourse was ins
 
 In addition to the many ephemeral Kubernetes clusters we use for testing, we also deploy a long-running acceptance environment.
 
-Google Kubernetes Engine (GKE) in the `gke-acceptance-cluster` cluster in our GCP project in the `us-central1-c` availability zone.
+Google Kubernetes Engine (GKE) in the `gke-acceptance-cluster` cluster in our GCP project in the `us-west1-c` availability zone.
 
 To access this cluster, download the kubeconfig to `gke-acceptance.yaml` by running:
 
 ```cmd
-KUBECONFIG=gke-acceptance.yaml gcloud container clusters get-credentials gke-acceptance-cluster --project "$PINNIPED_GCP_PROJECT" --zone us-central1-c
+KUBECONFIG=gke-acceptance.yaml gcloud container clusters get-credentials gke-acceptance-cluster --project "$PINNIPED_GCP_PROJECT" --zone us-west1-c
 ```
 
 The above command assumes that you have already set `PINNIPED_GCP_PROJECT` to be the name of the GCP project.

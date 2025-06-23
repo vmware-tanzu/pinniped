@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2022-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # This is similar to rsync.sh, but with the src and dest flipped at the end.
@@ -19,7 +19,7 @@ dest_dir="./workspace/pinniped"
 instance_name="${REMOTE_INSTANCE_NAME:-${USER}}"
 instance_user="${REMOTE_INSTANCE_USERNAME:-${USER}}"
 project="$PINNIPED_GCP_PROJECT"
-zone="us-central1-b"
+zone="us-west1-b"
 config_file="/tmp/gcp-ssh-config"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

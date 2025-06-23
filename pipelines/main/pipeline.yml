@@ -85,15 +85,15 @@ meta:
 
   # GKE account info and which zone the clusters should be created in and deleted from.
   gke_account_params: &gke_account_params
-    CLUSTER_ZONE: us-central1-c
+    CLUSTER_ZONE: us-west1-c
     GCP_PROJECT: ((gcp-project-name))
     GCP_SERVICE_ACCOUNT: ((gke-test-pool-manager-username))
     GCP_JSON_KEY: ((gke-test-pool-manager-json-key))
 
   # GCP account info and which zone the kind workers should be created in and deleted from.
   gcp_account_params: &gcp_account_params
-    INSTANCE_ZONE: us-central1-b # which zone the kind worker VMs should be created in and deleted from
-    GCP_ZONE: us-central1-b
+    INSTANCE_ZONE: us-west1-b # which zone the kind worker VMs should be created in and deleted from
+    GCP_ZONE: us-west1-b
     GCP_PROJECT: ((gcp-project-name))
     GCP_USERNAME: ((gcp-instance-admin-username))
     GCP_JSON_KEY: ((gcp-instance-admin-json-key))
@@ -297,8 +297,7 @@ resources:
   - name: pinniped
     type: git
     icon: github
-    check_every: 10m
-    webhook_token: ((github-webhook-token))
+    check_every: 1m
     source:
       uri: git@github.com:vmware-tanzu/pinniped.git
       branch: main
@@ -2493,13 +2492,13 @@ jobs:
           <<: *jumpcloud_integration_env_vars
           <<: *active_directory_integration_env_vars
           <<: *github_integration_env_vars
-      - task: install-and-configure-cert-manager
-        file: pinniped-ci/pipelines/shared-tasks/install-and-configure-cert-manager/task.yml
-        image: k8s-app-deployer-image
-        timeout: 15m
-        params:
-          PINNIPED_GCP_PROJECT: ((gcp-project-name))
-          CERT_MANAGER_DNS_ADMIN_JSON_KEY: ((cert-manager-dns-admin-json-key))
+#      - task: install-and-configure-cert-manager
+#        file: pinniped-ci/pipelines/shared-tasks/install-and-configure-cert-manager/task.yml
+#        image: k8s-app-deployer-image
+#        timeout: 15m
+#        params:
+#          PINNIPED_GCP_PROJECT: ((gcp-project-name))
+#          CERT_MANAGER_DNS_ADMIN_JSON_KEY: ((cert-manager-dns-admin-json-key))
       - task: run-integration-tests
         timeout: 75m
         file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml

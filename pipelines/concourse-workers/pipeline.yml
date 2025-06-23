@@ -9,21 +9,21 @@ meta:
 
   # GCP account info and which zone the workers should be created in and deleted from.
   gke_admin_params: &gke_admin_params
-    INSTANCE_ZONE: us-west1-b
+    INSTANCE_ZONE: us-west1-c
     PINNIPED_GCP_PROJECT: ((gcp-project-name))
     GCP_USERNAME: ((gke-cluster-developer-username))
     GCP_JSON_KEY: ((gke-cluster-developer-json-key))
 
   # GCP account info and which zone the workers should be created in and deleted from.
   gcp_account_params: &gcp_account_params
-    INSTANCE_ZONE: us-central1-b
+    INSTANCE_ZONE: us-west1-b
     GCP_PROJECT: ((gcp-project-name))
     GCP_USERNAME: ((gcp-instance-admin-username))
     GCP_JSON_KEY: ((gcp-instance-admin-json-key))
 
   # GKE account info and which zone the clusters should be created in and deleted from.
   gke_account_params: &gke_account_params
-    CLUSTER_ZONE: us-central1-c
+    CLUSTER_ZONE: us-west1-c
     GCP_PROJECT: ((gcp-project-name))
     GCP_SERVICE_ACCOUNT: ((gke-test-pool-manager-username))
     GCP_JSON_KEY: ((gke-test-pool-manager-json-key))
@@ -42,9 +42,9 @@ resources:
     type: git
     icon: github
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
 
   - name: k8s-app-deployer-image
     type: registry-image

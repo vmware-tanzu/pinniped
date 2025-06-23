@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -13,7 +13,7 @@ fi
 instance_name="${REMOTE_INSTANCE_NAME:-${USER}}"
 instance_user="${REMOTE_INSTANCE_USERNAME:-${USER}}"
 project="$PINNIPED_GCP_PROJECT"
-zone="us-central1-b"
+zone="us-west1-b"
 
 # Run ssh with identities forwarded so you can use them with git on the remote host.
 # Optionally run an arbitrary command on the remote host.

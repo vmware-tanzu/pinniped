@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -20,7 +20,7 @@ gcloud auth activate-service-account "$GKE_USERNAME" --key-file <(echo "$GKE_JSO
 
 # https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke
 export USE_GKE_GCLOUD_AUTH_PLUGIN=True
-gcloud container clusters get-credentials "$GKE_CLUSTER_NAME" --zone us-central1-c --project "$PINNIPED_GCP_PROJECT"
+gcloud container clusters get-credentials "$GKE_CLUSTER_NAME" --zone us-west1-c --project "$PINNIPED_GCP_PROJECT"
 
 pushd pinniped >/dev/null
 
@@ -81,7 +81,7 @@ cp /tmp/integration-test-env integration-test-env-vars/
 
 # So that the tests can avoid using the GKE auth plugin, create an admin kubeconfig which uses certs (without the plugin).
 # Get the cluster details back, including the admin certificate:
-gcloud container clusters describe "$GKE_CLUSTER_NAME" --zone us-central1-c --format json >/tmp/cluster.json
+gcloud container clusters describe "$GKE_CLUSTER_NAME" --zone us-west1-c --format json >/tmp/cluster.json
 # Make a new kubeconfig user "cluster-admin" using the admin cert.
 jq -r .masterAuth.clientCertificate /tmp/cluster.json | base64 -d >/tmp/client.crt
 jq -r .masterAuth.clientKey /tmp/cluster.json | base64 -d >/tmp/client.key

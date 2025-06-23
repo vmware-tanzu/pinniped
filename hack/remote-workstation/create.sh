@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -13,7 +13,7 @@ fi
 instance_name="${REMOTE_INSTANCE_NAME:-${USER}}"
 instance_user="${REMOTE_INSTANCE_USERNAME:-${USER}}"
 project="$PINNIPED_GCP_PROJECT"
-zone="us-central1-b"
+zone="us-west1-b"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Create a VM called $instance_name with some reasonable compute power and disk.

@@ -13,7 +13,7 @@ fi
 instance_name="${REMOTE_INSTANCE_NAME:-${USER}}"
 instance_user="${REMOTE_INSTANCE_USERNAME:-${USER}}"
 project="$PINNIPED_GCP_PROJECT"
-zone="us-west1-b"
+zone="us-west1-a"
 
 # Run ssh with identities forwarded so you can use them with git on the remote host.
 # Optionally run an arbitrary command on the remote host.

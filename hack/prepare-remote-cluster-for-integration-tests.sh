@@ -240,7 +240,7 @@ gke | aks | eks)
   log_note "KUBECONFIG='$KUBECONFIG' TEST_ENV_PATH='/tmp/integration-test-env' SOURCE_PATH='$pinniped_repo' $ROOT/pipelines/shared-tasks/run-integration-tests/task.sh"
   ;;
 kind)
-  log_note "KUBECONFIG='$KUBECONFIG' TEST_ENV_PATH='/tmp/integration-test-env' SOURCE_PATH='$pinniped_repo' START_GCLOUD_PROXY=yes GCP_PROJECT=$PINNIPED_GCP_PROJECT GCP_ZONE=us-west1-b $ROOT/pipelines/shared-tasks/run-integration-tests/task.sh"
+  log_note "KUBECONFIG='$KUBECONFIG' TEST_ENV_PATH='/tmp/integration-test-env' SOURCE_PATH='$pinniped_repo' START_GCLOUD_PROXY=yes GCP_PROJECT=$PINNIPED_GCP_PROJECT GCP_ZONE=us-west1-a $ROOT/pipelines/shared-tasks/run-integration-tests/task.sh"
   ;;
 *)
   log_error "Huh? Should never get here."

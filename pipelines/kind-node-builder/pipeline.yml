@@ -18,7 +18,7 @@ meta:
 
   # GCP account info and which zone the workers should be created in and deleted from.
   gcp_account_params: &gcp_account_params
-    INSTANCE_ZONE: us-west1-b
+    INSTANCE_ZONE: us-west1-a
     GCP_PROJECT: ((gcp-project-name))
     GCP_USERNAME: ((gcp-instance-admin-username))
     GCP_JSON_KEY: ((gcp-instance-admin-json-key))

@@ -13,7 +13,7 @@ fi
 instance_name="${REMOTE_INSTANCE_NAME:-${USER}}"
 instance_user="${REMOTE_INSTANCE_USERNAME:-${USER}}"
 project="$PINNIPED_GCP_PROJECT"
-zone="us-west1-b"
+zone="us-west1-a"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Create a VM called $instance_name with some reasonable compute power and disk.

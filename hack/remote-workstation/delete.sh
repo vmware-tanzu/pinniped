@@ -12,7 +12,7 @@ fi
 
 instance_name="${REMOTE_INSTANCE_NAME:-${USER}}"
 project="$PINNIPED_GCP_PROJECT"
-zone="us-west1-b"
+zone="us-west1-a"
 
 # Delete the instance forever. Will prompt for confirmation.
 echo "Destroying VM $instance_name..."

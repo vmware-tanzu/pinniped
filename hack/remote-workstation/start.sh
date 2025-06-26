@@ -12,7 +12,7 @@ fi
 
 instance_name="${REMOTE_INSTANCE_NAME:-${USER}}"
 project="$PINNIPED_GCP_PROJECT"
-zone="us-west1-b"
+zone="us-west1-a"
 
 # Start an instance which was previously stopped to save money.
 echo "Starting VM $instance_name..."

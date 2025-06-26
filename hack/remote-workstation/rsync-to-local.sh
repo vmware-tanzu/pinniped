@@ -19,7 +19,7 @@ dest_dir="./workspace/pinniped"
 instance_name="${REMOTE_INSTANCE_NAME:-${USER}}"
 instance_user="${REMOTE_INSTANCE_USERNAME:-${USER}}"
 project="$PINNIPED_GCP_PROJECT"
-zone="us-west1-b"
+zone="us-west1-a"
 config_file="/tmp/gcp-ssh-config"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

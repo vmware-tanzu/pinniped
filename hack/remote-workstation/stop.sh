@@ -12,7 +12,7 @@ fi
 
 instance_name="${REMOTE_INSTANCE_NAME:-${USER}}"
 project="$PINNIPED_GCP_PROJECT"
-zone="us-west1-b"
+zone="us-west1-a"
 
 # Stop the instance, to save money, in a way that it can be restarted.
 echo "Stopping VM $instance_name..."

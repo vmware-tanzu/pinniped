@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Run the integration tests against a remote target cluster.
@@ -156,7 +156,7 @@ if [[ "${START_GCLOUD_PROXY:-no}" == "yes" ]]; then
   # seems to be no way to avoid it. :( So we'll use regular ssh.
   gcloud_instance_ip=$(gcloud compute instances describe \
     --zone "$GCP_ZONE" --project "$GCP_PROJECT" "${cluster_name}" \
-    --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+    --format='get(networkInterfaces[0].networkIP)')
 
   # Now start some simultaneous background jobs.
   for mapping in "${ssh_mappings[@]}"; do

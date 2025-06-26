@@ -5,13 +5,13 @@
 
 # This is the script that runs at startup to launch Kind on GCE.
 # A log of the output of this script can be viewed by running this command on the VM:
-# sudo journalctl -u google-startup-scripts.service
+# sudo journalctl -u google-startup-scripts.service --no-pager
 
 set -euo pipefail
 
 function cleanup() {
   # Upon exit, try to save the log of everything that happened to make debugging errors easier.
-  curl --retry-all-errors --retry 5 -X PUT --data "$(journalctl -u google-startup-scripts.service)" \
+  curl --retry-all-errors --retry 5 -X PUT --data "$(journalctl -u google-startup-scripts.service --no-pager)" \
     http://metadata.google.internal/computeMetadata/v1/instance/guest-attributes/kind/init_log -H "Metadata-Flavor: Google"
 }
 trap "cleanup" EXIT SIGINT
@@ -92,9 +92,18 @@ kubeadmConfigPatches:
   apiVersion: ${KUBE_ADM_VERSION}
   kind: ClusterConfiguration
   # ControlPlaneEndpoint sets a stable IP address or DNS name for the control plane.
-  controlPlaneEndpoint: "${INTERNAL_IP}:6443"
+  # Although this worked when the VM had a public IP address that we could use here,
+  # this does not work when using the VM's internal IP address. kubeadm fails to connect
+  # to this endpoint during liveness probes, so it thinks that the api-server is not
+  # running (when it actually is running), which causes cluster creation to fail.
+  # Instead, we will add the internal IP as a SAN on the api-server's TLS certificate below,
+  # which will still allow us to validate TLS when connecting to the cluster using the
+  # VM's internal IP.
+  #controlPlaneEndpoint: "${INTERNAL_IP}:6443"
   # mount the kind extraMounts into the API server static pod so we can use the audit config
   apiServer:
+    certSANs:
+    - "${INTERNAL_IP}"
     extraVolumes:
     - name: audit-config
       hostPath: /audit-config/audit-config.yaml

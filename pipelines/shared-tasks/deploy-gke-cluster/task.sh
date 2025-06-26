@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -54,7 +54,18 @@ gcloud container clusters create "$CLUSTER_NAME" \
   --preemptible \
   --issue-client-certificate \
   --no-enable-basic-auth \
-  --enable-network-policy
+  --enable-network-policy \
+  --tags "gke-broadcom" \
+  --enable-master-authorized-networks \
+  --master-authorized-networks "10.0.0.0/8" \
+  --enable-private-nodes \
+  --enable-private-endpoint \
+  --enable-ip-alias \
+  --network "projects/${SHARED_VPC_PROJECT}/global/networks/${SHARED_VPC_NAME}" \
+  --subnetwork "projects/${SHARED_VPC_PROJECT}/regions/${SUBNET_REGION}/subnetworks/${SUBNET_NAME}" \
+  --cluster-secondary-range-name "services" \
+  --services-secondary-range-name "pods"
+  # TODO is this also needed? --default-max-pods-per-node "64"
 
 # Get the cluster details back, including the admin certificate:
 gcloud container clusters describe "$CLUSTER_NAME" --zone "$CLUSTER_ZONE" --format json \

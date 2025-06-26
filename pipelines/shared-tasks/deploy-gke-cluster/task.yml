@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 ---
@@ -14,5 +14,9 @@ params:
   GCP_SERVICE_ACCOUNT:
   GCP_JSON_KEY:
   GKE_CHANNEL:
+  SHARED_VPC_PROJECT:
+  SHARED_VPC_NAME:
+  SUBNET_REGION:
+  SUBNET_NAME:
 run:
   path: pinniped-ci/pipelines/shared-tasks/deploy-gke-cluster/task.sh

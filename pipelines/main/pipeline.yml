@@ -2711,7 +2711,7 @@ jobs:
 
   - name: integration-test-gke-rapid
     public: true # all logs are publicly visible
-    serial: true
+    serial: true # since we need to choose a subnet, we can't run this in parallel
     plan:
       - in_parallel:
           - get: ci-build-image
@@ -2731,6 +2731,10 @@ jobs:
             image: k8s-app-deployer-image
             params:
               GKE_CHANNEL: rapid
+              SHARED_VPC_PROJECT: ((shared-vpc-project))
+              SHARED_VPC_NAME: ((shared-vpc-name))
+              SUBNET_REGION: ((subnet-region))
+              SUBNET_NAME: ((gke-subnet-name-1)) # globally unique to this job
               <<: *gke_account_params
           - task: pre-warm-cluster
             timeout: 10m
@@ -2778,7 +2782,7 @@ jobs:
 
   - name: integration-test-gke-stable
     public: true # all logs are publicly visible
-    serial: true
+    serial: true # since we need to choose a subnet, we can't run this in parallel
     plan:
       - in_parallel:
           - get: ci-build-image
@@ -2798,6 +2802,10 @@ jobs:
             image: k8s-app-deployer-image
             params:
               GKE_CHANNEL: stable
+              SHARED_VPC_PROJECT: ((shared-vpc-project))
+              SHARED_VPC_NAME: ((shared-vpc-name))
+              SUBNET_REGION: ((subnet-region))
+              SUBNET_NAME: ((gke-subnet-name-2)) # globally unique to this job
               <<: *gke_account_params
           - task: pre-warm-cluster
             timeout: 10m

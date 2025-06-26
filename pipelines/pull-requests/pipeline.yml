@@ -1824,6 +1824,7 @@ jobs:
     on_error: { <<: *pr-status-on-error, params: { <<: *pr-status-on-error-params, context: integration-test-gke-rapid } }
     on_abort: { <<: *pr-status-on-abort, params: { <<: *pr-status-on-abort-params, context: integration-test-gke-rapid } }
     public: true # all logs are publicly visible
+    serial: true # since we need to choose a subnet, we can't run this in parallel anymore
     plan:
       - in_parallel:
           - get: pinniped-pr
@@ -1846,6 +1847,10 @@ jobs:
         image: k8s-app-deployer-image
         params:
           GKE_CHANNEL: rapid
+          SHARED_VPC_PROJECT: ((shared-vpc-project))
+          SHARED_VPC_NAME: ((shared-vpc-name))
+          SUBNET_REGION: ((subnet-region))
+          SUBNET_NAME: ((gke-subnet-name-3)) # globally unique to this job
           <<: *gke_account_params
       - task: pre-warm-cluster
         timeout: 10m

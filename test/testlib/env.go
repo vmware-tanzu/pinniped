@@ -1,10 +1,12 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testlib
 
 import (
 	"encoding/base64"
+	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -145,10 +147,27 @@ type TestGithubUpstream struct {
 
 // ProxyEnv returns a set of environment variable strings (e.g., to combine with os.Environ()) which set up the configured test HTTP proxy.
 func (e *TestEnv) ProxyEnv() []string {
+	e.t.Helper()
+
 	if e.Proxy == "" {
 		return nil
 	}
-	return []string{"http_proxy=" + e.Proxy, "https_proxy=" + e.Proxy, "no_proxy=127.0.0.1"}
+
+	// We should never need to use the proxy to access the Kube API server from the kubeconfig.
+	// When the cluster is a Kind cluster running in CI, and if the VM has no external IP, then
+	// the squid proxy running inside the cluster will not able to reach the IP of the VM at all
+	// due to limitations of Docker networking, so in that case we must ensure that we are not
+	// trying to use the proxy to reach the Kubernetes API server from the outside. Therefore,
+	// always add the Kube API server's address or hostname to the no_proxy list.
+	kubeClientConfig := NewClientConfig(e.t)
+	parsedKubeAPIServerURL, err := url.Parse(kubeClientConfig.Host)
+	require.NoError(e.t, err)
+
+	return []string{
+		"http_proxy=" + e.Proxy,
+		"https_proxy=" + e.Proxy,
+		fmt.Sprintf("no_proxy=127.0.0.1,%s", parsedKubeAPIServerURL.Host),
+	}
 }
 
 // memoizedTestEnvsByTest maps *testing.T pointers to *TestEnv. It exists so that we don't do all the

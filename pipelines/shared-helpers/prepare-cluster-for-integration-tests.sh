@@ -855,6 +855,7 @@ ytt --file . \
   --data-value "log_level=debug" \
   --data-value-yaml "custom_labels=$concierge_custom_labels" \
   --data-value "discovery_url=$discovery_url" \
+  --data-value-yaml "impersonation_proxy_spec.service.annotations={'networking.gke.io/load-balancer-type': 'Internal', 'service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout': '4000'}" \
   ${concierge_optional_ytt_values[@]+"${concierge_optional_ytt_values[@]}"} \
   >"$manifest"
 

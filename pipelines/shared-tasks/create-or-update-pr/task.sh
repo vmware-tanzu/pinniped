@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -12,22 +12,10 @@ cd pinniped
 # Print the current status to the log.
 git status
 
-# Copied from https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
-github_hosts='
-github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
-github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
-github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=
-'
-
 # Prepare to be able to do commits and pushes.
-ssh_dir="$HOME"/.ssh/
-mkdir "$ssh_dir"
-echo "$github_hosts" >"$ssh_dir"/known_hosts
-echo "${DEPLOY_KEY}" >"$ssh_dir"/id_rsa
-chmod 600 "$ssh_dir"/id_rsa
 git config user.email "pinniped-ci-bot@users.noreply.github.com"
 git config user.name "Pinny"
-git remote add ssh_origin "git@github.com:vmware-tanzu/pinniped.git"
+git remote add https_origin "${GH_TOKEN}@https://github.com/vmware/pinniped.git"
 
 # Add all the changed files.
 git add .
@@ -45,7 +33,7 @@ fi
 
 # Check if the branch already exists on the remote.
 new_branch="no"
-if [[ -z "$(git ls-remote ssh_origin "$branch")" ]]; then
+if [[ -z "$(git ls-remote https_origin "$branch")" ]]; then
   echo "The branch does not already exist, so create it."
   git checkout -b "$branch"
   git status
@@ -56,7 +44,7 @@ else
   git status
   git stash
   # Fetch all the remote branches so we can use one of them.
-  git fetch ssh_origin
+  git fetch https_origin
   # The branch already exists, so reuse it.
   git checkout "$branch"
   # Pull to sync up commits with the remote branch.
@@ -83,7 +71,7 @@ git commit -m "Bump dependencies"
 if [[ "$new_branch" == "yes" ]]; then
   # Push the new branch to the remote.
   echo "Pushing the new branch."
-  git push --set-upstream ssh_origin "$branch"
+  git push --set-upstream https_origin "$branch"
 else
   # Force push the existing branch to the remote.
   echo "Force pushing the existing branch."

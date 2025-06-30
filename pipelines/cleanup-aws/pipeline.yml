@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 display:
@@ -11,9 +11,9 @@ resources:
     type: git
     icon: github
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
 
 jobs:
 

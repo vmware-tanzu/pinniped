@@ -55,9 +55,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/k8s-app-deployer/Dockerfile ]
 
   - name: k8s-app-deployer-image
@@ -75,9 +75,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/deployment-yaml-formatter/Dockerfile ]
 
   - name: deployment-yaml-formatter-image
@@ -95,9 +95,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/integration-test-runner/Dockerfile ]
 
   - name: integration-test-runner-beta-dockerfile
@@ -105,9 +105,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/integration-test-runner-beta/Dockerfile ]
 
   - name: integration-test-runner-image
@@ -135,9 +135,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/code-coverage-uploader/Dockerfile ]
 
   - name: code-coverage-uploader-image
@@ -155,9 +155,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths:
         - dockerfiles/pool-trigger-resource/Dockerfile
         - "dockerfiles/pool-trigger-resource/assets/*"
@@ -257,9 +257,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/k8s-code-generator/* ]
 
   - name: test-forward-proxy-image-ghcr
@@ -277,9 +277,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/test-forward-proxy/* ]
 
   - name: test-bitnami-ldap-image-ghcr
@@ -297,9 +297,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/test-bitnami-ldap/Dockerfile ]
 
   - name: test-dex-image
@@ -317,9 +317,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/test-dex/Dockerfile ]
 
   - name: test-cfssl-image
@@ -337,9 +337,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/test-cfssl/Dockerfile ]
 
   - name: test-kubectl-image
@@ -357,9 +357,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/test-kubectl/Dockerfile ]
 
   - name: gh-cli-image
@@ -377,9 +377,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/gh-cli/Dockerfile ]
 
   - name: crane-image
@@ -397,9 +397,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/crane/Dockerfile ]
 
   - name: eks-deployer-dockerfile
@@ -407,9 +407,9 @@ resources:
     icon: github
     <<: *check-every-for-dockerfile
     source:
-      uri: git@github.com:vmware-tanzu/pinniped.git
+      uri: https://github.com/vmware/pinniped.git
       branch: ci
-      private_key: ((source-repo-deploy-key))
+      username: ((ci-bot-access-token-with-read-only-public-repos))
       paths: [ dockerfiles/eks-deployer/Dockerfile ]
 
   - name: eks-deployer-image

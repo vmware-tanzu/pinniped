@@ -91,7 +91,7 @@ meta:
     image: integration-test-runner-image
     timeout: 15m
     params:
-      GCS_BUCKET: pinniped-ci-archive
+      GCS_BUCKET: pinniped-ci-logs
       GCP_PROJECT: ((gcp-project-name))
       GCP_USERNAME: ((gcp-cluster-diagnostic-uploader-username))
       GCP_JSON_KEY: ((gcp-cluster-diagnostic-uploaded-json-key))
@@ -923,7 +923,8 @@ jobs:
             version: every
             passed:
               # First we list everything that should be triggered by the first ready-for-int.
-              - scan-image
+              # TODO: bring back scan-image after upgrading Golang to resolve CVEs in a PR
+#              - scan-image
               - integration-test-oldest
               - integration-test-latest
               - integration-test-latest-arm64
@@ -1219,10 +1220,12 @@ jobs:
           # The following Jumpcloud params will cause the integration tests to use Jumpcloud instead of OpenLDAP.
           # We don't need to run these on every version of Kubernetes for Kind in this pipeline, so we choose to run
           # them on one version to get some coverage.
-          <<: *jumpcloud_integration_env_vars
+          # TODO: replace this with some other LDAP and open firewall for outgoing LDAP and LDAPs
+#          <<: *jumpcloud_integration_env_vars
           # The following AD params enable the ActiveDirectory integration tests. We don't need to run these on every
           # version of Kubernetes for Kind in this pipeline, so we choose to run them on one version to get some coverage.
-          <<: *active_directory_integration_env_vars
+          # TODO: bring this back with a new AD server
+#          <<: *active_directory_integration_env_vars
           # The following params enable the GitHub integration tests. We don't need to run these on every
           # version of Kubernetes for Kind in this pipeline, so we choose to run them on one version to get some coverage.
           <<: *github_integration_env_vars

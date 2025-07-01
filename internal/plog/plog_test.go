@@ -1,4 +1,4 @@
-// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package plog
@@ -545,7 +545,7 @@ func TestPlog(t *testing.T) {
 				testAllPlogMethods(l.withDepth(-2))
 			},
 			want: here.Doc(`
-				{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Error","message":"e","panda":2,"error":"some err"}
+				{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Error","message":"e","panda":2,"error":"some err"}
 				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.pLogger.warningDepth","message":"w","warning":true,"panda":2}
 				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.pLogger.warningDepth","message":"we","warning":true,"error":"some err","panda":2}
 				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.pLogger.infoDepth","message":"i","panda":2}
@@ -554,8 +554,8 @@ func TestPlog(t *testing.T) {
 				{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.pLogger.debugDepth","message":"de","error":"some err","panda":2}
 				{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.pLogger.traceDepth","message":"t","panda":2}
 				{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"plog/plog.go:<line>$plog.pLogger.traceDepth","message":"te","error":"some err","panda":2}
-				{"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"all","panda":2}
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"always","panda":2}
+				{"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"all","panda":2}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"always","panda":2}
 			`),
 		},
 		{
@@ -565,14 +565,14 @@ func TestPlog(t *testing.T) {
 			},
 			want: here.Doc(`
 				{"level":"error","timestamp":"2099-08-08T13:57:36.123456Z","caller":"zapr@v1.3.0/zapr.go:<line>$zapr.(*zapLogger).Error","message":"e","panda":2,"error":"some err"}
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"w","warning":true,"panda":2}
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"we","warning":true,"error":"some err","panda":2}
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"i","panda":2}
-				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"ie","error":"some err","panda":2}
-				{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"d","panda":2}
-				{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"de","error":"some err","panda":2}
-				{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"t","panda":2}
-				{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.2/logr.go:<line>$logr.Logger.Info","message":"te","error":"some err","panda":2}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"w","warning":true,"panda":2}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"we","warning":true,"error":"some err","panda":2}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"i","panda":2}
+				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"ie","error":"some err","panda":2}
+				{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"d","panda":2}
+				{"level":"debug","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"de","error":"some err","panda":2}
+				{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"t","panda":2}
+				{"level":"trace","timestamp":"2099-08-08T13:57:36.123456Z","caller":"logr@v1.4.3/logr.go:<line>$logr.Logger.Info","message":"te","error":"some err","panda":2}
 				{"level":"all","timestamp":"2099-08-08T13:57:36.123456Z","caller":"zapr@v1.3.0/zapr.go:<line>$zapr.(*zapLogger).Info","message":"all","panda":2}
 				{"level":"info","timestamp":"2099-08-08T13:57:36.123456Z","caller":"zapr@v1.3.0/zapr.go:<line>$zapr.(*zapLogger).Info","message":"always","panda":2}
 			`),

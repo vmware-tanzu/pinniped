@@ -177,17 +177,20 @@ Each run of `hack/prepare-for-integration-tests.sh` can result in different valu
 
 ### Observing Tests on the Continuous Integration Environment
 
-[CI](https://ci.pinniped.dev/teams/main/pipelines/pull-requests)
-will not be triggered on a pull request until the pull request is reviewed and
+CI will not be triggered on a pull request until the pull request is reviewed and
 approved for CI by a project [maintainer](MAINTAINERS.md). Once CI is triggered,
 the progress and results will appear on the Github page for that
 [pull request](https://github.com/vmware-tanzu/pinniped/pulls) as checks. Links
 will appear to view the details of each check.
 
+Starting in mid-2025, Pinniped's CI system is no longer externally visible due to corporate policies.
+Please contact the maintainers for help with your PR if you encounter any CI failures.
+They will be happy to share CI logs with you directly for your PR.
+
 ## CI
 
 Pinniped's CI configuration and code is in the [`ci`](https://github.com/vmware-tanzu/pinniped/tree/ci)
-branch of this repo. The CI results are visible to the public at https://ci.pinniped.dev.
+branch of this repo.
 
 ## Documentation
 

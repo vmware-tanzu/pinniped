@@ -212,15 +212,18 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	// this point depending on the capabilities of the cluster under test. We handle each possible case here.
 	switch {
 	case impersonatorShouldHaveStartedAutomaticallyByDefault && clusterSupportsLoadBalancers:
+		var originalSpecAnnotations map[string]string
+		if oldCredentialIssuer.Spec.ImpersonationProxy != nil {
+			originalSpecAnnotations = oldCredentialIssuer.Spec.ImpersonationProxy.Service.Annotations
+		}
 		// configure the credential issuer spec to have the impersonation proxy in auto mode
 		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
 			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
 				Mode: conciergeconfigv1alpha1.ImpersonationProxyModeAuto,
 				Service: conciergeconfigv1alpha1.ImpersonationProxyServiceSpec{
 					Type: conciergeconfigv1alpha1.ImpersonationProxyServiceTypeLoadBalancer,
-					Annotations: map[string]string{
-						"service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout": "4000",
-					},
+					// Use the pre-existing annotations, which might include an annotation to request a private IP.
+					Annotations: originalSpecAnnotations,
 				},
 			},
 		})
@@ -1762,6 +1765,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		if env.Proxy == "" {
 			t.Skip("Skipping ClusterIP test because squid proxy is not present")
 		}
+
 		clusterIPServiceURL := fmt.Sprintf("%s.%s.svc.cluster.local", impersonationProxyClusterIPName(env), env.ConciergeNamespace)
 		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
 			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
@@ -1793,6 +1797,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 
 	t.Run("using externally provided TLS serving cert with stringData", func(t *testing.T) {
+		if env.Proxy == "" {
+			t.Skip("Skipping ClusterIP test because squid proxy is not present")
+		}
+
 		var externallyProvidedCA *certauthority.CA
 		externallyProvidedCA, err = certauthority.New("Impersonation Proxy Integration Test CA", 1*time.Hour)
 		require.NoError(t, err)
@@ -1864,6 +1872,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 
 	t.Run("using externally provided TLS serving cert with data []byte arrays", func(t *testing.T) {
+		if env.Proxy == "" {
+			t.Skip("Skipping ClusterIP test because squid proxy is not present")
+		}
+
 		var externallyProvidedCA *certauthority.CA
 		externallyProvidedCA, err = certauthority.New("Impersonation Proxy Integration Test CA", 1*time.Hour)
 		require.NoError(t, err)
@@ -1935,6 +1947,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 	})
 
 	t.Run("manually disabling the impersonation proxy feature", func(t *testing.T) {
+		if env.Proxy == "" {
+			t.Skip("Skipping disable test because squid proxy is not present")
+		}
+
 		// Update configuration to force the proxy to disabled mode
 		updateCredentialIssuer(ctx, t, env, adminConciergeClient, conciergeconfigv1alpha1.CredentialIssuerSpec{
 			ImpersonationProxy: &conciergeconfigv1alpha1.ImpersonationProxySpec{
@@ -1952,19 +1968,13 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 		}
 
 		// Check that the impersonation proxy port has shut down.
-		// Ideally we could always check that the impersonation proxy's port has shut down, but on clusters where we
-		// do not run the squid proxy we have no easy way to see beyond the load balancer to see inside the cluster,
-		// so we'll skip this check on clusters which have load balancers but don't run the squid proxy.
-		// The other cluster types that do run the squid proxy will give us sufficient coverage here.
-		if env.Proxy != "" {
-			testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
-				// It's okay if this returns RBAC errors because this user has no role bindings.
-				// What we want to see is that the proxy eventually shuts down entirely.
-				_, err := impersonationProxyViaSquidKubeClientWithoutCredential(t, proxyServiceEndpoint).CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-				isErr, _ := isServiceUnavailableViaSquidError(err, proxyServiceEndpoint)
-				requireEventually.Truef(isErr, "wanted service unavailable via squid error, got %v", err)
-			}, 20*time.Second, 500*time.Millisecond)
-		}
+		testlib.RequireEventually(t, func(requireEventually *require.Assertions) {
+			// It's okay if this returns RBAC errors because this user has no role bindings.
+			// What we want to see is that the proxy eventually shuts down entirely.
+			_, err := impersonationProxyViaSquidKubeClientWithoutCredential(t, proxyServiceEndpoint).CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+			isErr, _ := isServiceUnavailableViaSquidError(err, proxyServiceEndpoint)
+			requireEventually.Truef(isErr, "wanted service unavailable via squid error, got %v", err)
+		}, 20*time.Second, 500*time.Millisecond)
 
 		// Check that the generated TLS cert Secret was deleted by the controller because it's supposed to clean this up
 		// when we disable the impersonator.
@@ -2316,6 +2326,8 @@ func updateCredentialIssuer(ctx context.Context, t *testing.T, env *testlib.Test
 		if err != nil {
 			return err
 		}
+
+		t.Logf("updating CredentialIssuer spec from %+v to new spec %+v", newCredentialIssuer.Spec, spec)
 
 		spec.DeepCopyInto(&newCredentialIssuer.Spec)
 		_, err = adminConciergeClient.ConfigV1alpha1().CredentialIssuers().Update(ctx, newCredentialIssuer, metav1.UpdateOptions{})

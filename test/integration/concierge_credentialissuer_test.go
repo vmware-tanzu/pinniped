@@ -66,13 +66,22 @@ func TestCredentialIssuer(t *testing.T) {
 		require.NotNil(t, actualStatusStrategy)
 
 		if env.HasCapability(testlib.ClusterSigningKeyIsAvailable) {
+			kubernetesAPIServerURLFromKubeconfig := config.Host
+			expectedServer := kubernetesAPIServerURLFromKubeconfig
+			if actualStatusStrategy.Frontend.TokenCredentialRequestAPIInfo.Server == "https://kind-control-plane:6443" {
+				// When our Kind clusters running in CI are on a VM with only an internal IP address,
+				// then the Kind cluster will not know its own hostname and will instead advertise kind-control-plane.
+				// This is okay, so adjust our expectation in this case.
+				expectedServer = "https://kind-control-plane:6443"
+			}
+
 			require.Equal(t, conciergeconfigv1alpha1.SuccessStrategyStatus, actualStatusStrategy.Status)
 			require.Equal(t, conciergeconfigv1alpha1.FetchedKeyStrategyReason, actualStatusStrategy.Reason)
 			require.Equal(t, "key was fetched successfully", actualStatusStrategy.Message)
 			require.NotNil(t, actualStatusStrategy.Frontend)
 			require.Equal(t, conciergeconfigv1alpha1.TokenCredentialRequestAPIFrontendType, actualStatusStrategy.Frontend.Type)
 			expectedTokenRequestAPIInfo := conciergeconfigv1alpha1.TokenCredentialRequestAPIInfo{
-				Server:                   config.Host,
+				Server:                   expectedServer,
 				CertificateAuthorityData: base64.StdEncoding.EncodeToString(config.CAData),
 			}
 			require.Equal(t, &expectedTokenRequestAPIInfo, actualStatusStrategy.Frontend.TokenCredentialRequestAPIInfo)

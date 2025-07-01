@@ -15,7 +15,7 @@ git status
 # Prepare to be able to do commits and pushes.
 git config user.email "pinniped-ci-bot@users.noreply.github.com"
 git config user.name "Pinny"
-git remote add https_origin "${GH_TOKEN}@https://github.com/vmware/pinniped.git"
+git remote add https_origin "https://${GH_TOKEN}@github.com/vmware/pinniped.git"
 
 # Add all the changed files.
 git add .

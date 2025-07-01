@@ -1,4 +1,4 @@
-# Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+# Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 ---
@@ -12,5 +12,9 @@ params:
   GCP_PROJECT:
   GCP_USERNAME:
   GCP_JSON_KEY:
+  SHARED_VPC_PROJECT:
+  SUBNET_REGION:
+  SUBNET_NAME:
+  DISK_IMAGES_PROJECT:
 run:
   path: pinniped-ci/pipelines/shared-tasks/create-kind-node-builder-vm/task.sh

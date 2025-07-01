@@ -86,6 +86,10 @@ jobs:
         file: pinniped-ci/pipelines/shared-tasks/create-kind-node-builder-vm/task.yml
         image: gcloud-image
         params:
+          SHARED_VPC_PROJECT: ((shared-vpc-project))
+          SUBNET_REGION: ((subnet-region))
+          SUBNET_NAME: ((instances-subnet-name))
+          DISK_IMAGES_PROJECT: ((disk-images-gcp-project-name))
           <<: *gcp_account_params
       - task: build-kind-node-image
         timeout: 90m

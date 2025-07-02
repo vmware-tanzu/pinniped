@@ -65,7 +65,6 @@ gcloud container clusters create "$CLUSTER_NAME" \
   --subnetwork "projects/${SHARED_VPC_PROJECT}/regions/${SUBNET_REGION}/subnetworks/${SUBNET_NAME}" \
   --cluster-secondary-range-name "services" \
   --services-secondary-range-name "pods"
-  # TODO is this also needed? --default-max-pods-per-node "64"
 
 # Get the cluster details back, including the admin certificate:
 gcloud container clusters describe "$CLUSTER_NAME" --zone "$CLUSTER_ZONE" --format json \

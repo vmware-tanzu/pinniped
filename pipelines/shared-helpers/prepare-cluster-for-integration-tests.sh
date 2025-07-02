@@ -92,16 +92,9 @@ set -euo pipefail
 #    NodePort Service defined and create an Ingress connected to that Service.
 #    When set to "yes" the following additional variables are expected:
 #    - $SUPERVISOR_INGRESS_STATIC_IP_NAME: The name of the static IP resource from the
-#      underlying cloud infrastructure platform. Optional.
+#      underlying cloud infrastructure platform. Required when $SUPERVISOR_INGRESS is "yes".
 #    - $SUPERVISOR_INGRESS_DNS_NAME: The DNS hostname name associated with the
 #      ingress' IP address. Required when $SUPERVISOR_INGRESS is "yes".
-#    - $SUPERVISOR_INGRESS_PATH_PATTERN: The path that will be set in the Ingress object
-#      (e.g., "/", "/*"; this depends on what is supported by the underlying platform).
-#      Required when $SUPERVISOR_INGRESS is "yes".
-#    - If the $SUPERVISOR_INGRESS_DNS_NAME is given without the
-#      $SUPERVISOR_INGRESS_STATIC_IP_NAME, then allow the ingress service
-#      to choose its own IP address, and dynamically register that address as the name
-#      specified in $SUPERVISOR_INGRESS_DNS_NAME using the Cloud DNS service.
 #  - When neither $SUPERVISOR_LOAD_BALANCER nor $SUPERVISOR_INGRESS then we will use
 #    nodeport services to make the supervisor available. In this case you may specify
 #    $PINNIPED_SUPERVISOR_HTTP_NODEPORT and $PINNIPED_SUPERVISOR_HTTPS_NODEPORT if you
@@ -174,64 +167,6 @@ function print_redacted_manifest() {
   done <"$1"
 
   print_or_redact_doc "$doc"
-}
-
-function update_gcloud_dns_record() {
-  if [[ -z "${PINNIPED_GCP_PROJECT:-}" ]]; then
-    echo "PINNIPED_GCP_PROJECT env var must be set when using update_gcloud_dns_record"
-    exit 1
-  fi
-
-  local dns_name=$1
-  local new_ip=$2
-  local dns_record_name="${dns_name}."
-  local dns_zone="pinniped-dev"
-  local dns_project="$PINNIPED_GCP_PROJECT"
-
-  # Login to gcloud CLI
-  gcloud auth activate-service-account "$GKE_USERNAME" --key-file <(echo "$GKE_JSON_KEY") --project "$dns_project"
-
-  # Get the current value of the DNS A record.
-  # We assume that this record already exists because it was manually created.
-  # We also assume in the transaction commands below that it was created with a TTL of 30 seconds.
-  current_dns_record_ip=$(gcloud dns record-sets list --zone "$dns_zone" \
-    --project "$dns_project" --name "$dns_record_name" --format json |
-    jq -r ".[] | select(.name ==\"${dns_record_name}\") | .rrdatas[0]")
-
-  if [[ "$current_dns_record_ip" == "$new_ip" ]]; then
-    echo "No update needed: DNS record $dns_record_name was already set to $new_ip"
-  else
-    echo "Changing DNS record $dns_record_name from $current_dns_record_ip to $new_ip ..."
-
-    # Updating a DNS record with gcloud must be done with a remove and an add wrapped in a transaction.
-    gcloud dns record-sets transaction start --zone "$dns_zone" --project "$dns_project"
-    gcloud dns record-sets transaction remove "$current_dns_record_ip" --name "$dns_name" \
-      --ttl "30" --type "A" --zone "$dns_zone" --project "$dns_project"
-    gcloud dns record-sets transaction add "$new_ip" --name "$dns_name" \
-      --ttl "30" --type "A" --zone "$dns_zone" --project "$dns_project"
-    change_id=$(gcloud dns record-sets transaction execute --zone "$dns_zone" --project "$dns_project" --format json | jq -r '.id')
-
-    # Wait for that transaction to commit. This is usually quick.
-    change_status="not-done"
-    while [[ "$change_status" != "done" ]]; do
-      sleep 3
-      change_status=$(gcloud dns record-sets changes describe "$change_id" \
-        --zone "$dns_zone" --project "$dns_project" --format json | jq -r '.status')
-      echo "Waiting for change $change_id to have status 'done'. Current status: $change_status"
-    done
-
-    # Wait for DNS propagation. The TTL is 30 seconds, so this shouldn't take too long.
-    echo "Waiting for new IP address $new_ip to appear in the result of a local DNS query. This may take a few minutes..."
-    while true; do
-      dig_result=$(dig +short "$dns_name")
-      echo "dig result for $dns_name: $dig_result"
-      if [[ "$dig_result" == "$new_ip" ]]; then
-        echo "New IP address has finished DNS propagation. Done with DNS update!"
-        break
-      fi
-      sleep 5
-    done
-  fi
 }
 
 if [[ "${TMC_API_TOKEN:-}" == "" && "${DEPLOY_LOCAL_USER_AUTHENTICATOR:-no}" != "yes" ]]; then
@@ -1048,12 +983,6 @@ if [[ "${SUPERVISOR_LOAD_BALANCER:-no}" == "yes" ]]; then
   echo "Load balancer reported ingress: $ingress_json"
   ingress_ip=$(echo "$ingress_json" | jq -r '.ingress[0].ip')
 
-  if [[ "${SUPERVISOR_LOAD_BALANCER_STATIC_IP:-}" == "" ]]; then
-    # No static IP was provided, so the load balancer was allowed to choose its own IP.
-    # Update the DNS record associated with $SUPERVISOR_LOAD_BALANCER_DNS_NAME to make it match the new IP.
-    update_gcloud_dns_record "$SUPERVISOR_LOAD_BALANCER_DNS_NAME" "$ingress_ip"
-  fi
-
   # Use the published ingress address for the integration test env vars below.
   supervisor_https_address="https://${SUPERVISOR_LOAD_BALANCER_DNS_NAME}:443"
 elif [[ "${USE_LOAD_BALANCERS_FOR_DEX_AND_SUPERVISOR:-no}" == "yes" ]]; then
@@ -1160,12 +1089,6 @@ EOF
     kubectl get -n "$supervisor_namespace" secret "$ingress_tls_secret" -o jsonpath=\{.data.'tls\.crt'\} | base64 -d >"$ingress_tls_cert_file"
   fi
 
-  # If a static IP name was provided then use it. Otherwise, don't include the annotation at all.
-  static_ip_annotation=""
-  if [[ "${SUPERVISOR_INGRESS_STATIC_IP_NAME:-}" != "" ]]; then
-    static_ip_annotation="kubernetes.io/ingress.global-static-ip-name: ${SUPERVISOR_INGRESS_STATIC_IP_NAME}"
-  fi
-
   if [[ "$cluster_has_gke_backend_config" == "yes" ]]; then
     # Get the nodePort port number that was dynamically assigned to the nodeport service.
     nodeport_service_port=$(kubectl get service -n "${supervisor_namespace}" "${supervisor_app_name}-nodeport" -o jsonpath='{.spec.ports[0].nodePort}')
@@ -1200,6 +1123,7 @@ metadata:
   namespace: ${supervisor_namespace}
   annotations:
     kubernetes.io/ingress.class: "gce-internal"
+    kubernetes.io/ingress.regional-static-ip-name: "${SUPERVISOR_INGRESS_STATIC_IP_NAME}"
     kubernetes.io/ingress.allow-http: "false"
     nginx.ingress.kubernetes.io/backend-protocol: HTTPS
     # TODO Re-enable backend TLS cert verification once the Supervisor's default TLS cert is generated by automation in this script.
@@ -1207,7 +1131,6 @@ metadata:
     #nginx.ingress.kubernetes.io/proxy-ssl-verify: "on"
     #nginx.ingress.kubernetes.io/proxy-ssl-secret: ${supervisor_namespace}/${supervisor_app_name}-default-tls-certificate
     nginx.ingress.kubernetes.io/proxy-ssl-verify: "off"
-    ${static_ip_annotation}
 spec:
   defaultBackend:
     service:
@@ -1219,25 +1142,6 @@ spec:
       hosts:
         - ${SUPERVISOR_INGRESS_DNS_NAME}
 EOF
-
-  # If no static IP was provided for the ingress, then register the dynamic IP of the ingress with the DNS provider.
-  if [[ "${SUPERVISOR_INGRESS_STATIC_IP_NAME:-}" == "" ]]; then
-    # Wait for the ingress to get an IP
-    ingress_json='{}'
-    while [[ "$ingress_json" == '{}' ]]; do
-      echo "Checking for ingress address..."
-      sleep 1
-      ingress_json=$(kubectl get ingress "${supervisor_app_name}" -n "$supervisor_namespace" -o json |
-        jq -r '.status.loadBalancer')
-    done
-
-    echo "Ingress reported address: $ingress_json"
-    ingress_ip=$(echo "$ingress_json" | jq -r '.ingress[0].ip')
-
-    # No static IP was provided, so the load balancer was allowed to choose its own IP.
-    # Update the DNS record associated with $SUPERVISOR_INGRESS_DNS_NAME to make it match the new IP.
-    update_gcloud_dns_record "$SUPERVISOR_INGRESS_DNS_NAME" "$ingress_ip"
-  fi
 
   # Wait for the Ingress frontend to be up and running. Wait forever... until this Concourse task times out.
   healthz_via_ingress_url="https://${SUPERVISOR_INGRESS_DNS_NAME}/healthz"

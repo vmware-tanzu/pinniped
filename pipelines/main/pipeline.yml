@@ -530,7 +530,7 @@ resources:
     check_every: 5m
     source:
       driver: gcs
-      bucket: tanzu-user-authentication-private-ci
+      bucket: pinniped-ci-version-state
       key: semver/0.0.x-version.txt
       json_key: ((gcr-image-pusher-json-key))
       initial_version: 0.0.0
@@ -1828,11 +1828,11 @@ jobs:
           # We don't need to run these on every version of Kubernetes for Kind in this pipeline, so we choose to run
           # them on one version to get some coverage.
           # TODO: replace this with some other LDAP and open firewall for outgoing LDAP and LDAPs
-#          <<: *jumpcloud_integration_env_vars
+          # <<: *jumpcloud_integration_env_vars
           # The following AD params enable the ActiveDirectory integration tests. We don't need to run these on every
           # version of Kubernetes for Kind in this pipeline, so we choose to run them on one version to get some coverage.
           # TODO: bring this back with a new AD server
-#          <<: *active_directory_integration_env_vars
+          # <<: *active_directory_integration_env_vars
           # The following params enable the GitHub integration tests. We don't need to run these on every
           # version of Kubernetes for Kind in this pipeline, so we choose to run them on one version to get some coverage.
           <<: *github_integration_env_vars
@@ -1962,7 +1962,8 @@ jobs:
           # The following AD params enable the ActiveDirectory integration tests. We don't need to run these on every
           # version of Kubernetes for Kind in this pipeline, but it is useful to know if we can communicate with our
           # AD server when using FIPS cipher suites.
-          <<: *active_directory_integration_env_vars
+          # TODO: bring this back with a new AD server
+          # <<: *active_directory_integration_env_vars
           # The following params enable the GitHub integration tests. We don't need to run these on every
           # version of Kubernetes for Kind in this pipeline, but it is useful to know if we can communicate with
           # GitHub when using FIPS cipher suites.
@@ -2494,22 +2495,30 @@ jobs:
           DEPLOY_LOCAL_USER_AUTHENTICATOR: "yes"
           GKE_CLUSTER_NAME: gke-acceptance-cluster
           SUPERVISOR_AND_CONCIERGE_NO_CPU_REQUEST: true
-          RESERVED_LOAD_BALANCER_STATIC_IP: 35.224.24.196
-          LOAD_BALANCER_DNS_NAME: gke-acceptance-supervisor-lb.test.pinniped.dev
+          # Note that this static IP reservation needs to be manually created before the first time that this job is run,
+          # and the reserved IP needs to be updated here. Create it in the same subnet as the acceptance cluster itself.
+          # This is the IP address of a static IP reservation in GCP, not the name of the reservation. The name of this
+          # reservation in GCP is currently gke-acceptance-test-supervisor-loadbalancer-ip, and it can be viewed in the
+          # GCP Console's "IP Addresses" UI.
+          RESERVED_LOAD_BALANCER_STATIC_IP: 10.31.141.181
+          # This DNS name needs to be manually created as an "A" record pointing to the above reserved IP address for
+          # the LB before this job is run.
+          LOAD_BALANCER_DNS_NAME: gke-acceptance-supervisor-lb.test.pinniped.broadcom.net
+          # Note that this static IP needs to be manually reserved in GCP before we run this job for the first time
+          # for this GKE cluster. Create it in the same subnet as the acceptance cluster itself. This needs to be the
+          # name of the IP reservation in GCP, not the IP address itself, because that's how a GKE Ingress accepts
+          # static IPs. It can be viewed in the GCP Console's "IP Addresses" UI.
           INGRESS_STATIC_IP_GCLOUD_NAME: gke-acceptance-test-supervisor-ingress-ip
-          INGRESS_DNS_ENTRY_GCLOUD_NAME: gke-acceptance-supervisor.test.pinniped.dev
+          # This DNS name needs to be manually created as an "A" record pointing to the above reserved IP address for
+          # the ingress before this job is run.
+          INGRESS_DNS_NAME: gke-acceptance-supervisor-ingress.test.pinniped.broadcom.net
           <<: *okta_integration_env_vars
           OKTA_SUPERVISOR_CALLBACK: ((okta-supervisor-callback))
-          <<: *jumpcloud_integration_env_vars
-          <<: *active_directory_integration_env_vars
+          # TODO: replace this with some other LDAP and open firewall for outgoing LDAP and LDAPs
+          # <<: *jumpcloud_integration_env_vars
+          # TODO: bring this back with a new AD server
+          # <<: *active_directory_integration_env_vars
           <<: *github_integration_env_vars
-#      - task: install-and-configure-cert-manager
-#        file: pinniped-ci/pipelines/shared-tasks/install-and-configure-cert-manager/task.yml
-#        image: k8s-app-deployer-image
-#        timeout: 15m
-#        params:
-#          PINNIPED_GCP_PROJECT: ((gcp-project-name))
-#          CERT_MANAGER_DNS_ADMIN_JSON_KEY: ((cert-manager-dns-admin-json-key))
       - task: run-integration-tests
         timeout: 75m
         file: pinniped-ci/pipelines/shared-tasks/run-integration-tests/task.yml

@@ -923,8 +923,7 @@ jobs:
             version: every
             passed:
               # First we list everything that should be triggered by the first ready-for-int.
-              # TODO: bring back scan-image after upgrading Golang to resolve CVEs in a PR
-              # - scan-image
+              - scan-image
               - integration-test-oldest
               - integration-test-latest
               - integration-test-latest-arm64

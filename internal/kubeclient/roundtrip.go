@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubeclient
@@ -250,7 +250,7 @@ func handleCreateOrUpdate(
 	}
 
 	// simplest way to reuse the body creation logic
-	newReqForBody, err := http.NewRequest(req.Method, reqURL.String(), bytes.NewReader(newData))
+	newReqForBody, err := http.NewRequestWithContext(req.Context(), req.Method, reqURL.String(), bytes.NewReader(newData))
 	if err != nil {
 		return true, nil, fmt.Errorf("failed to create new req for body: %w", err) // this should never happen
 	}

@@ -12,10 +12,10 @@
 # Whenever a new version is added to this file, or when a version number
 # is edited in this file, please run hack/update.sh.
 #
-1.33.0
-1.32.4
-1.31.8
-1.30.12
+1.33.2
+1.32.6
+1.31.10
+1.30.14
 1.29.14
 1.28.15
 1.27.16

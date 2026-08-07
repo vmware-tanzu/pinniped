@@ -19,6 +19,7 @@ const (
 
 	IDPFlowCLIPassword     IDPFlow = "cli_password"
 	IDPFlowBrowserAuthcode IDPFlow = "browser_authcode"
+	IDPFlowDeviceCode      IDPFlow = "device_code"
 )
 
 // Equals is a convenience function for comparing an IDPType to a string.

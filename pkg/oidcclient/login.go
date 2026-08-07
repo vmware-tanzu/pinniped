@@ -318,20 +318,23 @@ func WithCLISendingCredentials() Option {
 // could potentially get logged somewhere by the issuer.
 // When the argument is equal to idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode, it will attempt to open a web browser
 // and perform the OIDC authcode flow.
+// When the argument is equal to idpdiscoveryv1alpha1.IDPFlowDeviceCode, it will attempt to use the device code flow.
 // When not used, the default when the issuer is a Pinniped Supervisor will be determined automatically,
 // and the default for non-Supervisor issuers will be the browser authcode flow.
 func WithLoginFlow(loginFlow idpdiscoveryv1alpha1.IDPFlow, flowSource string) Option {
 	return func(h *handlerState) error {
 		switch loginFlow {
 		case idpdiscoveryv1alpha1.IDPFlowCLIPassword,
-			idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode:
+			idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode,
+			idpdiscoveryv1alpha1.IDPFlowDeviceCode:
 		default:
 			return fmt.Errorf(
-				"WithLoginFlow error: loginFlow '%s' from '%s' must be '%s' or '%s'",
+				"WithLoginFlow error: loginFlow '%s' from '%s' must be '%s', '%s' or '%s'",
 				loginFlow,
 				flowSource,
 				idpdiscoveryv1alpha1.IDPFlowCLIPassword,
 				idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode,
+				idpdiscoveryv1alpha1.IDPFlowDeviceCode,
 			)
 		}
 		h.loginFlow = loginFlow
@@ -478,17 +481,19 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 
 	// Initialize login parameters.
 	var err error
-	h.state, err = h.generateState()
-	if err != nil {
-		return nil, err
-	}
-	h.nonce, err = h.generateNonce()
-	if err != nil {
-		return nil, err
-	}
-	h.pkce, err = h.generatePKCE()
-	if err != nil {
-		return nil, err
+	if h.loginFlow != idpdiscoveryv1alpha1.IDPFlowDeviceCode {
+		h.state, err = h.generateState()
+		if err != nil {
+			return nil, err
+		}
+		h.nonce, err = h.generateNonce()
+		if err != nil {
+			return nil, err
+		}
+		h.pkce, err = h.generatePKCE()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Do the basic login to get an access and ID token issued to our main client ID.
@@ -605,6 +610,8 @@ func (h *handlerState) baseLogin() (*oidctypes.Token, error) {
 		authFunc = h.cliBasedAuth
 	case idpdiscoveryv1alpha1.IDPFlowBrowserAuthcode:
 		// NOOP
+	case idpdiscoveryv1alpha1.IDPFlowDeviceCode:
+		authFunc = h.deviceCodeBasedAuth
 	}
 
 	// Perform the authorize request and authcode exchange to get back OIDC tokens.

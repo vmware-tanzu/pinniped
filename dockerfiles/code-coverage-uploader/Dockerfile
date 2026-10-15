@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # For running Go linters
-FROM debian:13.6-slim AS builder
+FROM debian:13.7-slim AS builder
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 

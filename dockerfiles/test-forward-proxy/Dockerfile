@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Use a runtime image based on Debian slim
-FROM debian:13.6-slim
+FROM debian:13.7-slim
 
 # Install Squid and drop in a very basic, open proxy configuration.
 RUN apt-get update && apt-get install -y squid

@@ -7,7 +7,7 @@
 # This was observed in cfssl/cfssl:v1.6.4.
 # However, they do compile their own binaries for both arm64 and amd64,
 # so we can just copy their binaries into a vanilla linux base image.
-FROM cfssl/cfssl:v1.6.5 as cfssl
+FROM cfssl/cfssl:v1.7.1 as cfssl
 
 # We just need any basic unix with bash, but we can pick the same
 # base image that they use, just in case they did any dynamic linking.

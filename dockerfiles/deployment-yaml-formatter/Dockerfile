@@ -1,7 +1,7 @@
 # Copyright 2020-2026 the Pinniped contributors. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM mikefarah/yq:4.53.3 AS yq
+FROM mikefarah/yq:4.54.1 AS yq
 
 FROM debian:13.6-slim
 

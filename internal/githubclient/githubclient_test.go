@@ -6,11 +6,14 @@ package githubclient
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v92/github"
+	"github.com/google/go-github/v93/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/util/cert"
@@ -81,21 +84,41 @@ func TestNewGitHubClient(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			called := false
+			var mu sync.Mutex
+			var receivedAuthHeaders [][]string
 			testServer, testServerCA := tlsserver.TestServerIPv4(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				require.Len(t, r.Header["Authorization"], 1)
-				require.Equal(t, "Bearer "+test.token, r.Header.Get("Authorization"))
-				called = true
+				mu.Lock()
+				defer mu.Unlock()
+				receivedAuthHeaders = append(receivedAuthHeaders, r.Header.Values("Authorization"))
 			}), nil)
 
 			t.Cleanup(func() {
-				require.True(t, (test.wantErr == "" && called) || (test.wantErr != "" && !called))
+				mu.Lock()
+				defer mu.Unlock()
+				if test.wantErr != "" {
+					require.Empty(t, receivedAuthHeaders)
+				}
 			})
+
+			testServerURL, err := url.Parse(testServer.URL)
+			require.NoError(t, err)
 
 			pool, err := cert.NewPoolFromBytes(testServerCA)
 			require.NoError(t, err)
 
 			httpClient := phttp.Default(pool)
+
+			// go-github only adds the Authorization header to requests whose origin matches the client's base URL
+			// or upload URL. Redirect every request to the test server below that check, so that requests to the
+			// (fake) base URL can be observed.
+			originalTransport := httpClient.Transport
+			httpClient.Transport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				req = req.Clone(req.Context())
+				req.URL.Scheme = testServerURL.Scheme
+				req.URL.Host = testServerURL.Host
+				req.Host = ""
+				return originalTransport.RoundTrip(req)
+			})
 
 			actualI, err := NewGitHubClient(httpClient, test.apiBaseURL, test.token)
 
@@ -111,12 +134,24 @@ func TestNewGitHubClient(t *testing.T) {
 				require.Equal(t, test.wantBaseURL, actual.client.BaseURL())
 
 				// Force the githubClient's httpClient roundTrippers to run and add the Authorization header
-
-				req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, testServer.URL, nil)
+				// for a request to the base URL.
+				req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, actual.client.BaseURL()+"user", nil)
 				require.NoError(t, err)
 
 				_, err = actual.client.Client().Do(req) //nolint:bodyclose
 				require.NoError(t, err)
+
+				// A request to any other origin should not carry the token (starting in go-github/v93).
+				req, err = http.NewRequestWithContext(context.Background(), http.MethodGet, testServer.URL, nil)
+				require.NoError(t, err)
+
+				_, err = actual.client.Client().Do(req) //nolint:bodyclose
+				require.NoError(t, err)
+
+				mu.Lock()
+				defer mu.Unlock()
+				// Assert that the first request had the expected auth token and the second request had none.
+				require.Equal(t, [][]string{{"Bearer " + test.token}, nil}, receivedAuthHeaders)
 			}
 		})
 	}
@@ -260,7 +295,7 @@ func TestGetUserInfoRetryOnUnauthorized(t *testing.T) {
 		name                string
 		retryOnUnauthorized bool
 		retryDelay          time.Duration // zero means no artificial delay
-		ctxTimeout          time.Duration // zero means context.Background() with no timeout
+		cancelAfter         time.Duration // when non-zero, cancel the context this long after the server receives the first request
 		handlerStatus       int
 		handlerMessage      string
 		succeedOnAttempt    int // returns success instead of handlerStatus after this many attempts; 0 means never succeed
@@ -306,10 +341,10 @@ func TestGetUserInfoRetryOnUnauthorized(t *testing.T) {
 			name:                "returns promptly when the context is canceled during the retry wait",
 			retryOnUnauthorized: true,
 			retryDelay:          time.Hour, // long enough that a real wait would fail the test
-			ctxTimeout:          50 * time.Millisecond,
+			cancelAfter:         50 * time.Millisecond,
 			handlerStatus:       http.StatusUnauthorized,
 			handlerMessage:      "bad credentials",
-			wantErrIs:           context.DeadlineExceeded,
+			wantErrIs:           context.Canceled,
 			wantAttempts:        1,
 		},
 	}
@@ -317,12 +352,21 @@ func TestGetUserInfoRetryOnUnauthorized(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			attempts := new(int)
+			// The handler runs on a server goroutine, so the counter must be safe for concurrent access.
+			var attempts atomic.Int32
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			httpClient := mock.NewMockedHTTPClient(
 				mock.WithRequestMatchHandler(mock.GetUser, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					*attempts++
-					if *attempts == test.succeedOnAttempt {
+					attempt := int(attempts.Add(1))
+					if attempt == 1 && test.cancelAfter != 0 {
+						// Start the timer only once the server has the request, so that slow CI machines can't
+						// cancel the context before the first attempt reaches the server.
+						time.AfterFunc(test.cancelAfter, cancel)
+					}
+					if attempt == test.succeedOnAttempt {
 						_, err := w.Write([]byte(`{"login":"some-username","id":12345678}`))
 						require.NoError(t, err)
 						return
@@ -340,15 +384,8 @@ func TestGetUserInfoRetryOnUnauthorized(t *testing.T) {
 				unauthorizedMaxRetries: defaultUnauthorizedMaxRetries,
 			}
 
-			ctx := context.Background()
-			if test.ctxTimeout != 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, test.ctxTimeout)
-				defer cancel()
-			}
-
 			actual, err := githubClient.GetUserInfo(ctx, test.retryOnUnauthorized)
-			require.Equal(t, test.wantAttempts, *attempts)
+			require.Equal(t, test.wantAttempts, int(attempts.Load()))
 			switch {
 			case test.wantErrContains != "":
 				require.ErrorContains(t, err, test.wantErrContains)
@@ -945,4 +982,10 @@ func TestGetTeamMembership(t *testing.T) {
 			}
 		})
 	}
+}
+
+type roundTripperFunc func(req *http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }

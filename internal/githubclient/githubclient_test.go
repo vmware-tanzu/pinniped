@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -294,7 +295,7 @@ func TestGetUserInfoRetryOnUnauthorized(t *testing.T) {
 		name                string
 		retryOnUnauthorized bool
 		retryDelay          time.Duration // zero means no artificial delay
-		ctxTimeout          time.Duration // zero means context.Background() with no timeout
+		cancelAfter         time.Duration // when non-zero, cancel the context this long after the server receives the first request
 		handlerStatus       int
 		handlerMessage      string
 		succeedOnAttempt    int // returns success instead of handlerStatus after this many attempts; 0 means never succeed
@@ -340,10 +341,10 @@ func TestGetUserInfoRetryOnUnauthorized(t *testing.T) {
 			name:                "returns promptly when the context is canceled during the retry wait",
 			retryOnUnauthorized: true,
 			retryDelay:          time.Hour, // long enough that a real wait would fail the test
-			ctxTimeout:          50 * time.Millisecond,
+			cancelAfter:         50 * time.Millisecond,
 			handlerStatus:       http.StatusUnauthorized,
 			handlerMessage:      "bad credentials",
-			wantErrIs:           context.DeadlineExceeded,
+			wantErrIs:           context.Canceled,
 			wantAttempts:        1,
 		},
 	}
@@ -351,12 +352,21 @@ func TestGetUserInfoRetryOnUnauthorized(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			attempts := new(int)
+			// The handler runs on a server goroutine, so the counter must be safe for concurrent access.
+			var attempts atomic.Int32
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
 			httpClient := mock.NewMockedHTTPClient(
 				mock.WithRequestMatchHandler(mock.GetUser, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					*attempts++
-					if *attempts == test.succeedOnAttempt {
+					attempt := int(attempts.Add(1))
+					if attempt == 1 && test.cancelAfter != 0 {
+						// Start the timer only once the server has the request, so that slow CI machines can't
+						// cancel the context before the first attempt reaches the server.
+						time.AfterFunc(test.cancelAfter, cancel)
+					}
+					if attempt == test.succeedOnAttempt {
 						_, err := w.Write([]byte(`{"login":"some-username","id":12345678}`))
 						require.NoError(t, err)
 						return
@@ -374,15 +384,8 @@ func TestGetUserInfoRetryOnUnauthorized(t *testing.T) {
 				unauthorizedMaxRetries: defaultUnauthorizedMaxRetries,
 			}
 
-			ctx := context.Background()
-			if test.ctxTimeout != 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, test.ctxTimeout)
-				defer cancel()
-			}
-
 			actual, err := githubClient.GetUserInfo(ctx, test.retryOnUnauthorized)
-			require.Equal(t, test.wantAttempts, *attempts)
+			require.Equal(t, test.wantAttempts, int(attempts.Load()))
 			switch {
 			case test.wantErrContains != "":
 				require.ErrorContains(t, err, test.wantErrContains)

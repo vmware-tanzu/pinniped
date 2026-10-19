@@ -21,11 +21,39 @@ import (
 )
 
 // JWTAuthenticatorInformer provides access to a shared informer and lister for
-// JWTAuthenticators.
+// JWTAuthenticators. Prefer using the type-safe variant (see [TypedJWTAuthenticatorInformer]).
 type JWTAuthenticatorInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() authenticationv1alpha1.JWTAuthenticatorLister
 }
+
+// TypedJWTAuthenticatorInformer provides access to a shared informer and lister for
+// JWTAuthenticators, including the type-safe TypedInformer variant.
+// It is a superset of JWTAuthenticatorInformer.
+type TypedJWTAuthenticatorInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() JWTAuthenticatorIndexInformer
+	Lister() authenticationv1alpha1.JWTAuthenticatorLister
+}
+
+// JWTAuthenticatorIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type JWTAuthenticatorIndexInformer cache.TypedSharedIndexInformer[*conciergeauthenticationv1alpha1.JWTAuthenticator]
+
+// JWTAuthenticatorHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for JWTAuthenticator.
+type JWTAuthenticatorHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*conciergeauthenticationv1alpha1.JWTAuthenticator]
+
+// JWTAuthenticatorDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for JWTAuthenticator.
+type JWTAuthenticatorDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*conciergeauthenticationv1alpha1.JWTAuthenticator]
+
+// JWTAuthenticatorFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for JWTAuthenticator.
+type JWTAuthenticatorFilteringHandler = cache.TypedFilteringResourceEventHandler[*conciergeauthenticationv1alpha1.JWTAuthenticator]
+
+// JWTAuthenticatorIndexers is a specialization of [cache.TypedIndexers] for JWTAuthenticator.
+type JWTAuthenticatorIndexers = cache.TypedIndexers[*conciergeauthenticationv1alpha1.JWTAuthenticator]
+
+// DeletedJWTAuthenticator is a specialization of [cache.DeletedObject] for JWTAuthenticator.
+type DeletedJWTAuthenticator = cache.DeletedObject[*conciergeauthenticationv1alpha1.JWTAuthenticator]
 
 type jWTAuthenticatorInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -35,25 +63,49 @@ type jWTAuthenticatorInformer struct {
 // NewJWTAuthenticatorInformer constructs a new informer for JWTAuthenticator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedJWTAuthenticatorInformer]).
 func NewJWTAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewJWTAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedJWTAuthenticatorInformer constructs a new informer for JWTAuthenticator type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedJWTAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers JWTAuthenticatorIndexers) JWTAuthenticatorIndexInformer {
+	return NewTypedJWTAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredJWTAuthenticatorInformer constructs a new informer for JWTAuthenticator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredJWTAuthenticatorInformer]).
 func NewFilteredJWTAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewJWTAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedJWTAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredJWTAuthenticatorInformer constructs a new informer for JWTAuthenticator type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredJWTAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers JWTAuthenticatorIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) JWTAuthenticatorIndexInformer {
+	return NewTypedJWTAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewJWTAuthenticatorInformerWithOptions constructs a new informer for JWTAuthenticator type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedJWTAuthenticatorInformerWithOptions]).
 func NewJWTAuthenticatorInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedJWTAuthenticatorInformerWithOptions(client, options)
+}
+
+// NewTypedJWTAuthenticatorInformerWithOptions constructs a new informer for JWTAuthenticator type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedJWTAuthenticatorInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) JWTAuthenticatorIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "authentication.concierge.pinniped.dev", Version: "v1alpha1", Resource: "jwtauthenticators"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*conciergeauthenticationv1alpha1.JWTAuthenticator](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -86,17 +138,57 @@ func NewJWTAuthenticatorInformerWithOptions(client versioned.Interface, options 
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *jWTAuthenticatorInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewJWTAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedJWTAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *jWTAuthenticatorInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&conciergeauthenticationv1alpha1.JWTAuthenticator{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *jWTAuthenticatorInformer) TypedInformer() JWTAuthenticatorIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*conciergeauthenticationv1alpha1.JWTAuthenticator](f.factory.InformerFor(&conciergeauthenticationv1alpha1.JWTAuthenticator{}, f.defaultInformer))
 }
 
 func (f *jWTAuthenticatorInformer) Lister() authenticationv1alpha1.JWTAuthenticatorLister {
 	return authenticationv1alpha1.NewJWTAuthenticatorLister(f.Informer().GetIndexer())
+}
+
+// ToTypedJWTAuthenticatorInformer converts an untyped informer into a TypedJWTAuthenticatorInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *JWTAuthenticator. If that is not the case, calling type-safe methods of the returned
+// TypedJWTAuthenticatorInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedJWTAuthenticatorInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedJWTAuthenticatorInformer(informer JWTAuthenticatorInformer) TypedJWTAuthenticatorInformer {
+	if informer, ok := informer.(TypedJWTAuthenticatorInformer); ok {
+		return informer
+	}
+	return &jWTAuthenticatorTypedInformerAdapter{informer}
+}
+
+type jWTAuthenticatorTypedInformerAdapter struct {
+	JWTAuthenticatorInformer
+}
+
+func (a *jWTAuthenticatorTypedInformerAdapter) TypedInformer() JWTAuthenticatorIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*conciergeauthenticationv1alpha1.JWTAuthenticator](a.Informer())
+}
+
+// ToJWTAuthenticatorIndexInformer converts an untyped informer into a JWTAuthenticatorIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *JWTAuthenticator. If that is not the case, calling type-safe methods of the returned
+// JWTAuthenticatorIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a JWTAuthenticatorIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToJWTAuthenticatorIndexInformer(informer cache.SharedIndexInformer) JWTAuthenticatorIndexInformer {
+	if informer, ok := informer.(JWTAuthenticatorIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*conciergeauthenticationv1alpha1.JWTAuthenticator](informer)
 }

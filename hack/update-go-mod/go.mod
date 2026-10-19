@@ -1,5 +1,5 @@
 module go.pinniped.dev/update-go-mod
 
-go 1.25.0
+go 1.26.0
 
-require golang.org/x/mod v0.38.0
+require golang.org/x/mod v0.42.0

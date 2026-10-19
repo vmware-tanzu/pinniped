@@ -906,9 +906,54 @@ func getTransportForProtocol(restConfig *rest.Config, protocol string) (http.Rou
 		return nil, fmt.Errorf("could not extract TLS config: %w", err)
 	}
 	cfg.NextProtos = []string{protocol}
+
+	// Overriding NextProtos above is not sufficient on its own. Starting with Go 1.27,
+	// http2.ConfigureTransports no longer sets NextProtos itself, and instead enables http2 by
+	// setting http.Transport.Protocols to allow both http/1.1 and h2. On the first round trip,
+	// net/http lazily recomputes NextProtos from Protocols, which would undo the override above.
+	// Restricting Protocols to only the desired protocol makes the override stick.
+	if err := restrictTransportToProtocol(rt, protocol); err != nil {
+		return nil, err
+	}
+
 	if err := kubeclient.AssertSecureTransport(rt); err != nil {
 		return nil, err // make sure we only use a secure TLS config
 	}
 
 	return rt, nil
+}
+
+// restrictTransportToProtocol configures the underlying http.Transport to speak only the given
+// protocol, which must be either "h2" or "http/1.1".
+func restrictTransportToProtocol(rt http.RoundTripper, protocol string) error {
+	t, err := unwrapHTTPTransport(rt)
+	if err != nil {
+		return err
+	}
+
+	var protocols http.Protocols
+	switch protocol {
+	case "h2":
+		protocols.SetHTTP2(true)
+	case "http/1.1":
+		protocols.SetHTTP1(true)
+	default:
+		return fmt.Errorf("unsupported protocol %q", protocol)
+	}
+	t.Protocols = &protocols
+
+	return nil
+}
+
+// unwrapHTTPTransport digs through any round tripper wrappers to find the underlying
+// http.Transport. This mirrors how utilnet.TLSClientConfig unwraps round trippers.
+func unwrapHTTPTransport(rt http.RoundTripper) (*http.Transport, error) {
+	switch t := rt.(type) {
+	case *http.Transport:
+		return t, nil
+	case utilnet.RoundTripperWrapper:
+		return unwrapHTTPTransport(t.WrappedRoundTripper())
+	default:
+		return nil, fmt.Errorf("could not find underlying http.Transport, found type: %T", rt)
+	}
 }

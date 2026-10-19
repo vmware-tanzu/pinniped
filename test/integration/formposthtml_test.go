@@ -121,13 +121,11 @@ func formpostCallbackServer(t *testing.T) (string, func(*testing.T, url.Values))
 		// Allow CORS requests.
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
-		//nolint:gosec // this is a test, so we don't care about limiting request body size
 		assert.NoError(t, r.ParseForm())
 
 		// Extract only the POST parameters (r.Form also contains URL query parameters).
 		postParams := url.Values{}
 		for k := range r.Form {
-			//nolint:gosec // this is a test, so we don't care about limiting request body size
 			if v := r.PostFormValue(k); v != "" {
 				postParams.Set(k, v)
 			}

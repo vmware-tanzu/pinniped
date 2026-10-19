@@ -23,32 +23,32 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge authenticatio
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcekind"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcekind"]
 ==== CertificateAuthorityDataSourceKind (string) 
 
 CertificateAuthorityDataSourceKind enumerates the sources for CA Bundles.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec"]
 ==== CertificateAuthorityDataSourceSpec 
 
 CertificateAuthorityDataSourceSpec provides a source for CA bundle used for client-side TLS verification.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`kind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcekind[$$CertificateAuthorityDataSourceKind$$]__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
+| *`kind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcekind[$$CertificateAuthorityDataSourceKind$$]__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
 Allowed values are "Secret" or "ConfigMap". +
 "ConfigMap" uses a Kubernetes configmap to source CA Bundles. +
 "Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles. +
@@ -60,14 +60,14 @@ certificate bundle. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-claimvalidationrule"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-claimvalidationrule"]
 ==== ClaimValidationRule 
 
 ClaimValidationRule provides the configuration for a single claim validation rule.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -98,14 +98,14 @@ Mutually exclusive with claim and requiredValue. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-extramapping"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-extramapping"]
 ==== ExtraMapping 
 
 ExtraMapping provides the configuration for a single extra mapping.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwttokenclaims[$$JWTTokenClaims$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwttokenclaims[$$JWTTokenClaims$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -132,7 +132,7 @@ Documentation on CEL: https://kubernetes.io/docs/reference/using-api/cel/ +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticator"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticator"]
 ==== JWTAuthenticator 
 
 JWTAuthenticator describes the configuration of a JWT authenticator.
@@ -142,41 +142,41 @@ signature, existence of claims, etc.) and extract the username and groups from t
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorlist[$$JWTAuthenticatorList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorlist[$$JWTAuthenticatorList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]__ | spec for configuring the authenticator. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus[$$JWTAuthenticatorStatus$$]__ | status of the authenticator. +
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]__ | spec for configuring the authenticator. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus[$$JWTAuthenticatorStatus$$]__ | status of the authenticator. +
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorphase"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorphase"]
 ==== JWTAuthenticatorPhase (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus[$$JWTAuthenticatorStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus[$$JWTAuthenticatorStatus$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec"]
 ==== JWTAuthenticatorSpec 
 
 JWTAuthenticatorSpec is the spec for configuring a JWT authenticator.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticator[$$JWTAuthenticator$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticator[$$JWTAuthenticator$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -185,14 +185,14 @@ JWTAuthenticatorSpec is the spec for configuring a JWT authenticator.
 | *`issuer`* __string__ | issuer is the OIDC issuer URL that will be used to discover public signing keys. Issuer is +
 also used to validate the "iss" JWT claim. +
 | *`audience`* __string__ | audience is the required value of the "aud" JWT claim. +
-| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwttokenclaims[$$JWTTokenClaims$$]__ | claims allows customization of the claims that will be mapped to user identity +
+| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwttokenclaims[$$JWTTokenClaims$$]__ | claims allows customization of the claims that will be mapped to user identity +
 for Kubernetes access. +
-| *`claimValidationRules`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-claimvalidationrule[$$ClaimValidationRule$$] array__ | claimValidationRules are rules that are applied to validate token claims to authenticate users. +
+| *`claimValidationRules`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-claimvalidationrule[$$ClaimValidationRule$$] array__ | claimValidationRules are rules that are applied to validate token claims to authenticate users. +
 This is similar to claimValidationRules from Kubernetes AuthenticationConfiguration as documented in +
 https://kubernetes.io/docs/reference/access-authn-authz/authentication. +
 This is an advanced configuration option. During an end-user login flow, mistakes in this +
 configuration will cause the user's login to fail. +
-| *`userValidationRules`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-uservalidationrule[$$UserValidationRule$$] array__ | userValidationRules are rules that are applied to final user before completing authentication. +
+| *`userValidationRules`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-uservalidationrule[$$UserValidationRule$$] array__ | userValidationRules are rules that are applied to final user before completing authentication. +
 These allow invariants to be applied to incoming identities such as preventing the +
 use of the system: prefix that is commonly used by Kubernetes components. +
 The validation rules are logically ANDed together and must all return true for the validation to pass. +
@@ -200,29 +200,29 @@ This is similar to claimValidationRules from Kubernetes AuthenticationConfigurat
 https://kubernetes.io/docs/reference/access-authn-authz/authentication. +
 This is an advanced configuration option. During an end-user login flow, mistakes in this +
 configuration will cause the user's login to fail. +
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]__ | tls is the configuration for communicating with the OIDC provider via TLS. +
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]__ | tls is the configuration for communicating with the OIDC provider via TLS. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorstatus"]
 ==== JWTAuthenticatorStatus 
 
 JWTAuthenticatorStatus is the status of a JWT authenticator.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticator[$$JWTAuthenticator$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticator[$$JWTAuthenticator$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of the authenticator's current state. +
-| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorphase[$$JWTAuthenticatorPhase$$]__ | Phase summarizes the overall status of the JWTAuthenticator. +
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of the authenticator's current state. +
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorphase[$$JWTAuthenticatorPhase$$]__ | Phase summarizes the overall status of the JWTAuthenticator. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwttokenclaims"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwttokenclaims"]
 ==== JWTTokenClaims 
 
 JWTTokenClaims allows customization of the claims that will be mapped to user identity
@@ -230,7 +230,7 @@ for Kubernetes access.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -295,7 +295,7 @@ Documentation on CEL: https://kubernetes.io/docs/reference/using-api/cel/ +
 
 Mutually exclusive with groups. Use either groups or groupsExpression to +
 determine the user's group membership from the JWT token. +
-| *`extra`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-extramapping[$$ExtraMapping$$] array__ | extra is similar to claimMappings.extra from Kubernetes AuthenticationConfiguration +
+| *`extra`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-extramapping[$$ExtraMapping$$] array__ | extra is similar to claimMappings.extra from Kubernetes AuthenticationConfiguration +
 as documented in https://kubernetes.io/docs/reference/access-authn-authz/authentication. +
 
 However, note that the Pinniped Concierge issues client certificates to users for the purpose +
@@ -336,34 +336,34 @@ This will result in: +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-tlsspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-tlsspec"]
 ==== TLSSpec 
 
 TLSSpec provides TLS configuration on various authenticators.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec[$$WebhookAuthenticatorSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec[$$WebhookAuthenticatorSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
 | *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted. +
-| *`certificateAuthorityDataSource`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]__ | Reference to a CA bundle in a secret or a configmap. +
+| *`certificateAuthorityDataSource`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]__ | Reference to a CA bundle in a secret or a configmap. +
 Any changes to the CA bundle in the secret or configmap will be dynamically reloaded. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-uservalidationrule"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-uservalidationrule"]
 ==== UserValidationRule 
 
 UserValidationRule provides the configuration for a single user info validation rule.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-jwtauthenticatorspec[$$JWTAuthenticatorSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -383,73 +383,73 @@ message is a literal string. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticator"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticator"]
 ==== WebhookAuthenticator 
 
 WebhookAuthenticator describes the configuration of a webhook authenticator.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticatorlist[$$WebhookAuthenticatorList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticatorlist[$$WebhookAuthenticatorList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec[$$WebhookAuthenticatorSpec$$]__ | Spec for configuring the authenticator. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]__ | Status of the authenticator. +
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec[$$WebhookAuthenticatorSpec$$]__ | Spec for configuring the authenticator. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]__ | Status of the authenticator. +
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticatorphase"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticatorphase"]
 ==== WebhookAuthenticatorPhase (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus[$$WebhookAuthenticatorStatus$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticatorspec"]
 ==== WebhookAuthenticatorSpec 
 
 Spec for configuring a webhook authenticator.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticator[$$WebhookAuthenticator$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticator[$$WebhookAuthenticator$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
 | *`endpoint`* __string__ | Webhook server endpoint URL. +
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration. +
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticatorstatus"]
 ==== WebhookAuthenticatorStatus 
 
 Status of a webhook authenticator.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticator[$$WebhookAuthenticator$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticator[$$WebhookAuthenticator$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of the authenticator's current state. +
-| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-authentication-v1alpha1-webhookauthenticatorphase[$$WebhookAuthenticatorPhase$$]__ | Phase summarizes the overall status of the WebhookAuthenticator. +
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of the authenticator's current state. +
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-authentication-v1alpha1-webhookauthenticatorphase[$$WebhookAuthenticatorPhase$$]__ | Phase summarizes the overall status of the WebhookAuthenticator. +
 |===
 
 
@@ -461,35 +461,35 @@ Package clientsecret is the internal version of the Pinniped client secret API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-oidcclientsecretrequest"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-oidcclientsecretrequest"]
 ==== OIDCClientSecretRequest 
 
 OIDCClientSecretRequest can be used to update the client secrets associated with an OIDCClient.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-oidcclientsecretrequestlist[$$OIDCClientSecretRequestList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-oidcclientsecretrequestlist[$$OIDCClientSecretRequestList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`ObjectMeta`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | 
-| *`Spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-oidcclientsecretrequestspec[$$OIDCClientSecretRequestSpec$$]__ | 
-| *`Status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-oidcclientsecretrequeststatus[$$OIDCClientSecretRequestStatus$$]__ | 
+| *`ObjectMeta`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | 
+| *`Spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-oidcclientsecretrequestspec[$$OIDCClientSecretRequestSpec$$]__ | 
+| *`Status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-oidcclientsecretrequeststatus[$$OIDCClientSecretRequestStatus$$]__ | 
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-oidcclientsecretrequestspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-oidcclientsecretrequestspec"]
 ==== OIDCClientSecretRequestSpec 
 
 Spec of the OIDCClientSecretRequest.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -500,14 +500,14 @@ Spec of the OIDCClientSecretRequest.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-oidcclientsecretrequeststatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-oidcclientsecretrequeststatus"]
 ==== OIDCClientSecretRequestStatus 
 
 Status of the OIDCClientSecretRequest.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -526,36 +526,36 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped client secret API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest"]
 ==== OIDCClientSecretRequest 
 
 OIDCClientSecretRequest can be used to update the client secrets associated with an OIDCClient.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestlist[$$OIDCClientSecretRequestList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestlist[$$OIDCClientSecretRequestList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestspec[$$OIDCClientSecretRequestSpec$$]__ | 
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequeststatus[$$OIDCClientSecretRequestStatus$$]__ | 
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestspec[$$OIDCClientSecretRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequeststatus[$$OIDCClientSecretRequestStatus$$]__ | 
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequestspec"]
 ==== OIDCClientSecretRequestSpec 
 
 Spec of the OIDCClientSecretRequest.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -566,14 +566,14 @@ Spec of the OIDCClientSecretRequest.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequeststatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequeststatus"]
 ==== OIDCClientSecretRequestStatus 
 
 Status of the OIDCClientSecretRequest.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-clientsecret-v1alpha1-oidcclientsecretrequest[$$OIDCClientSecretRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -592,125 +592,125 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped concierge configuration
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuer"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuer"]
 ==== CredentialIssuer 
 
 CredentialIssuer describes the configuration and status of the Pinniped Concierge credential issuer.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerlist[$$CredentialIssuerList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerlist[$$CredentialIssuerList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerspec[$$CredentialIssuerSpec$$]__ | Spec describes the intended configuration of the Concierge. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]__ | CredentialIssuerStatus describes the status of the Concierge. +
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerspec[$$CredentialIssuerSpec$$]__ | Spec describes the intended configuration of the Concierge. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]__ | CredentialIssuerStatus describes the status of the Concierge. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerfrontend"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerfrontend"]
 ==== CredentialIssuerFrontend 
 
 CredentialIssuerFrontend describes how to connect using a particular integration strategy.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`type`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-frontendtype[$$FrontendType$$]__ | Type describes which frontend mechanism clients can use with a strategy. +
-| *`tokenCredentialRequestInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo[$$TokenCredentialRequestAPIInfo$$]__ | TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge. +
+| *`type`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-frontendtype[$$FrontendType$$]__ | Type describes which frontend mechanism clients can use with a strategy. +
+| *`tokenCredentialRequestInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo[$$TokenCredentialRequestAPIInfo$$]__ | TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge. +
 This field is only set when Type is "TokenCredentialRequestAPI". +
-| *`impersonationProxyInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyinfo[$$ImpersonationProxyInfo$$]__ | ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge. +
+| *`impersonationProxyInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyinfo[$$ImpersonationProxyInfo$$]__ | ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge. +
 This field is only set when Type is "ImpersonationProxy". +
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerspec"]
 ==== CredentialIssuerSpec 
 
 CredentialIssuerSpec describes the intended configuration of the Concierge.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuer[$$CredentialIssuer$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuer[$$CredentialIssuer$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`impersonationProxy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]__ | ImpersonationProxy describes the intended configuration of the Concierge impersonation proxy. +
+| *`impersonationProxy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]__ | ImpersonationProxy describes the intended configuration of the Concierge impersonation proxy. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerstatus"]
 ==== CredentialIssuerStatus 
 
 CredentialIssuerStatus describes the status of the Concierge.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuer[$$CredentialIssuer$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuer[$$CredentialIssuer$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$] array__ | List of integration strategies that were attempted by Pinniped. +
+| *`strategies`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$] array__ | List of integration strategies that were attempted by Pinniped. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerstrategy"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerstrategy"]
 ==== CredentialIssuerStrategy 
 
 CredentialIssuerStrategy describes the status of an integration strategy that was attempted by Pinniped.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerstatus[$$CredentialIssuerStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`type`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-strategytype[$$StrategyType$$]__ | Type of integration attempted. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-strategystatus[$$StrategyStatus$$]__ | Status of the attempted integration strategy. +
-| *`reason`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-strategyreason[$$StrategyReason$$]__ | Reason for the current status. +
+| *`type`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-strategytype[$$StrategyType$$]__ | Type of integration attempted. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-strategystatus[$$StrategyStatus$$]__ | Status of the attempted integration strategy. +
+| *`reason`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-strategyreason[$$StrategyReason$$]__ | Reason for the current status. +
 | *`message`* __string__ | Human-readable description of the current status. +
-| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta[$$Time$$]__ | When the status was last checked. +
-| *`frontend`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]__ | Frontend describes how clients can connect using this strategy. +
+| *`lastUpdateTime`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#time-v1-meta[$$Time$$]__ | When the status was last checked. +
+| *`frontend`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]__ | Frontend describes how clients can connect using this strategy. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-frontendtype"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-frontendtype"]
 ==== FrontendType (string) 
 
 FrontendType enumerates a type of "frontend" used to provide access to users of a cluster.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyinfo"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyinfo"]
 ==== ImpersonationProxyInfo 
 
 ImpersonationProxyInfo describes the parameters for the impersonation proxy on this Concierge.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -721,7 +721,7 @@ ImpersonationProxyInfo describes the parameters for the impersonation proxy on t
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxymode"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxymode"]
 ==== ImpersonationProxyMode (string) 
 
 ImpersonationProxyMode enumerates the configuration modes for the impersonation proxy.
@@ -729,25 +729,25 @@ Allowed values are "auto", "enabled", or "disabled".
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyservicespec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyservicespec"]
 ==== ImpersonationProxyServiceSpec 
 
 ImpersonationProxyServiceSpec describes how the Concierge should provision a Service to expose the impersonation proxy.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`type`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyservicetype[$$ImpersonationProxyServiceType$$]__ | Type specifies the type of Service to provision for the impersonation proxy. +
+| *`type`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyservicetype[$$ImpersonationProxyServiceType$$]__ | Type specifies the type of Service to provision for the impersonation proxy. +
 
 If the type is "None", then the "spec.impersonationProxy.externalEndpoint" field must be set to a non-empty +
 value so that the Concierge can properly advertise the endpoint in the CredentialIssuer's status. +
@@ -757,7 +757,7 @@ This is not supported on all cloud providers. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyservicetype"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyservicetype"]
 ==== ImpersonationProxyServiceType (string) 
 
 ImpersonationProxyServiceType enumerates the types of service that can be provisioned for the impersonation proxy.
@@ -765,40 +765,40 @@ Allowed values are "LoadBalancer", "ClusterIP", or "None".
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyservicespec[$$ImpersonationProxyServiceSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyservicespec[$$ImpersonationProxyServiceSpec$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyspec"]
 ==== ImpersonationProxySpec 
 
 ImpersonationProxySpec describes the intended configuration of the Concierge impersonation proxy.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerspec[$$CredentialIssuerSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerspec[$$CredentialIssuerSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`mode`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxymode[$$ImpersonationProxyMode$$]__ | Mode configures whether the impersonation proxy should be started: +
+| *`mode`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxymode[$$ImpersonationProxyMode$$]__ | Mode configures whether the impersonation proxy should be started: +
 - "disabled" explicitly disables the impersonation proxy. This is the default. +
 - "enabled" explicitly enables the impersonation proxy. +
 - "auto" enables or disables the impersonation proxy based upon the cluster in which it is running. +
-| *`service`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyservicespec[$$ImpersonationProxyServiceSpec$$]__ | Service describes the configuration of the Service provisioned to expose the impersonation proxy to clients. +
+| *`service`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyservicespec[$$ImpersonationProxyServiceSpec$$]__ | Service describes the configuration of the Service provisioned to expose the impersonation proxy to clients. +
 | *`externalEndpoint`* __string__ | ExternalEndpoint describes the HTTPS endpoint where the proxy will be exposed. If not set, the proxy will +
 be served using the external name of the LoadBalancer service or the cluster service DNS name. +
 
 This field must be non-empty when spec.impersonationProxy.service.type is "None". +
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxytlsspec[$$ImpersonationProxyTLSSpec$$]__ | TLS contains information about how the Concierge impersonation proxy should serve TLS. +
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxytlsspec[$$ImpersonationProxyTLSSpec$$]__ | TLS contains information about how the Concierge impersonation proxy should serve TLS. +
 
 If this field is empty, the impersonation proxy will generate its own TLS certificate. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxytlsspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxytlsspec"]
 ==== ImpersonationProxyTLSSpec 
 
 ImpersonationProxyTLSSpec contains information about how the Concierge impersonation proxy should
@@ -812,7 +812,7 @@ the impersonation proxy endpoint.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-impersonationproxyspec[$$ImpersonationProxySpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -825,50 +825,50 @@ the TLS serving certificate for the Concierge impersonation proxy endpoint. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-strategyreason"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-strategyreason"]
 ==== StrategyReason (string) 
 
 StrategyReason enumerates the detailed reason why a strategy is in a particular status.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-strategystatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-strategystatus"]
 ==== StrategyStatus (string) 
 
 StrategyStatus enumerates whether a strategy is working on a cluster.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-strategytype"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-strategytype"]
 ==== StrategyType (string) 
 
 StrategyType enumerates a type of "strategy" used to implement credential access on a cluster.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerstrategy[$$CredentialIssuerStrategy$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-tokencredentialrequestapiinfo"]
 ==== TokenCredentialRequestAPIInfo 
 
 TokenCredentialRequestAPIInfo describes the parameters for the TokenCredentialRequest API on this Concierge.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-config-v1alpha1-credentialissuerfrontend[$$CredentialIssuerFrontend$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -887,34 +887,34 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor configuratio
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomain"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomain"]
 ==== FederationDomain 
 
 FederationDomain describes the configuration of an OIDC provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainlist[$$FederationDomainList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainlist[$$FederationDomainList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainspec[$$FederationDomainSpec$$]__ | Spec of the OIDC provider. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]__ | Status of the OIDC provider. +
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainspec[$$FederationDomainSpec$$]__ | Spec of the OIDC provider. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]__ | Status of the OIDC provider. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainidentityprovider"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainidentityprovider"]
 ==== FederationDomainIdentityProvider 
 
 FederationDomainIdentityProvider describes how an identity provider is made available in this FederationDomain.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainspec[$$FederationDomainSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainspec[$$FederationDomainSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -923,62 +923,62 @@ FederationDomainIdentityProvider describes how an identity provider is made avai
 | *`displayName`* __string__ | DisplayName is the name of this identity provider as it will appear to clients. This name ends up in the +
 kubeconfig of end users, so changing the name of an identity provider that is in use by end users will be a +
 disruptive change for those users. +
-| *`objectRef`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#typedlocalobjectreference-v1-core[$$TypedLocalObjectReference$$]__ | ObjectRef is a reference to a Pinniped identity provider resource. A valid reference is required. +
+| *`objectRef`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#typedlocalobjectreference-v1-core[$$TypedLocalObjectReference$$]__ | ObjectRef is a reference to a Pinniped identity provider resource. A valid reference is required. +
 If the reference cannot be resolved then the identity provider will not be made available. +
 Must refer to a resource of one of the Pinniped identity provider types, e.g. OIDCIdentityProvider, +
 LDAPIdentityProvider, ActiveDirectoryIdentityProvider. +
-| *`transforms`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransforms[$$FederationDomainTransforms$$]__ | Transforms is an optional way to specify transformations to be applied during user authentication and +
+| *`transforms`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransforms[$$FederationDomainTransforms$$]__ | Transforms is an optional way to specify transformations to be applied during user authentication and +
 session refresh. +
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainphase"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainphase"]
 ==== FederationDomainPhase (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainsecrets"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainsecrets"]
 ==== FederationDomainSecrets 
 
 FederationDomainSecrets holds information about this OIDC Provider's secrets.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainstatus[$$FederationDomainStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`jwks`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | JWKS holds the name of the corev1.Secret in which this OIDC Provider's signing/verification keys are +
+| *`jwks`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | JWKS holds the name of the corev1.Secret in which this OIDC Provider's signing/verification keys are +
 stored. If it is empty, then the signing/verification keys are either unknown or they don't +
 exist. +
-| *`tokenSigningKey`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | TokenSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for +
+| *`tokenSigningKey`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | TokenSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for +
 signing tokens is stored. +
-| *`stateSigningKey`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | StateSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for +
+| *`stateSigningKey`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | StateSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for +
 signing state parameters is stored. +
-| *`stateEncryptionKey`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | StateSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for +
+| *`stateEncryptionKey`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#localobjectreference-v1-core[$$LocalObjectReference$$]__ | StateSigningKey holds the name of the corev1.Secret in which this OIDC Provider's key for +
 encrypting state parameters is stored. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainspec"]
 ==== FederationDomainSpec 
 
 FederationDomainSpec is a struct that describes an OIDC Provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomain[$$FederationDomain$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomain[$$FederationDomain$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -992,8 +992,8 @@ https://example.com/foo/some/path/to/auth/endpoint). +
 
 See +
 https://openid.net/specs/openid-connect-discovery-1_0.html#rfc.section.3 for more information. +
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintlsspec[$$FederationDomainTLSSpec$$]__ | TLS specifies a secret which will contain Transport Layer Security (TLS) configuration for the FederationDomain. +
-| *`identityProviders`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainidentityprovider[$$FederationDomainIdentityProvider$$] array__ | IdentityProviders is the list of identity providers available for use by this FederationDomain. +
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintlsspec[$$FederationDomainTLSSpec$$]__ | TLS specifies a secret which will contain Transport Layer Security (TLS) configuration for the FederationDomain. +
+| *`identityProviders`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainidentityprovider[$$FederationDomainIdentityProvider$$] array__ | IdentityProviders is the list of identity providers available for use by this FederationDomain. +
 
 An identity provider CR (e.g. OIDCIdentityProvider or LDAPIdentityProvider) describes how to connect to a server, +
 how to talk in a specific protocol for authentication, and how to use the schema of that server/protocol to +
@@ -1018,33 +1018,33 @@ explicitly list the identity provider using this IdentityProviders field. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainstatus"]
 ==== FederationDomainStatus 
 
 FederationDomainStatus is a struct that describes the actual state of an OIDC Provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomain[$$FederationDomain$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomain[$$FederationDomain$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainphase[$$FederationDomainPhase$$]__ | Phase summarizes the overall status of the FederationDomain. +
-| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta[$$Condition$$] array__ | Conditions represent the observations of an FederationDomain's current state. +
-| *`secrets`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainsecrets[$$FederationDomainSecrets$$]__ | Secrets contains information about this OIDC Provider's secrets. +
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainphase[$$FederationDomainPhase$$]__ | Phase summarizes the overall status of the FederationDomain. +
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta[$$Condition$$] array__ | Conditions represent the observations of an FederationDomain's current state. +
+| *`secrets`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainsecrets[$$FederationDomainSecrets$$]__ | Secrets contains information about this OIDC Provider's secrets. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintlsspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintlsspec"]
 ==== FederationDomainTLSSpec 
 
 FederationDomainTLSSpec is a struct that describes the TLS configuration for an OIDC Provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainspec[$$FederationDomainSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainspec[$$FederationDomainSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1070,21 +1070,21 @@ When your Issuer URL's host is an IP address, then this field is ignored. SNI do
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransforms"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransforms"]
 ==== FederationDomainTransforms 
 
 FederationDomainTransforms defines identity transformations for an identity provider's usage on a FederationDomain.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomainidentityprovider[$$FederationDomainIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomainidentityprovider[$$FederationDomainIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`constants`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransformsconstant[$$FederationDomainTransformsConstant$$] array__ | Constants defines constant variables and their values which will be made available to the transform expressions. +
-| *`expressions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransformsexpression[$$FederationDomainTransformsExpression$$] array__ | Expressions are an optional list of transforms and policies to be executed in the order given during every +
+| *`constants`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransformsconstant[$$FederationDomainTransformsConstant$$] array__ | Constants defines constant variables and their values which will be made available to the transform expressions. +
+| *`expressions`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransformsexpression[$$FederationDomainTransformsExpression$$] array__ | Expressions are an optional list of transforms and policies to be executed in the order given during every +
 authentication attempt, including during every session refresh. +
 Each is a CEL expression. It may use the basic CEL language as defined in +
 https://github.com/google/cel-spec/blob/master/doc/langdef.md plus the CEL string extensions defined in +
@@ -1112,7 +1112,7 @@ Any compilation or static type-checking failure of any expression will cause an 
 During an authentication attempt, any unexpected runtime evaluation errors (e.g. division by zero) cause the +
 authentication attempt to fail. When all expressions evaluate successfully, then the (potentially changed) username +
 and group names have been decided for that authentication attempt. +
-| *`examples`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransformsexample[$$FederationDomainTransformsExample$$] array__ | Examples can optionally be used to ensure that the sequence of transformation expressions are working as +
+| *`examples`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransformsexample[$$FederationDomainTransformsExample$$] array__ | Examples can optionally be used to ensure that the sequence of transformation expressions are working as +
 expected. Examples define sample input identities which are then run through the expression list, and the +
 results are compared to the expected results. If any example in this list fails, then this +
 identity provider will not be available for use within this FederationDomain, and the error(s) will be +
@@ -1121,7 +1121,7 @@ expressions, and also act as living documentation for other administrators to be
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransformsconstant"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransformsconstant"]
 ==== FederationDomainTransformsConstant 
 
 FederationDomainTransformsConstant defines a constant variable and its value which will be made available to
@@ -1129,7 +1129,7 @@ the transform expressions. This is a union type, and Type is the discriminator f
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransforms[$$FederationDomainTransforms$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransforms[$$FederationDomainTransforms$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1143,14 +1143,14 @@ Allowed values are "string" or "stringList". +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransformsexample"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransformsexample"]
 ==== FederationDomainTransformsExample 
 
 FederationDomainTransformsExample defines a transform example.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransforms[$$FederationDomainTransforms$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransforms[$$FederationDomainTransforms$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1158,19 +1158,19 @@ FederationDomainTransformsExample defines a transform example.
 | Field | Description
 | *`username`* __string__ | Username is the input username. +
 | *`groups`* __string array__ | Groups is the input list of group names. +
-| *`expects`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransformsexampleexpects[$$FederationDomainTransformsExampleExpects$$]__ | Expects is the expected output of the entire sequence of transforms when they are run against the +
+| *`expects`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransformsexampleexpects[$$FederationDomainTransformsExampleExpects$$]__ | Expects is the expected output of the entire sequence of transforms when they are run against the +
 input Username and Groups. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransformsexampleexpects"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransformsexampleexpects"]
 ==== FederationDomainTransformsExampleExpects 
 
 FederationDomainTransformsExampleExpects defines the expected result for a transforms example.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransformsexample[$$FederationDomainTransformsExample$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransformsexample[$$FederationDomainTransformsExample$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1190,14 +1190,14 @@ transformation error, such as a runtime error. When Rejected is false, there is 
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransformsexpression"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransformsexpression"]
 ==== FederationDomainTransformsExpression 
 
 FederationDomainTransformsExpression defines a transform expression.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-federationdomaintransforms[$$FederationDomainTransforms$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-federationdomaintransforms[$$FederationDomainTransforms$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1211,70 +1211,70 @@ an authentication attempt. When empty, a default message will be used. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-granttype"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-granttype"]
 ==== GrantType (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclient"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclient"]
 ==== OIDCClient 
 
 OIDCClient describes the configuration of an OIDC client.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientlist[$$OIDCClientList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientlist[$$OIDCClientList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]__ | Spec of the OIDC client. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientstatus[$$OIDCClientStatus$$]__ | Status of the OIDC client. +
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]__ | Spec of the OIDC client. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientstatus[$$OIDCClientStatus$$]__ | Status of the OIDC client. +
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientphase"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientphase"]
 ==== OIDCClientPhase (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientstatus[$$OIDCClientStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientstatus[$$OIDCClientStatus$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientspec"]
 ==== OIDCClientSpec 
 
 OIDCClientSpec is a struct that describes an OIDCClient.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclient[$$OIDCClient$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclient[$$OIDCClient$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`allowedRedirectURIs`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-redirecturi[$$RedirectURI$$] array__ | allowedRedirectURIs is a list of the allowed redirect_uri param values that should be accepted during OIDC flows with this +
+| *`allowedRedirectURIs`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-redirecturi[$$RedirectURI$$] array__ | allowedRedirectURIs is a list of the allowed redirect_uri param values that should be accepted during OIDC flows with this +
 client. Any other uris will be rejected. +
 Must be a URI with the https scheme, unless the hostname is 127.0.0.1 or ::1 which may use the http scheme. +
 Port numbers are not required for 127.0.0.1 or ::1 and are ignored when checking for a matching redirect_uri. +
-| *`allowedGrantTypes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-granttype[$$GrantType$$] array__ | allowedGrantTypes is a list of the allowed grant_type param values that should be accepted during OIDC flows with this +
+| *`allowedGrantTypes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-granttype[$$GrantType$$] array__ | allowedGrantTypes is a list of the allowed grant_type param values that should be accepted during OIDC flows with this +
 client. +
 
 Must only contain the following values: +
@@ -1285,7 +1285,7 @@ This grant must be listed if allowedScopes lists offline_access. +
 - urn:ietf:params:oauth:grant-type:token-exchange: allows the client to perform RFC8693 token exchange, +
 which is a step in the process to be able to get a cluster credential for the user. +
 This grant must be listed if allowedScopes lists pinniped:request-audience. +
-| *`allowedScopes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-scope[$$Scope$$] array__ | allowedScopes is a list of the allowed scopes param values that should be accepted during OIDC flows with this client. +
+| *`allowedScopes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-scope[$$Scope$$] array__ | allowedScopes is a list of the allowed scopes param values that should be accepted during OIDC flows with this client. +
 
 Must only contain the following values: +
 - openid: The client is allowed to request ID tokens. ID tokens only include the required claims by default (iss, sub, aud, exp, iat). +
@@ -1301,37 +1301,37 @@ Without the username scope being requested and allowed, the ID token will not co
 - groups: The client is allowed to request that ID tokens contain the user's group membership, +
 if their group membership is discoverable by the Supervisor. +
 Without the groups scope being requested and allowed, the ID token will not contain groups. +
-| *`tokenLifetimes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclienttokenlifetimes[$$OIDCClientTokenLifetimes$$]__ | tokenLifetimes are the optional overrides of token lifetimes for an OIDCClient. +
+| *`tokenLifetimes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclienttokenlifetimes[$$OIDCClientTokenLifetimes$$]__ | tokenLifetimes are the optional overrides of token lifetimes for an OIDCClient. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientstatus"]
 ==== OIDCClientStatus 
 
 OIDCClientStatus is a struct that describes the actual state of an OIDCClient.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclient[$$OIDCClient$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclient[$$OIDCClient$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientphase[$$OIDCClientPhase$$]__ | phase summarizes the overall status of the OIDCClient. +
-| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta[$$Condition$$] array__ | conditions represent the observations of an OIDCClient's current state. +
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientphase[$$OIDCClientPhase$$]__ | phase summarizes the overall status of the OIDCClient. +
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta[$$Condition$$] array__ | conditions represent the observations of an OIDCClient's current state. +
 | *`totalClientSecrets`* __integer__ | totalClientSecrets is the current number of client secrets that are detected for this OIDCClient. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclienttokenlifetimes"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclienttokenlifetimes"]
 ==== OIDCClientTokenLifetimes 
 
 OIDCClientTokenLifetimes describes the optional overrides of token lifetimes for an OIDCClient.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1350,26 +1350,26 @@ longer lifetimes. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-redirecturi"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-redirecturi"]
 ==== RedirectURI (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-scope"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-scope"]
 ==== Scope (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-config-v1alpha1-oidcclientspec[$$OIDCClientSpec$$]
 ****
 
 
@@ -1382,19 +1382,19 @@ Package identity is the internal version of the Pinniped identity API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-extravalue"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-extravalue"]
 ==== ExtraValue (string array) 
 
 ExtraValue masks the value so protobuf can generate
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-userinfo[$$UserInfo$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-userinfo[$$UserInfo$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-kubernetesuserinfo"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-kubernetesuserinfo"]
 ==== KubernetesUserInfo 
 
 KubernetesUserInfo represents the current authenticated user, exactly as Kubernetes understands it.
@@ -1402,18 +1402,18 @@ Copied from the Kubernetes token review API.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-whoamirequeststatus[$$WhoAmIRequestStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-whoamirequeststatus[$$WhoAmIRequestStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`User`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-userinfo[$$UserInfo$$]__ | User is the UserInfo associated with the current user. +
+| *`User`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-userinfo[$$UserInfo$$]__ | User is the UserInfo associated with the current user. +
 | *`Audiences`* __string array__ | Audiences are audience identifiers chosen by the authenticator. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-userinfo"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-userinfo"]
 ==== UserInfo 
 
 UserInfo holds the information about the user needed to implement the
@@ -1421,7 +1421,7 @@ user.Info interface.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-kubernetesuserinfo[$$KubernetesUserInfo$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-kubernetesuserinfo[$$KubernetesUserInfo$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1432,57 +1432,57 @@ user.Info interface.
 deleted and another user by the same name is added, they will have +
 different UIDs. +
 | *`Groups`* __string array__ | The names of groups this user is a part of. +
-| *`Extra`* __object (keys:string, values:xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-extravalue[$$ExtraValue$$])__ | Any additional information provided by the authenticator. +
+| *`Extra`* __object (keys:string, values:xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-extravalue[$$ExtraValue$$])__ | Any additional information provided by the authenticator. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-whoamirequest"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-whoamirequest"]
 ==== WhoAmIRequest 
 
 WhoAmIRequest submits a request to echo back the current authenticated user.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-whoamirequestlist[$$WhoAmIRequestList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-whoamirequestlist[$$WhoAmIRequestList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`ObjectMeta`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | 
-| *`Spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-whoamirequestspec[$$WhoAmIRequestSpec$$]__ | 
-| *`Status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-whoamirequeststatus[$$WhoAmIRequestStatus$$]__ | 
+| *`ObjectMeta`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | 
+| *`Spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-whoamirequestspec[$$WhoAmIRequestSpec$$]__ | 
+| *`Status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-whoamirequeststatus[$$WhoAmIRequestStatus$$]__ | 
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-whoamirequestspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-whoamirequestspec"]
 ==== WhoAmIRequestSpec 
 
 Spec is always empty for a WhoAmIRequest.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-whoamirequest[$$WhoAmIRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-whoamirequest[$$WhoAmIRequest$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-whoamirequeststatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-whoamirequeststatus"]
 ==== WhoAmIRequestStatus 
 
 Status is set by the server in the response to a WhoAmIRequest.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-whoamirequest[$$WhoAmIRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-whoamirequest[$$WhoAmIRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`KubernetesUserInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-kubernetesuserinfo[$$KubernetesUserInfo$$]__ | The current authenticated user, exactly as Kubernetes understands it. +
+| *`KubernetesUserInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-kubernetesuserinfo[$$KubernetesUserInfo$$]__ | The current authenticated user, exactly as Kubernetes understands it. +
 |===
 
 
@@ -1494,19 +1494,19 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped identity API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-extravalue"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-extravalue"]
 ==== ExtraValue (string array) 
 
 ExtraValue masks the value so protobuf can generate
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-userinfo[$$UserInfo$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-userinfo[$$UserInfo$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-kubernetesuserinfo"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-kubernetesuserinfo"]
 ==== KubernetesUserInfo 
 
 KubernetesUserInfo represents the current authenticated user, exactly as Kubernetes understands it.
@@ -1514,18 +1514,18 @@ Copied from the Kubernetes token review API.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-whoamirequeststatus[$$WhoAmIRequestStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-whoamirequeststatus[$$WhoAmIRequestStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`user`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-userinfo[$$UserInfo$$]__ | User is the UserInfo associated with the current user. +
+| *`user`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-userinfo[$$UserInfo$$]__ | User is the UserInfo associated with the current user. +
 | *`audiences`* __string array__ | Audiences are audience identifiers chosen by the authenticator. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-userinfo"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-userinfo"]
 ==== UserInfo 
 
 UserInfo holds the information about the user needed to implement the
@@ -1533,7 +1533,7 @@ user.Info interface.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-kubernetesuserinfo[$$KubernetesUserInfo$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-kubernetesuserinfo[$$KubernetesUserInfo$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1544,58 +1544,58 @@ user.Info interface.
 deleted and another user by the same name is added, they will have +
 different UIDs. +
 | *`groups`* __string array__ | The names of groups this user is a part of. +
-| *`extra`* __object (keys:string, values:xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-extravalue[$$ExtraValue$$])__ | Any additional information provided by the authenticator. +
+| *`extra`* __object (keys:string, values:xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-extravalue[$$ExtraValue$$])__ | Any additional information provided by the authenticator. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-whoamirequest"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-whoamirequest"]
 ==== WhoAmIRequest 
 
 WhoAmIRequest submits a request to echo back the current authenticated user.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-whoamirequestlist[$$WhoAmIRequestList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-whoamirequestlist[$$WhoAmIRequestList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-whoamirequestspec[$$WhoAmIRequestSpec$$]__ | 
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-whoamirequeststatus[$$WhoAmIRequestStatus$$]__ | 
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-whoamirequestspec[$$WhoAmIRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-whoamirequeststatus[$$WhoAmIRequestStatus$$]__ | 
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-whoamirequestspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-whoamirequestspec"]
 ==== WhoAmIRequestSpec 
 
 Spec is always empty for a WhoAmIRequest.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-whoamirequest[$$WhoAmIRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-whoamirequest[$$WhoAmIRequest$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-whoamirequeststatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-whoamirequeststatus"]
 ==== WhoAmIRequestStatus 
 
 Status is set by the server in the response to a WhoAmIRequest.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-whoamirequest[$$WhoAmIRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-whoamirequest[$$WhoAmIRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`kubernetesUserInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-identity-v1alpha1-kubernetesuserinfo[$$KubernetesUserInfo$$]__ | The current authenticated user, exactly as Kubernetes understands it. +
+| *`kubernetesUserInfo`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-identity-v1alpha1-kubernetesuserinfo[$$KubernetesUserInfo$$]__ | The current authenticated user, exactly as Kubernetes understands it. +
 |===
 
 
@@ -1607,34 +1607,34 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped supervisor identity pro
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovider"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovider"]
 ==== ActiveDirectoryIdentityProvider 
 
 ActiveDirectoryIdentityProvider describes the configuration of an upstream Microsoft Active Directory identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderlist[$$ActiveDirectoryIdentityProviderList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderlist[$$ActiveDirectoryIdentityProviderList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]__ | Spec for configuring the identity provider. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderstatus[$$ActiveDirectoryIdentityProviderStatus$$]__ | Status of the identity provider. +
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]__ | Spec for configuring the identity provider. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderstatus[$$ActiveDirectoryIdentityProviderStatus$$]__ | Status of the identity provider. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderbind"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderbind"]
 ==== ActiveDirectoryIdentityProviderBind 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1648,14 +1648,14 @@ The password must be non-empty. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearch"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearch"]
 ==== ActiveDirectoryIdentityProviderGroupSearch 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1689,7 +1689,7 @@ the "{}" placeholder in the Filter with the value of the user's "uid" attribute.
 Optional. When not specified, the default will act as if "dn" were specified. For example, leaving +
 UserAttributeForFilter unspecified while specifying "&(objectClass=groupOfNames)(member={})" as the Filter +
 would search for groups by replacing the "{}" placeholder(s) with the dn (distinguished name) of the user. +
-| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearchattributes[$$ActiveDirectoryIdentityProviderGroupSearchAttributes$$]__ | Attributes specifies how the group's information should be read from each ActiveDirectory entry which was found as +
+| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearchattributes[$$ActiveDirectoryIdentityProviderGroupSearchAttributes$$]__ | Attributes specifies how the group's information should be read from each ActiveDirectory entry which was found as +
 the result of the group search. +
 | *`skipGroupRefresh`* __boolean__ | The user's group membership is refreshed as they interact with the supervisor +
 to obtain new credentials (as their old credentials expire).  This allows group +
@@ -1717,14 +1717,14 @@ not changed. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearchattributes"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearchattributes"]
 ==== ActiveDirectoryIdentityProviderGroupSearchAttributes 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearch[$$ActiveDirectoryIdentityProviderGroupSearch$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearch[$$ActiveDirectoryIdentityProviderGroupSearch$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1741,66 +1741,66 @@ where domain is constructed from the domain components of the group DN. +
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderphase"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderphase"]
 ==== ActiveDirectoryIdentityProviderPhase (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderstatus[$$ActiveDirectoryIdentityProviderStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderstatus[$$ActiveDirectoryIdentityProviderStatus$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec"]
 ==== ActiveDirectoryIdentityProviderSpec 
 
 Spec for configuring an ActiveDirectory identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovider[$$ActiveDirectoryIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovider[$$ActiveDirectoryIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
 | *`host`* __string__ | Host is the hostname of this Active Directory identity provider, i.e., where to connect. For example: ldap.example.com:636. +
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS contains the connection settings for how to establish the connection to the Host. +
-| *`bind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderbind[$$ActiveDirectoryIdentityProviderBind$$]__ | Bind contains the configuration for how to provide access credentials during an initial bind to the ActiveDirectory server +
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS contains the connection settings for how to establish the connection to the Host. +
+| *`bind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderbind[$$ActiveDirectoryIdentityProviderBind$$]__ | Bind contains the configuration for how to provide access credentials during an initial bind to the ActiveDirectory server +
 to be allowed to perform searches and binds to validate a user's credentials during a user's authentication attempt. +
-| *`userSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearch[$$ActiveDirectoryIdentityProviderUserSearch$$]__ | UserSearch contains the configuration for searching for a user by name in Active Directory. +
-| *`groupSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearch[$$ActiveDirectoryIdentityProviderGroupSearch$$]__ | GroupSearch contains the configuration for searching for a user's group membership in ActiveDirectory. +
+| *`userSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearch[$$ActiveDirectoryIdentityProviderUserSearch$$]__ | UserSearch contains the configuration for searching for a user by name in Active Directory. +
+| *`groupSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovidergroupsearch[$$ActiveDirectoryIdentityProviderGroupSearch$$]__ | GroupSearch contains the configuration for searching for a user's group membership in ActiveDirectory. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderstatus"]
 ==== ActiveDirectoryIdentityProviderStatus 
 
 Status of an Active Directory identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovider[$$ActiveDirectoryIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityprovider[$$ActiveDirectoryIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderphase[$$ActiveDirectoryIdentityProviderPhase$$]__ | Phase summarizes the overall status of the ActiveDirectoryIdentityProvider. +
-| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of an identity provider's current state. +
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderphase[$$ActiveDirectoryIdentityProviderPhase$$]__ | Phase summarizes the overall status of the ActiveDirectoryIdentityProvider. +
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of an identity provider's current state. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearch"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearch"]
 ==== ActiveDirectoryIdentityProviderUserSearch 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1824,19 +1824,19 @@ This means that the user is a person, is not a computer, the sAMAccountType is f
 and is not shown in advanced view only +
 (which would likely mean its a system created service account with advanced permissions). +
 Also, either the sAMAccountName, the userPrincipalName, or the mail attribute matches the input username. +
-| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearchattributes[$$ActiveDirectoryIdentityProviderUserSearchAttributes$$]__ | Attributes specifies how the user's information should be read from the ActiveDirectory entry which was found as +
+| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearchattributes[$$ActiveDirectoryIdentityProviderUserSearchAttributes$$]__ | Attributes specifies how the user's information should be read from the ActiveDirectory entry which was found as +
 the result of the user search. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearchattributes"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearchattributes"]
 ==== ActiveDirectoryIdentityProviderUserSearchAttributes 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearch[$$ActiveDirectoryIdentityProviderUserSearch$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderusersearch[$$ActiveDirectoryIdentityProviderUserSearch$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1851,32 +1851,32 @@ Optional, when empty this defaults to "objectGUID". +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcekind"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcekind"]
 ==== CertificateAuthorityDataSourceKind (string) 
 
 CertificateAuthorityDataSourceKind enumerates the sources for CA Bundles.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec"]
 ==== CertificateAuthorityDataSourceSpec 
 
 CertificateAuthorityDataSourceSpec provides a source for CA bundle used for client-side TLS verification.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`kind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcekind[$$CertificateAuthorityDataSourceKind$$]__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
+| *`kind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcekind[$$CertificateAuthorityDataSourceKind$$]__ | Kind configures whether the CA bundle is being sourced from a Kubernetes secret or a configmap. +
 Allowed values are "Secret" or "ConfigMap". +
 "ConfigMap" uses a Kubernetes configmap to source CA Bundles. +
 "Secret" uses Kubernetes secrets of type kubernetes.io/tls or Opaque to source CA Bundles. +
@@ -1888,14 +1888,14 @@ certificate bundle. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubapiconfig"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubapiconfig"]
 ==== GitHubAPIConfig 
 
 GitHubAPIConfig allows configuration for GitHub Enterprise Server
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1909,56 +1909,56 @@ Port is optional. Do not specify a path, query, fragment, or userinfo. +
 Only specify domain name or IP address, subdomains (optional), and port (optional). +
 IPv4 and IPv6 are supported. If using an IPv6 address with a port, you must enclose the IPv6 address +
 in square brackets. Example: "[::1]:443". +
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for GitHub Enterprise Server. +
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for GitHub Enterprise Server. +
 Note that this field should not be needed when using GitHub's public API ("github.com"). +
 However, if you choose to specify this field when using GitHub's public API, you must +
 specify a CA bundle that will verify connections to "api.github.com". +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githuballowauthenticationspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githuballowauthenticationspec"]
 ==== GitHubAllowAuthenticationSpec 
 
 GitHubAllowAuthenticationSpec allows customization of who can authenticate using this IDP and how.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`organizations`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githuborganizationsspec[$$GitHubOrganizationsSpec$$]__ | Organizations allows customization of which organizations can authenticate using this IDP. +
+| *`organizations`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githuborganizationsspec[$$GitHubOrganizationsSpec$$]__ | Organizations allows customization of which organizations can authenticate using this IDP. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githuballowedauthorganizationspolicy"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githuballowedauthorganizationspolicy"]
 ==== GitHubAllowedAuthOrganizationsPolicy (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githuborganizationsspec[$$GitHubOrganizationsSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githuborganizationsspec[$$GitHubOrganizationsSpec$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubclaims"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubclaims"]
 ==== GitHubClaims 
 
 GitHubClaims allows customization of the username and groups claims.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`username`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubusernameattribute[$$GitHubUsernameAttribute$$]__ | Username configures which property of the GitHub user record shall determine the username in Kubernetes. +
+| *`username`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubusernameattribute[$$GitHubUsernameAttribute$$]__ | Username configures which property of the GitHub user record shall determine the username in Kubernetes. +
 
 Can be either "id", "login", or "login:id". Defaults to "login:id". +
 
@@ -1979,7 +1979,7 @@ choice to concatenate the two values. +
 
 See the response schema for +
 [Get the authenticated user](https://docs.github.com/en/rest/users/users?apiVersion=2022-11-28#get-the-authenticated-user). +
-| *`groups`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubgroupnameattribute[$$GitHubGroupNameAttribute$$]__ | Groups configures which property of the GitHub team record shall determine the group names in Kubernetes. +
+| *`groups`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubgroupnameattribute[$$GitHubGroupNameAttribute$$]__ | Groups configures which property of the GitHub team record shall determine the group names in Kubernetes. +
 
 Can be either "name" or "slug". Defaults to "slug". +
 
@@ -2000,7 +2000,7 @@ See the response schema for +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubclientspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubclientspec"]
 ==== GitHubClientSpec 
 
 GitHubClientSpec contains information about the GitHub client that this identity provider will use
@@ -2008,7 +2008,7 @@ for web-based login flows.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2021,7 +2021,7 @@ This secret must be of type "secrets.pinniped.dev/github-client" with keys "clie
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubgroupnameattribute"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubgroupnameattribute"]
 ==== GitHubGroupNameAttribute (string) 
 
 GitHubGroupNameAttribute allows the user to specify which attribute from GitHub to use for the group
@@ -2030,12 +2030,12 @@ names to present to Kubernetes. See the response schema for
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubclaims[$$GitHubClaims$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubclaims[$$GitHubClaims$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityprovider"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityprovider"]
 ==== GitHubIdentityProvider 
 
 GitHubIdentityProvider describes the configuration of an upstream GitHub identity provider.
@@ -2046,85 +2046,85 @@ as OIDCClients.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderlist[$$GitHubIdentityProviderList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderlist[$$GitHubIdentityProviderList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]__ | Spec for configuring the identity provider. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderstatus[$$GitHubIdentityProviderStatus$$]__ | Status of the identity provider. +
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderspec[$$GitHubIdentityProviderSpec$$]__ | Spec for configuring the identity provider. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderstatus[$$GitHubIdentityProviderStatus$$]__ | Status of the identity provider. +
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderphase"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderphase"]
 ==== GitHubIdentityProviderPhase (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderstatus[$$GitHubIdentityProviderStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderstatus[$$GitHubIdentityProviderStatus$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderspec"]
 ==== GitHubIdentityProviderSpec 
 
 GitHubIdentityProviderSpec is the spec for configuring an GitHub identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityprovider[$$GitHubIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityprovider[$$GitHubIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`githubAPI`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubapiconfig[$$GitHubAPIConfig$$]__ | GitHubAPI allows configuration for GitHub Enterprise Server +
-| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubclaims[$$GitHubClaims$$]__ | Claims allows customization of the username and groups claims. +
-| *`allowAuthentication`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githuballowauthenticationspec[$$GitHubAllowAuthenticationSpec$$]__ | AllowAuthentication allows customization of who can authenticate using this IDP and how. +
-| *`client`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubclientspec[$$GitHubClientSpec$$]__ | Client identifies the secret with credentials for a GitHub App or GitHub OAuth2 App (a GitHub client). +
+| *`githubAPI`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubapiconfig[$$GitHubAPIConfig$$]__ | GitHubAPI allows configuration for GitHub Enterprise Server +
+| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubclaims[$$GitHubClaims$$]__ | Claims allows customization of the username and groups claims. +
+| *`allowAuthentication`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githuballowauthenticationspec[$$GitHubAllowAuthenticationSpec$$]__ | AllowAuthentication allows customization of who can authenticate using this IDP and how. +
+| *`client`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubclientspec[$$GitHubClientSpec$$]__ | Client identifies the secret with credentials for a GitHub App or GitHub OAuth2 App (a GitHub client). +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderstatus"]
 ==== GitHubIdentityProviderStatus 
 
 GitHubIdentityProviderStatus is the status of an GitHub identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityprovider[$$GitHubIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityprovider[$$GitHubIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubidentityproviderphase[$$GitHubIdentityProviderPhase$$]__ | Phase summarizes the overall status of the GitHubIdentityProvider. +
-| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta[$$Condition$$] array__ | Conditions represents the observations of an identity provider's current state. +
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubidentityproviderphase[$$GitHubIdentityProviderPhase$$]__ | Phase summarizes the overall status of the GitHubIdentityProvider. +
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta[$$Condition$$] array__ | Conditions represents the observations of an identity provider's current state. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githuborganizationsspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githuborganizationsspec"]
 ==== GitHubOrganizationsSpec 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githuballowauthenticationspec[$$GitHubAllowAuthenticationSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githuballowauthenticationspec[$$GitHubAllowAuthenticationSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`policy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githuballowedauthorganizationspolicy[$$GitHubAllowedAuthOrganizationsPolicy$$]__ | Allowed values are "OnlyUsersFromAllowedOrganizations" or "AllGitHubUsers". +
+| *`policy`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githuballowedauthorganizationspolicy[$$GitHubAllowedAuthOrganizationsPolicy$$]__ | Allowed values are "OnlyUsersFromAllowedOrganizations" or "AllGitHubUsers". +
 Defaults to "OnlyUsersFromAllowedOrganizations". +
 
 Must be set to "AllGitHubUsers" if the allowed field is empty. +
@@ -2144,7 +2144,7 @@ If no organizations are listed, you must set organizations: AllGitHubUsers. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubusernameattribute"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubusernameattribute"]
 ==== GitHubUsernameAttribute (string) 
 
 GitHubUsernameAttribute allows the user to specify which attribute(s) from GitHub to use for the username to present
@@ -2153,12 +2153,12 @@ to Kubernetes. See the response schema for
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubclaims[$$GitHubClaims$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubclaims[$$GitHubClaims$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityprovider"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityprovider"]
 ==== LDAPIdentityProvider 
 
 LDAPIdentityProvider describes the configuration of an upstream Lightweight Directory Access
@@ -2166,27 +2166,27 @@ Protocol (LDAP) identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderlist[$$LDAPIdentityProviderList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderlist[$$LDAPIdentityProviderList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]__ | Spec for configuring the identity provider. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderstatus[$$LDAPIdentityProviderStatus$$]__ | Status of the identity provider. +
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]__ | Spec for configuring the identity provider. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderstatus[$$LDAPIdentityProviderStatus$$]__ | Status of the identity provider. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderbind"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderbind"]
 ==== LDAPIdentityProviderBind 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2200,14 +2200,14 @@ The password must be non-empty. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearch"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearch"]
 ==== LDAPIdentityProviderGroupSearch 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2232,7 +2232,7 @@ the "{}" placeholder in the Filter with the value of the user's "uid" attribute.
 Optional. When not specified, the default will act as if "dn" were specified. For example, leaving +
 UserAttributeForFilter unspecified while specifying "&(objectClass=groupOfNames)(member={})" as the Filter +
 would search for groups by replacing the "{}" placeholder(s) with the dn (distinguished name) of the user. +
-| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearchattributes[$$LDAPIdentityProviderGroupSearchAttributes$$]__ | Attributes specifies how the group's information should be read from each LDAP entry which was found as +
+| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearchattributes[$$LDAPIdentityProviderGroupSearchAttributes$$]__ | Attributes specifies how the group's information should be read from each LDAP entry which was found as +
 the result of the group search. +
 | *`skipGroupRefresh`* __boolean__ | The user's group membership is refreshed as they interact with the supervisor +
 to obtain new credentials (as their old credentials expire).  This allows group +
@@ -2260,14 +2260,14 @@ not changed. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearchattributes"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearchattributes"]
 ==== LDAPIdentityProviderGroupSearchAttributes 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearch[$$LDAPIdentityProviderGroupSearch$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearch[$$LDAPIdentityProviderGroupSearch$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2283,66 +2283,66 @@ Optional. When not specified, the default will act as if the GroupName were spec
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderphase"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderphase"]
 ==== LDAPIdentityProviderPhase (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderstatus[$$LDAPIdentityProviderStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderstatus[$$LDAPIdentityProviderStatus$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec"]
 ==== LDAPIdentityProviderSpec 
 
 Spec for configuring an LDAP identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityprovider[$$LDAPIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityprovider[$$LDAPIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
 | *`host`* __string__ | Host is the hostname of this LDAP identity provider, i.e., where to connect. For example: ldap.example.com:636. +
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS contains the connection settings for how to establish the connection to the Host. +
-| *`bind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderbind[$$LDAPIdentityProviderBind$$]__ | Bind contains the configuration for how to provide access credentials during an initial bind to the LDAP server +
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS contains the connection settings for how to establish the connection to the Host. +
+| *`bind`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderbind[$$LDAPIdentityProviderBind$$]__ | Bind contains the configuration for how to provide access credentials during an initial bind to the LDAP server +
 to be allowed to perform searches and binds to validate a user's credentials during a user's authentication attempt. +
-| *`userSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearch[$$LDAPIdentityProviderUserSearch$$]__ | UserSearch contains the configuration for searching for a user by name in the LDAP provider. +
-| *`groupSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearch[$$LDAPIdentityProviderGroupSearch$$]__ | GroupSearch contains the configuration for searching for a user's group membership in the LDAP provider. +
+| *`userSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearch[$$LDAPIdentityProviderUserSearch$$]__ | UserSearch contains the configuration for searching for a user by name in the LDAP provider. +
+| *`groupSearch`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityprovidergroupsearch[$$LDAPIdentityProviderGroupSearch$$]__ | GroupSearch contains the configuration for searching for a user's group membership in the LDAP provider. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderstatus"]
 ==== LDAPIdentityProviderStatus 
 
 Status of an LDAP identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityprovider[$$LDAPIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityprovider[$$LDAPIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderphase[$$LDAPIdentityProviderPhase$$]__ | Phase summarizes the overall status of the LDAPIdentityProvider. +
-| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of an identity provider's current state. +
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderphase[$$LDAPIdentityProviderPhase$$]__ | Phase summarizes the overall status of the LDAPIdentityProvider. +
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of an identity provider's current state. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearch"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearch"]
 ==== LDAPIdentityProviderUserSearch 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2358,19 +2358,19 @@ Note that the dn (distinguished name) is not an attribute of an entry, so "dn={}
 Optional. When not specified, the default will act as if the Filter were specified as the value from +
 Attributes.Username appended by "={}". When the Attributes.Username is set to "dn" then the Filter must be +
 explicitly specified, since the default value of "dn={}" would not work. +
-| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchattributes[$$LDAPIdentityProviderUserSearchAttributes$$]__ | Attributes specifies how the user's information should be read from the LDAP entry which was found as +
+| *`attributes`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchattributes[$$LDAPIdentityProviderUserSearchAttributes$$]__ | Attributes specifies how the user's information should be read from the LDAP entry which was found as +
 the result of the user search. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchattributes"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearchattributes"]
 ==== LDAPIdentityProviderUserSearchAttributes 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearch[$$LDAPIdentityProviderUserSearch$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderusersearch[$$LDAPIdentityProviderUserSearch$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2390,7 +2390,7 @@ server in the user's entry. Distinguished names can be used by specifying lower-
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig"]
 ==== OIDCAuthorizationConfig 
 
 OIDCAuthorizationConfig provides information about how to form the OAuth2 authorization
@@ -2398,7 +2398,7 @@ request parameters.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2432,7 +2432,7 @@ may ignore scopes that it does not understand or require (see +
 https://datatracker.ietf.org/doc/html/rfc6749#section-3.3). In the unusual case that you must avoid sending the +
 "offline_access" scope, then you must override the default value of this setting. This is required if your OIDC +
 provider will reject the request when it includes "offline_access" (e.g. GitLab's OIDC provider). +
-| *`additionalAuthorizeParameters`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-parameter[$$Parameter$$] array__ | additionalAuthorizeParameters are extra query parameters that should be included in the authorize request to your +
+| *`additionalAuthorizeParameters`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-parameter[$$Parameter$$] array__ | additionalAuthorizeParameters are extra query parameters that should be included in the authorize request to your +
 OIDC provider in the authorization request during an OIDC Authorization Code Flow. By default, no extra +
 parameters are sent. The standard parameters that will be sent are "response_type", "scope", "client_id", +
 "state", "nonce", "code_challenge", "code_challenge_method", and "redirect_uri". These parameters cannot be +
@@ -2468,14 +2468,14 @@ allowPasswordGrant defaults to false. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcclaims"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcclaims"]
 ==== OIDCClaims 
 
 OIDCClaims provides a mapping from upstream claims into identities.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2499,7 +2499,7 @@ are not available, the "additionalClaims" claim will be excluded from the ID tok
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcclient"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcclient"]
 ==== OIDCClient 
 
 OIDCClient contains information about an OIDC client (e.g., client ID and client
@@ -2507,7 +2507,7 @@ secret).
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2520,48 +2520,48 @@ struct, then it is expected that the Secret is of type "secrets.pinniped.dev/oid
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityprovider"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityprovider"]
 ==== OIDCIdentityProvider 
 
 OIDCIdentityProvider describes the configuration of an upstream OpenID Connect identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderlist[$$OIDCIdentityProviderList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderlist[$$OIDCIdentityProviderList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]__ | Spec for configuring the identity provider. +
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus[$$OIDCIdentityProviderStatus$$]__ | Status of the identity provider. +
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]__ | Spec for configuring the identity provider. +
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus[$$OIDCIdentityProviderStatus$$]__ | Status of the identity provider. +
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderphase"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderphase"]
 ==== OIDCIdentityProviderPhase (string) 
 
 
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus[$$OIDCIdentityProviderStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus[$$OIDCIdentityProviderStatus$$]
 ****
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec"]
 ==== OIDCIdentityProviderSpec 
 
 OIDCIdentityProviderSpec is the spec for configuring an OIDC identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityprovider[$$OIDCIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityprovider[$$OIDCIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2569,42 +2569,42 @@ OIDCIdentityProviderSpec is the spec for configuring an OIDC identity provider.
 | Field | Description
 | *`issuer`* __string__ | Issuer is the issuer URL of this OIDC identity provider, i.e., where to fetch +
 /.well-known/openid-configuration. +
-| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for discovery/JWKS requests to the issuer. +
-| *`authorizationConfig`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig[$$OIDCAuthorizationConfig$$]__ | AuthorizationConfig holds information about how to form the OAuth2 authorization request +
+| *`tls`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-tlsspec[$$TLSSpec$$]__ | TLS configuration for discovery/JWKS requests to the issuer. +
+| *`authorizationConfig`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig[$$OIDCAuthorizationConfig$$]__ | AuthorizationConfig holds information about how to form the OAuth2 authorization request +
 parameters to be used with this OIDC identity provider. +
-| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcclaims[$$OIDCClaims$$]__ | Claims provides the names of token claims that will be used when inspecting an identity from +
+| *`claims`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcclaims[$$OIDCClaims$$]__ | Claims provides the names of token claims that will be used when inspecting an identity from +
 this OIDC identity provider. +
-| *`client`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcclient[$$OIDCClient$$]__ | OIDCClient contains OIDC client information to be used used with this OIDC identity +
+| *`client`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcclient[$$OIDCClient$$]__ | OIDCClient contains OIDC client information to be used used with this OIDC identity +
 provider. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderstatus"]
 ==== OIDCIdentityProviderStatus 
 
 OIDCIdentityProviderStatus is the status of an OIDC identity provider.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityprovider[$$OIDCIdentityProvider$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityprovider[$$OIDCIdentityProvider$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderphase[$$OIDCIdentityProviderPhase$$]__ | Phase summarizes the overall status of the OIDCIdentityProvider. +
-| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of an identity provider's current state. +
+| *`phase`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderphase[$$OIDCIdentityProviderPhase$$]__ | Phase summarizes the overall status of the OIDCIdentityProvider. +
+| *`conditions`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta[$$Condition$$] array__ | Represents the observations of an identity provider's current state. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-parameter"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-parameter"]
 ==== Parameter 
 
 Parameter is a key/value pair which represents a parameter in an HTTP request.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig[$$OIDCAuthorizationConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcauthorizationconfig[$$OIDCAuthorizationConfig$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -2615,24 +2615,24 @@ Parameter is a key/value pair which represents a parameter in an HTTP request.
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-tlsspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-tlsspec"]
 ==== TLSSpec 
 
 TLSSpec provides TLS configuration for identity provider integration.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-githubapiconfig[$$GitHubAPIConfig$$]
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-activedirectoryidentityproviderspec[$$ActiveDirectoryIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-githubapiconfig[$$GitHubAPIConfig$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-ldapidentityproviderspec[$$LDAPIdentityProviderSpec$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-oidcidentityproviderspec[$$OIDCIdentityProviderSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
 | *`certificateAuthorityData`* __string__ | X.509 Certificate Authority (base64-encoded PEM bundle). If omitted, a default set of system roots will be trusted. +
-| *`certificateAuthorityDataSource`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]__ | Reference to a CA bundle in a secret or a configmap. +
+| *`certificateAuthorityDataSource`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-supervisor-idp-v1alpha1-certificateauthoritydatasourcespec[$$CertificateAuthorityDataSourceSpec$$]__ | Reference to a CA bundle in a secret or a configmap. +
 Any changes to the CA bundle in the secret or configmap will be dynamically reloaded. +
 |===
 
@@ -2645,7 +2645,7 @@ Package v1alpha1 is the v1alpha1 version of the Pinniped login API.
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-clustercredential"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-clustercredential"]
 ==== ClusterCredential 
 
 ClusterCredential is the cluster-specific credential returned on a successful credential request. It
@@ -2653,73 +2653,73 @@ contains either a valid bearer token or a valid TLS certificate and correspondin
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`expirationTimestamp`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#time-v1-meta[$$Time$$]__ | ExpirationTimestamp indicates a time when the provided credentials expire. +
+| *`expirationTimestamp`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#time-v1-meta[$$Time$$]__ | ExpirationTimestamp indicates a time when the provided credentials expire. +
 | *`token`* __string__ | Token is a bearer token used by the client for request authentication. +
 | *`clientCertificateData`* __string__ | PEM-encoded client TLS certificates (including intermediates, if any). +
 | *`clientKeyData`* __string__ | PEM-encoded private key for the above certificate. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-tokencredentialrequest"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-tokencredentialrequest"]
 ==== TokenCredentialRequest 
 
 TokenCredentialRequest submits an IDP-specific credential to Pinniped in exchange for a cluster-specific credential.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-tokencredentialrequestlist[$$TokenCredentialRequestList$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-tokencredentialrequestlist[$$TokenCredentialRequestList$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
+| *`metadata`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta[$$ObjectMeta$$]__ | Refer to Kubernetes API documentation for fields of `metadata`.
 
-| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-tokencredentialrequestspec[$$TokenCredentialRequestSpec$$]__ | 
-| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]__ | 
+| *`spec`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-tokencredentialrequestspec[$$TokenCredentialRequestSpec$$]__ | 
+| *`status`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-tokencredentialrequeststatus[$$TokenCredentialRequestStatus$$]__ | 
 |===
 
 
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-tokencredentialrequestspec"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-tokencredentialrequestspec"]
 ==== TokenCredentialRequestSpec 
 
 Specification of a TokenCredentialRequest, expected on requests to the Pinniped API.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
 | *`token`* __string__ | Bearer token supplied with the credential request. +
-| *`authenticator`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#typedlocalobjectreference-v1-core[$$TypedLocalObjectReference$$]__ | Reference to an authenticator which can validate this credential request. +
+| *`authenticator`* __link:https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#typedlocalobjectreference-v1-core[$$TypedLocalObjectReference$$]__ | Reference to an authenticator which can validate this credential request. +
 |===
 
 
-[id="{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-tokencredentialrequeststatus"]
+[id="{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-tokencredentialrequeststatus"]
 ==== TokenCredentialRequestStatus 
 
 Status of a TokenCredentialRequest, returned on responses to the Pinniped API.
 
 .Appears In:
 ****
-- xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
+- xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-tokencredentialrequest[$$TokenCredentialRequest$$]
 ****
 
 [cols="25a,75a", options="header"]
 |===
 | Field | Description
-| *`credential`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-36-apis-concierge-login-v1alpha1-clustercredential[$$ClusterCredential$$]__ | A Credential will be returned for a successful credential request. +
+| *`credential`* __xref:{anchor_prefix}-go-pinniped-dev-generated-1-37-apis-concierge-login-v1alpha1-clustercredential[$$ClusterCredential$$]__ | A Credential will be returned for a successful credential request. +
 | *`message`* __string__ | An error message will be returned for an unsuccessful credential request. +
 |===
 

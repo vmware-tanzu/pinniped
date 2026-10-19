@@ -1,4 +1,4 @@
-// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package integration
@@ -28,12 +28,14 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 
 	adminClient := testlib.NewKubernetesClientset(t)
 
+	needsNewErrFix := testutil.KubeServerMinorVersionAtLeastInclusive(t, adminClient.Discovery(), 38)
 	needsErrFix := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 23)
 	reallyOld := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 19)
 	noSets := testutil.KubeServerMinorVersionInBetweenInclusive(t, adminClient.Discovery(), 0, 17)
 
 	groupFix := strings.NewReplacer(".supervisor.pinniped.dev", ".supervisor."+env.APIGroupSuffix)
 	errFix := strings.NewReplacer(makeErrFix(reallyOld)...)
+	newErrFix := strings.NewReplacer(makeNewErrFix()...)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)
@@ -523,9 +525,29 @@ func TestOIDCClientStaticValidation_Parallel(t *testing.T) {
 				want = errFix.Replace(want)
 			}
 
+			// new API servers have slightly different error messages
+			if needsNewErrFix {
+				want = newErrFix.Replace(want)
+			}
+
 			require.EqualError(t, err, want)
 		})
 	}
+}
+
+func makeNewErrFix() []string {
+	fields := []string{"spec.allowedRedirectURIs", "spec.allowedGrantTypes", "spec.allowedScopes"}
+	out := make([]string, 0, len(fields)*2)
+
+	// these servers have a different error message for minItems validation
+	for _, field := range fields {
+		out = append(out,
+			fmt.Sprintf("%s: Invalid value: 0: %s in body should have at least 1 items", field, field),
+			fmt.Sprintf("%s: Too few: 0: must have at least 1 item", field),
+		)
+	}
+
+	return out
 }
 
 func makeErrFix(reallyOld bool) []string {

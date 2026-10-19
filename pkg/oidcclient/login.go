@@ -77,7 +77,6 @@ const (
 
 // stdin returns the file descriptor for stdin as an int.
 func stdin() int {
-	//nolint:gosec // casting like this is the documented way to pass file descriptors to the term package
 	return int(os.Stdin.Fd())
 }
 

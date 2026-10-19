@@ -1,4 +1,4 @@
-// Copyright 2021-2022 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package groupsuffix
@@ -25,13 +25,8 @@ func ConciergeAggregatedGroups(apiGroupSuffix string) (login, identity GroupData
 		panic("static group input is invalid")
 	}
 
-	return GroupData{
-			Group:   loginConciergeAPIGroup,
-			Version: loginv1alpha1.SchemeGroupVersion.Version,
-		}, GroupData{
-			Group:   identityConciergeAPIGroup,
-			Version: identityv1alpha1.SchemeGroupVersion.Version,
-		}
+	return GroupData{Group: loginConciergeAPIGroup, Version: loginv1alpha1.SchemeGroupVersion.Version},
+		GroupData{Group: identityConciergeAPIGroup, Version: identityv1alpha1.SchemeGroupVersion.Version}
 }
 
 func SupervisorAggregatedGroups(apiGroupSuffix string) (clientSecret GroupData) {

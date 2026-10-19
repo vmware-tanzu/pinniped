@@ -21,11 +21,39 @@ import (
 )
 
 // FederationDomainInformer provides access to a shared informer and lister for
-// FederationDomains.
+// FederationDomains. Prefer using the type-safe variant (see [TypedFederationDomainInformer]).
 type FederationDomainInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() configv1alpha1.FederationDomainLister
 }
+
+// TypedFederationDomainInformer provides access to a shared informer and lister for
+// FederationDomains, including the type-safe TypedInformer variant.
+// It is a superset of FederationDomainInformer.
+type TypedFederationDomainInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() FederationDomainIndexInformer
+	Lister() configv1alpha1.FederationDomainLister
+}
+
+// FederationDomainIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type FederationDomainIndexInformer cache.TypedSharedIndexInformer[*supervisorconfigv1alpha1.FederationDomain]
+
+// FederationDomainHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for FederationDomain.
+type FederationDomainHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*supervisorconfigv1alpha1.FederationDomain]
+
+// FederationDomainDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for FederationDomain.
+type FederationDomainDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*supervisorconfigv1alpha1.FederationDomain]
+
+// FederationDomainFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for FederationDomain.
+type FederationDomainFilteringHandler = cache.TypedFilteringResourceEventHandler[*supervisorconfigv1alpha1.FederationDomain]
+
+// FederationDomainIndexers is a specialization of [cache.TypedIndexers] for FederationDomain.
+type FederationDomainIndexers = cache.TypedIndexers[*supervisorconfigv1alpha1.FederationDomain]
+
+// DeletedFederationDomain is a specialization of [cache.DeletedObject] for FederationDomain.
+type DeletedFederationDomain = cache.DeletedObject[*supervisorconfigv1alpha1.FederationDomain]
 
 type federationDomainInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -36,25 +64,49 @@ type federationDomainInformer struct {
 // NewFederationDomainInformer constructs a new informer for FederationDomain type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFederationDomainInformer]).
 func NewFederationDomainInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewFederationDomainInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedFederationDomainInformer constructs a new informer for FederationDomain type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFederationDomainInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers FederationDomainIndexers) FederationDomainIndexInformer {
+	return NewTypedFederationDomainInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredFederationDomainInformer constructs a new informer for FederationDomain type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredFederationDomainInformer]).
 func NewFilteredFederationDomainInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewFederationDomainInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedFederationDomainInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredFederationDomainInformer constructs a new informer for FederationDomain type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredFederationDomainInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers FederationDomainIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) FederationDomainIndexInformer {
+	return NewTypedFederationDomainInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewFederationDomainInformerWithOptions constructs a new informer for FederationDomain type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFederationDomainInformerWithOptions]).
 func NewFederationDomainInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedFederationDomainInformerWithOptions(client, namespace, options)
+}
+
+// NewTypedFederationDomainInformerWithOptions constructs a new informer for FederationDomain type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFederationDomainInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) FederationDomainIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "config.supervisor.pinniped.dev", Version: "v1alpha1", Resource: "federationdomains"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*supervisorconfigv1alpha1.FederationDomain](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -87,17 +139,57 @@ func NewFederationDomainInformerWithOptions(client versioned.Interface, namespac
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *federationDomainInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFederationDomainInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedFederationDomainInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *federationDomainInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&supervisorconfigv1alpha1.FederationDomain{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *federationDomainInformer) TypedInformer() FederationDomainIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*supervisorconfigv1alpha1.FederationDomain](f.factory.InformerFor(&supervisorconfigv1alpha1.FederationDomain{}, f.defaultInformer))
 }
 
 func (f *federationDomainInformer) Lister() configv1alpha1.FederationDomainLister {
 	return configv1alpha1.NewFederationDomainLister(f.Informer().GetIndexer())
+}
+
+// ToTypedFederationDomainInformer converts an untyped informer into a TypedFederationDomainInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *FederationDomain. If that is not the case, calling type-safe methods of the returned
+// TypedFederationDomainInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedFederationDomainInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedFederationDomainInformer(informer FederationDomainInformer) TypedFederationDomainInformer {
+	if informer, ok := informer.(TypedFederationDomainInformer); ok {
+		return informer
+	}
+	return &federationDomainTypedInformerAdapter{informer}
+}
+
+type federationDomainTypedInformerAdapter struct {
+	FederationDomainInformer
+}
+
+func (a *federationDomainTypedInformerAdapter) TypedInformer() FederationDomainIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*supervisorconfigv1alpha1.FederationDomain](a.Informer())
+}
+
+// ToFederationDomainIndexInformer converts an untyped informer into a FederationDomainIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *FederationDomain. If that is not the case, calling type-safe methods of the returned
+// FederationDomainIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a FederationDomainIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToFederationDomainIndexInformer(informer cache.SharedIndexInformer) FederationDomainIndexInformer {
+	if informer, ok := informer.(FederationDomainIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*supervisorconfigv1alpha1.FederationDomain](informer)
 }

@@ -139,6 +139,7 @@ func redirectToLoginPage(
 		return err
 	}
 
+	//nolint:gosec // not an open redirect: the destination is always this server's own issuer URL
 	http.Redirect(w, r,
 		loginURL,
 		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11

@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	chromedpbrowser "github.com/chromedp/cdproto/browser"
+	"github.com/chromedp/cdproto/cdp"
 	chromedpdom "github.com/chromedp/cdproto/dom"
 	chromedppage "github.com/chromedp/cdproto/page"
 	chromedpruntime "github.com/chromedp/cdproto/runtime"
@@ -110,39 +112,49 @@ func OpenBrowser(t *testing.T) *Browser {
 	b := &Browser{chromeCtx: chromeCtx}
 
 	// Subscribe to console events and exceptions to make them available later.
-	chromedp.ListenTarget(chromeCtx, func(ev any) {
-		switch ev := ev.(type) {
-		case *chromedpruntime.EventConsoleAPICalled:
+	// The subscriptions end when the browser context is cancelled at the end of the test.
+	consoleEvents := chromedp.Events(chromeCtx, chromedpruntime.ConsoleAPICalled)
+	exceptionEvents := chromedp.Events(chromeCtx, chromedpruntime.ExceptionThrown)
+	go func() {
+		for ev, err := range consoleEvents {
+			if err != nil {
+				return
+			}
 			args := make([]string, len(ev.Args))
 			for i, arg := range ev.Args {
 				// Could also pay attention to arg.Type here, but choosing to keep it simple for now.
 				args[i] = arg.Value.String()
 			}
 			b.lock.Lock()
-			defer b.lock.Unlock()
 			b.consoleEvents = append(b.consoleEvents, consoleEvent{
-				api:  ev.Type.String(),
+				api:  string(ev.Type),
 				args: args,
 			})
-		case *chromedpruntime.EventExceptionThrown:
-			b.lock.Lock()
-			defer b.lock.Unlock()
-			b.exceptionEvents = append(b.exceptionEvents, ev.ExceptionDetails.Error())
+			b.lock.Unlock()
 		}
-	})
+	}()
+	go func() {
+		for ev, err := range exceptionEvents {
+			if err != nil {
+				return
+			}
+			b.lock.Lock()
+			b.exceptionEvents = append(b.exceptionEvents, exceptionDetailsString(ev.ExceptionDetails))
+			b.lock.Unlock()
+		}
+	}()
 
 	// Start the web browser subprocess. Do not use a timeout here or else the browser will close after that timeout.
 	// The subprocess will be cleaned up at the end of the test when the browser context is cancelled.
-	require.NoError(t, chromedp.Run(chromeCtx))
+	require.NoError(t, chromedp.Do(chromeCtx))
 
 	// Grant permission to write to the clipboard because the Pinniped formpost UI has a button to copy the
 	// authcode to the clipboard, and we want to be able to use that button in tests.
-	require.NoError(t, chromedp.Run(chromeCtx,
-		chromedpbrowser.SetPermission(
-			&chromedpbrowser.PermissionDescriptor{Name: chromedppage.PermissionsPolicyFeatureClipboardWrite.String()},
-			chromedpbrowser.PermissionSettingGranted,
-		),
-	))
+	_, err := chromedp.CallBrowser(chromeCtx, chromedpbrowser.SetPermission, chromedpbrowser.SetPermissionParams{
+		Permission: &chromedpbrowser.PermissionDescriptor{Name: chromedppage.PermissionsPolicyFeatureClipboardWrite.String()},
+		Setting:    chromedpbrowser.PermissionSettingGranted,
+	})
+	require.NoError(t, err)
 
 	// To aid in debugging test failures, print the events received from the browser at the end of the test.
 	t.Cleanup(func() {
@@ -180,31 +192,43 @@ func OpenBrowser(t *testing.T) *Browser {
 	return b
 }
 
+// exceptionDetailsString formats the exception similar to how ExceptionDetails.Error() did in older versions of cdproto.
+func exceptionDetailsString(e *chromedpruntime.ExceptionDetails) string {
+	if e == nil {
+		return "<nil exception details>"
+	}
+	s := fmt.Sprintf("exception %q (%d:%d)", e.Text, e.LineNumber, e.ColumnNumber)
+	if e.Exception != nil {
+		s += ": " + e.Exception.Description
+	}
+	return s
+}
+
 func (b *Browser) dumpPage(t *testing.T) {
 	// Log the URL of the current page.
-	var url string
-	b.runWithTimeout(t, b.timeout(), chromedp.Location(&url))
+	url := runWithTimeout(t, b, b.timeout(), chromedp.Location())
 	t.Logf("Browser URL from end of test %q: %s", t.Name(), url)
 
 	// Log the title of the current page.
 	t.Logf("Browser page title from end of test %q: %q", t.Name(), b.Title(t))
 
 	// Log a screenshot of the current page.
-	var screenBuf []byte
-	b.runWithTimeout(t, b.timeout(), chromedp.FullScreenshot(&screenBuf, 10)) // low quality to make it smaller
+	screenBuf := runWithTimeout(t, b, b.timeout(), chromedp.FullScreenshot(10)) // low quality to make it smaller
 	t.Logf("Browser screenshot (base64 encoded jpeg format) from end of test %q:\n%s\n",
 		t.Name(), base64.StdEncoding.EncodeToString(screenBuf))
 
 	// Log the HTML of the current page.
-	var html string
-	b.runWithTimeout(t, b.timeout(), chromedp.ActionFunc(func(ctx context.Context) error {
-		node, err := chromedpdom.GetDocument().Do(ctx)
+	html := runWithTimeout(t, b, b.timeout(), func(ctx context.Context, target *chromedp.Target) (string, error) {
+		doc, err := cdp.Call(ctx, target, chromedpdom.GetDocument, chromedpdom.GetDocumentParams{})
 		if err != nil {
-			return err
+			return "", err
 		}
-		html, err = chromedpdom.GetOuterHTML().WithNodeID(node.NodeID).Do(ctx)
-		return err
-	}))
+		res, err := cdp.Call(ctx, target, chromedpdom.GetOuterHTML, chromedpdom.GetOuterHTMLParams{NodeID: doc.Root.NodeID})
+		if err != nil {
+			return "", err
+		}
+		return res.OuterHTML, nil
+	})
 	var htmlBuf bytes.Buffer
 	gz := gzip.NewWriter(&htmlBuf)
 	_, err := gz.Write([]byte(html))
@@ -219,67 +243,62 @@ func (b *Browser) timeout() time.Duration {
 	return 30 * time.Second
 }
 
-func (b *Browser) runWithTimeout(t *testing.T, timeout time.Duration, actions ...chromedp.Action) {
+func runWithTimeout[T any](t *testing.T, b *Browser, timeout time.Duration, action chromedp.Action[T]) T {
 	t.Helper()
 	timeoutCtx, cancel := context.WithTimeout(b.chromeCtx, timeout)
 	t.Cleanup(cancel)
 
-	err := chromedp.Run(timeoutCtx, actions...)
-	if err != nil && err == context.Canceled || err == context.DeadlineExceeded {
+	result, err := chromedp.Run(timeoutCtx, action)
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		require.NoError(t, err, "the browser operation took longer than the allowed timeout")
 	}
 	require.NoError(t, err, "the browser operation failed")
+	return result
 }
 
 func (b *Browser) Navigate(t *testing.T, url string) {
 	t.Helper()
-	b.runWithTimeout(t, b.timeout(), chromedp.Navigate(url))
+	runWithTimeout(t, b, b.timeout(), chromedp.Navigate(url))
 }
 
 func (b *Browser) Title(t *testing.T) string {
 	t.Helper()
-	var title string
-	b.runWithTimeout(t, b.timeout(), chromedp.Title(&title))
-	return title
+	return runWithTimeout(t, b, b.timeout(), chromedp.Title())
 }
 
 func (b *Browser) WaitForVisibleElements(t *testing.T, cssSelectors ...string) {
 	t.Helper()
 	for _, s := range cssSelectors {
-		b.runWithTimeout(t, b.timeout(), chromedp.WaitVisible(s, chromedp.ByQuery))
+		runWithTimeout(t, b, b.timeout(), chromedp.WaitVisible(chromedp.CSS(s)))
 	}
 }
 
 func (b *Browser) TextOfFirstMatch(t *testing.T, cssSelector string) string {
 	t.Helper()
-	var text string
-	b.runWithTimeout(t, b.timeout(), chromedp.Text(cssSelector, &text, chromedp.NodeVisible, chromedp.ByQuery))
-	return text
+	return runWithTimeout(t, b, b.timeout(), chromedp.Text(chromedp.CSS(cssSelector), chromedp.NodeVisible))
 }
 
 func (b *Browser) AttrValueOfFirstMatch(t *testing.T, cssSelector string, attributeName string) string {
 	t.Helper()
-	var value string
-	var ok bool
-	b.runWithTimeout(t, b.timeout(), chromedp.AttributeValue(cssSelector, attributeName, &value, &ok, chromedp.ByQuery))
-	require.Truef(t, ok, "did not find attribute named %q on first element returned by selector %q", attributeName, cssSelector)
-	return value
+	attr := runWithTimeout(t, b, b.timeout(), chromedp.AttributeValue(chromedp.CSS(cssSelector), attributeName))
+	require.Truef(t, attr.Exists, "did not find attribute named %q on first element returned by selector %q", attributeName, cssSelector)
+	return attr.Value
 }
 
 func (b *Browser) SendKeysToFirstMatch(t *testing.T, cssSelector string, runesToType string) {
 	t.Helper()
-	b.runWithTimeout(t, b.timeout(), chromedp.SendKeys(cssSelector, runesToType, chromedp.NodeVisible, chromedp.NodeEnabled, chromedp.ByQuery))
+	runWithTimeout(t, b, b.timeout(), chromedp.SendKeys(chromedp.CSS(cssSelector), runesToType, chromedp.NodeVisible, chromedp.NodeEnabled))
 }
 
 func (b *Browser) ClearFirstMatch(t *testing.T, cssSelector string) {
 	t.Helper()
-	b.runWithTimeout(t, b.timeout(), chromedp.Clear(cssSelector, chromedp.NodeVisible, chromedp.NodeEnabled, chromedp.ByQuery))
+	runWithTimeout(t, b, b.timeout(), chromedp.Clear(chromedp.CSS(cssSelector), chromedp.NodeVisible, chromedp.NodeEnabled))
 }
 
 func (b *Browser) ClickFirstMatch(t *testing.T, cssSelector string) string {
 	t.Helper()
 	var text string
-	b.runWithTimeout(t, b.timeout(), chromedp.Click(cssSelector, chromedp.NodeVisible, chromedp.NodeEnabled, chromedp.ByQuery))
+	runWithTimeout(t, b, b.timeout(), chromedp.Click(chromedp.CSS(cssSelector), chromedp.NodeVisible, chromedp.NodeEnabled))
 	return text
 }
 
@@ -289,8 +308,8 @@ func (b *Browser) WaitForURL(t *testing.T, regex *regexp.Regexp) {
 	var lastURL string
 	testlib.RequireEventuallyf(t,
 		func(requireEventually *require.Assertions) {
-			var url string
-			requireEventually.NoError(chromedp.Run(b.chromeCtx, chromedp.Location(&url)))
+			url, err := chromedp.Run(b.chromeCtx, chromedp.Location())
+			requireEventually.NoError(err)
 			if url != lastURL {
 				t.Logf("saw URL %s", testlib.MaskTokens(url))
 				lastURL = url

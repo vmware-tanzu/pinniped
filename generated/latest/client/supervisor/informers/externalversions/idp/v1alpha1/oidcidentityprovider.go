@@ -21,11 +21,39 @@ import (
 )
 
 // OIDCIdentityProviderInformer provides access to a shared informer and lister for
-// OIDCIdentityProviders.
+// OIDCIdentityProviders. Prefer using the type-safe variant (see [TypedOIDCIdentityProviderInformer]).
 type OIDCIdentityProviderInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() idpv1alpha1.OIDCIdentityProviderLister
 }
+
+// TypedOIDCIdentityProviderInformer provides access to a shared informer and lister for
+// OIDCIdentityProviders, including the type-safe TypedInformer variant.
+// It is a superset of OIDCIdentityProviderInformer.
+type TypedOIDCIdentityProviderInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() OIDCIdentityProviderIndexInformer
+	Lister() idpv1alpha1.OIDCIdentityProviderLister
+}
+
+// OIDCIdentityProviderIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type OIDCIdentityProviderIndexInformer cache.TypedSharedIndexInformer[*supervisoridpv1alpha1.OIDCIdentityProvider]
+
+// OIDCIdentityProviderHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for OIDCIdentityProvider.
+type OIDCIdentityProviderHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*supervisoridpv1alpha1.OIDCIdentityProvider]
+
+// OIDCIdentityProviderDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for OIDCIdentityProvider.
+type OIDCIdentityProviderDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*supervisoridpv1alpha1.OIDCIdentityProvider]
+
+// OIDCIdentityProviderFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for OIDCIdentityProvider.
+type OIDCIdentityProviderFilteringHandler = cache.TypedFilteringResourceEventHandler[*supervisoridpv1alpha1.OIDCIdentityProvider]
+
+// OIDCIdentityProviderIndexers is a specialization of [cache.TypedIndexers] for OIDCIdentityProvider.
+type OIDCIdentityProviderIndexers = cache.TypedIndexers[*supervisoridpv1alpha1.OIDCIdentityProvider]
+
+// DeletedOIDCIdentityProvider is a specialization of [cache.DeletedObject] for OIDCIdentityProvider.
+type DeletedOIDCIdentityProvider = cache.DeletedObject[*supervisoridpv1alpha1.OIDCIdentityProvider]
 
 type oIDCIdentityProviderInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -36,25 +64,49 @@ type oIDCIdentityProviderInformer struct {
 // NewOIDCIdentityProviderInformer constructs a new informer for OIDCIdentityProvider type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedOIDCIdentityProviderInformer]).
 func NewOIDCIdentityProviderInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewOIDCIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedOIDCIdentityProviderInformer constructs a new informer for OIDCIdentityProvider type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedOIDCIdentityProviderInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers OIDCIdentityProviderIndexers) OIDCIdentityProviderIndexInformer {
+	return NewTypedOIDCIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredOIDCIdentityProviderInformer constructs a new informer for OIDCIdentityProvider type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredOIDCIdentityProviderInformer]).
 func NewFilteredOIDCIdentityProviderInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewOIDCIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedOIDCIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredOIDCIdentityProviderInformer constructs a new informer for OIDCIdentityProvider type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredOIDCIdentityProviderInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers OIDCIdentityProviderIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) OIDCIdentityProviderIndexInformer {
+	return NewTypedOIDCIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewOIDCIdentityProviderInformerWithOptions constructs a new informer for OIDCIdentityProvider type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedOIDCIdentityProviderInformerWithOptions]).
 func NewOIDCIdentityProviderInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedOIDCIdentityProviderInformerWithOptions(client, namespace, options)
+}
+
+// NewTypedOIDCIdentityProviderInformerWithOptions constructs a new informer for OIDCIdentityProvider type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedOIDCIdentityProviderInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) OIDCIdentityProviderIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "idp.supervisor.pinniped.dev", Version: "v1alpha1", Resource: "oidcidentityproviders"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*supervisoridpv1alpha1.OIDCIdentityProvider](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -87,17 +139,57 @@ func NewOIDCIdentityProviderInformerWithOptions(client versioned.Interface, name
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *oIDCIdentityProviderInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewOIDCIdentityProviderInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedOIDCIdentityProviderInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *oIDCIdentityProviderInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&supervisoridpv1alpha1.OIDCIdentityProvider{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *oIDCIdentityProviderInformer) TypedInformer() OIDCIdentityProviderIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*supervisoridpv1alpha1.OIDCIdentityProvider](f.factory.InformerFor(&supervisoridpv1alpha1.OIDCIdentityProvider{}, f.defaultInformer))
 }
 
 func (f *oIDCIdentityProviderInformer) Lister() idpv1alpha1.OIDCIdentityProviderLister {
 	return idpv1alpha1.NewOIDCIdentityProviderLister(f.Informer().GetIndexer())
+}
+
+// ToTypedOIDCIdentityProviderInformer converts an untyped informer into a TypedOIDCIdentityProviderInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *OIDCIdentityProvider. If that is not the case, calling type-safe methods of the returned
+// TypedOIDCIdentityProviderInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedOIDCIdentityProviderInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedOIDCIdentityProviderInformer(informer OIDCIdentityProviderInformer) TypedOIDCIdentityProviderInformer {
+	if informer, ok := informer.(TypedOIDCIdentityProviderInformer); ok {
+		return informer
+	}
+	return &oIDCIdentityProviderTypedInformerAdapter{informer}
+}
+
+type oIDCIdentityProviderTypedInformerAdapter struct {
+	OIDCIdentityProviderInformer
+}
+
+func (a *oIDCIdentityProviderTypedInformerAdapter) TypedInformer() OIDCIdentityProviderIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*supervisoridpv1alpha1.OIDCIdentityProvider](a.Informer())
+}
+
+// ToOIDCIdentityProviderIndexInformer converts an untyped informer into a OIDCIdentityProviderIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *OIDCIdentityProvider. If that is not the case, calling type-safe methods of the returned
+// OIDCIdentityProviderIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a OIDCIdentityProviderIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToOIDCIdentityProviderIndexInformer(informer cache.SharedIndexInformer) OIDCIdentityProviderIndexInformer {
+	if informer, ok := informer.(OIDCIdentityProviderIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*supervisoridpv1alpha1.OIDCIdentityProvider](informer)
 }

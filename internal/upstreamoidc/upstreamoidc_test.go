@@ -284,7 +284,6 @@ func TestProviderConfig(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					require.Equal(t, http.MethodPost, r.Method)
-					//nolint:gosec // this is a test, so we don't care about limiting request body size
 					require.NoError(t, r.ParseForm())
 					require.Equal(t, 6, len(r.Form))
 					require.Equal(t, "password", r.Form.Get("grant_type"))
@@ -457,7 +456,6 @@ func TestProviderConfig(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					require.Equal(t, http.MethodPost, r.Method)
-					//nolint:gosec // this is a test, so we don't care about limiting request body size
 					require.NoError(t, r.ParseForm())
 					require.Equal(t, 4, len(r.Form))
 					require.Equal(t, "test-client-id", r.Form.Get("client_id"))
@@ -696,7 +694,6 @@ func TestProviderConfig(t *testing.T) {
 					numRequests++
 					require.LessOrEqual(t, numRequests, 2)
 					require.Equal(t, http.MethodPost, r.Method)
-					//nolint:gosec // this is a test, so we don't care about limiting request body size
 					require.NoError(t, r.ParseForm())
 					if numRequests == 1 {
 						// First request should use client_id/client_secret params.
@@ -1455,7 +1452,6 @@ func TestProviderConfig(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					require.Equal(t, http.MethodPost, r.Method)
-					//nolint:gosec // this is a test, so we don't care about limiting request body size
 					require.NoError(t, r.ParseForm())
 					require.Len(t, r.Form, 6)
 					require.Equal(t, "test-client-id", r.Form.Get("client_id"))

@@ -21,11 +21,39 @@ import (
 )
 
 // CredentialIssuerInformer provides access to a shared informer and lister for
-// CredentialIssuers.
+// CredentialIssuers. Prefer using the type-safe variant (see [TypedCredentialIssuerInformer]).
 type CredentialIssuerInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() configv1alpha1.CredentialIssuerLister
 }
+
+// TypedCredentialIssuerInformer provides access to a shared informer and lister for
+// CredentialIssuers, including the type-safe TypedInformer variant.
+// It is a superset of CredentialIssuerInformer.
+type TypedCredentialIssuerInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() CredentialIssuerIndexInformer
+	Lister() configv1alpha1.CredentialIssuerLister
+}
+
+// CredentialIssuerIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type CredentialIssuerIndexInformer cache.TypedSharedIndexInformer[*conciergeconfigv1alpha1.CredentialIssuer]
+
+// CredentialIssuerHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for CredentialIssuer.
+type CredentialIssuerHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*conciergeconfigv1alpha1.CredentialIssuer]
+
+// CredentialIssuerDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for CredentialIssuer.
+type CredentialIssuerDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*conciergeconfigv1alpha1.CredentialIssuer]
+
+// CredentialIssuerFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for CredentialIssuer.
+type CredentialIssuerFilteringHandler = cache.TypedFilteringResourceEventHandler[*conciergeconfigv1alpha1.CredentialIssuer]
+
+// CredentialIssuerIndexers is a specialization of [cache.TypedIndexers] for CredentialIssuer.
+type CredentialIssuerIndexers = cache.TypedIndexers[*conciergeconfigv1alpha1.CredentialIssuer]
+
+// DeletedCredentialIssuer is a specialization of [cache.DeletedObject] for CredentialIssuer.
+type DeletedCredentialIssuer = cache.DeletedObject[*conciergeconfigv1alpha1.CredentialIssuer]
 
 type credentialIssuerInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -35,25 +63,49 @@ type credentialIssuerInformer struct {
 // NewCredentialIssuerInformer constructs a new informer for CredentialIssuer type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedCredentialIssuerInformer]).
 func NewCredentialIssuerInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewCredentialIssuerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedCredentialIssuerInformer constructs a new informer for CredentialIssuer type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedCredentialIssuerInformer(client versioned.Interface, resyncPeriod time.Duration, indexers CredentialIssuerIndexers) CredentialIssuerIndexInformer {
+	return NewTypedCredentialIssuerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredCredentialIssuerInformer constructs a new informer for CredentialIssuer type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredCredentialIssuerInformer]).
 func NewFilteredCredentialIssuerInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewCredentialIssuerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedCredentialIssuerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredCredentialIssuerInformer constructs a new informer for CredentialIssuer type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredCredentialIssuerInformer(client versioned.Interface, resyncPeriod time.Duration, indexers CredentialIssuerIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) CredentialIssuerIndexInformer {
+	return NewTypedCredentialIssuerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewCredentialIssuerInformerWithOptions constructs a new informer for CredentialIssuer type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedCredentialIssuerInformerWithOptions]).
 func NewCredentialIssuerInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedCredentialIssuerInformerWithOptions(client, options)
+}
+
+// NewTypedCredentialIssuerInformerWithOptions constructs a new informer for CredentialIssuer type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedCredentialIssuerInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) CredentialIssuerIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "config.concierge.pinniped.dev", Version: "v1alpha1", Resource: "credentialissuers"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*conciergeconfigv1alpha1.CredentialIssuer](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -86,17 +138,57 @@ func NewCredentialIssuerInformerWithOptions(client versioned.Interface, options 
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *credentialIssuerInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewCredentialIssuerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedCredentialIssuerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *credentialIssuerInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&conciergeconfigv1alpha1.CredentialIssuer{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *credentialIssuerInformer) TypedInformer() CredentialIssuerIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*conciergeconfigv1alpha1.CredentialIssuer](f.factory.InformerFor(&conciergeconfigv1alpha1.CredentialIssuer{}, f.defaultInformer))
 }
 
 func (f *credentialIssuerInformer) Lister() configv1alpha1.CredentialIssuerLister {
 	return configv1alpha1.NewCredentialIssuerLister(f.Informer().GetIndexer())
+}
+
+// ToTypedCredentialIssuerInformer converts an untyped informer into a TypedCredentialIssuerInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *CredentialIssuer. If that is not the case, calling type-safe methods of the returned
+// TypedCredentialIssuerInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedCredentialIssuerInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedCredentialIssuerInformer(informer CredentialIssuerInformer) TypedCredentialIssuerInformer {
+	if informer, ok := informer.(TypedCredentialIssuerInformer); ok {
+		return informer
+	}
+	return &credentialIssuerTypedInformerAdapter{informer}
+}
+
+type credentialIssuerTypedInformerAdapter struct {
+	CredentialIssuerInformer
+}
+
+func (a *credentialIssuerTypedInformerAdapter) TypedInformer() CredentialIssuerIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*conciergeconfigv1alpha1.CredentialIssuer](a.Informer())
+}
+
+// ToCredentialIssuerIndexInformer converts an untyped informer into a CredentialIssuerIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *CredentialIssuer. If that is not the case, calling type-safe methods of the returned
+// CredentialIssuerIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a CredentialIssuerIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToCredentialIssuerIndexInformer(informer cache.SharedIndexInformer) CredentialIssuerIndexInformer {
+	if informer, ok := informer.(CredentialIssuerIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*conciergeconfigv1alpha1.CredentialIssuer](informer)
 }

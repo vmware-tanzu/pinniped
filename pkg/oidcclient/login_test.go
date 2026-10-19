@@ -325,7 +325,6 @@ func TestLogin(t *testing.T) { //nolint:gocyclo
 			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
 			return
 		}
-		//nolint:gosec // this is a test, so we don't care about limiting request body size
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -3665,7 +3664,11 @@ func TestMaybePerformPinnipedSupervisorIDPDiscovery(t *testing.T) {
 		{
 			name:              "when the Supervisor returns invalid discovery information, returns an error",
 			pinnipedDiscovery: `"not-valid-discovery-claim"`,
-			wantErr:           `could not decode the Pinniped IDP discovery document URL in OIDC discovery from "FAKE-ISSUER": json: cannot unmarshal string into Go struct field OIDCDiscoveryResponse.discovery.supervisor.pinniped.dev/v1alpha1 of type v1alpha1.OIDCDiscoveryResponseIDPEndpoint`,
+			wantErr: testutil.StringBasedOnGoVersion(testutil.GoVersionDependentString{
+				GoVersion:     "go1.27",
+				BeforeVersion: `could not decode the Pinniped IDP discovery document URL in OIDC discovery from "FAKE-ISSUER": json: cannot unmarshal string into Go struct field OIDCDiscoveryResponse.discovery.supervisor.pinniped.dev/v1alpha1 of type v1alpha1.OIDCDiscoveryResponseIDPEndpoint`,
+				SinceVersion:  `could not decode the Pinniped IDP discovery document URL in OIDC discovery from "FAKE-ISSUER": json: cannot unmarshal string into Go struct field OIDCDiscoveryResponse.discovery.supervisor.pinniped.dev~1v1alpha1 of type v1alpha1.OIDCDiscoveryResponseIDPEndpoint`,
+			}),
 		},
 		{
 			name:              "when the Supervisor has invalid pinniped_identity_providers_endpoint, returns an error",

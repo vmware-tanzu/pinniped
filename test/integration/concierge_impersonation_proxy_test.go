@@ -35,7 +35,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/http2"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	certificatesv1 "k8s.io/api/certificates/v1"
@@ -1279,8 +1278,9 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 					return proxyURL, nil
 				}
 			}
-			err = http2.ConfigureTransport(&httpTransport)
-			require.NoError(t, err)
+			httpTransport.Protocols = new(http.Protocols)
+			httpTransport.Protocols.SetHTTP1(true)
+			httpTransport.Protocols.SetHTTP2(true)
 
 			httpClient := http.Client{
 				Transport: &httpTransport,

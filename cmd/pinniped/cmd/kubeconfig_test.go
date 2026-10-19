@@ -1712,7 +1712,7 @@ func TestGetKubeconfig(t *testing.T) {
 			}`),
 			wantError: true,
 			wantStderr: func(issuerCABundle string, issuerURL string) testutil.RequireErrorStringFunc {
-				return testutil.WantExactErrorString(`Error: no client flow "my-nonexistent-flow" for Supervisor upstream identity provider "some-oidc-idp" of type "oidc" were found.` +
+				return testutil.WantExactErrorString(`Error: no client flow "my-nonexistent-flow" for Supervisor upstream identity provider "some-oidc-idp" of type "oidc" was found.` +
 					` Found these flows: [non-matching-flow-1 non-matching-flow-2]` + "\n")
 			},
 		},

@@ -22,3 +22,6 @@
 
 # Hugo temp file
 .hugo_build.lock
+
+# anchor
+.anchor

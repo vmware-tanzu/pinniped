@@ -126,7 +126,6 @@ func TestExchangeAuthcode(t *testing.T) {
 				require.NotEmpty(t, r.Header.Get("Content-Length"))
 
 				// Get the params.
-				//nolint:gosec // this is a test, so we don't care about limiting request body size
 				err := r.ParseForm()
 				require.NoError(t, err)
 				params := r.PostForm

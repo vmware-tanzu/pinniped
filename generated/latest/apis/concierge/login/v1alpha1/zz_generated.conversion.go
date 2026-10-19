@@ -77,10 +77,7 @@ func RegisterConversions(s *runtime.Scheme) error {
 }
 
 func autoConvert_v1alpha1_ClusterCredential_To_login_ClusterCredential(in *ClusterCredential, out *login.ClusterCredential, s conversion.Scope) error {
-	out.ExpirationTimestamp = in.ExpirationTimestamp
-	out.Token = in.Token
-	out.ClientCertificateData = in.ClientCertificateData
-	out.ClientKeyData = in.ClientKeyData
+	*out = *(*login.ClusterCredential)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -90,10 +87,7 @@ func Convert_v1alpha1_ClusterCredential_To_login_ClusterCredential(in *ClusterCr
 }
 
 func autoConvert_login_ClusterCredential_To_v1alpha1_ClusterCredential(in *login.ClusterCredential, out *ClusterCredential, s conversion.Scope) error {
-	out.ExpirationTimestamp = in.ExpirationTimestamp
-	out.Token = in.Token
-	out.ClientCertificateData = in.ClientCertificateData
-	out.ClientKeyData = in.ClientKeyData
+	*out = *(*ClusterCredential)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -157,8 +151,7 @@ func Convert_login_TokenCredentialRequestList_To_v1alpha1_TokenCredentialRequest
 }
 
 func autoConvert_v1alpha1_TokenCredentialRequestSpec_To_login_TokenCredentialRequestSpec(in *TokenCredentialRequestSpec, out *login.TokenCredentialRequestSpec, s conversion.Scope) error {
-	out.Token = in.Token
-	out.Authenticator = in.Authenticator
+	*out = *(*login.TokenCredentialRequestSpec)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -168,8 +161,7 @@ func Convert_v1alpha1_TokenCredentialRequestSpec_To_login_TokenCredentialRequest
 }
 
 func autoConvert_login_TokenCredentialRequestSpec_To_v1alpha1_TokenCredentialRequestSpec(in *login.TokenCredentialRequestSpec, out *TokenCredentialRequestSpec, s conversion.Scope) error {
-	out.Token = in.Token
-	out.Authenticator = in.Authenticator
+	*out = *(*TokenCredentialRequestSpec)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -179,8 +171,7 @@ func Convert_login_TokenCredentialRequestSpec_To_v1alpha1_TokenCredentialRequest
 }
 
 func autoConvert_v1alpha1_TokenCredentialRequestStatus_To_login_TokenCredentialRequestStatus(in *TokenCredentialRequestStatus, out *login.TokenCredentialRequestStatus, s conversion.Scope) error {
-	out.Credential = (*login.ClusterCredential)(unsafe.Pointer(in.Credential))
-	out.Message = (*string)(unsafe.Pointer(in.Message))
+	*out = *(*login.TokenCredentialRequestStatus)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -190,8 +181,7 @@ func Convert_v1alpha1_TokenCredentialRequestStatus_To_login_TokenCredentialReque
 }
 
 func autoConvert_login_TokenCredentialRequestStatus_To_v1alpha1_TokenCredentialRequestStatus(in *login.TokenCredentialRequestStatus, out *TokenCredentialRequestStatus, s conversion.Scope) error {
-	out.Credential = (*ClusterCredential)(unsafe.Pointer(in.Credential))
-	out.Message = (*string)(unsafe.Pointer(in.Message))
+	*out = *(*TokenCredentialRequestStatus)(unsafe.Pointer(in))
 	return nil
 }
 

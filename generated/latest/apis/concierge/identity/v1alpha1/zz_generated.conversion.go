@@ -87,10 +87,7 @@ func RegisterConversions(s *runtime.Scheme) error {
 }
 
 func autoConvert_v1alpha1_KubernetesUserInfo_To_identity_KubernetesUserInfo(in *KubernetesUserInfo, out *identity.KubernetesUserInfo, s conversion.Scope) error {
-	if err := Convert_v1alpha1_UserInfo_To_identity_UserInfo(&in.User, &out.User, s); err != nil {
-		return err
-	}
-	out.Audiences = *(*[]string)(unsafe.Pointer(&in.Audiences))
+	*out = *(*identity.KubernetesUserInfo)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -100,10 +97,7 @@ func Convert_v1alpha1_KubernetesUserInfo_To_identity_KubernetesUserInfo(in *Kube
 }
 
 func autoConvert_identity_KubernetesUserInfo_To_v1alpha1_KubernetesUserInfo(in *identity.KubernetesUserInfo, out *KubernetesUserInfo, s conversion.Scope) error {
-	if err := Convert_identity_UserInfo_To_v1alpha1_UserInfo(&in.User, &out.User, s); err != nil {
-		return err
-	}
-	out.Audiences = *(*[]string)(unsafe.Pointer(&in.Audiences))
+	*out = *(*KubernetesUserInfo)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -113,10 +107,7 @@ func Convert_identity_KubernetesUserInfo_To_v1alpha1_KubernetesUserInfo(in *iden
 }
 
 func autoConvert_v1alpha1_UserInfo_To_identity_UserInfo(in *UserInfo, out *identity.UserInfo, s conversion.Scope) error {
-	out.Username = in.Username
-	out.UID = in.UID
-	out.Groups = *(*[]string)(unsafe.Pointer(&in.Groups))
-	out.Extra = *(*map[string]identity.ExtraValue)(unsafe.Pointer(&in.Extra))
+	*out = *(*identity.UserInfo)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -126,10 +117,7 @@ func Convert_v1alpha1_UserInfo_To_identity_UserInfo(in *UserInfo, out *identity.
 }
 
 func autoConvert_identity_UserInfo_To_v1alpha1_UserInfo(in *identity.UserInfo, out *UserInfo, s conversion.Scope) error {
-	out.Username = in.Username
-	out.UID = in.UID
-	out.Groups = *(*[]string)(unsafe.Pointer(&in.Groups))
-	out.Extra = *(*map[string]ExtraValue)(unsafe.Pointer(&in.Extra))
+	*out = *(*UserInfo)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -193,6 +181,7 @@ func Convert_identity_WhoAmIRequestList_To_v1alpha1_WhoAmIRequestList(in *identi
 }
 
 func autoConvert_v1alpha1_WhoAmIRequestSpec_To_identity_WhoAmIRequestSpec(in *WhoAmIRequestSpec, out *identity.WhoAmIRequestSpec, s conversion.Scope) error {
+	*out = *(*identity.WhoAmIRequestSpec)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -202,6 +191,7 @@ func Convert_v1alpha1_WhoAmIRequestSpec_To_identity_WhoAmIRequestSpec(in *WhoAmI
 }
 
 func autoConvert_identity_WhoAmIRequestSpec_To_v1alpha1_WhoAmIRequestSpec(in *identity.WhoAmIRequestSpec, out *WhoAmIRequestSpec, s conversion.Scope) error {
+	*out = *(*WhoAmIRequestSpec)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -211,9 +201,7 @@ func Convert_identity_WhoAmIRequestSpec_To_v1alpha1_WhoAmIRequestSpec(in *identi
 }
 
 func autoConvert_v1alpha1_WhoAmIRequestStatus_To_identity_WhoAmIRequestStatus(in *WhoAmIRequestStatus, out *identity.WhoAmIRequestStatus, s conversion.Scope) error {
-	if err := Convert_v1alpha1_KubernetesUserInfo_To_identity_KubernetesUserInfo(&in.KubernetesUserInfo, &out.KubernetesUserInfo, s); err != nil {
-		return err
-	}
+	*out = *(*identity.WhoAmIRequestStatus)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -223,9 +211,7 @@ func Convert_v1alpha1_WhoAmIRequestStatus_To_identity_WhoAmIRequestStatus(in *Wh
 }
 
 func autoConvert_identity_WhoAmIRequestStatus_To_v1alpha1_WhoAmIRequestStatus(in *identity.WhoAmIRequestStatus, out *WhoAmIRequestStatus, s conversion.Scope) error {
-	if err := Convert_identity_KubernetesUserInfo_To_v1alpha1_KubernetesUserInfo(&in.KubernetesUserInfo, &out.KubernetesUserInfo, s); err != nil {
-		return err
-	}
+	*out = *(*WhoAmIRequestStatus)(unsafe.Pointer(in))
 	return nil
 }
 

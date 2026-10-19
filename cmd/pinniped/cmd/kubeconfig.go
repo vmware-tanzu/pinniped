@@ -1,4 +1,4 @@
-// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package cmd
@@ -1116,7 +1116,7 @@ func selectUpstreamIDPFlow(discoveredIDPFlows []idpdiscoveryv1alpha1.IDPFlow, se
 			}
 		}
 		return "", fmt.Errorf(
-			"no client flow %q for Supervisor upstream identity provider %q of type %q were found. "+
+			"no client flow %q for Supervisor upstream identity provider %q of type %q was found. "+
 				"Found these flows: %v",
 			specifiedFlow, selectedIDPName, selectedIDPType, discoveredIDPFlows)
 	case len(discoveredIDPFlows) == 1:

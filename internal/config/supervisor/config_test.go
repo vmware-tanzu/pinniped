@@ -1,4 +1,4 @@
-// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package supervisor
@@ -14,6 +14,7 @@ import (
 
 	"go.pinniped.dev/internal/here"
 	"go.pinniped.dev/internal/plog"
+	"go.pinniped.dev/internal/testutil"
 )
 
 func TestFromPath(t *testing.T) {
@@ -424,7 +425,11 @@ func TestFromPath(t *testing.T) {
 				oidc:
 				  ignoreUserInfoEndpoint: "should be a struct, but is a string"
 			`),
-			wantError: "decode yaml: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go struct field OIDCSpec.oidc.ignoreUserInfoEndpoint of type supervisor.IgnoreUserInfoEndpointSpec",
+			wantError: testutil.StringBasedOnGoVersion(testutil.GoVersionDependentString{
+				GoVersion:     "go1.27",
+				BeforeVersion: "decode yaml: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go struct field OIDCSpec.oidc.ignoreUserInfoEndpoint of type supervisor.IgnoreUserInfoEndpointSpec",
+				SinceVersion:  "decode yaml: error unmarshaling JSON: while decoding JSON: json: cannot unmarshal string into Go struct field .oidc.ignoreUserInfoEndpoint of type supervisor.IgnoreUserInfoEndpointSpec",
+			}),
 		},
 	}
 	for _, test := range tests {

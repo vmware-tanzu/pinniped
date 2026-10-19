@@ -200,6 +200,7 @@ func TestManager(t *testing.T) {
 			numberOfKubeActionsBeforeThisRequest := len(kubeClient.Actions())
 
 			getRequest := newGetRequest(requestIssuer + oidc.CallbackEndpointPath + requestURLSuffix)
+			//nolint:gosec // this is a request cookie in a test, so response-only attributes do not apply
 			getRequest.AddCookie(&http.Cookie{
 				Name:  "__Host-pinniped-csrf-v2",
 				Value: csrfCookieValue,

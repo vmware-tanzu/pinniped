@@ -1,4 +1,4 @@
-// Copyright 2020-2025 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package auth provides a handler for the OIDC authorization endpoint.
@@ -139,6 +139,7 @@ func (h *authorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if shouldShowIDPChooser(h.idpFinder, idpNameQueryParamValue, requestedBrowserlessFlow) {
 		// Redirect to the IDP chooser page with all the same query/form params. When the user chooses an IDP,
 		// it will redirect back to here with all the same params again, with the pinniped_idp_name param added.
+		//nolint:gosec // not an open redirect: the destination is always this server's own issuer URL
 		http.Redirect(w, r,
 			fmt.Sprintf("%s%s?%s", h.downstreamIssuerURL, oidc.ChooseIDPEndpointPath, r.Form.Encode()),
 			http.StatusSeeOther,
@@ -289,6 +290,7 @@ func (h *authorizeHandler) authorizeWithBrowser(
 		return "", err
 	}
 
+	//nolint:gosec // not an open redirect: redirectURL is built from operator-configured IDP settings
 	http.Redirect(w, r, redirectURL,
 		http.StatusSeeOther, // match fosite and https://tools.ietf.org/id/draft-ietf-oauth-security-topics-18.html#section-4.11
 	)
@@ -509,6 +511,7 @@ func addCSRFSetCookieHeader(w http.ResponseWriter, csrfValue csrftoken.CSRFToken
 		return fmt.Errorf("error encoding CSRF cookie: %w", err)
 	}
 
+	//nolint:gosec // SameSite=None is intentional and required for response_mode=form_post
 	http.SetCookie(w, &http.Cookie{
 		// Because of the other settings below, this value can only be known by the end user's browser, not by other sites.
 		Value: encodedCSRFValue,

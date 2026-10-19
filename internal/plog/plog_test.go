@@ -615,8 +615,11 @@ func TestPlog(t *testing.T) {
 				case runtimeVersionSemver.Major == 1 && runtimeVersionSemver.Minor == 21:
 					// Format of string for Go 1.21
 					return "func13.TestPlog.func13.1.func2"
+				case runtimeVersionSemver.Major == 1 && runtimeVersionSemver.Minor >= 27:
+					// Format of string for Go 1.27+
+					return "func13.1.1"
 				case runtimeVersionSemver.Major == 1 && runtimeVersionSemver.Minor >= 22:
-					// Format of string for Go 1.22+
+					// Format of string for Go 1.22 - 1.26
 					return "func13.TestPlog.func13.1.2"
 				default:
 					// Format of string for Go 1.20 and below.

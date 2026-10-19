@@ -12,13 +12,13 @@ import (
 // Interface provides access to all the informers in this group version.
 type Interface interface {
 	// ActiveDirectoryIdentityProviders returns a ActiveDirectoryIdentityProviderInformer.
-	ActiveDirectoryIdentityProviders() ActiveDirectoryIdentityProviderInformer
+	ActiveDirectoryIdentityProviders() TypedActiveDirectoryIdentityProviderInformer
 	// GitHubIdentityProviders returns a GitHubIdentityProviderInformer.
-	GitHubIdentityProviders() GitHubIdentityProviderInformer
+	GitHubIdentityProviders() TypedGitHubIdentityProviderInformer
 	// LDAPIdentityProviders returns a LDAPIdentityProviderInformer.
-	LDAPIdentityProviders() LDAPIdentityProviderInformer
+	LDAPIdentityProviders() TypedLDAPIdentityProviderInformer
 	// OIDCIdentityProviders returns a OIDCIdentityProviderInformer.
-	OIDCIdentityProviders() OIDCIdentityProviderInformer
+	OIDCIdentityProviders() TypedOIDCIdentityProviderInformer
 }
 
 type version struct {
@@ -32,22 +32,22 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// ActiveDirectoryIdentityProviders returns a ActiveDirectoryIdentityProviderInformer.
-func (v *version) ActiveDirectoryIdentityProviders() ActiveDirectoryIdentityProviderInformer {
+// ActiveDirectoryIdentityProviders returns a TypedActiveDirectoryIdentityProviderInformer.
+func (v *version) ActiveDirectoryIdentityProviders() TypedActiveDirectoryIdentityProviderInformer {
 	return &activeDirectoryIdentityProviderInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// GitHubIdentityProviders returns a GitHubIdentityProviderInformer.
-func (v *version) GitHubIdentityProviders() GitHubIdentityProviderInformer {
+// GitHubIdentityProviders returns a TypedGitHubIdentityProviderInformer.
+func (v *version) GitHubIdentityProviders() TypedGitHubIdentityProviderInformer {
 	return &gitHubIdentityProviderInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// LDAPIdentityProviders returns a LDAPIdentityProviderInformer.
-func (v *version) LDAPIdentityProviders() LDAPIdentityProviderInformer {
+// LDAPIdentityProviders returns a TypedLDAPIdentityProviderInformer.
+func (v *version) LDAPIdentityProviders() TypedLDAPIdentityProviderInformer {
 	return &lDAPIdentityProviderInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// OIDCIdentityProviders returns a OIDCIdentityProviderInformer.
-func (v *version) OIDCIdentityProviders() OIDCIdentityProviderInformer {
+// OIDCIdentityProviders returns a TypedOIDCIdentityProviderInformer.
+func (v *version) OIDCIdentityProviders() TypedOIDCIdentityProviderInformer {
 	return &oIDCIdentityProviderInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

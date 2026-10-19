@@ -40,7 +40,6 @@ func getWarningHandler() rest.WarningHandler {
 	// the client-go rest.WarningHandlers all log warnings with non-empty message and code=299, agent is ignored
 
 	// no deduplication or color output when running from a non-terminal such as a pod
-	//nolint:gosec // casting to an int is the documented way to call this function
 	if isTerm := term.IsTerminal(int(os.Stderr.Fd())); !isTerm {
 		return rest.WarningLogger{}
 	}

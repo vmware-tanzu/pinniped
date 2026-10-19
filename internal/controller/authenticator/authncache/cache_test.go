@@ -1,4 +1,4 @@
-// Copyright 2020-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2020-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package authncache
@@ -74,6 +74,7 @@ func TestCache(t *testing.T) {
 	}
 	for range 10 {
 		cache := New()
+		//nolint:gosec // this is a test, and the shuffle does not need to be cryptographically random
 		for _, i := range rand.Perm(len(keysInExpectedOrder)) {
 			cache.Store(keysInExpectedOrder[i], nil)
 		}

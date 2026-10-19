@@ -21,11 +21,39 @@ import (
 )
 
 // LDAPIdentityProviderInformer provides access to a shared informer and lister for
-// LDAPIdentityProviders.
+// LDAPIdentityProviders. Prefer using the type-safe variant (see [TypedLDAPIdentityProviderInformer]).
 type LDAPIdentityProviderInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() idpv1alpha1.LDAPIdentityProviderLister
 }
+
+// TypedLDAPIdentityProviderInformer provides access to a shared informer and lister for
+// LDAPIdentityProviders, including the type-safe TypedInformer variant.
+// It is a superset of LDAPIdentityProviderInformer.
+type TypedLDAPIdentityProviderInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() LDAPIdentityProviderIndexInformer
+	Lister() idpv1alpha1.LDAPIdentityProviderLister
+}
+
+// LDAPIdentityProviderIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type LDAPIdentityProviderIndexInformer cache.TypedSharedIndexInformer[*supervisoridpv1alpha1.LDAPIdentityProvider]
+
+// LDAPIdentityProviderHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for LDAPIdentityProvider.
+type LDAPIdentityProviderHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*supervisoridpv1alpha1.LDAPIdentityProvider]
+
+// LDAPIdentityProviderDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for LDAPIdentityProvider.
+type LDAPIdentityProviderDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*supervisoridpv1alpha1.LDAPIdentityProvider]
+
+// LDAPIdentityProviderFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for LDAPIdentityProvider.
+type LDAPIdentityProviderFilteringHandler = cache.TypedFilteringResourceEventHandler[*supervisoridpv1alpha1.LDAPIdentityProvider]
+
+// LDAPIdentityProviderIndexers is a specialization of [cache.TypedIndexers] for LDAPIdentityProvider.
+type LDAPIdentityProviderIndexers = cache.TypedIndexers[*supervisoridpv1alpha1.LDAPIdentityProvider]
+
+// DeletedLDAPIdentityProvider is a specialization of [cache.DeletedObject] for LDAPIdentityProvider.
+type DeletedLDAPIdentityProvider = cache.DeletedObject[*supervisoridpv1alpha1.LDAPIdentityProvider]
 
 type lDAPIdentityProviderInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -36,25 +64,49 @@ type lDAPIdentityProviderInformer struct {
 // NewLDAPIdentityProviderInformer constructs a new informer for LDAPIdentityProvider type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedLDAPIdentityProviderInformer]).
 func NewLDAPIdentityProviderInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewLDAPIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedLDAPIdentityProviderInformer constructs a new informer for LDAPIdentityProvider type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedLDAPIdentityProviderInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers LDAPIdentityProviderIndexers) LDAPIdentityProviderIndexInformer {
+	return NewTypedLDAPIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredLDAPIdentityProviderInformer constructs a new informer for LDAPIdentityProvider type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredLDAPIdentityProviderInformer]).
 func NewFilteredLDAPIdentityProviderInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewLDAPIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedLDAPIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredLDAPIdentityProviderInformer constructs a new informer for LDAPIdentityProvider type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredLDAPIdentityProviderInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers LDAPIdentityProviderIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) LDAPIdentityProviderIndexInformer {
+	return NewTypedLDAPIdentityProviderInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewLDAPIdentityProviderInformerWithOptions constructs a new informer for LDAPIdentityProvider type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedLDAPIdentityProviderInformerWithOptions]).
 func NewLDAPIdentityProviderInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedLDAPIdentityProviderInformerWithOptions(client, namespace, options)
+}
+
+// NewTypedLDAPIdentityProviderInformerWithOptions constructs a new informer for LDAPIdentityProvider type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedLDAPIdentityProviderInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) LDAPIdentityProviderIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "idp.supervisor.pinniped.dev", Version: "v1alpha1", Resource: "ldapidentityproviders"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*supervisoridpv1alpha1.LDAPIdentityProvider](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -87,17 +139,57 @@ func NewLDAPIdentityProviderInformerWithOptions(client versioned.Interface, name
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *lDAPIdentityProviderInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewLDAPIdentityProviderInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedLDAPIdentityProviderInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *lDAPIdentityProviderInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&supervisoridpv1alpha1.LDAPIdentityProvider{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *lDAPIdentityProviderInformer) TypedInformer() LDAPIdentityProviderIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*supervisoridpv1alpha1.LDAPIdentityProvider](f.factory.InformerFor(&supervisoridpv1alpha1.LDAPIdentityProvider{}, f.defaultInformer))
 }
 
 func (f *lDAPIdentityProviderInformer) Lister() idpv1alpha1.LDAPIdentityProviderLister {
 	return idpv1alpha1.NewLDAPIdentityProviderLister(f.Informer().GetIndexer())
+}
+
+// ToTypedLDAPIdentityProviderInformer converts an untyped informer into a TypedLDAPIdentityProviderInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *LDAPIdentityProvider. If that is not the case, calling type-safe methods of the returned
+// TypedLDAPIdentityProviderInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedLDAPIdentityProviderInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedLDAPIdentityProviderInformer(informer LDAPIdentityProviderInformer) TypedLDAPIdentityProviderInformer {
+	if informer, ok := informer.(TypedLDAPIdentityProviderInformer); ok {
+		return informer
+	}
+	return &lDAPIdentityProviderTypedInformerAdapter{informer}
+}
+
+type lDAPIdentityProviderTypedInformerAdapter struct {
+	LDAPIdentityProviderInformer
+}
+
+func (a *lDAPIdentityProviderTypedInformerAdapter) TypedInformer() LDAPIdentityProviderIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*supervisoridpv1alpha1.LDAPIdentityProvider](a.Informer())
+}
+
+// ToLDAPIdentityProviderIndexInformer converts an untyped informer into a LDAPIdentityProviderIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *LDAPIdentityProvider. If that is not the case, calling type-safe methods of the returned
+// LDAPIdentityProviderIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a LDAPIdentityProviderIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToLDAPIdentityProviderIndexInformer(informer cache.SharedIndexInformer) LDAPIdentityProviderIndexInformer {
+	if informer, ok := informer.(LDAPIdentityProviderIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*supervisoridpv1alpha1.LDAPIdentityProvider](informer)
 }

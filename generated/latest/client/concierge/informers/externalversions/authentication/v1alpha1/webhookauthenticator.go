@@ -21,11 +21,39 @@ import (
 )
 
 // WebhookAuthenticatorInformer provides access to a shared informer and lister for
-// WebhookAuthenticators.
+// WebhookAuthenticators. Prefer using the type-safe variant (see [TypedWebhookAuthenticatorInformer]).
 type WebhookAuthenticatorInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() authenticationv1alpha1.WebhookAuthenticatorLister
 }
+
+// TypedWebhookAuthenticatorInformer provides access to a shared informer and lister for
+// WebhookAuthenticators, including the type-safe TypedInformer variant.
+// It is a superset of WebhookAuthenticatorInformer.
+type TypedWebhookAuthenticatorInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() WebhookAuthenticatorIndexInformer
+	Lister() authenticationv1alpha1.WebhookAuthenticatorLister
+}
+
+// WebhookAuthenticatorIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type WebhookAuthenticatorIndexInformer cache.TypedSharedIndexInformer[*conciergeauthenticationv1alpha1.WebhookAuthenticator]
+
+// WebhookAuthenticatorHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for WebhookAuthenticator.
+type WebhookAuthenticatorHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*conciergeauthenticationv1alpha1.WebhookAuthenticator]
+
+// WebhookAuthenticatorDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for WebhookAuthenticator.
+type WebhookAuthenticatorDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*conciergeauthenticationv1alpha1.WebhookAuthenticator]
+
+// WebhookAuthenticatorFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for WebhookAuthenticator.
+type WebhookAuthenticatorFilteringHandler = cache.TypedFilteringResourceEventHandler[*conciergeauthenticationv1alpha1.WebhookAuthenticator]
+
+// WebhookAuthenticatorIndexers is a specialization of [cache.TypedIndexers] for WebhookAuthenticator.
+type WebhookAuthenticatorIndexers = cache.TypedIndexers[*conciergeauthenticationv1alpha1.WebhookAuthenticator]
+
+// DeletedWebhookAuthenticator is a specialization of [cache.DeletedObject] for WebhookAuthenticator.
+type DeletedWebhookAuthenticator = cache.DeletedObject[*conciergeauthenticationv1alpha1.WebhookAuthenticator]
 
 type webhookAuthenticatorInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -35,25 +63,49 @@ type webhookAuthenticatorInformer struct {
 // NewWebhookAuthenticatorInformer constructs a new informer for WebhookAuthenticator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedWebhookAuthenticatorInformer]).
 func NewWebhookAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewWebhookAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedWebhookAuthenticatorInformer constructs a new informer for WebhookAuthenticator type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedWebhookAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers WebhookAuthenticatorIndexers) WebhookAuthenticatorIndexInformer {
+	return NewTypedWebhookAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredWebhookAuthenticatorInformer constructs a new informer for WebhookAuthenticator type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredWebhookAuthenticatorInformer]).
 func NewFilteredWebhookAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewWebhookAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedWebhookAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredWebhookAuthenticatorInformer constructs a new informer for WebhookAuthenticator type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredWebhookAuthenticatorInformer(client versioned.Interface, resyncPeriod time.Duration, indexers WebhookAuthenticatorIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) WebhookAuthenticatorIndexInformer {
+	return NewTypedWebhookAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewWebhookAuthenticatorInformerWithOptions constructs a new informer for WebhookAuthenticator type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedWebhookAuthenticatorInformerWithOptions]).
 func NewWebhookAuthenticatorInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedWebhookAuthenticatorInformerWithOptions(client, options)
+}
+
+// NewTypedWebhookAuthenticatorInformerWithOptions constructs a new informer for WebhookAuthenticator type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedWebhookAuthenticatorInformerWithOptions(client versioned.Interface, options internalinterfaces.InformerOptions) WebhookAuthenticatorIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "authentication.concierge.pinniped.dev", Version: "v1alpha1", Resource: "webhookauthenticators"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*conciergeauthenticationv1alpha1.WebhookAuthenticator](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -86,17 +138,57 @@ func NewWebhookAuthenticatorInformerWithOptions(client versioned.Interface, opti
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *webhookAuthenticatorInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewWebhookAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedWebhookAuthenticatorInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *webhookAuthenticatorInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&conciergeauthenticationv1alpha1.WebhookAuthenticator{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *webhookAuthenticatorInformer) TypedInformer() WebhookAuthenticatorIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*conciergeauthenticationv1alpha1.WebhookAuthenticator](f.factory.InformerFor(&conciergeauthenticationv1alpha1.WebhookAuthenticator{}, f.defaultInformer))
 }
 
 func (f *webhookAuthenticatorInformer) Lister() authenticationv1alpha1.WebhookAuthenticatorLister {
 	return authenticationv1alpha1.NewWebhookAuthenticatorLister(f.Informer().GetIndexer())
+}
+
+// ToTypedWebhookAuthenticatorInformer converts an untyped informer into a TypedWebhookAuthenticatorInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *WebhookAuthenticator. If that is not the case, calling type-safe methods of the returned
+// TypedWebhookAuthenticatorInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedWebhookAuthenticatorInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedWebhookAuthenticatorInformer(informer WebhookAuthenticatorInformer) TypedWebhookAuthenticatorInformer {
+	if informer, ok := informer.(TypedWebhookAuthenticatorInformer); ok {
+		return informer
+	}
+	return &webhookAuthenticatorTypedInformerAdapter{informer}
+}
+
+type webhookAuthenticatorTypedInformerAdapter struct {
+	WebhookAuthenticatorInformer
+}
+
+func (a *webhookAuthenticatorTypedInformerAdapter) TypedInformer() WebhookAuthenticatorIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*conciergeauthenticationv1alpha1.WebhookAuthenticator](a.Informer())
+}
+
+// ToWebhookAuthenticatorIndexInformer converts an untyped informer into a WebhookAuthenticatorIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *WebhookAuthenticator. If that is not the case, calling type-safe methods of the returned
+// WebhookAuthenticatorIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a WebhookAuthenticatorIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToWebhookAuthenticatorIndexInformer(informer cache.SharedIndexInformer) WebhookAuthenticatorIndexInformer {
+	if informer, ok := informer.(WebhookAuthenticatorIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*conciergeauthenticationv1alpha1.WebhookAuthenticator](informer)
 }

@@ -21,11 +21,39 @@ import (
 )
 
 // OIDCClientInformer provides access to a shared informer and lister for
-// OIDCClients.
+// OIDCClients. Prefer using the type-safe variant (see [TypedOIDCClientInformer]).
 type OIDCClientInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() configv1alpha1.OIDCClientLister
 }
+
+// TypedOIDCClientInformer provides access to a shared informer and lister for
+// OIDCClients, including the type-safe TypedInformer variant.
+// It is a superset of OIDCClientInformer.
+type TypedOIDCClientInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() OIDCClientIndexInformer
+	Lister() configv1alpha1.OIDCClientLister
+}
+
+// OIDCClientIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type OIDCClientIndexInformer cache.TypedSharedIndexInformer[*supervisorconfigv1alpha1.OIDCClient]
+
+// OIDCClientHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for OIDCClient.
+type OIDCClientHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*supervisorconfigv1alpha1.OIDCClient]
+
+// OIDCClientDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for OIDCClient.
+type OIDCClientDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*supervisorconfigv1alpha1.OIDCClient]
+
+// OIDCClientFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for OIDCClient.
+type OIDCClientFilteringHandler = cache.TypedFilteringResourceEventHandler[*supervisorconfigv1alpha1.OIDCClient]
+
+// OIDCClientIndexers is a specialization of [cache.TypedIndexers] for OIDCClient.
+type OIDCClientIndexers = cache.TypedIndexers[*supervisorconfigv1alpha1.OIDCClient]
+
+// DeletedOIDCClient is a specialization of [cache.DeletedObject] for OIDCClient.
+type DeletedOIDCClient = cache.DeletedObject[*supervisorconfigv1alpha1.OIDCClient]
 
 type oIDCClientInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -36,25 +64,49 @@ type oIDCClientInformer struct {
 // NewOIDCClientInformer constructs a new informer for OIDCClient type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedOIDCClientInformer]).
 func NewOIDCClientInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewOIDCClientInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedOIDCClientInformer constructs a new informer for OIDCClient type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedOIDCClientInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers OIDCClientIndexers) OIDCClientIndexInformer {
+	return NewTypedOIDCClientInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredOIDCClientInformer constructs a new informer for OIDCClient type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredOIDCClientInformer]).
 func NewFilteredOIDCClientInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewOIDCClientInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedOIDCClientInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredOIDCClientInformer constructs a new informer for OIDCClient type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredOIDCClientInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers OIDCClientIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) OIDCClientIndexInformer {
+	return NewTypedOIDCClientInformerWithOptions(client, namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewOIDCClientInformerWithOptions constructs a new informer for OIDCClient type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedOIDCClientInformerWithOptions]).
 func NewOIDCClientInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedOIDCClientInformerWithOptions(client, namespace, options)
+}
+
+// NewTypedOIDCClientInformerWithOptions constructs a new informer for OIDCClient type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedOIDCClientInformerWithOptions(client versioned.Interface, namespace string, options internalinterfaces.InformerOptions) OIDCClientIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "config.supervisor.pinniped.dev", Version: "v1alpha1", Resource: "oidcclients"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*supervisorconfigv1alpha1.OIDCClient](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -87,17 +139,57 @@ func NewOIDCClientInformerWithOptions(client versioned.Interface, namespace stri
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *oIDCClientInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewOIDCClientInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedOIDCClientInformerWithOptions(client, f.namespace, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *oIDCClientInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&supervisorconfigv1alpha1.OIDCClient{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *oIDCClientInformer) TypedInformer() OIDCClientIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*supervisorconfigv1alpha1.OIDCClient](f.factory.InformerFor(&supervisorconfigv1alpha1.OIDCClient{}, f.defaultInformer))
 }
 
 func (f *oIDCClientInformer) Lister() configv1alpha1.OIDCClientLister {
 	return configv1alpha1.NewOIDCClientLister(f.Informer().GetIndexer())
+}
+
+// ToTypedOIDCClientInformer converts an untyped informer into a TypedOIDCClientInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *OIDCClient. If that is not the case, calling type-safe methods of the returned
+// TypedOIDCClientInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedOIDCClientInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedOIDCClientInformer(informer OIDCClientInformer) TypedOIDCClientInformer {
+	if informer, ok := informer.(TypedOIDCClientInformer); ok {
+		return informer
+	}
+	return &oIDCClientTypedInformerAdapter{informer}
+}
+
+type oIDCClientTypedInformerAdapter struct {
+	OIDCClientInformer
+}
+
+func (a *oIDCClientTypedInformerAdapter) TypedInformer() OIDCClientIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*supervisorconfigv1alpha1.OIDCClient](a.Informer())
+}
+
+// ToOIDCClientIndexInformer converts an untyped informer into a OIDCClientIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *OIDCClient. If that is not the case, calling type-safe methods of the returned
+// OIDCClientIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a OIDCClientIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToOIDCClientIndexInformer(informer cache.SharedIndexInformer) OIDCClientIndexInformer {
+	if informer, ok := informer.(OIDCClientIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*supervisorconfigv1alpha1.OIDCClient](informer)
 }

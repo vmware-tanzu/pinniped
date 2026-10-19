@@ -121,8 +121,7 @@ func Convert_clientsecret_OIDCClientSecretRequestList_To_v1alpha1_OIDCClientSecr
 }
 
 func autoConvert_v1alpha1_OIDCClientSecretRequestSpec_To_clientsecret_OIDCClientSecretRequestSpec(in *OIDCClientSecretRequestSpec, out *clientsecret.OIDCClientSecretRequestSpec, s conversion.Scope) error {
-	out.GenerateNewSecret = in.GenerateNewSecret
-	out.RevokeOldSecrets = in.RevokeOldSecrets
+	*out = *(*clientsecret.OIDCClientSecretRequestSpec)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -132,8 +131,7 @@ func Convert_v1alpha1_OIDCClientSecretRequestSpec_To_clientsecret_OIDCClientSecr
 }
 
 func autoConvert_clientsecret_OIDCClientSecretRequestSpec_To_v1alpha1_OIDCClientSecretRequestSpec(in *clientsecret.OIDCClientSecretRequestSpec, out *OIDCClientSecretRequestSpec, s conversion.Scope) error {
-	out.GenerateNewSecret = in.GenerateNewSecret
-	out.RevokeOldSecrets = in.RevokeOldSecrets
+	*out = *(*OIDCClientSecretRequestSpec)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -143,8 +141,7 @@ func Convert_clientsecret_OIDCClientSecretRequestSpec_To_v1alpha1_OIDCClientSecr
 }
 
 func autoConvert_v1alpha1_OIDCClientSecretRequestStatus_To_clientsecret_OIDCClientSecretRequestStatus(in *OIDCClientSecretRequestStatus, out *clientsecret.OIDCClientSecretRequestStatus, s conversion.Scope) error {
-	out.GeneratedSecret = in.GeneratedSecret
-	out.TotalClientSecrets = in.TotalClientSecrets
+	*out = *(*clientsecret.OIDCClientSecretRequestStatus)(unsafe.Pointer(in))
 	return nil
 }
 
@@ -154,8 +151,7 @@ func Convert_v1alpha1_OIDCClientSecretRequestStatus_To_clientsecret_OIDCClientSe
 }
 
 func autoConvert_clientsecret_OIDCClientSecretRequestStatus_To_v1alpha1_OIDCClientSecretRequestStatus(in *clientsecret.OIDCClientSecretRequestStatus, out *OIDCClientSecretRequestStatus, s conversion.Scope) error {
-	out.GeneratedSecret = in.GeneratedSecret
-	out.TotalClientSecrets = in.TotalClientSecrets
+	*out = *(*OIDCClientSecretRequestStatus)(unsafe.Pointer(in))
 	return nil
 }
 

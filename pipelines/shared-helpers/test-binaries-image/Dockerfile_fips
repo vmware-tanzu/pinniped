@@ -6,7 +6,7 @@
 # we need a separate dockerfile for the fips test image so that the integration tests
 # use the right ciphers etc.
 
-FROM golang:1.27.2-bookworm as build-env
+FROM golang:1.27.3-bookworm as build-env
 WORKDIR /work
 COPY . .
 ARG GOPROXY

@@ -509,13 +509,35 @@ func Login(issuer string, clientID string, opts ...Option) (*oidctypes.Token, er
 	return token, nil
 }
 
+// needRFC8693TokenExchange returns true if the login flow needs to perform an RFC8693 token exchange to get a new ID token
 func (h *handlerState) needRFC8693TokenExchange(token *oidctypes.Token) bool {
-	// Need a new ID token if there is a requested audience value and any of the following are true...
-	return h.requestedAudience != "" &&
-		// we don't have an ID token (maybe it expired or was otherwise removed from the session cache)
-		(token.IDToken == nil ||
-			// or, our current ID token has a different audience
-			h.requestedAudience != token.IDToken.Claims["aud"])
+	// If the user did not request an audience, then we don't need to do a token exchange.
+	if h.requestedAudience == "" {
+		return false
+	}
+	// If the token is nil, then we need to do a token exchange.
+	if token.IDToken == nil {
+		return true
+	}
+	// If the token's audience does not match the requested audience, then we need to do a token exchange.
+	return !hasAudience(token.IDToken.Claims["aud"], h.requestedAudience)
+}
+
+// hasAudience checks if the audClaim contains the target audience. The audClaim can be a string, a slice of strings, or a slice of interfaces.
+func hasAudience(audClaim interface{}, target string) bool {
+	switch aud := audClaim.(type) {
+	case string:
+		return aud == target
+	case []string:
+		return slices.Contains(aud, target)
+	case []interface{}:
+		for _, v := range aud {
+			if s, ok := v.(string); ok && s == target {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (h *handlerState) tokenValidForNearFuture(token *oidctypes.Token) (bool, string) {
